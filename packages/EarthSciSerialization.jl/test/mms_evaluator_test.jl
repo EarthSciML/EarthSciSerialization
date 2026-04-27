@@ -1812,4 +1812,206 @@ using EarthSciSerialization
         @test isapprox(result[1], (u[2] - u[n]) / (2 * dx); atol=1e-12)
         @test isapprox(result[n], (u[1] - u[n - 1]) / (2 * dx); atol=1e-12)
     end
+
+    # ============================================================
+    # esm-8i9: AST-walker reaches form=weighted_essentially_nonoscillatory
+    # rules whose body lives in a closed-AST `lowering` (no legacy
+    # reconstruction_left_biased / axes blocks), and binds multiple
+    # rank-1 input arrays — enough to express the weno5_advection
+    # `div($U·$q, $x)` shape end-to-end.
+    # ============================================================
+
+    # Helper: AST node for the linear-weight 5-point reconstruction of
+    # cell-averaged q at face i+1/2 (offsets `offs`, integer numerators
+    # `nums`, common denominator `den`). Equivalent to the WENO5 linear
+    # combination with the smoothness-indicator nonlinearity dropped —
+    # 5th-order accurate on smooth data, which suffices for the >= 4.7
+    # convergence acceptance bar without re-implementing the full WENO5
+    # weights inside the lowering AST.
+    function _q_recon_5pt(offs, nums, den)
+        function _idx(off::Int)
+            off == 0 && return Dict("op" => "index",
+                                    "args" => Any["q", "i"])
+            shift = off > 0 ?
+                Dict("op" => "+", "args" => Any["i", off]) :
+                Dict("op" => "-", "args" => Any["i", -off])
+            return Dict("op" => "index", "args" => Any["q", shift])
+        end
+        terms = Any[Dict("op" => "*", "args" => Any[Float64(c), _idx(o)])
+                    for (o, c) in zip(offs, nums)]
+        return Dict("op" => "/",
+                    "args" => Any[Dict("op" => "+", "args" => terms),
+                                  Float64(den)])
+    end
+    # Left-biased: cells {i-2..i+2} at face i+1/2.
+    _q_left_5pt  = _q_recon_5pt((-2, -1, 0, 1, 2), (2, -13, 47, 27, -3), 60)
+    # Right-biased: mirror image, cells {i-1..i+3} at face i+1/2.
+    _q_right_5pt = _q_recon_5pt((-1, 0, 1, 2, 3), (-3, 27, 47, -13, 2), 60)
+
+    # Closed-AST WENO5-style advection rule: form gates the dispatch, but
+    # there are no `reconstruction_left_biased` / `axes` blocks — so the
+    # AST-walker (esm-4gw + esm-8i9) must own this rule. The lowering
+    # binds two input arrays ($U, $q) and uses `ifelse` to pick the upwind
+    # 5-point reconstruction by the sign of U at the face.
+    weno5_lowering_rule = Dict(
+        "discretizations" => Dict(
+            "weno5_advection_lowering" => Dict(
+                # Multi-input applies_to: div($U · $q, $x).
+                "applies_to" => Dict(
+                    "op" => "div",
+                    "args" => Any[
+                        Dict("op" => "*", "args" => Any["\$U", "\$q"]),
+                    ],
+                    "dim" => "\$x",
+                ),
+                "form" => "weighted_essentially_nonoscillatory",
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^5)",
+                "lowering" => Dict(
+                    "op" => "arrayop",
+                    "output_idx" => Any["i"],
+                    "ranges" => Dict("i" => Any[1, "n"]),
+                    "args" => Any["U", "q"],
+                    "expr" => Dict(
+                        "op" => "*",
+                        "args" => Any[
+                            Dict("op" => "index", "args" => Any["U", "i"]),
+                            Dict("op" => "ifelse", "args" => Any[
+                                Dict("op" => ">", "args" => Any[
+                                    Dict("op" => "index",
+                                         "args" => Any["U", "i"]),
+                                    0.0,
+                                ]),
+                                _q_left_5pt,
+                                _q_right_5pt,
+                            ]),
+                        ],
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    # Sweep input. `input_arrays` binds U (constant 1.0 — pure positive
+    # advection) and q (smooth manufactured solution). The top-level
+    # `manufactured_solution` is the reference: its `value_at_edge_right`
+    # samples are the face values the reconstruction must recover.
+    # Backwards-compatible — the legacy `input_array` / single-binding
+    # path is exercised by the centered_lowering_rule tests above.
+    weno5_lowering_input = Dict(
+        "rule" => "weno5_advection_lowering",
+        "manufactured_solution" => Dict("name" => "phase_shifted_sine"),
+        "sampling" => "cell_average",
+        "output_kind" => "value_at_edge_right",
+        "input_arrays" => Any[
+            Dict("name" => "U", "constant" => 1.0),
+            Dict("name" => "q",
+                 "manufactured_solution" => Dict("name" => "phase_shifted_sine")),
+        ],
+        "grids" => [Dict("n" => 32), Dict("n" => 64),
+                    Dict("n" => 128), Dict("n" => 256)],
+        "boundary_conditions" => [
+            Dict("type" => "periodic", "dimensions" => Any["x"]),
+        ],
+    )
+
+    @testset "AST-walker — closed-AST WENO5 dispatches via form fall-through" begin
+        # form=weighted_essentially_nonoscillatory but no legacy keys →
+        # _mms_rule_kind must NOT claim :weno5; mms_convergence routes to
+        # the AST-walker via `lowering`. (Layer-B convergence acceptance.)
+        result = mms_convergence(weno5_lowering_rule, weno5_lowering_input)
+        @test result.declared_order == 5.0
+        @test result.grids == [32, 64, 128, 256]
+        @test all(result.errors .> 0) && all(isfinite, result.errors)
+        @test all(result.errors[i] > result.errors[i+1] for i in 1:3)
+        @test result.observed_min_order ≥ 4.7
+    end
+
+    @testset "AST-walker — _mms_rule_kind ignores form without legacy keys" begin
+        # The dispatch helper itself: form alone is not enough.
+        spec_no_legacy = weno5_lowering_rule["discretizations"][
+            "weno5_advection_lowering"]
+        @test EarthSciSerialization._mms_rule_kind(spec_no_legacy) ===
+              :linear_stencil
+        # Add a legacy block back in → :weno5 again.
+        spec_with_legacy = deepcopy(spec_no_legacy)
+        spec_with_legacy["reconstruction_left_biased"] = Dict()
+        @test EarthSciSerialization._mms_rule_kind(spec_with_legacy) === :weno5
+    end
+
+    @testset "AST-walker — multi-input env binds U and q independently" begin
+        # The lowering must see U and q as separate Vector{Float64} entries.
+        # Choose U identically -1 → ifelse picks the right-biased branch.
+        # Negating sign matches WENO5 behaviour: face value still recovered
+        # at 5th order.
+        right_input = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[
+                Dict("name" => "U", "constant" => -1.0),
+                Dict("name" => "q",
+                     "manufactured_solution" =>
+                         Dict("name" => "phase_shifted_sine")),
+            ]))
+        # output = U · q_face; with U = -1, the *signed* error against
+        # +q_face is the same magnitude — verify by comparing against the
+        # negative reference.
+        n = 64
+        dx = 1.0 / n
+        ms = lookup_manufactured_solution(Dict("name" => "phase_shifted_sine"))
+        u_arr = fill(-1.0, n)
+        q_arr = [ms.cell_average((i - 1) * dx, i * dx) for i in 1:n]
+        env = EarthSciSerialization._LoweringEnv(
+            Dict{String,Vector{Float64}}("U" => u_arr, "q" => q_arr),
+            Dict{String,Float64}("dx" => dx, "h" => dx,
+                                 "n" => Float64(n), "domain_lo" => 0.0),
+            Dict{String,Int}(),
+            EarthSciSerialization._AxisBC[
+                EarthSciSerialization._AxisBC(:periodic, 0.0)],
+        )
+        lowering = weno5_lowering_rule["discretizations"][
+            "weno5_advection_lowering"]["lowering"]
+        result = EarthSciSerialization._eval_lowering_array(lowering, env)
+        @test length(result) == n
+        # |result| ≈ |q at face|; same magnitude as positive-U reconstruction.
+        face = [ms.sample(i * dx) for i in 1:n]
+        @test maximum(abs.(result .+ face)) < 0.01
+    end
+
+    @testset "AST-walker — input_arrays validation" begin
+        # Unknown / missing fields surface E_MMS_BAD_FIXTURE.
+        bad_shape = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Dict("U" => 1.0)))   # not a list
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, bad_shape)
+
+        empty_list = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, empty_list)
+
+        no_name = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[Dict("constant" => 1.0)]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, no_name)
+
+        both_specs = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[Dict("name" => "U",
+                                       "constant" => 1.0,
+                                       "manufactured_solution" =>
+                                           Dict("name" => "phase_shifted_sine"))]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, both_specs)
+
+        neither_spec = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[Dict("name" => "U")]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, neither_spec)
+
+        dup_name = Base.merge(weno5_lowering_input, Dict(
+            "input_arrays" => Any[
+                Dict("name" => "U", "constant" => 1.0),
+                Dict("name" => "U", "constant" => 2.0),
+            ]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            weno5_lowering_rule, dup_name)
+    end
 end

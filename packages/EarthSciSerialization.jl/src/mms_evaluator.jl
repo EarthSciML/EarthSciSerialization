@@ -2216,10 +2216,22 @@ function apply_weno5_reconstruction_periodic_1d(spec::AbstractDict,
 end
 
 # Internal: dispatch helper. Returns `:weno5` for WENO5 nonlinear
-# reconstruction rules, else `:linear_stencil` (the original sweep path).
+# reconstruction rules expressed in the legacy
+# `reconstruction_left_biased` / `_right_biased` (1D) or `axes` (2D
+# axis-split) shape, else `:linear_stencil` (the original sweep path).
+#
+# A rule whose `form == "weighted_essentially_nonoscillatory"` but which
+# carries none of those legacy keys must be expressing its body through a
+# closed §4.2 AST in `lowering` (or `replacement`) — fall through to
+# `:linear_stencil` so `mms_convergence` can dispatch to the AST-walker
+# (esm-4gw, esm-8i9). A rule's *kind* here is a function of its body
+# content, not just its declared `form`.
 function _mms_rule_kind(spec::AbstractDict)::Symbol
     form = String(get(spec, "form", ""))
-    if form == "weighted_essentially_nonoscillatory"
+    if form == "weighted_essentially_nonoscillatory" &&
+       (haskey(spec, "reconstruction_left_biased") ||
+        haskey(spec, "reconstruction_right_biased") ||
+        haskey(spec, "axes"))
         return :weno5
     end
     return :linear_stencil
@@ -2525,6 +2537,75 @@ function _parse_lowering_bcs(input_json::AbstractDict)::Vector{_AxisBC}
     return out
 end
 
+# Resolve `input_arrays` (multi-input, esm-8i9) or fall back to single
+# `input_array` (esm-4gw) into a list of (name, sampler) pairs. Each
+# sampler is a closure (domain_lo, dx, n, sampling) -> Vector{Float64}
+# that produces the per-grid binding for one named array.
+#
+# Supported entry shapes (when `input_arrays` is a list of dicts):
+# - `{"name": str, "manufactured_solution": <descriptor>}` — sample the
+#   named MS at cell_center / cell_average per the sweep `sampling`.
+# - `{"name": str, "constant": <real>}` — fill with a constant value.
+#
+# When `input_arrays` is absent, a single binding is constructed from the
+# top-level `manufactured_solution` (already passed in as `default_ms`),
+# named by `input_array` (default `"u"`). This preserves every esm-4gw
+# fixture's behaviour bit-for-bit.
+function _parse_input_array_specs(input_json::AbstractDict,
+                                  default_ms::ManufacturedSolution
+                                  )::Vector{Pair{String,Function}}
+    raw = get(input_json, "input_arrays", nothing)
+    if raw === nothing
+        name = String(get(input_json, "input_array", "u"))
+        sampler = (lo, dx, n, sampling) ->
+            sampling == "cell_average" ?
+                Float64[_cell_average(default_ms,
+                                      lo + (i - 1) * dx,
+                                      lo + i * dx) for i in 1:n] :
+                Float64[default_ms.sample(lo + (i - 0.5) * dx) for i in 1:n]
+        return Pair{String,Function}[name => sampler]
+    end
+    raw isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "`input_arrays` must be an array of binding objects, got $(typeof(raw))"))
+    isempty(raw) && throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "`input_arrays` must declare at least one binding"))
+    out = Pair{String,Function}[]
+    seen = Set{String}()
+    for entry in raw
+        entry isa AbstractDict || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "`input_arrays` entry must be a mapping, got $(typeof(entry))"))
+        haskey(entry, "name") || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "`input_arrays` entry missing `name`"))
+        name = String(entry["name"])
+        name in seen && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "duplicate name $(repr(name)) in `input_arrays`"))
+        push!(seen, name)
+        has_ms = haskey(entry, "manufactured_solution")
+        has_const = haskey(entry, "constant")
+        has_ms == has_const && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "`input_arrays` entry $(repr(name)) must declare exactly one " *
+            "of `manufactured_solution` or `constant`"))
+        sampler = if has_ms
+            ms = lookup_manufactured_solution(entry["manufactured_solution"])
+            (lo, dx, n, sampling) ->
+                sampling == "cell_average" ?
+                    Float64[_cell_average(ms,
+                                          lo + (i - 1) * dx,
+                                          lo + i * dx) for i in 1:n] :
+                    Float64[ms.sample(lo + (i - 0.5) * dx) for i in 1:n]
+        else
+            v = Float64(entry["constant"])
+            (lo, dx, n, sampling) -> fill(v, n)
+        end
+        push!(out, name => sampler)
+    end
+    return out
+end
+
 # Convergence sweep for a rule whose `lowering` is a closed §4.2 AST.
 # Mirrors the 1D-cartesian path of `mms_convergence` but evaluates the
 # lowering AST against a manufactured sample instead of summing a stencil
@@ -2574,22 +2655,26 @@ function _mms_convergence_ast_lowering(spec::AbstractDict,
 
     bcs = _parse_lowering_bcs(input_json)
 
-    # Optional explicit input-array name: defaults to "u" so the canonical
-    # `arrayop(output_idx=[i], expr=…u[i±1]…)` form just works.
-    input_array_name = String(get(input_json, "input_array", "u"))
+    # Per-rule input-array bindings (esm-8i9). The walker env must support
+    # rules whose `applies_to` indexes more than one rank-1 array — e.g.
+    # weno5_advection's `div($U·$q, $x)` indexes both $U and $q. Each entry
+    # in `input_arrays` resolves at sweep time to a name + sample function
+    # (manufactured_solution lookup or constant fill); see
+    # `_parse_input_array_specs`. Single-input rules retain the legacy
+    # `input_array`/default-"u" path with no schema change.
+    array_specs = _parse_input_array_specs(input_json, ms)
 
     domain_lo, domain_hi = ms.domain
     L = domain_hi - domain_lo
     errors = Vector{Float64}(undef, length(grids))
     for (k, n) in enumerate(grids)
         dx = L / n
-        u = sampling == "cell_average" ?
-            [_cell_average(ms,
-                           domain_lo + (i - 1) * dx,
-                           domain_lo + i * dx) for i in 1:n] :
-            [ms.sample(domain_lo + (i - 0.5) * dx) for i in 1:n]
+        arrays = Dict{String,Vector{Float64}}()
+        for (name, sampler) in array_specs
+            arrays[name] = sampler(domain_lo, dx, n, sampling)
+        end
         env = _LoweringEnv(
-            Dict{String,Vector{Float64}}(input_array_name => u),
+            arrays,
             Dict{String,Float64}("dx" => dx, "h" => dx,
                                  "n" => Float64(n),
                                  "domain_lo" => domain_lo),
