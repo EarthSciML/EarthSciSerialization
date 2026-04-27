@@ -993,9 +993,15 @@ fn eval_op(
         "cosh" => v(0).cosh(),
         "tanh" => v(0).tanh(),
 
-        // min / max
-        "min" => v(0).min(v(1)),
-        "max" => v(0).max(v(1)),
+        // n-ary min / max (esm-spec §4.2 — arity ≥ 2)
+        "min" => args
+            .iter()
+            .map(|a| interpret(a, state, params, observed, t))
+            .fold(f64::INFINITY, f64::min),
+        "max" => args
+            .iter()
+            .map(|a| interpret(a, state, params, observed, t))
+            .fold(f64::NEG_INFINITY, f64::max),
 
         // conditional
         "ifelse" => {

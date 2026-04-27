@@ -195,10 +195,12 @@ export function evaluate(expr: Expr, bindings: Map<string, number>): number {
         if (args.length !== 2) throw new Error('atan2 requires exactly 2 arguments')
         return Math.atan2(args[0], args[1])
       case 'min':
-        if (args.length === 0) throw new Error('min requires at least 1 argument')
+        // n-ary min (esm-spec §4.2 — arity ≥ 2)
+        if (args.length < 2) throw new Error('min requires at least 2 arguments')
         return Math.min(...args)
       case 'max':
-        if (args.length === 0) throw new Error('max requires at least 1 argument')
+        // n-ary max (esm-spec §4.2 — arity ≥ 2)
+        if (args.length < 2) throw new Error('max requires at least 2 arguments')
         return Math.max(...args)
       case 'floor':
         if (args.length !== 1) throw new Error('floor requires exactly 1 argument')

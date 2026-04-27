@@ -501,28 +501,26 @@ fn evaluate_operator_with_unbound_tracking(
             }
         }
 
-        // Min/max and rounding
-        "min" => {
-            if args.len() != 2 {
+        // N-ary min/max (esm-spec §4.2 — arity ≥ 2)
+        "min" | "max" => {
+            if args.len() < 2 {
                 return Err(());
             }
-            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
-            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
-            match (a_result, b_result) {
-                (Ok(a), Ok(b)) => Ok(a.min(b)),
-                _ => Err(()),
+            let mut acc: Option<f64> = None;
+            for a in args {
+                let v = evaluate_with_unbound_tracking(a, bindings, unbound_vars)?;
+                acc = Some(match acc {
+                    None => v,
+                    Some(prev) => {
+                        if op == "min" {
+                            prev.min(v)
+                        } else {
+                            prev.max(v)
+                        }
+                    }
+                });
             }
-        }
-        "max" => {
-            if args.len() != 2 {
-                return Err(());
-            }
-            let a_result = evaluate_with_unbound_tracking(&args[0], bindings, unbound_vars);
-            let b_result = evaluate_with_unbound_tracking(&args[1], bindings, unbound_vars);
-            match (a_result, b_result) {
-                (Ok(a), Ok(b)) => Ok(a.max(b)),
-                _ => Err(()),
-            }
+            Ok(acc.unwrap())
         }
         "floor" => {
             if args.len() != 1 {
@@ -1072,5 +1070,51 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(evaluate(&expr, &bindings).unwrap(), 5.0);
+    }
+
+    #[test]
+    fn test_evaluate_nary_min_max() {
+        // esm-2is — n-ary min/max (esm-spec §4.2 — arity ≥ 2)
+        let bindings = HashMap::new();
+        let n = |v: f64| Expr::Number(v);
+
+        // 3-arg min
+        let expr = Expr::Operator(ExpressionNode {
+            op: "min".to_string(),
+            args: vec![n(3.0), n(1.0), n(2.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 1.0);
+
+        // 3-arg max
+        let expr = Expr::Operator(ExpressionNode {
+            op: "max".to_string(),
+            args: vec![n(3.0), n(1.0), n(2.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 3.0);
+
+        // 4-arg min
+        let expr = Expr::Operator(ExpressionNode {
+            op: "min".to_string(),
+            args: vec![n(5.0), n(2.0), n(8.0), n(1.0)],
+            ..Default::default()
+        });
+        assert_eq!(evaluate(&expr, &bindings).unwrap(), 1.0);
+
+        // 1-arg rejected
+        let expr = Expr::Operator(ExpressionNode {
+            op: "min".to_string(),
+            args: vec![n(3.0)],
+            ..Default::default()
+        });
+        assert!(evaluate(&expr, &bindings).is_err());
+
+        let expr = Expr::Operator(ExpressionNode {
+            op: "max".to_string(),
+            args: vec![n(3.0)],
+            ..Default::default()
+        });
+        assert!(evaluate(&expr, &bindings).is_err());
     }
 }

@@ -121,6 +121,11 @@ function _esm_to_symbolic(expr::EsmExpr, var_dict::Dict{String,Any},
             arg = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
             fn = getfield(Base, Symbol(op))
             return fn(arg)
+        elseif op == "min" || op == "max"
+            length(expr.args) < 2 && error("$op requires at least 2 arguments (esm-spec §4.2)")
+            args = [_esm_to_symbolic(a, var_dict, t_sym, dim_dict) for a in expr.args]
+            fn = op == "min" ? min : max
+            return foldl(fn, args)
         elseif op == "ifelse"
             cond = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
             t_val = _esm_to_symbolic(expr.args[2], var_dict, t_sym, dim_dict)

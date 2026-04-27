@@ -502,12 +502,14 @@ function _eval_node_op(n::_Node, u, p, t)
     elseif op === :floor; _expect_arity_n(op, c, 1); return floor(_eval_node(c[1], u, p, t))
     elseif op === :ceil;  _expect_arity_n(op, c, 1); return ceil(_eval_node(c[1], u, p, t))
     elseif op === :min
-        isempty(c) && throw(TreeWalkError("E_TREEWALK_ARITY", "min needs ≥1 arg"))
+        # n-ary min (esm-spec §4.2 — arity ≥ 2)
+        length(c) < 2 && throw(TreeWalkError("E_TREEWALK_ARITY", "min needs ≥2 args"))
         acc = _eval_node(c[1], u, p, t)
         @inbounds for i in 2:length(c); acc = min(acc, _eval_node(c[i], u, p, t)); end
         return acc
     elseif op === :max
-        isempty(c) && throw(TreeWalkError("E_TREEWALK_ARITY", "max needs ≥1 arg"))
+        # n-ary max (esm-spec §4.2 — arity ≥ 2)
+        length(c) < 2 && throw(TreeWalkError("E_TREEWALK_ARITY", "max needs ≥2 args"))
         acc = _eval_node(c[1], u, p, t)
         @inbounds for i in 2:length(c); acc = max(acc, _eval_node(c[i], u, p, t)); end
         return acc

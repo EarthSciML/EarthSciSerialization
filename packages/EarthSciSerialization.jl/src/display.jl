@@ -614,18 +614,31 @@ function format_operator_expression(node::OpExpr, format::Symbol)
             else
                 return join([format_arg(arg) for arg in args], " or ")
             end
-        elseif op == "max"
-            # N-ary max
+        elseif op == "max" || op == "min"
+            # N-ary max / min (esm-spec §4.2)
             arg_list = join([format == :unicode ? format_expression_unicode(arg) :
                            (format == :latex ? format_expression_latex(arg) :
                            (format == :ascii ? format_expression_ascii(arg) : format_arg(arg)))
                            for arg in args], ", ")
 
             if format == :latex
-                return "\\max($arg_list)"
+                return "\\$op($arg_list)"
             else
-                return "max($arg_list)"
+                return "$op($arg_list)"
             end
+        end
+    end
+
+    # Binary min/max (≥ 2 args) — n-ary branch handles ≥ 3
+    if length(args) == 2 && (op == "min" || op == "max")
+        arg_list = join([format == :unicode ? format_expression_unicode(arg) :
+                       (format == :latex ? format_expression_latex(arg) :
+                       (format == :ascii ? format_expression_ascii(arg) : format_arg(arg)))
+                       for arg in args], ", ")
+        if format == :latex
+            return "\\$op($arg_list)"
+        else
+            return "$op($arg_list)"
         end
     end
 

@@ -189,6 +189,15 @@ describe('Expression structural operations', () => {
         const expr2: Expr = { op: 'max', args: ['x', 'y', 1] }
         expect(evaluate(expr2, bindings)).toBe(3) // max(2, 3, 1)
       })
+
+      it('should reject min/max with fewer than 2 args (esm-spec §4.2)', () => {
+        // esm-2is — n-ary arity ≥ 2
+        const minOne: Expr = { op: 'min', args: ['x'] }
+        expect(() => evaluate(minOne, bindings)).toThrow('min requires at least 2 arguments')
+
+        const maxOne: Expr = { op: 'max', args: ['x'] }
+        expect(() => evaluate(maxOne, bindings)).toThrow('max requires at least 2 arguments')
+      })
     })
 
     describe('comparison operations', () => {

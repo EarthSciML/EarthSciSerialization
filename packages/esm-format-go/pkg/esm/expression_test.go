@@ -372,6 +372,37 @@ func TestEvaluate(t *testing.T) {
 			expr: ExprNode{Op: "*", Args: []interface{}{"x", "y", 2.0}},
 			expected: 12.0, // 2 * 3 * 2
 		},
+		// n-ary min/max (esm-spec §4.2 — arity ≥ 2; esm-2is)
+		{
+			name:     "n-ary min",
+			expr:     ExprNode{Op: "min", Args: []interface{}{"x", "y", "z"}},
+			expected: 2.0, // min(2, 3, 4)
+		},
+		{
+			name:     "n-ary max",
+			expr:     ExprNode{Op: "max", Args: []interface{}{"x", "y", "z"}},
+			expected: 4.0, // max(2, 3, 4)
+		},
+		{
+			name:     "binary min",
+			expr:     ExprNode{Op: "min", Args: []interface{}{"x", 5.0}},
+			expected: 2.0,
+		},
+		{
+			name:     "binary max",
+			expr:     ExprNode{Op: "max", Args: []interface{}{"x", 5.0}},
+			expected: 5.0,
+		},
+		{
+			name:      "min single arg rejected",
+			expr:      ExprNode{Op: "min", Args: []interface{}{"x"}},
+			expectErr: true,
+		},
+		{
+			name:      "max single arg rejected",
+			expr:      ExprNode{Op: "max", Args: []interface{}{"x"}},
+			expectErr: true,
+		},
 	}
 
 	for _, tt := range tests {

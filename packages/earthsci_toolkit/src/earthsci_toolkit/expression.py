@@ -300,12 +300,14 @@ def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
             import math
             return math.ceil(arg_values[0])
         elif expr.op == "min":
-            if len(arg_values) < 1:
-                raise TypeError(f"Min requires at least 1 argument, got {len(arg_values)}")
+            # n-ary min (esm-spec §4.2 — arity ≥ 2)
+            if len(arg_values) < 2:
+                raise TypeError(f"Min requires at least 2 arguments, got {len(arg_values)}")
             return min(arg_values)
         elif expr.op == "max":
-            if len(arg_values) < 1:
-                raise TypeError(f"Max requires at least 1 argument, got {len(arg_values)}")
+            # n-ary max (esm-spec §4.2 — arity ≥ 2)
+            if len(arg_values) < 2:
+                raise TypeError(f"Max requires at least 2 arguments, got {len(arg_values)}")
             return max(arg_values)
         elif expr.op == "and":
             if len(arg_values) < 2:
@@ -546,12 +548,14 @@ def to_sympy(expr: Expr, symbol_map: Optional[Dict[str, sp.Symbol]] = None) -> s
                 raise TypeError(f"Ceiling requires exactly 1 argument, got {len(sympy_args)}")
             return sp.ceiling(sympy_args[0])
         elif expr.op == "min":
-            if len(sympy_args) < 1:
-                raise TypeError(f"Min requires at least 1 argument, got {len(sympy_args)}")
+            # n-ary min (esm-spec §4.2 — arity ≥ 2)
+            if len(sympy_args) < 2:
+                raise TypeError(f"Min requires at least 2 arguments, got {len(sympy_args)}")
             return sp.Min(*sympy_args)
         elif expr.op == "max":
-            if len(sympy_args) < 1:
-                raise TypeError(f"Max requires at least 1 argument, got {len(sympy_args)}")
+            # n-ary max (esm-spec §4.2 — arity ≥ 2)
+            if len(sympy_args) < 2:
+                raise TypeError(f"Max requires at least 2 arguments, got {len(sympy_args)}")
             return sp.Max(*sympy_args)
         elif expr.op == "and":
             if len(sympy_args) < 2:
