@@ -190,6 +190,7 @@ result = evaluate(sum_expr, bindings)  # 5.0
 # Supported Operations
 - Arithmetic: "+", "-", "*", "/", "^"
 - Mathematical functions: "sin", "cos", "tan", "exp", "log", "sqrt", "abs"
+- N-ary extrema (≥ 2 args): "min", "max"
 - Constants: "π", "e"
 """
 function evaluate(expr::NumExpr, bindings::Dict{String,Float64})::Float64
@@ -395,6 +396,18 @@ function evaluate(expr::OpExpr, bindings::Dict{String,Float64})::Float64
         else
             throw(ArgumentError("abs requires exactly 1 argument, got $(length(args))"))
         end
+
+    # n-ary extrema (esm-spec §4.2 — arity ≥ 2)
+    elseif op == "min"
+        if length(args) < 2
+            throw(ArgumentError("min requires at least 2 arguments, got $(length(args))"))
+        end
+        return minimum(args)
+    elseif op == "max"
+        if length(args) < 2
+            throw(ArgumentError("max requires at least 2 arguments, got $(length(args))"))
+        end
+        return maximum(args)
 
     # Constants (handled as zero-argument functions)
     elseif op == "π" || op == "pi"

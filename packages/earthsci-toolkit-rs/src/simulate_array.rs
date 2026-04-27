@@ -949,7 +949,12 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
             eval_unary(&node.op, &node.args, ctx)
         }
 
-        "atan2" | "min" | "max" => eval_binary(&node.op, &node.args, ctx),
+        "atan2" => eval_binary(&node.op, &node.args, ctx),
+
+        // n-ary min/max (esm-spec §4.2 — arity ≥ 2). Reuse the n-ary
+        // arithmetic combiner so array operands broadcast through the same
+        // ndarray path as `+`/`*`.
+        "min" | "max" => eval_arith(&node.op, &node.args, ctx),
 
         "ifelse" => {
             let c = eval(&node.args[0], ctx).as_scalar().unwrap_or(0.0);
@@ -1030,6 +1035,20 @@ fn fold_scalar(op: &str, vs: &[f64]) -> f64 {
                 vs[0].powf(vs[1])
             } else {
                 f64::NAN
+            }
+        }
+        "min" => {
+            if vs.len() < 2 {
+                f64::NAN
+            } else {
+                vs.iter().copied().fold(f64::INFINITY, f64::min)
+            }
+        }
+        "max" => {
+            if vs.len() < 2 {
+                f64::NAN
+            } else {
+                vs.iter().copied().fold(f64::NEG_INFINITY, f64::max)
             }
         }
         _ => f64::NAN,

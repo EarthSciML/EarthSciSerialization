@@ -425,3 +425,42 @@ class TestErrorHandling:
         expr = ExprNode(op="/", args=["x"])  # division takes 2 args
         with pytest.raises(TypeError, match="Division requires exactly 2 arguments"):
             to_sympy(expr)
+
+
+class TestNAryMinMax:
+    """n-ary min/max scalar ops (esm-spec §4.2 — arity ≥ 2; esm-2is)."""
+
+    def test_evaluate_nary_min(self):
+        expr = ExprNode(op="min", args=[3.0, 1.0, 2.0])
+        assert evaluate(expr, {}) == 1.0
+
+    def test_evaluate_nary_max(self):
+        expr = ExprNode(op="max", args=[3.0, 1.0, 2.0])
+        assert evaluate(expr, {}) == 3.0
+
+    def test_evaluate_binary_min_max(self):
+        assert evaluate(ExprNode(op="min", args=[7.0, 4.0]), {}) == 4.0
+        assert evaluate(ExprNode(op="max", args=[7.0, 4.0]), {}) == 7.0
+
+    def test_evaluate_min_with_bindings(self):
+        expr = ExprNode(op="max", args=["x", "y", "z"])
+        assert evaluate(expr, {"x": 5.0, "y": 2.0, "z": 8.0}) == 8.0
+
+    def test_evaluate_min_single_arg_rejected(self):
+        with pytest.raises(TypeError, match="Min requires at least 2 arguments"):
+            evaluate(ExprNode(op="min", args=[3.0]), {})
+
+    def test_evaluate_max_single_arg_rejected(self):
+        with pytest.raises(TypeError, match="Max requires at least 2 arguments"):
+            evaluate(ExprNode(op="max", args=[3.0]), {})
+
+    def test_to_sympy_min_max(self):
+        import sympy as sp
+        s = to_sympy(ExprNode(op="min", args=["x", "y"]))
+        assert s == sp.Min(sp.Symbol("x"), sp.Symbol("y"))
+        s = to_sympy(ExprNode(op="max", args=["x", "y", "z"]))
+        assert s == sp.Max(sp.Symbol("x"), sp.Symbol("y"), sp.Symbol("z"))
+
+    def test_to_sympy_min_single_arg_rejected(self):
+        with pytest.raises(TypeError, match="Min requires at least 2 arguments"):
+            to_sympy(ExprNode(op="min", args=["x"]))

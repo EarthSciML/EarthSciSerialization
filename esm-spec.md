@@ -131,7 +131,14 @@ Example: `{"op": "D", "args": ["O3"], "wrt": "t"}` represents ∂O₃/∂t.
 
 `exp`, `log`, `log10`, `sqrt`, `abs`, `sign`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `min`, `max`, `floor`, `ceil`
 
-All take their standard mathematical arguments in `args`.
+All take their standard mathematical arguments in `args`. Most are unary (one
+scalar argument) except `atan2` (binary) and `min`/`max`, which are **n-ary
+with arity ≥ 2** and return the element-wise extremum across all arguments
+(left-fold of the binary operator). Conforming bindings MUST reject `min`/`max`
+nodes with fewer than two arguments. `min`/`max` are the canonical, AST-level
+encoding of clamp / clip / limiter primitives — `clamp(x, lo, hi)` is
+`{"op": "min", "args": [hi, {"op": "max", "args": [lo, "x"]}]}` — and reviewers
+MUST reject `fn` nodes that only re-implement these in disguise (see §0).
 
 #### Conditionals
 

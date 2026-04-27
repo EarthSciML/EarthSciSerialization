@@ -478,6 +478,36 @@ func evaluateExprNode(node ExprNode, bindings map[string]float64) (float64, erro
 			return -1.0, nil
 		}
 		return 0.0, nil
+	case "min":
+		// n-ary min (esm-spec §4.2 — arity ≥ 2)
+		if len(args) < 2 {
+			return 0, fmt.Errorf("min requires at least 2 arguments, got %d", len(args))
+		}
+		result := args[0]
+		for _, a := range args[1:] {
+			result = math.Min(result, a)
+		}
+		return result, nil
+	case "max":
+		// n-ary max (esm-spec §4.2 — arity ≥ 2)
+		if len(args) < 2 {
+			return 0, fmt.Errorf("max requires at least 2 arguments, got %d", len(args))
+		}
+		result := args[0]
+		for _, a := range args[1:] {
+			result = math.Max(result, a)
+		}
+		return result, nil
+	case "floor":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("floor requires 1 argument, got %d", len(args))
+		}
+		return math.Floor(args[0]), nil
+	case "ceil":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("ceil requires 1 argument, got %d", len(args))
+		}
+		return math.Ceil(args[0]), nil
 	default:
 		return 0, fmt.Errorf("unknown operation: %s", node.Op)
 	}
