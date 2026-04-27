@@ -312,8 +312,10 @@ end
     namespace_expr(expr, prefix, local_names) -> Expr
 
 Return a new Expr tree with every VarExpr referencing a name in `local_names`
-rewritten as `"<prefix>.<name>"`. Variables whose name already contains a dot
-(already qualified) are left unchanged. Numeric literals are unchanged.
+rewritten as `"<prefix>.<name>"`. For dotted names (e.g. `Sub.var`), the first
+segment is treated as the local symbol: if it is in `local_names` (a local
+subsystem), the whole dotted path is prefixed; otherwise the reference is
+already external and is left unchanged. Numeric literals are unchanged.
 """
 function namespace_expr(expr::NumExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
     return expr
@@ -325,6 +327,10 @@ end
 
 function namespace_expr(expr::VarExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
     if occursin('.', expr.name)
+        first_part = String(split(expr.name, '.')[1])
+        if first_part in local_names
+            return VarExpr("$(prefix).$(expr.name)")
+        end
         return expr
     end
     if expr.name in local_names

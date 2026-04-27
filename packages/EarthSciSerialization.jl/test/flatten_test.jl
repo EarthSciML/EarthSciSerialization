@@ -335,6 +335,32 @@ end
         @test haskey(flat.state_variables, "Parent.Child.v")
     end
 
+    @testset "9b. Subsystem-scoped refs in parent expressions get prefixed (esm-v3x)" begin
+        # Parent observed variable references `Sub.x` where `Sub` is a local
+        # subsystem. Flattening must rewrite the dotted name to
+        # `<parent_prefix>.Sub.x`, not leave it as `Sub.x` (which would fail
+        # to resolve against the flat dictionary).
+        sub_vars = Dict{String, ModelVariable}(
+            "x" => ModelVariable(StateVariable; default=1.0))
+        sub = Model(sub_vars, Equation[])
+
+        parent_vars = Dict{String, ModelVariable}(
+            "y" => ModelVariable(ObservedVariable;
+                expression=_V("Sub.x")))
+        parent = Model(parent_vars, Equation[],
+            subsystems=Dict{String, Model}("Sub" => sub))
+
+        file = EarthSciSerialization.EsmFile("0.1.0",
+            EarthSciSerialization.Metadata("t9b"),
+            models=Dict("Parent" => parent))
+        flat = flatten(file)
+
+        eq = _find_eq(flat, "Parent.y")
+        @test eq !== nothing
+        @test _uses_var(eq.rhs, "Parent.Sub.x")
+        @test !_uses_var(eq.rhs, "Sub.x")
+    end
+
     @testset "10. HYBRID §4.7.6 Example A: 0D chem + 2D advection via operator_compose" begin
         # Spec §4.7.6 Worked example: 0D chemistry system on a 2D grid is
         # composed with an Advection model whose equations use the `_var`
