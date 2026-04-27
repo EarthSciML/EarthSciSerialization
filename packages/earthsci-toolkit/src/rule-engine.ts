@@ -71,6 +71,40 @@ export type RuleRegionScope =
   | { kind: 'mask_field'; field: string }
   | { kind: 'index_range'; axis: string; lo: number; hi: number }
 
+/**
+ * Closed set of valid rule edge-behavior policies (RFC §5.2.8).
+ * Omission is equivalent to `'periodic'` for backwards compatibility.
+ */
+export type BoundaryPolicy =
+  | 'periodic'
+  | 'ghosted'
+  | 'neumann_zero'
+  | 'extrapolate'
+
+const BOUNDARY_POLICY_VALUES: readonly BoundaryPolicy[] = [
+  'periodic',
+  'ghosted',
+  'neumann_zero',
+  'extrapolate',
+]
+
+/**
+ * Rule binding declaration (RFC §5.2.8). Declares the cadence at which
+ * the host runtime updates a non-pattern-variable, non-canonical-index
+ * symbol that the rule's replacement may reference.
+ */
+export interface RuleBinding {
+  kind: 'static' | 'per_step' | 'per_cell'
+  default?: Expr
+  description?: string
+}
+
+const BINDING_KIND_VALUES: readonly RuleBinding['kind'][] = [
+  'static',
+  'per_step',
+  'per_cell',
+]
+
 export interface Rule {
   name: string
   pattern: Expr
@@ -97,6 +131,17 @@ export interface Rule {
    * discriminated by JSON shape at parse time.
    */
   whereExpr?: Expr
+  /**
+   * Behavior at domain edges (RFC §5.2.8). Omission == 'periodic'.
+   * Stored verbatim; the rule engine does not branch on this field.
+   */
+  boundaryPolicy?: BoundaryPolicy
+  /**
+   * Map from bare identifier name to a {@link RuleBinding} declaration
+   * (RFC §5.2.8). Documents the time-varying / static symbols the
+   * replacement AST may reference. Loaders preserve this across roundtrips.
+   */
+  bindings?: Record<string, RuleBinding>
 }
 
 export interface GridMeta {
@@ -785,7 +830,89 @@ function parseRuleNamed(name: string, v: unknown): Rule {
       )
     }
   }
-  return { name, pattern, where, replacement, region, regionScope, whereExpr }
+  let boundaryPolicy: BoundaryPolicy | undefined
+  if ('boundary_policy' in obj && obj.boundary_policy !== undefined) {
+    const bp = obj.boundary_policy
+    if (typeof bp !== 'string') {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`boundary_policy\` must be a string`,
+      )
+    }
+    if (!(BOUNDARY_POLICY_VALUES as readonly string[]).includes(bp)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: unknown boundary_policy \`${bp}\` (closed set: ${BOUNDARY_POLICY_VALUES.join(', ')})`,
+      )
+    }
+    boundaryPolicy = bp as BoundaryPolicy
+  }
+  let bindings: Record<string, RuleBinding> | undefined
+  if ('bindings' in obj && obj.bindings !== undefined) {
+    const bRaw = obj.bindings
+    if (typeof bRaw !== 'object' || bRaw === null || Array.isArray(bRaw)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`bindings\` must be an object`,
+      )
+    }
+    bindings = {}
+    for (const [bname, bval] of Object.entries(bRaw as Record<string, unknown>)) {
+      bindings[bname] = parseRuleBinding(name, bname, bval)
+    }
+  }
+  return {
+    name,
+    pattern,
+    where,
+    replacement,
+    region,
+    regionScope,
+    whereExpr,
+    boundaryPolicy,
+    bindings,
+  }
+}
+
+function parseRuleBinding(
+  ruleName: string,
+  bindingName: string,
+  v: unknown,
+): RuleBinding {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: bindings.${bindingName} must be an object`,
+    )
+  }
+  const obj = v as Record<string, unknown>
+  const kind = obj.kind
+  if (typeof kind !== 'string') {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: bindings.${bindingName} missing required string \`kind\``,
+    )
+  }
+  if (!(BINDING_KIND_VALUES as readonly string[]).includes(kind)) {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: bindings.${bindingName}: unknown kind \`${kind}\` (closed set: ${BINDING_KIND_VALUES.join(', ')})`,
+    )
+  }
+  const out: RuleBinding = { kind: kind as RuleBinding['kind'] }
+  if ('default' in obj && obj.default !== undefined) {
+    out.default = parseExpr(obj.default)
+  }
+  if ('description' in obj && obj.description !== undefined) {
+    if (typeof obj.description !== 'string') {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: bindings.${bindingName}.description must be a string`,
+      )
+    }
+    out.description = obj.description
+  }
+  return out
 }
 
 function parseRegionScope(

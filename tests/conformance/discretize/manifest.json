@@ -24,6 +24,12 @@
       "input":  "inputs/bc_value_canonicalization.esm",
       "golden": "golden/bc_value_canonicalization.json",
       "tags": ["step1", "boundary_conditions", "canonicalize"]
+    },
+    {
+      "id": "cfl_sine_advection",
+      "input":  "inputs/cfl_sine_advection.esm",
+      "golden": "golden/cfl_sine_advection.json",
+      "tags": ["step1", "pde", "rules", "grid", "boundary_policy", "bindings"]
     }
   ]
 }

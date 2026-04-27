@@ -96,6 +96,76 @@ pub enum RuleRegion {
     IndexRange { axis: String, lo: i64, hi: i64 },
 }
 
+/// Closed set of rule edge-behavior policies (RFC §5.2.8). Omission is
+/// equivalent to [`BoundaryPolicy::Periodic`] for backwards compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundaryPolicy {
+    Periodic,
+    Ghosted,
+    NeumannZero,
+    Extrapolate,
+}
+
+impl BoundaryPolicy {
+    /// Wire-form value as it appears in JSON.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BoundaryPolicy::Periodic => "periodic",
+            BoundaryPolicy::Ghosted => "ghosted",
+            BoundaryPolicy::NeumannZero => "neumann_zero",
+            BoundaryPolicy::Extrapolate => "extrapolate",
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "periodic" => Some(BoundaryPolicy::Periodic),
+            "ghosted" => Some(BoundaryPolicy::Ghosted),
+            "neumann_zero" => Some(BoundaryPolicy::NeumannZero),
+            "extrapolate" => Some(BoundaryPolicy::Extrapolate),
+            _ => None,
+        }
+    }
+}
+
+/// Rule binding cadence (RFC §5.2.8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleBindingKind {
+    Static,
+    PerStep,
+    PerCell,
+}
+
+impl RuleBindingKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RuleBindingKind::Static => "static",
+            RuleBindingKind::PerStep => "per_step",
+            RuleBindingKind::PerCell => "per_cell",
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "static" => Some(RuleBindingKind::Static),
+            "per_step" => Some(RuleBindingKind::PerStep),
+            "per_cell" => Some(RuleBindingKind::PerCell),
+            _ => None,
+        }
+    }
+}
+
+/// A single rule binding declaration (RFC §5.2.8). Loaders preserve
+/// `RuleBinding` entries across parse/serialize roundtrips; the rule
+/// engine itself does not consult them during pattern matching or
+/// expansion.
+#[derive(Debug, Clone)]
+pub struct RuleBinding {
+    pub kind: RuleBindingKind,
+    pub default: Option<Expr>,
+    pub description: Option<String>,
+}
+
 /// A rewrite rule (RFC §5.2). MVP supports the inline `replacement`
 /// form only; `use:<scheme>` is tracked as Step 1b follow-up.
 ///
@@ -103,6 +173,11 @@ pub enum RuleRegion {
 /// AST (RFC §5.2.7) — mutually exclusive with the guard-list `where_`
 /// at the author level, structurally distinguished by JSON shape at
 /// parse time.
+///
+/// `boundary_policy` declares behavior at domain edges (RFC §5.2.8).
+/// `bindings` declares the time-varying / static symbols the
+/// replacement may reference (RFC §5.2.8). Both fields are stored
+/// verbatim; the rule engine does not branch on them.
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub name: String,
@@ -111,6 +186,8 @@ pub struct Rule {
     pub replacement: Expr,
     pub region: Option<RuleRegion>,
     pub where_expr: Option<Expr>,
+    pub boundary_policy: Option<BoundaryPolicy>,
+    pub bindings: Option<HashMap<String, RuleBinding>>,
 }
 
 impl Rule {
@@ -122,6 +199,8 @@ impl Rule {
             replacement,
             region: None,
             where_expr: None,
+            boundary_policy: None,
+            bindings: None,
         }
     }
 }
@@ -635,6 +714,8 @@ fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngin
     let replacement = parse_expr(replacement)?;
     let (where_, where_expr) = parse_where(name, v.get("where"))?;
     let region = parse_region(name, v.get("region"))?;
+    let boundary_policy = parse_boundary_policy(name, v.get("boundary_policy"))?;
+    let bindings = parse_bindings(name, v.get("bindings"))?;
     Ok(Rule {
         name: name.to_string(),
         pattern,
@@ -642,6 +723,106 @@ fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngin
         replacement,
         region,
         where_expr,
+        boundary_policy,
+        bindings,
+    })
+}
+
+fn parse_boundary_policy(
+    name: &str,
+    v: Option<&serde_json::Value>,
+) -> Result<Option<BoundaryPolicy>, RuleEngineError> {
+    let Some(v) = v else {
+        return Ok(None);
+    };
+    let s = v.as_str().ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{name}`: `boundary_policy` must be a string"),
+        )
+    })?;
+    BoundaryPolicy::from_str(s).map(Some).ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!(
+                "rule `{name}`: unknown boundary_policy `{s}` \
+                 (closed set: periodic, ghosted, neumann_zero, extrapolate)"
+            ),
+        )
+    })
+}
+
+fn parse_bindings(
+    name: &str,
+    v: Option<&serde_json::Value>,
+) -> Result<Option<HashMap<String, RuleBinding>>, RuleEngineError> {
+    let Some(v) = v else {
+        return Ok(None);
+    };
+    let obj = v.as_object().ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{name}`: `bindings` must be an object"),
+        )
+    })?;
+    let mut out = HashMap::with_capacity(obj.len());
+    for (bname, bval) in obj {
+        out.insert(bname.clone(), parse_rule_binding(name, bname, bval)?);
+    }
+    Ok(Some(out))
+}
+
+fn parse_rule_binding(
+    rule_name: &str,
+    binding_name: &str,
+    v: &serde_json::Value,
+) -> Result<RuleBinding, RuleEngineError> {
+    let obj = v.as_object().ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{rule_name}`: bindings.{binding_name} must be an object"),
+        )
+    })?;
+    let kind_raw = obj
+        .get("kind")
+        .and_then(|s| s.as_str())
+        .ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: bindings.{binding_name} missing required string `kind`"
+                ),
+            )
+        })?;
+    let kind = RuleBindingKind::from_str(kind_raw).ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!(
+                "rule `{rule_name}`: bindings.{binding_name}: unknown kind `{kind_raw}` \
+                 (closed set: static, per_step, per_cell)"
+            ),
+        )
+    })?;
+    let default = match obj.get("default") {
+        Some(d) => Some(parse_expr(d)?),
+        None => None,
+    };
+    let description = match obj.get("description") {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(serde_json::Value::Null) | None => None,
+        Some(_) => {
+            return Err(RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: bindings.{binding_name}.description must be a string"
+                ),
+            ));
+        }
+    };
+    Ok(RuleBinding {
+        kind,
+        default,
+        description,
     })
 }
 
@@ -1311,6 +1492,8 @@ mod tests {
             replacement: var("$u"),
             region: None,
             where_expr: None,
+            boundary_policy: None,
+            bindings: None,
         };
         let mut ctx = RuleContext::default();
         ctx.variables.insert(

@@ -2320,6 +2320,16 @@
             "additionalProperties": true
           }
         },
+        "boundary_policy": {
+          "type": "string",
+          "enum": ["periodic", "ghosted", "neumann_zero", "extrapolate"],
+          "description": "Behavior of this rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. 'ghosted' declares the rule requires ghost cells filled by an upstream BC pass and may emit raw interior-form stencils that read out-of-bounds. 'neumann_zero' declares mirror/zero-flux behavior at edges. 'extrapolate' declares the rule expects interior-extrapolated values at edges. Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (e.g. ghost-cell synthesis, edge-rule fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures."
+        },
+        "bindings": {
+          "type": "object",
+          "description": "Declares the symbolic identifiers (other than pattern variables and canonical grid indices i/j/k/...) that the rule's replacement AST may reference, together with the rate at which each binding's value changes at runtime (RFC §5.2.8). This is metadata: loaders preserve it across roundtrips but the rule engine does not consult it during pattern matching or expansion. Time-varying bindings (per_step, per_cell) document a contract between the rule author and the host runtime that supplies values during simulation. Static bindings are equivalent to model parameters and may be evaluated at load time. Keys are bare identifier names (e.g. 'dt', 'dx', 'velocity', 'cos_lat'); '$'-prefixed pattern-variable names are NOT permitted here (declare those via the pattern itself).",
+          "additionalProperties": { "$ref": "#/$defs/RuleBinding" }
+        },
         "description": { "type": "string" }
       },
       "oneOf": [
@@ -2327,6 +2337,28 @@
         { "required": ["use"] },
         { "required": ["produces"] }
       ]
+    },
+
+    "RuleBinding": {
+      "type": "object",
+      "description": "A single binding declaration for a rule (RFC §5.2.8). Carries the binding's update cadence ('static', 'per_step', 'per_cell') and an optional default-value expression. The schema does not require 'default' — a binding with no default declares a runtime-supplied value with no compile-time fallback.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["static", "per_step", "per_cell"],
+          "description": "Update cadence. 'static' = constant for the whole simulation (e.g. Earth radius R, fixed grid spacing dlon). 'per_step' = may change once per time-step (e.g. an adaptive dt, an externally-driven max wind speed). 'per_cell' = varies across the grid at runtime (e.g. cell-centered velocity, latitudinally-varying cos_lat); the value is indexed by the canonical grid indices in scope."
+        },
+        "default": {
+          "$ref": "#/$defs/ExpressionNode",
+          "description": "Optional default value as an §4 expression. For 'static' bindings this is the value used when the runtime supplies no override. For 'per_step' and 'per_cell' bindings it is an authorial fallback — bindings MAY ignore it if the runtime always supplies a live value."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note about what this binding represents (e.g. 'Courant number, set per-step from max|u|·dt/dx')."
+        }
+      }
     },
 
     "NeighborSelector": {

@@ -101,7 +101,29 @@ struct RegionIndexRange <: RuleRegion
 end
 
 """
-    Rule(name, pattern, where, replacement, region, where_expr)
+    RuleBinding(kind::String, default::Union{Expr,Nothing}, description::Union{String,Nothing})
+
+A single rule binding declaration (RFC §5.2.8). `kind` is one of
+`"static"`, `"per_step"`, `"per_cell"`; `default` is an optional default
+ExpressionNode; `description` is an optional authorial note. Loaders
+preserve `RuleBinding` entries across parse/serialize roundtrips; the
+rule engine itself does not consult them during pattern matching or
+expansion.
+"""
+struct RuleBinding
+    kind::String
+    default::Union{Expr,Nothing}
+    description::Union{String,Nothing}
+end
+
+RuleBinding(kind::AbstractString;
+            default::Union{Expr,Nothing}=nothing,
+            description::Union{Nothing,AbstractString}=nothing) =
+    RuleBinding(String(kind), default, description === nothing ? nothing : String(description))
+
+"""
+    Rule(name, pattern, where, replacement, region, where_expr,
+         boundary_policy, bindings)
 
 A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
 `where` is a vector of [`Guard`](@ref) constraints applied at rule-
@@ -116,6 +138,15 @@ concrete [`RuleRegion`](@ref) object (normative per-point scope).
 `where_expr` is an optional per-query-point boolean predicate AST
 (RFC §5.2.7). Mutually exclusive at the author level with guard-list
 `where`; structurally distinguished by JSON shape at parse time.
+
+`boundary_policy` declares behavior at domain edges (RFC §5.2.8); one of
+`"periodic"` (default when `nothing`), `"ghosted"`, `"neumann_zero"`,
+`"extrapolate"`. Stored verbatim; the rule engine does not branch on it.
+
+`bindings` is an optional `Dict{String,RuleBinding}` declaring the
+non-pattern-variable, non-canonical-index symbols the replacement may
+reference and the rate at which the host runtime updates each
+(RFC §5.2.8). Stored verbatim.
 """
 struct Rule
     name::String
@@ -124,18 +155,29 @@ struct Rule
     replacement::Expr
     region::Union{String,RuleRegion,Nothing}
     where_expr::Union{Expr,Nothing}
+    boundary_policy::Union{String,Nothing}
+    bindings::Union{Dict{String,RuleBinding},Nothing}
 end
 
 Rule(name::String, pattern::Expr, replacement::Expr;
      where::Vector{Guard}=Guard[],
      region::Union{String,RuleRegion,Nothing}=nothing,
-     where_expr::Union{Expr,Nothing}=nothing) =
-    Rule(name, pattern, where, replacement, region, where_expr)
+     where_expr::Union{Expr,Nothing}=nothing,
+     boundary_policy::Union{String,Nothing}=nothing,
+     bindings::Union{Dict{String,RuleBinding},Nothing}=nothing) =
+    Rule(name, pattern, where, replacement, region, where_expr,
+         boundary_policy, bindings)
 
 # Backward-compatible 5-arg positional constructor (pre-§5.2.7 callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      region::Union{String,RuleRegion,Nothing}) =
-    Rule(name, pattern, where, replacement, region, nothing)
+    Rule(name, pattern, where, replacement, region, nothing, nothing, nothing)
+
+# Backward-compatible 6-arg positional constructor (pre-§5.2.8 callers).
+Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
+     region::Union{String,RuleRegion,Nothing},
+     where_expr::Union{Expr,Nothing}) =
+    Rule(name, pattern, where, replacement, region, where_expr, nothing, nothing)
 
 # ============================================================================
 # Pattern variable detection
@@ -582,7 +624,56 @@ function parse_rule(name::AbstractString, obj)::Rule
     guards, where_expr = _parse_where(String(name), where_raw)
     region_raw = _getkey(obj, "region"; default=nothing)
     region = _parse_region(String(name), region_raw)
-    return Rule(String(name), pat, guards, repl, region, where_expr)
+    bp_raw = _getkey(obj, "boundary_policy"; default=nothing)
+    boundary_policy = _parse_boundary_policy(String(name), bp_raw)
+    bindings_raw = _getkey(obj, "bindings"; default=nothing)
+    bindings = _parse_bindings(String(name), bindings_raw)
+    return Rule(String(name), pat, guards, repl, region, where_expr,
+                boundary_policy, bindings)
+end
+
+const _BOUNDARY_POLICY_VALUES = ("periodic", "ghosted", "neumann_zero", "extrapolate")
+
+function _parse_boundary_policy(name::String, raw)::Union{String,Nothing}
+    raw === nothing && return nothing
+    raw isa AbstractString || throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `boundary_policy` must be a string"))
+    s = String(raw)
+    if !(s in _BOUNDARY_POLICY_VALUES)
+        valid = join(_BOUNDARY_POLICY_VALUES, ", ")
+        throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: unknown boundary_policy `$s` (closed set: $valid)"))
+    end
+    return s
+end
+
+const _BINDING_KIND_VALUES = ("static", "per_step", "per_cell")
+
+function _parse_bindings(name::String, raw)::Union{Dict{String,RuleBinding},Nothing}
+    raw === nothing && return nothing
+    _is_dict_like(raw) || throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `bindings` must be an object"))
+    out = Dict{String,RuleBinding}()
+    for (k, v) in _iterate_dict(raw)
+        sk = String(k)
+        _is_dict_like(v) || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: bindings.$sk must be an object"))
+        kind_raw = _getkey(v, "kind"; default=nothing)
+        kind_raw === nothing && throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: bindings.$sk missing required field `kind`"))
+        kind = String(kind_raw)
+        if !(kind in _BINDING_KIND_VALUES)
+            valid = join(_BINDING_KIND_VALUES, ", ")
+            throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: bindings.$sk: unknown kind `$kind` (closed set: $valid)"))
+        end
+        default_raw = _getkey(v, "default"; default=nothing)
+        default_expr = default_raw === nothing ? nothing : _parse_expr(default_raw)
+        desc_raw = _getkey(v, "description"; default=nothing)
+        desc = desc_raw === nothing ? nothing : String(desc_raw)
+        out[sk] = RuleBinding(kind, default_expr, desc)
+    end
+    return out
 end
 
 # Discriminate array-of-guards vs expression predicate (RFC §5.2.7).

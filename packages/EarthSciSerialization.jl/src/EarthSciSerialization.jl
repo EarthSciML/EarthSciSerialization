@@ -115,8 +115,8 @@ export
     to_ascii, format_expression_ascii,
     # Canonical AST form (RFC §5.4)
     canonicalize, canonical_json, format_canonical_float, CanonicalizeError,
-    # Rule engine (RFC §5.2, §5.2.7)
-    Rule, Guard, RuleContext, RuleEngineError,
+    # Rule engine (RFC §5.2, §5.2.7, §5.2.8)
+    Rule, Guard, RuleContext, RuleEngineError, RuleBinding,
     RuleRegion, RegionBoundary, RegionPanelBoundary,
     RegionMaskField, RegionIndexRange,
     match_pattern, apply_bindings, rewrite,

@@ -112,7 +112,15 @@ export {
   E_RULE_PARSE,
   E_RULE_REPLACEMENT_MISSING,
 } from './rule-engine.js'
-export type { Rule, Guard, RuleContext, GridMeta, VariableMeta } from './rule-engine.js'
+export type {
+  Rule,
+  Guard,
+  RuleContext,
+  GridMeta,
+  VariableMeta,
+  BoundaryPolicy,
+  RuleBinding,
+} from './rule-engine.js'
 
 // Discretization pipeline (RFC §11, gt-gbs2) + DAE binding contract (RFC §12, gt-q7sh).
 export {

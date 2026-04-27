@@ -48,9 +48,30 @@ class Guard:
     params: Dict[str, Any] = field(default_factory=dict)
 
 
+_BOUNDARY_POLICY_VALUES = ("periodic", "ghosted", "neumann_zero", "extrapolate")
+_BINDING_KIND_VALUES = ("static", "per_step", "per_cell")
+
+
+@dataclass
+class RuleBinding:
+    """A single rule binding declaration (RFC §5.2.8).
+
+    ``kind`` is one of ``"static"``, ``"per_step"``, ``"per_cell"`` and
+    declares the rate at which the host runtime updates the binding's
+    value. ``default`` is an optional default-value expression. ``description``
+    is an optional authorial note. The Python binding preserves
+    ``RuleBinding`` entries across parse/serialize roundtrips; the rule
+    engine itself does not consult them during pattern matching or expansion.
+    """
+
+    kind: str
+    default: Optional[Expr] = None
+    description: Optional[str] = None
+
+
 @dataclass
 class Rule:
-    """A rewrite rule (RFC §5.2, §5.2.7).
+    """A rewrite rule (RFC §5.2, §5.2.7, §5.2.8).
 
     ``region`` may be ``None``, a legacy advisory ``str``, or a ``dict``
     representing an object scope variant (``{kind: "boundary"/"panel_boundary"
@@ -63,6 +84,14 @@ class Rule:
     and the ``where_expr`` predicate per query point. ``region.panel_boundary``
     and ``region.mask_field`` parse and round-trip but do not evaluate
     (conservative fall-through, equivalent to RFC §5.2.7's W_UNEVAL_SCOPE).
+
+    ``boundary_policy`` declares behavior at domain edges (RFC §5.2.8); one
+    of ``"periodic"`` (default when ``None``), ``"ghosted"``,
+    ``"neumann_zero"``, ``"extrapolate"``. Stored verbatim; the rule engine
+    does not branch on it.
+
+    ``bindings`` is an optional mapping from bare identifier name to a
+    :class:`RuleBinding` declaration (RFC §5.2.8). Stored verbatim.
     """
 
     name: str
@@ -71,6 +100,8 @@ class Rule:
     where: List[Guard] = field(default_factory=list)
     region: Optional[Any] = None
     where_expr: Optional[Expr] = None
+    boundary_policy: Optional[str] = None
+    bindings: Optional[Dict[str, RuleBinding]] = None
 
 
 @dataclass
@@ -720,6 +751,36 @@ def parse_rule(obj: Mapping[str, Any], name: Optional[str] = None) -> Rule:
             "E_RULE_PARSE",
             f"rule {name}: 'region' must be a string (legacy) or object (scope)",
         )
+    bp_raw = obj.get("boundary_policy")
+    boundary_policy: Optional[str]
+    if bp_raw is None:
+        boundary_policy = None
+    elif isinstance(bp_raw, str):
+        if bp_raw not in _BOUNDARY_POLICY_VALUES:
+            valid = ", ".join(_BOUNDARY_POLICY_VALUES)
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: unknown boundary_policy `{bp_raw}` (closed set: {valid})",
+            )
+        boundary_policy = bp_raw
+    else:
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {name}: `boundary_policy` must be a string",
+        )
+    bindings_raw = obj.get("bindings")
+    bindings: Optional[Dict[str, RuleBinding]]
+    if bindings_raw is None:
+        bindings = None
+    elif isinstance(bindings_raw, Mapping):
+        bindings = {}
+        for bname, bval in bindings_raw.items():
+            bindings[str(bname)] = _parse_rule_binding(name, str(bname), bval)
+    else:
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {name}: `bindings` must be an object",
+        )
     return Rule(
         name=name,
         pattern=pat,
@@ -727,7 +788,39 @@ def parse_rule(obj: Mapping[str, Any], name: Optional[str] = None) -> Rule:
         where=guards,
         region=region,
         where_expr=where_expr,
+        boundary_policy=boundary_policy,
+        bindings=bindings,
     )
+
+
+def _parse_rule_binding(rule_name: str, binding_name: str, v: Any) -> RuleBinding:
+    if not isinstance(v, Mapping):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: bindings.{binding_name} must be an object",
+        )
+    kind = v.get("kind")
+    if not isinstance(kind, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: bindings.{binding_name} missing required string `kind`",
+        )
+    if kind not in _BINDING_KIND_VALUES:
+        valid = ", ".join(_BINDING_KIND_VALUES)
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: bindings.{binding_name}: unknown kind `{kind}` "
+            f"(closed set: {valid})",
+        )
+    default_raw = v.get("default")
+    default_expr = None if default_raw is None else _parse_expr(default_raw)
+    desc_raw = v.get("description")
+    if desc_raw is not None and not isinstance(desc_raw, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: bindings.{binding_name}.description must be a string",
+        )
+    return RuleBinding(kind=kind, default=default_expr, description=desc_raw)
 
 
 def parse_rules(obj: Any) -> List[Rule]:

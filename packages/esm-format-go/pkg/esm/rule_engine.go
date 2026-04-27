@@ -51,17 +51,39 @@ type Guard struct {
 // per-query-point boolean predicate AST (RFC §5.2.7); structurally
 // distinguished from the guard-list Where at parse time by JSON shape.
 //
+// BoundaryPolicy declares behavior at domain edges (RFC §5.2.8); empty
+// string means unset (semantically equivalent to "periodic" for
+// backwards compatibility). Bindings declares the time-varying / static
+// symbols the replacement may reference (RFC §5.2.8). Both fields are
+// preserved across parse/serialize roundtrips; the rule engine does not
+// branch on them.
+//
 // The Go binding evaluates region.index_range, region.boundary,
 // region.panel_boundary, region.mask_field, and the where-expression
 // predicate per query point (RFC §5.2.7).
 type Rule struct {
-	Name        string
-	Pattern     Expression
-	Where       []Guard
-	Replacement Expression
-	Region      string
-	RegionScope *RuleRegionScope
-	WhereExpr   Expression
+	Name           string
+	Pattern        Expression
+	Where          []Guard
+	Replacement    Expression
+	Region         string
+	RegionScope    *RuleRegionScope
+	WhereExpr      Expression
+	BoundaryPolicy string
+	Bindings       map[string]RuleBinding
+}
+
+// RuleBinding is a single rule binding declaration (RFC §5.2.8).
+// Loaders preserve RuleBinding entries across parse/serialize
+// roundtrips; the rule engine itself does not consult them during
+// pattern matching or expansion.
+type RuleBinding struct {
+	// Kind is one of "static", "per_step", "per_cell".
+	Kind string
+	// Default is an optional default-value expression. Nil means unset.
+	Default Expression
+	// Description is an optional authorial note. Empty means unset.
+	Description string
 }
 
 // RuleRegionScope is the parsed object-form `region` per RFC §5.2.7.
@@ -1196,15 +1218,93 @@ func parseRuleObject(name string, obj map[string]interface{}) (Rule, error) {
 				fmt.Sprintf("rule `%s`: `region` must be a string (legacy) or object (scope)", name))
 		}
 	}
+	var boundaryPolicy string
+	if bpRaw, has := obj["boundary_policy"]; has {
+		bp, ok := bpRaw.(string)
+		if !ok {
+			return Rule{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `boundary_policy` must be a string", name))
+		}
+		switch bp {
+		case "periodic", "ghosted", "neumann_zero", "extrapolate":
+			// ok
+		default:
+			return Rule{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: unknown boundary_policy `%s` "+
+					"(closed set: periodic, ghosted, neumann_zero, extrapolate)", name, bp))
+		}
+		boundaryPolicy = bp
+	}
+	var bindings map[string]RuleBinding
+	if bRaw, has := obj["bindings"]; has {
+		bMap, ok := bRaw.(map[string]interface{})
+		if !ok {
+			return Rule{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `bindings` must be an object", name))
+		}
+		bindings = make(map[string]RuleBinding, len(bMap))
+		for bname, bval := range bMap {
+			rb, err := parseRuleBinding(name, bname, bval)
+			if err != nil {
+				return Rule{}, err
+			}
+			bindings[bname] = rb
+		}
+	}
 	return Rule{
-		Name:        name,
-		Pattern:     pat,
-		Where:       guards,
-		Replacement: repl,
-		Region:      region,
-		RegionScope: regionScope,
-		WhereExpr:   whereExpr,
+		Name:           name,
+		Pattern:        pat,
+		Where:          guards,
+		Replacement:    repl,
+		Region:         region,
+		RegionScope:    regionScope,
+		WhereExpr:      whereExpr,
+		BoundaryPolicy: boundaryPolicy,
+		Bindings:       bindings,
 	}, nil
+}
+
+func parseRuleBinding(ruleName, bindingName string, v interface{}) (RuleBinding, error) {
+	obj, ok := v.(map[string]interface{})
+	if !ok {
+		return RuleBinding{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: bindings.%s must be an object", ruleName, bindingName))
+	}
+	kindV, has := obj["kind"]
+	if !has {
+		return RuleBinding{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: bindings.%s missing required string `kind`", ruleName, bindingName))
+	}
+	kind, ok := kindV.(string)
+	if !ok {
+		return RuleBinding{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: bindings.%s.kind must be a string", ruleName, bindingName))
+	}
+	switch kind {
+	case "static", "per_step", "per_cell":
+		// ok
+	default:
+		return RuleBinding{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: bindings.%s: unknown kind `%s` "+
+				"(closed set: static, per_step, per_cell)", ruleName, bindingName, kind))
+	}
+	rb := RuleBinding{Kind: kind}
+	if dRaw, has := obj["default"]; has && dRaw != nil {
+		d, err := parseExprValue(dRaw)
+		if err != nil {
+			return RuleBinding{}, err
+		}
+		rb.Default = d
+	}
+	if descRaw, has := obj["description"]; has && descRaw != nil {
+		desc, ok := descRaw.(string)
+		if !ok {
+			return RuleBinding{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: bindings.%s.description must be a string", ruleName, bindingName))
+		}
+		rb.Description = desc
+	}
+	return rb, nil
 }
 
 func parseRegionScope(ruleName string, obj map[string]interface{}) (*RuleRegionScope, error) {

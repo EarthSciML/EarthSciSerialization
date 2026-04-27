@@ -418,6 +418,103 @@ agnostic to the upstream source; only the populated
 from `ctx.mask_fields`, the rule falls through (same
 W_UNEVAL_SCOPE handling as any unimplemented scope).
 
+#### 5.2.8 `boundary_policy` and `bindings` (new in v0.3.x; resolves esm-m5s)
+
+Two additive optional fields on the Rule object (§5.2 schema, §7.2 expansion)
+extend rules to flux-form transport schemes whose stencil semantics depend on
+the rule's edge behavior and whose coefficients reference time-varying state
+that is not authored as a model variable.
+
+##### `boundary_policy`
+
+A string drawn from the closed set `{"periodic", "ghosted", "neumann_zero",
+"extrapolate"}`. Declares what the rule expects to happen when the matched
+pattern's stencil reaches a domain edge.
+
+| Value | Semantics at edge query points |
+|---|---|
+| `periodic` (default when omitted) | Wrap-around indexing on every spatial dimension. Equivalent to v0.2/v0.3 implicit behavior. Suitable for periodic Cartesian grids and for rules that emit `index` expressions that wrap around dimension extent. |
+| `ghosted` | Rule presumes ghost cells are filled by an upstream BC pass (RFC §9). Out-of-range `index` expressions in the rule's replacement read from the ghost layer and the rule fires unmodified at the edge. |
+| `neumann_zero` | At the edge, the rule's stencil is reflected (mirror BC) so that any out-of-range `index` reads its in-range image; emitted fluxes through the boundary are zero. Suitable for closed walls. |
+| `extrapolate` | At the edge, the rule expects interior-extrapolated values (linear or higher-order, binding-defined) at out-of-range positions. Suitable for outflow rules in advection-dominated problems. |
+
+The field is **declarative**. The rule engine itself (§5.2 pattern matcher,
+§7.2 expander) does not branch on `boundary_policy`; downstream pipeline
+phases (BC pass §9, ghost-cell synthesis, edge-rule fall-through) consult it.
+A binding that does not yet implement `ghosted`/`neumann_zero`/`extrapolate`
+edge handling MUST preserve the field through parse/serialize roundtrips and
+MAY emit `W_UNEVAL_BOUNDARY_POLICY` at the first non-`periodic` policy it
+encounters at rewrite time.
+
+Omission is equivalent to `periodic`. This preserves the v0.2/v0.3 implicit
+contract on Cartesian periodic grids.
+
+##### `bindings`
+
+A JSON object mapping bare identifier names (e.g. `"dt"`, `"dx"`,
+`"velocity"`, `"cos_lat"`) to a `RuleBinding` object. Declares the
+non-pattern-variable, non-canonical-index symbols that the rule's
+`replacement` AST may reference at runtime, together with the rate at which
+the runtime updates each binding's value:
+
+| `kind` | Cadence | Examples |
+|---|---|---|
+| `static` | Constant for the lifetime of the simulation | `R` (Earth radius), `dlon` (constant grid spacing), `cos_lat` (1D table indexed by latitude band) |
+| `per_step` | May change once per time-step | `dt` (adaptive timestep), `max_velocity` (CFL-bounding) |
+| `per_cell` | Varies per grid cell at runtime | `velocity[i]` (advected wind), `dx[i]` (nonuniform grid spacing) |
+
+A binding entry MAY carry a `default` ExpressionNode (a literal or any §4
+expression). For `static` bindings, the default is the value used when the
+runtime supplies no override; for `per_step` and `per_cell` bindings it is
+an authorial fallback the runtime is free to ignore.
+
+Pattern variables (`$`-prefixed) and canonical grid indices (`i`, `j`, `k`,
+`l`, `m` for cartesian; `c`, `e`, `v` for unstructured; etc.) are NOT
+declared here. Pattern variables flow from `pattern`; canonical indices are
+in scope by virtue of the model's grid binding (§7.2).
+
+The field is metadata: the rule engine does not consult it during pattern
+matching or expansion. Loaders MUST preserve it across roundtrips. The
+contract is between the rule author and the host runtime that supplies
+binding values during simulation. Conformance fixtures may exercise the
+parse/serialize path; runtime-evaluation conformance is a binding-specific
+concern outside RFC §11's deterministic pipeline scope.
+
+##### Worked example — CFL-bounded 1D upwind advection
+
+```json
+{
+  "name": "upwind_advect_x",
+  "pattern": { "op": "grad", "args": ["$u"], "dim": "$x" },
+  "where": [ { "guard": "var_has_grid", "pvar": "$u", "grid": "atmos1d" } ],
+  "boundary_policy": "periodic",
+  "bindings": {
+    "dt":       { "kind": "per_step", "description": "Adaptive timestep, set from CFL <= 0.5." },
+    "velocity": { "kind": "per_cell", "description": "Advected wind speed, cell-centered." },
+    "dx":       { "kind": "static",   "default": 0.1 }
+  },
+  "replacement": {
+    "op": "/",
+    "args": [
+      { "op": "*", "args": [
+        "velocity",
+        { "op": "-", "args": [
+          "$u",
+          { "op": "index", "args": ["$u", { "op": "-", "args": ["$x", 1] }] }
+        ]}
+      ]},
+      "dx"
+    ]
+  }
+}
+```
+
+The rule's replacement references `velocity` (per-cell) and `dx` (static)
+without further qualification; the binding contract tells the runtime
+which are time-varying. `boundary_policy: "periodic"` is explicit here
+even though it is the default — explicitness is recommended for any rule
+intended to port to non-periodic grids.
+
 ### 5.3 `regrid` op (new)
 
 ```json
