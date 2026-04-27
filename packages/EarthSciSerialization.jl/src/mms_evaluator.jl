@@ -241,11 +241,67 @@ const _MMS_REGISTRY_2D = Dict{Symbol,ManufacturedSolution2D}(
 )
 
 """
+    ReconstructionManufacturedSolution2D(name, sample, cell_average,
+                                         face_average_x, face_average_y, domain)
+
+A registered 2D scalar manufactured solution for nonlinear reconstruction
+sweeps (e.g. axis-split 2D WENO5). On a periodic Cartesian rectangle, the
+input vector is the cell-averaged scalar and the truth at a cell face is the
+perpendicular-axis-averaged value at that face — this lets a per-axis WENO5
+sweep on cell averages compare against the analytic edge value on a smooth
+manufactured field.
+
+- `sample(x, y)` is the pointwise scalar.
+- `cell_average(xlo, xhi, ylo, yhi)` is the analytic cell mean.
+- `face_average_x(xface, ylo, yhi)` is the y-average of `sample` at the
+  vertical face x = xface (the truth for an x-axis WENO5 sweep against
+  cell-averaged input).
+- `face_average_y(xlo, xhi, yface)` is the x-average at the horizontal face
+  y = yface.
+- `domain = ((xlo, xhi), (ylo, yhi))` is the periodic rectangle.
+"""
+struct ReconstructionManufacturedSolution2D
+    name::Symbol
+    sample::Function          # (x, y) -> Float64
+    cell_average::Function    # (xlo, xhi, ylo, yhi) -> Float64
+    face_average_x::Function  # (xface, ylo, yhi) -> Float64
+    face_average_y::Function  # (xlo, xhi, yface) -> Float64
+    domain::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
+end
+
+# Built-in: u(x, y) = sin(2π x + 1) · sin(2π y + 1) on [0,1]². Separable, so
+# both axes' WENO5 sweeps see the canonical Henrick-Aslam-Powers
+# phase-shifted sine in their reconstruction direction; the perpendicular
+# axis contributes only an exact analytic factor (the cell or face average
+# of the orthogonal sine), keeping the L∞ error a clean function of the
+# along-axis grid spacing.
+const _MMS_PHASE_SHIFTED_SINE_PRODUCT_2D = ReconstructionManufacturedSolution2D(
+    :phase_shifted_sine_product_2d,
+    (x, y) -> sin(2π * x + 1.0) * sin(2π * y + 1.0),
+    (xlo, xhi, ylo, yhi) ->
+        ((-cos(2π * xhi + 1.0) + cos(2π * xlo + 1.0)) / (2π * (xhi - xlo))) *
+        ((-cos(2π * yhi + 1.0) + cos(2π * ylo + 1.0)) / (2π * (yhi - ylo))),
+    (xf, ylo, yhi) ->
+        sin(2π * xf + 1.0) *
+        ((-cos(2π * yhi + 1.0) + cos(2π * ylo + 1.0)) / (2π * (yhi - ylo))),
+    (xlo, xhi, yf) ->
+        ((-cos(2π * xhi + 1.0) + cos(2π * xlo + 1.0)) / (2π * (xhi - xlo))) *
+        sin(2π * yf + 1.0),
+    ((0.0, 1.0), (0.0, 1.0)),
+)
+
+const _MMS_REGISTRY_2D_RECONSTRUCTION = Dict{Symbol,ReconstructionManufacturedSolution2D}(
+    :phase_shifted_sine_product_2d => _MMS_PHASE_SHIFTED_SINE_PRODUCT_2D,
+)
+
+"""
     register_manufactured_solution!(ms::ManufacturedSolution)
     register_manufactured_solution!(ms::ManufacturedSolution2D)
+    register_manufactured_solution!(ms::ReconstructionManufacturedSolution2D)
 
 Add or replace a manufactured solution in the registry. Returns `ms`.
-1D and 2D entries live in independent registries keyed by name.
+1D, 2D-sphere, and 2D-reconstruction entries live in independent registries
+keyed by name.
 """
 function register_manufactured_solution!(ms::ManufacturedSolution)
     _MMS_REGISTRY[ms.name] = ms
@@ -254,6 +310,11 @@ end
 
 function register_manufactured_solution!(ms::ManufacturedSolution2D)
     _MMS_REGISTRY_2D[ms.name] = ms
+    return ms
+end
+
+function register_manufactured_solution!(ms::ReconstructionManufacturedSolution2D)
+    _MMS_REGISTRY_2D_RECONSTRUCTION[ms.name] = ms
     return ms
 end
 
@@ -314,6 +375,44 @@ function lookup_manufactured_solution_2d(description::AbstractString)::Manufactu
     throw(MMSEvaluatorError(
         "E_MMS_UNKNOWN_SOLUTION",
         "no 2D manufactured solution registered for $(repr(description)); " *
+        "register one with register_manufactured_solution!"))
+end
+
+"""
+    lookup_manufactured_solution_2d_reconstruction(description) ->
+        ReconstructionManufacturedSolution2D
+
+Resolve a 2D `manufactured_solution` description for axis-split reconstruction
+sweeps (e.g. 2D WENO5). Accepts either a dict (exact match on a `name` key,
+then string-fallback on `expression`) or a string (loose alphanumeric match).
+The built-in `:phase_shifted_sine_product_2d` is the canonical separable
+phase-shifted sine product on [0,1]² used by the WENO5 cross-axis sweep.
+"""
+function lookup_manufactured_solution_2d_reconstruction(description::AbstractDict)::ReconstructionManufacturedSolution2D
+    if haskey(description, "name")
+        sym = Symbol(String(description["name"]))
+        haskey(_MMS_REGISTRY_2D_RECONSTRUCTION, sym) &&
+            return _MMS_REGISTRY_2D_RECONSTRUCTION[sym]
+    end
+    if haskey(description, "expression")
+        return lookup_manufactured_solution_2d_reconstruction(String(description["expression"]))
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no 2D reconstruction manufactured solution matches dict $(repr(description)); " *
+        "register one with register_manufactured_solution!"))
+end
+
+function lookup_manufactured_solution_2d_reconstruction(description::AbstractString)::ReconstructionManufacturedSolution2D
+    norm = replace(lowercase(String(description)), r"[^a-z0-9]" => "")
+    if occursin("phaseshiftedsineproduct", norm) ||
+       occursin("phaseshiftedsineprod2d", norm) ||
+       occursin("sin2pix1sin2piy1", norm)
+        return _MMS_REGISTRY_2D_RECONSTRUCTION[:phase_shifted_sine_product_2d]
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_UNKNOWN_SOLUTION",
+        "no 2D reconstruction manufactured solution registered for $(repr(description)); " *
         "register one with register_manufactured_solution!"))
 end
 
@@ -2141,23 +2240,28 @@ end
 Run a manufactured-solution convergence sweep for a WENO5 nonlinear
 reconstruction rule (`form == "weighted_essentially_nonoscillatory"`).
 
-The rule spec must carry the `reconstruction_left_biased` /
-`reconstruction_right_biased` blocks. The input fixture must declare:
+Two rule shapes are supported:
 
-- `reconstruction` — `"left_biased"` (default if missing) or `"right_biased"`,
-- `weno_epsilon` — smoothness-indicator regularisation (default 1e-6),
-- `grids` — at least two cell counts,
-- `manufactured_solution` — a registered solution that supplies both
-  `cell_average(a, b)` (used to seed cell-averaged input) and `edge_value(x)`
-  (used as truth at cell faces). The built-in `:phase_shifted_sine` covers
-  the canonical Jiang-Shu MMS case.
+1. **1D**: the spec carries top-level `reconstruction_left_biased` /
+   `reconstruction_right_biased` blocks. `input_json` must declare
+   `reconstruction`, `weno_epsilon`, `grids` (entries with `n`), and
+   `manufactured_solution` resolving to a 1D `ManufacturedSolution` with
+   `cell_average(a, b)` and `edge_value(x)`.
+2. **2D axis-split**: the spec carries an `axes` mapping with `x` and/or
+   `y` entries, each holding their own `reconstruction_left_biased` /
+   `reconstruction_right_biased` blocks. `input_json` adds an `axis`
+   selector (`"x"` or `"y"`, defaults to `"x"`), accepts `grids` entries
+   with `n` (square) or `nx`+`ny`, and resolves `manufactured_solution`
+   to a `ReconstructionManufacturedSolution2D` (e.g. the built-in
+   `:phase_shifted_sine_product_2d`). The chosen axis's WENO5 sweep is
+   applied row-wise (or column-wise), and the L∞ error is taken against
+   the perpendicular-axis-averaged analytic face value.
 
-The returned `MMSConvergenceResult` reports the L∞ error of the reconstructed
-right-cell-face value (left-biased) or left-cell-face value (right-biased)
-against `manufactured.edge_value` over the grid sequence.
+In both shapes the returned `MMSConvergenceResult` reports the L∞ error of
+the reconstructed face value over the grid sequence.
 """
 function mms_weno5_convergence(rule_json::AbstractDict, input_json::AbstractDict;
-                               manufactured::Union{Nothing,ManufacturedSolution}=nothing)::MMSConvergenceResult
+                               manufactured=nothing)::MMSConvergenceResult
     rule_name = String(input_json["rule"])
     spec = _resolve_rule_spec(rule_json, rule_name)
     _mms_rule_kind(spec) === :weno5 || throw(MMSEvaluatorError(
@@ -2170,6 +2274,20 @@ function mms_weno5_convergence(rule_json::AbstractDict, input_json::AbstractDict
             "E_MMS_BAD_FIXTURE",
             "rule $(repr(rule_name)) has no `accuracy` field"))
 
+    if haskey(spec, "axes")
+        return _mms_weno5_convergence_2d(spec, input_json, declared, manufactured)
+    end
+    return _mms_weno5_convergence_1d(spec, input_json, declared, manufactured)
+end
+
+# 1D WENO5 convergence sweep: top-level reconstruction_left/right_biased
+# blocks, 1D ManufacturedSolution with cell_average + edge_value.
+function _mms_weno5_convergence_1d(spec::AbstractDict, input_json::AbstractDict,
+                                   declared::Float64,
+                                   manufactured)::MMSConvergenceResult
+    manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "1D WENO5 sweep requires a `ManufacturedSolution`, got $(typeof(manufactured))"))
     ms = manufactured === nothing ?
         lookup_manufactured_solution(input_json["manufactured_solution"]) :
         manufactured
@@ -2210,13 +2328,124 @@ function mms_weno5_convergence(rule_json::AbstractDict, input_json::AbstractDict
         errors[k] = maximum(abs.(qhat .- face_truth))
     end
 
-    if any(!isfinite, errors) || any(e -> e <= 0, errors)
+    return _finalize_convergence(grids, errors, declared)
+end
+
+# 2D axis-split WENO5 convergence sweep. The spec's `axes.<axis>` block is a
+# 1D-shaped reconstruction sub-spec; the sweep applies the existing 1D
+# kernel along the chosen axis on each row/column of a 2D cell-averaged
+# manufactured field, and compares against the perpendicular-axis-averaged
+# analytic face value. WENO5 is positively homogeneous, so on a separable
+# manufactured solution u(x,y) = f(x) g(y) the 2D sweep degenerates to the
+# 1D kernel scaled by the orthogonal cell average — preserving the
+# Henrick-Aslam-Powers ≥ 4.5 smooth-MMS rate without re-deriving WENO5
+# weights in 2D.
+function _mms_weno5_convergence_2d(spec::AbstractDict, input_json::AbstractDict,
+                                   declared::Float64,
+                                   manufactured)::MMSConvergenceResult
+    axes_block = spec["axes"]
+    axes_block isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 2D rule's `axes` field must be a mapping, got $(typeof(axes_block))"))
+
+    axis = String(get(input_json, "axis", "x"))
+    axis in ("x", "y") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `axis` must be \"x\" or \"y\" (got $(repr(axis)))"))
+    haskey(axes_block, axis) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "WENO5 2D rule has no `axes.$(axis)` block " *
+        "(available: $(collect(keys(axes_block))))"))
+    axis_spec = axes_block[axis]
+
+    side = _parse_reconstruction_side(get(input_json, "reconstruction", "left_biased"))
+    eps = Float64(get(input_json, "weno_epsilon", 1e-6))
+
+    manufactured isa Union{Nothing,ReconstructionManufacturedSolution2D} ||
         throw(MMSEvaluatorError(
-            "E_MMS_NON_FINITE",
-            "non-finite or zero error on some grid; errors=$(errors)"))
+            "E_MMS_BAD_FIXTURE",
+            "2D WENO5 sweep requires a `ReconstructionManufacturedSolution2D`, " *
+            "got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution_2d_reconstruction(input_json["manufactured_solution"]) :
+        manufactured
+
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grid_pairs = Tuple{Int,Int}[]
+    for g in raw_grids
+        if haskey(g, "nx") && haskey(g, "ny")
+            push!(grid_pairs, (Int(g["nx"]), Int(g["ny"])))
+        elseif haskey(g, "n")
+            n = Int(g["n"])
+            push!(grid_pairs, (n, n))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "2D WENO5 grid entry must carry `nx`+`ny` or `n`; " *
+                "got keys $(collect(keys(g)))"))
+        end
+    end
+    length(grid_pairs) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grid_pairs)"))
+
+    (xlo, xhi), (ylo, yhi) = ms.domain
+    Lx = xhi - xlo
+    Ly = yhi - ylo
+    Lx > 0 && Ly > 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "2D WENO5 MMS requires positive domain extents; got $(ms.domain)"))
+
+    # Index the convergence sequence by the along-axis resolution.
+    grids = Int[axis == "x" ? nx : ny for (nx, ny) in grid_pairs]
+    errors = Vector{Float64}(undef, length(grid_pairs))
+    for (k, (nx, ny)) in enumerate(grid_pairs)
+        dx = Lx / nx
+        dy = Ly / ny
+        u = Matrix{Float64}(undef, nx, ny)
+        for j in 1:ny, i in 1:nx
+            u[i, j] = ms.cell_average(xlo + (i - 1) * dx, xlo + i * dx,
+                                      ylo + (j - 1) * dy, ylo + j * dy)
+        end
+        if axis == "x"
+            err = 0.0
+            for j in 1:ny
+                col = Vector{Float64}(undef, nx)
+                @inbounds for i in 1:nx
+                    col[i] = u[i, j]
+                end
+                qhat = apply_weno5_reconstruction_periodic_1d(axis_spec, col, side; eps=eps)
+                ylo_j = ylo + (j - 1) * dy
+                yhi_j = ylo + j * dy
+                @inbounds for i in 1:nx
+                    xf = side === :left_biased ? xlo + i * dx : xlo + (i - 1) * dx
+                    truth = ms.face_average_x(xf, ylo_j, yhi_j)
+                    err = max(err, abs(qhat[i] - truth))
+                end
+            end
+            errors[k] = err
+        else  # axis == "y"
+            err = 0.0
+            for i in 1:nx
+                row = Vector{Float64}(undef, ny)
+                @inbounds for j in 1:ny
+                    row[j] = u[i, j]
+                end
+                qhat = apply_weno5_reconstruction_periodic_1d(axis_spec, row, side; eps=eps)
+                xlo_i = xlo + (i - 1) * dx
+                xhi_i = xlo + i * dx
+                @inbounds for j in 1:ny
+                    yf = side === :left_biased ? ylo + j * dy : ylo + (j - 1) * dy
+                    truth = ms.face_average_y(xlo_i, xhi_i, yf)
+                    err = max(err, abs(qhat[j] - truth))
+                end
+            end
+            errors[k] = err
+        end
     end
 
-    orders = [log2(errors[i] / errors[i + 1]) for i in 1:(length(errors) - 1)]
-    observed_min = minimum(orders)
-    return MMSConvergenceResult(grids, errors, orders, observed_min, declared)
+    return _finalize_convergence(grids, errors, declared)
 end

@@ -161,9 +161,11 @@ export
     # MPAS-style unstructured MMS support (esm-0sy).
     # 2D structured + per-cell metric bindings + sphere MMS registry (esm-5ur).
     MMSEvaluatorError, ManufacturedSolution, ManufacturedSolution2D,
+    ReconstructionManufacturedSolution2D,
     MMSConvergenceResult, CellBindings, bindings_at,
     parse_accuracy_order, lookup_manufactured_solution,
     lookup_manufactured_solution_2d,
+    lookup_manufactured_solution_2d_reconstruction,
     register_manufactured_solution!, eval_coeff, OUTPUT_KINDS,
     apply_stencil_periodic_1d, apply_stencil_2d_latlon,
     apply_stencil_2d_arakawa, apply_stencil_1d_vertical,

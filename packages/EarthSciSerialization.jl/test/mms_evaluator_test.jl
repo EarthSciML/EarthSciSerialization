@@ -770,6 +770,198 @@ using EarthSciSerialization
                                 Dict("name" => "phase_shifted_sine"))))
     end
 
+    # ====================================================================
+    # 2D axis-split WENO5 (esm-hsa). Shares the 1D substencil shapes,
+    # nested under `axes.x` / `axes.y` so the rule covers both directions.
+    # ====================================================================
+    weno5_2d_rule = Dict(
+        "discretizations" => Dict(
+            "weno5_advection_2d" => Dict(
+                "applies_to" => Dict("op" => "reconstruct", "args" => Any["\$q"]),
+                "form" => "weighted_essentially_nonoscillatory",
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^5)",
+                "axes" => Dict(
+                    "x" => Dict(
+                        "reconstruction_left_biased" => Dict(
+                            "candidates" => [
+                                Dict("stencil" => _weno5_substencil(
+                                    [-2, -1, 0], [(1, 3), (-7, 6), (11, 6)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [-1, 0, 1],  [(-1, 6), (5, 6), (1, 3)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [0, 1, 2],   [(1, 3), (5, 6), (-1, 6)])),
+                            ],
+                            "linear_weights" => Dict(
+                                "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                                "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                                "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                            ),
+                        ),
+                        "reconstruction_right_biased" => Dict(
+                            "candidates" => [
+                                Dict("stencil" => _weno5_substencil(
+                                    [2, 1, 0],   [(1, 3), (-7, 6), (11, 6)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [1, 0, -1],  [(-1, 6), (5, 6), (1, 3)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [0, -1, -2], [(1, 3), (5, 6), (-1, 6)])),
+                            ],
+                            "linear_weights" => Dict(
+                                "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                                "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                                "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                            ),
+                        ),
+                    ),
+                    "y" => Dict(
+                        "reconstruction_left_biased" => Dict(
+                            "candidates" => [
+                                Dict("stencil" => _weno5_substencil(
+                                    [-2, -1, 0], [(1, 3), (-7, 6), (11, 6)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [-1, 0, 1],  [(-1, 6), (5, 6), (1, 3)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [0, 1, 2],   [(1, 3), (5, 6), (-1, 6)])),
+                            ],
+                            "linear_weights" => Dict(
+                                "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                                "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                                "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                            ),
+                        ),
+                        "reconstruction_right_biased" => Dict(
+                            "candidates" => [
+                                Dict("stencil" => _weno5_substencil(
+                                    [2, 1, 0],   [(1, 3), (-7, 6), (11, 6)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [1, 0, -1],  [(-1, 6), (5, 6), (1, 3)])),
+                                Dict("stencil" => _weno5_substencil(
+                                    [0, -1, -2], [(1, 3), (5, 6), (-1, 6)])),
+                            ],
+                            "linear_weights" => Dict(
+                                "d0" => Dict("op" => "/", "args" => Any[1, 10]),
+                                "d1" => Dict("op" => "/", "args" => Any[6, 10]),
+                                "d2" => Dict("op" => "/", "args" => Any[3, 10]),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    weno5_2d_input_x = Dict(
+        "rule" => "weno5_advection_2d",
+        "manufactured_solution" => Dict("name" => "phase_shifted_sine_product_2d"),
+        "axis" => "x",
+        "reconstruction" => "left_biased",
+        "weno_epsilon" => 1.0e-6,
+        "grids" => [Dict("n" => 32), Dict("n" => 64),
+                    Dict("n" => 128), Dict("n" => 256)],
+    )
+
+    @testset "lookup_manufactured_solution_2d_reconstruction — built-in" begin
+        ms = lookup_manufactured_solution_2d_reconstruction(
+            Dict("name" => "phase_shifted_sine_product_2d"))
+        @test ms isa ReconstructionManufacturedSolution2D
+        @test ms.name === :phase_shifted_sine_product_2d
+        # Cell average over [0,1]^2 of sin(2πx+1) sin(2πy+1) is the product
+        # of the 1D averages, both zero over a full period.
+        @test isapprox(ms.cell_average(0.0, 1.0, 0.0, 1.0), 0.0; atol=1e-12)
+        # Face-x average at xf = 0.25 over a full y period: sin(2π·0.25 + 1) · 0.
+        @test isapprox(ms.face_average_x(0.25, 0.0, 1.0), 0.0; atol=1e-12)
+        # String-fallback alias.
+        @test lookup_manufactured_solution_2d_reconstruction(
+            "phase shifted sine product 2D").name === :phase_shifted_sine_product_2d
+        @test_throws MMSEvaluatorError lookup_manufactured_solution_2d_reconstruction(
+            Dict("name" => "no_such_solution"))
+    end
+
+    @testset "mms_weno5_convergence — 2D axis=x left-biased" begin
+        result = mms_weno5_convergence(weno5_2d_rule, weno5_2d_input_x)
+        @test result.declared_order == 5.0
+        @test result.grids == [32, 64, 128, 256]
+        @test all(result.errors .> 0)
+        @test all(isfinite, result.errors)
+        # Acceptance #3 of dsc-5od: observed_min_order ≥ 4.4.
+        @test result.observed_min_order ≥ 4.4
+        @test result.orders[end] ≥ 4.5
+    end
+
+    @testset "mms_weno5_convergence — 2D axis=y right-biased" begin
+        input_y = Base.merge(weno5_2d_input_x,
+            Dict("axis" => "y", "reconstruction" => "right_biased"))
+        result = mms_weno5_convergence(weno5_2d_rule, input_y)
+        @test result.observed_min_order ≥ 4.4
+        @test result.orders[end] ≥ 4.5
+    end
+
+    @testset "mms_weno5_convergence — 2D dispatches via mms_convergence" begin
+        # The top-level dispatcher must route 2D WENO5 to the same path
+        # without a manual call to mms_weno5_convergence.
+        result = mms_convergence(weno5_2d_rule, weno5_2d_input_x)
+        @test result.declared_order == 5.0
+        @test result.observed_min_order ≥ 4.4
+    end
+
+    @testset "mms_weno5_convergence — 2D rectangular grids (nx ≠ ny)" begin
+        rect_input = Base.merge(weno5_2d_input_x, Dict(
+            "grids" => [Dict("nx" => 32, "ny" => 64),
+                        Dict("nx" => 64, "ny" => 128),
+                        Dict("nx" => 128, "ny" => 256),
+                        Dict("nx" => 256, "ny" => 512)],
+        ))
+        result = mms_weno5_convergence(weno5_2d_rule, rect_input)
+        # axis = "x", so the convergence sequence is indexed by nx.
+        @test result.grids == [32, 64, 128, 256]
+        @test result.observed_min_order ≥ 4.4
+    end
+
+    @testset "mms_weno5_convergence — 2D error paths" begin
+        # Bad axis selector.
+        bad_axis = Base.merge(weno5_2d_input_x, Dict("axis" => "z"))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(weno5_2d_rule, bad_axis)
+
+        # Spec axes block missing the requested axis.
+        no_y_rule = deepcopy(weno5_2d_rule)
+        delete!(no_y_rule["discretizations"]["weno5_advection_2d"]["axes"], "y")
+        @test_throws MMSEvaluatorError mms_weno5_convergence(
+            no_y_rule, Base.merge(weno5_2d_input_x, Dict("axis" => "y")))
+
+        # Wrong manufactured-solution type passed via kwarg (1D into 2D).
+        ms_1d = lookup_manufactured_solution(Dict("name" => "phase_shifted_sine"))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(
+            weno5_2d_rule, weno5_2d_input_x; manufactured=ms_1d)
+
+        # Wrong manufactured-solution type passed via kwarg (2D into 1D).
+        ms_2d = lookup_manufactured_solution_2d_reconstruction(
+            Dict("name" => "phase_shifted_sine_product_2d"))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(
+            weno5_rule, weno5_input; manufactured=ms_2d)
+
+        # Bad grid entry (neither n nor nx/ny).
+        bad_grids = Base.merge(weno5_2d_input_x,
+            Dict("grids" => [Dict("foo" => 32), Dict("foo" => 64)]))
+        @test_throws MMSEvaluatorError mms_weno5_convergence(weno5_2d_rule, bad_grids)
+    end
+
+    @testset "register_manufactured_solution! — 2D reconstruction overload" begin
+        # Smoke-test the registry overload: register a synthetic 2D MMS,
+        # look it up, then unregister to keep the global registry clean.
+        zero_field = ReconstructionManufacturedSolution2D(
+            :_test_zero_2d,
+            (x, y) -> 0.0,
+            (xlo, xhi, ylo, yhi) -> 0.0,
+            (xf, ylo, yhi) -> 0.0,
+            (xlo, xhi, yf) -> 0.0,
+            ((0.0, 1.0), (0.0, 1.0)),
+        )
+        register_manufactured_solution!(zero_field)
+        @test lookup_manufactured_solution_2d_reconstruction(
+            Dict("name" => "_test_zero_2d")).name === :_test_zero_2d
+        delete!(EarthSciSerialization._MMS_REGISTRY_2D_RECONSTRUCTION, :_test_zero_2d)
+    end
+
     @testset "eval_coeff — direct passthrough to evaluate" begin
         # Smoke test: matches ESD's `eval_coeff` semantics so a downstream
         # walker can swap to the ESS export with no behaviour change.
