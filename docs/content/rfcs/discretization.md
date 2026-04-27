@@ -1793,6 +1793,91 @@ with centered reconstruction and conservative remap — as the cross-binding
 fixture.
 
 
+### 7.8 Grid-family dispatch (`grid_dispatch`, resolves esm-fpb)
+
+Several earth-system operators take a different concrete form depending on
+the grid family on which they are evaluated. The canonical example is PPM
+advection: on a Cartesian interior the scheme is the 4-point Colella–Woodward
+stencil; on a cubed-sphere panel boundary the scheme uses the panel
+selectors of §7 to walk across the seam. v0.2 forced authors to fork a single
+operator into two named `discretizations` entries (one per family) and a
+sibling rule for each; this duplicated metadata (`applies_to`, `accuracy`,
+`order`, `requires_locations`, `emits_location`, …) and entangled the
+operator name with the grid topology.
+
+v0.3 adds an optional **`grid_dispatch`** block to a Discretization. When
+present, `grid_dispatch` is an array of two or more `DiscretizationVariant`
+objects, each carrying its own `grid_family` plus the body fields (`stencil`
+/ `kind` / `axes` / `inner_rule` / `splitting` / `order_of_sweeps` /
+`reconstruction` / `remap` / `limiter` / `cfl_policy` / `dimensions` /
+`combine`) that would otherwise live on the parent. The loader picks the
+variant whose `grid_family` matches the active grid's family at expansion
+time and substitutes its body in place of the parent's. Shared metadata
+(`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`,
+`target_binding`, `ghost_vars`, `free_variables`, `description`,
+`reference`) remains on the parent and applies to every variant.
+
+**Mutual exclusion.** When `grid_dispatch` is present:
+- Top-level `grid_family` MUST be absent (the variants own family selection).
+- Inline body fields (`stencil`, `kind`, `combine`, `axes`, `inner_rule`,
+  `splitting`, `order_of_sweeps`, `reconstruction`, `remap`, `limiter`,
+  `cfl_policy`, `dimensions`) MUST be absent at the parent level.
+- Each variant's `grid_family` MUST be unique within the array; ordering is
+  not significant. A variant whose `grid_family` matches no active grid is
+  inert.
+
+`grid_dispatch` is orthogonal to §7.6 cross-metric composites: a
+`CrossMetricStencilRule` entry is a sibling top-level shape (not a
+Discretization `kind`), and `grid_dispatch` does not nest cross-metric
+variants. Authors who need per-family cross-metric composites declare two
+sibling `discretizations` entries instead.
+
+**Worked example.** A single PPM scheme covering both Cartesian interior
+and cubed-sphere panel boundaries:
+
+```json
+{
+  "discretizations": {
+    "ppm_advection": {
+      "applies_to": { "op": "grad", "args": ["$u"], "dim": "$x" },
+      "accuracy":   "O(dx^3)",
+      "free_variables": ["$u", "$x"],
+      "grid_dispatch": [
+        {
+          "grid_family": "cartesian",
+          "kind":        "stencil",
+          "stencil":     [ /* 4-point Colella–Woodward */ ]
+        },
+        {
+          "grid_family": "cubed_sphere",
+          "kind":        "stencil",
+          "stencil":     [ /* panel-selector stencil */ ]
+        }
+      ]
+    }
+  }
+}
+```
+
+A single rule firing on `grad($u, $x)` selects `ppm_advection`; the loader
+inspects the active grid's `family` and substitutes the matching variant's
+body into the §7.2 expansion. No duplicated rule, no fork.
+
+**Binding contract.** All five bindings (Julia, TypeScript, Python, Rust,
+Go) parse and round-trip `grid_dispatch` losslessly and reject structural
+violations (parent `grid_family` alongside `grid_dispatch`, inline body
+fields alongside `grid_dispatch`, fewer than two variants, duplicate
+`grid_family` within the array — schema-enforced; uniqueness is enforced
+by the loader, since JSON Schema cannot express it directly). Runtime
+selection of a matching variant during §7.2 expansion is **out of scope**
+for the v0.3 schema bump and is tracked as follow-up beads
+(`esm-fpb` MVP delivers the schema + parse/round-trip; per-binding rule
+engines pick up runtime selection separately, mirroring the FFSL
+trajectory of §7.7). The conformance manifest adds
+`tests/discretizations/grid_dispatch_ppm.esm` — a PPM scheme with
+Cartesian and cubed-sphere variants — as the cross-binding fixture.
+
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-

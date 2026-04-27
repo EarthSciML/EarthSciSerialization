@@ -838,6 +838,33 @@ type Discretization struct {
 	FreeVariables      []string          `json:"free_variables,omitempty"`
 	Description        string            `json:"description,omitempty"`
 	Reference          *Reference        `json:"reference,omitempty"`
+	// GridDispatch (RFC §7.8) declares family-keyed body variants in lieu of an
+	// inline body. When non-empty, GridFamily and the inline body fields
+	// (Stencil / Axes / InnerRule / etc.) MUST be empty; the loader picks the
+	// variant whose GridFamily matches the active grid at expansion time.
+	GridDispatch       []DiscretizationVariant `json:"grid_dispatch,omitempty"`
+}
+
+// DiscretizationVariant (RFC §7.8) is one entry of a Discretization's
+// grid_dispatch block: a per-grid-family body that replaces the parent's
+// inline body when the active grid family matches GridFamily. Body fields
+// follow the same kind-discriminated semantics as the parent Discretization;
+// shared fields (AppliesTo, Accuracy, Order, RequiresLocations, etc.) live on
+// the parent and are not duplicated.
+type DiscretizationVariant struct {
+	GridFamily     string          `json:"grid_family"`
+	Kind           string          `json:"kind,omitempty"`
+	Combine        string          `json:"combine,omitempty"`
+	Stencil        []StencilEntry  `json:"stencil,omitempty"`
+	Axes           []string        `json:"axes,omitempty"`
+	InnerRule      string          `json:"inner_rule,omitempty"`
+	Splitting      string          `json:"splitting,omitempty"`
+	OrderOfSweeps  string          `json:"order_of_sweeps,omitempty"`
+	Reconstruction json.RawMessage `json:"reconstruction,omitempty"`
+	Remap          *FfslRemap      `json:"remap,omitempty"`
+	Limiter        json.RawMessage `json:"limiter,omitempty"`
+	CflPolicy      string          `json:"cfl_policy,omitempty"`
+	Dimensions     []string        `json:"dimensions,omitempty"`
 }
 
 // IsCrossMetric reports whether this Discretization is a CrossMetricStencilRule

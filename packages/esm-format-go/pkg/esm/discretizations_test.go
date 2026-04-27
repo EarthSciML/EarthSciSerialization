@@ -229,3 +229,58 @@ func TestFfslDiscretizationStructuralAsserts(t *testing.T) {
 		t.Error("reconstruction missing")
 	}
 }
+
+// TestGridDispatchScheme exercises the RFC §7.8 grid_dispatch fixture: a
+// single Discretization with cartesian + cubed_sphere variants in lieu of an
+// inline body. Verifies parent-level GridFamily / Stencil are absent,
+// GridDispatch carries both variants in declaration order, and the round-trip
+// preserves variant bodies.
+func TestGridDispatchScheme(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "tests/discretizations/grid_dispatch_ppm.esm"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed EsmFile
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	d, ok := parsed.Discretizations["ppm_advection"]
+	if !ok {
+		t.Fatal("ppm_advection not found")
+	}
+	if d.GridFamily != "" {
+		t.Errorf("parent GridFamily must be empty when grid_dispatch is set; got %q", d.GridFamily)
+	}
+	if len(d.Stencil) != 0 {
+		t.Errorf("parent Stencil must be empty when grid_dispatch is set; got %d entries", len(d.Stencil))
+	}
+	if len(d.GridDispatch) != 2 {
+		t.Fatalf("expected 2 grid_dispatch variants; got %d", len(d.GridDispatch))
+	}
+	families := []string{d.GridDispatch[0].GridFamily, d.GridDispatch[1].GridFamily}
+	want := []string{"cartesian", "cubed_sphere"}
+	if !reflect.DeepEqual(families, want) {
+		t.Errorf("variant grid_family order = %v, want %v", families, want)
+	}
+	if got := len(d.GridDispatch[0].Stencil); got != 4 {
+		t.Errorf("cartesian variant stencil len = %d, want 4", got)
+	}
+	if got := len(d.GridDispatch[1].Stencil); got != 2 {
+		t.Errorf("cubed_sphere variant stencil len = %d, want 2", got)
+	}
+	if got := d.GridDispatch[1].Stencil[0].Selector.Kind; got != "panel" {
+		t.Errorf("cubed_sphere variant first selector kind = %q, want \"panel\"", got)
+	}
+
+	// Round-trip the document and confirm the dispatch block survives.
+	out, err := json.Marshal(&parsed)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var reparsed EsmFile
+	if err := json.Unmarshal(out, &reparsed); err != nil {
+		t.Fatalf("unmarshal round-trip: %v", err)
+	}
+	assertJSONEqual(t, parsed.Discretizations, reparsed.Discretizations, "discretizations (grid_dispatch)")
+}

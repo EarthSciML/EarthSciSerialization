@@ -29,6 +29,7 @@ FIXTURES = [
     "periodic_bc",
     "mpas_cell_div",
     "cross_metric_cartesian",
+    "grid_dispatch_ppm",
 ]
 
 
@@ -75,3 +76,23 @@ def test_cross_metric_composite_structure() -> None:
     # Per-axis stencils should still be present and carry a stencil key.
     assert esm.discretizations["d2_dxi2_uniform"]["stencil"]
     assert esm.discretizations["d2_deta2_uniform"]["stencil"]
+
+
+def test_grid_dispatch_structure() -> None:
+    """RFC §7.8 grid_dispatch entry parses with its variant table preserved."""
+    fixture_path = DISC_DIR / "grid_dispatch_ppm.esm"
+    esm = load(fixture_path)
+
+    assert "ppm_advection" in esm.discretizations
+    scheme = esm.discretizations["ppm_advection"]
+    # Parent-level grid_family / stencil are absent; the body lives inside
+    # grid_dispatch variants.
+    assert "grid_family" not in scheme
+    assert "stencil" not in scheme
+    assert isinstance(scheme["grid_dispatch"], list)
+    assert len(scheme["grid_dispatch"]) == 2
+    families = [v["grid_family"] for v in scheme["grid_dispatch"]]
+    assert families == ["cartesian", "cubed_sphere"]
+    # Each variant carries its own body (per §7.8 mutual-exclusion contract).
+    assert len(scheme["grid_dispatch"][0]["stencil"]) == 4
+    assert len(scheme["grid_dispatch"][1]["stencil"]) == 2

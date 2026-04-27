@@ -504,7 +504,7 @@ export type InitialConditions =
       };
     };
 /**
- * A named discretization scheme. Three kinds are supported: (a) "stencil" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) "dimensional_split" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.5); (c) "flux_form_semi_lagrangian" — a flux-form semi-Lagrangian (FFSL) advection scheme (Lin & Rood 1996 MWR) that combines a piecewise reconstruction with flux-form remapping over declared advection axes, described in RFC §7.7.
+ * A named discretization scheme. Three kinds are supported: (a) "stencil" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) "dimensional_split" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.5); (c) "flux_form_semi_lagrangian" — a flux-form semi-Lagrangian (FFSL) advection scheme (Lin & Rood 1996 MWR) that combines a piecewise reconstruction with flux-form remapping over declared advection axes, described in RFC §7.7. A scheme may additionally carry a `grid_dispatch` block (RFC §7.8) instead of an inline body — a list of {grid_family, body} variants whose body fields (stencil / inner_rule / etc.) replace the inline ones at load time, picked by the active grid's family.
  */
 export type Discretization = Discretization1 & {
   /**
@@ -526,7 +526,7 @@ export type Discretization = Discretization1 & {
   /**
    * Grid family this scheme targets; the stencil's selector.kind must match this family. dimensional_split requires "cartesian" or "cubed_sphere" (unstructured grids have no intrinsic orthogonal-axis ordering).
    */
-  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
+  grid_family?: "cartesian" | "cubed_sphere" | "unstructured";
   /**
    * stencil: how stencil entries are combined. Not applicable to dimensional_split schemes.
    */
@@ -645,6 +645,12 @@ export type Discretization = Discretization1 & {
   free_variables?: string[];
   description?: string;
   reference?: Reference;
+  /**
+   * RFC §7.8: family-keyed variant table. When present, the scheme declares two or more grid-family-specific bodies in place of an inline one — each variant carries its own `grid_family` plus the body fields (stencil / kind / axes / inner_rule / splitting / order_of_sweeps / terms / boundary_fallback / reconstruction / remap / limiter / cfl_policy / dimensions / combine) that would otherwise live on the parent. The loader picks the variant whose `grid_family` matches the active grid family at expansion time and substitutes its body in place of the parent's. Top-level `grid_family` and any inline body field MUST be absent when `grid_dispatch` is present; shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) remain on the parent and apply to every variant. Each variant's `grid_family` MUST be unique within the array; ordering is not significant. The use case is operators whose form differs across grid topologies — e.g. PPM on cartesian interiors vs. cubed-sphere panels — without forking the scheme name.
+   *
+   * @minItems 2
+   */
+  grid_dispatch?: [DiscretizationVariant, DiscretizationVariant1, ...DiscretizationVariant1[]];
 };
 export type Discretization1 = {
   [k: string]: unknown;
@@ -735,6 +741,96 @@ export type NeighborSelector = NeighborSelector1 & {
   combine?: "+" | "*" | "min" | "max";
 };
 export type NeighborSelector1 = {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+};
+/**
+ * RFC §7.8: one entry of a Discretization's `grid_dispatch` block. Declares a per-grid-family body that replaces the parent's inline body when the active grid's family matches `grid_family`. The body fields (`kind`, `combine`, `stencil`, `axes`, `inner_rule`, `splitting`, `order_of_sweeps`, `reconstruction`, `remap`, `limiter`, `cfl_policy`, `dimensions`) follow the same kind-discriminated semantics and mutual-exclusion rules as the parent Discretization. Shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) live on the parent and are not duplicated here. A variant whose `grid_family` matches no active grid is inert. CrossMetricStencilRule entries (RFC §7.6) are a sibling top-level shape and not eligible for `grid_dispatch`; author per-family CrossMetric rules as separate `discretizations` entries instead.
+ */
+export type DiscretizationVariant = DiscretizationVariant1 & {
+  /**
+   * Grid family this variant targets; selected when the active grid's family equals this value.
+   */
+  grid_family: "cartesian" | "cubed_sphere" | "unstructured";
+  /**
+   * Variant kind discriminator; same vocabulary and semantics as the parent Discretization's `kind`.
+   */
+  kind?: "stencil" | "dimensional_split" | "flux_form_semi_lagrangian";
+  /**
+   * Variant: how stencil entries are combined. See parent Discretization.
+   */
+  combine?: "+" | "*" | "min" | "max";
+  /**
+   * Variant: stencil entries. Required when this variant's kind is "stencil" or omitted.
+   *
+   * @minItems 1
+   */
+  stencil?: [StencilEntry, ...StencilEntry[]];
+  /**
+   * Variant: dimensional_split axes (or cross_metric axes when terms is present).
+   *
+   * @minItems 1
+   */
+  axes?: [string, ...string[]];
+  /**
+   * Variant: dimensional_split inner scheme name.
+   */
+  inner_rule?: string;
+  /**
+   * Variant: dimensional_split operator-splitting convention.
+   */
+  splitting?: "strang" | "lie" | "none";
+  /**
+   * Variant: dimensional_split per-step traversal direction.
+   */
+  order_of_sweeps?: "forward" | "reverse" | "alternating";
+  /**
+   * Variant: FFSL sub-cell reconstruction (string ref or inline {order, parameters}).
+   */
+  reconstruction?:
+    | string
+    | {
+        order: string;
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * Variant: FFSL flux-form remap semantics.
+   */
+  remap?: {
+    semantics: "conservative" | "non_conservative";
+    flux_form?: string;
+    parameters?: {
+      [k: string]: unknown;
+    };
+  };
+  /**
+   * Variant: FFSL limiter (string ref or inline {family, parameters}).
+   */
+  limiter?:
+    | string
+    | {
+        family: string;
+        parameters?: {
+          [k: string]: unknown;
+        };
+      };
+  /**
+   * Variant: FFSL CFL policy.
+   */
+  cfl_policy?: "conservative" | "non_conservative";
+  /**
+   * Variant: FFSL advection axes.
+   *
+   * @minItems 1
+   */
+  dimensions?: [string, ...string[]];
+};
+export type DiscretizationVariant1 = {
   [k: string]: unknown;
 } & {
   [k: string]: unknown;

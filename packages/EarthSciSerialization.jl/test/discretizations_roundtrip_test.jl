@@ -36,7 +36,8 @@ end
                 "upwind_1st_advection.esm",
                 "periodic_bc.esm",
                 "mpas_cell_div.esm",
-                "cross_metric_cartesian.esm"]
+                "cross_metric_cartesian.esm",
+                "grid_dispatch_ppm.esm"]
 
     for fname in fixtures
         @testset "Round-trip $(fname)" begin
@@ -86,4 +87,26 @@ end
     # Per-axis stencils should still be present and carry a stencil key.
     @test haskey(esm.discretizations["d2_dxi2_uniform"], "stencil")
     @test haskey(esm.discretizations["d2_deta2_uniform"], "stencil")
+end
+
+@testset "RFC §7.8 grid_dispatch structure" begin
+    path = joinpath(_DISC_FIXTURES_DIR, "grid_dispatch_ppm.esm")
+    esm = EarthSciSerialization.load(path)
+
+    @test haskey(esm.discretizations, "ppm_advection")
+    scheme = esm.discretizations["ppm_advection"]
+
+    # Parent-level grid_family / stencil are absent; the body lives in
+    # grid_dispatch variants (RFC §7.8 mutual-exclusion contract).
+    @test !haskey(scheme, "grid_family")
+    @test !haskey(scheme, "stencil")
+    @test scheme["grid_dispatch"] isa AbstractVector
+    @test length(scheme["grid_dispatch"]) == 2
+
+    families = [v["grid_family"] for v in scheme["grid_dispatch"]]
+    @test families == ["cartesian", "cubed_sphere"]
+
+    # Each variant carries its own stencil body.
+    @test length(scheme["grid_dispatch"][1]["stencil"]) == 4
+    @test length(scheme["grid_dispatch"][2]["stencil"]) == 2
 end
