@@ -1666,4 +1666,150 @@ using EarthSciSerialization
         too_few = Base.merge(vertical_input, Dict("grids" => [Dict("nz" => 16)]))
         @test_throws MMSEvaluatorError mms_convergence(vertical_rule, too_few)
     end
+
+    # ============================================================
+    # AST-walker dispatch for closed-AST lowerings (esm-4gw)
+    # ============================================================
+
+    # Centered 2nd-order finite difference expressed as a closed §4.2 AST
+    # (no `stencil` block). The lowering is an `arrayop` whose body contains
+    # `index(u, i±1)` against periodic BCs declared in the input fixture.
+    centered_lowering_rule = Dict(
+        "discretizations" => Dict(
+            "centered_2nd_uniform_arrayop" => Dict(
+                "applies_to" => Dict("op" => "grad", "args" => Any["\$u"], "dim" => "\$x"),
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^2)",
+                "lowering" => Dict(
+                    "op" => "arrayop",
+                    "output_idx" => Any["i"],
+                    "ranges" => Dict("i" => Any[1, "n"]),
+                    "expr" => Dict(
+                        "op" => "/",
+                        "args" => Any[
+                            Dict("op" => "-", "args" => Any[
+                                Dict("op" => "index", "args" => Any[
+                                    "u",
+                                    Dict("op" => "+", "args" => Any["i", 1]),
+                                ]),
+                                Dict("op" => "index", "args" => Any[
+                                    "u",
+                                    Dict("op" => "-", "args" => Any["i", 1]),
+                                ]),
+                            ]),
+                            Dict("op" => "*", "args" => Any[2, "dx"]),
+                        ],
+                    ),
+                    "args" => Any["u"],
+                ),
+            ),
+        ),
+    )
+    centered_lowering_input = Dict(
+        "rule" => "centered_2nd_uniform_arrayop",
+        "manufactured_solution" => Dict("name" => "phase_shifted_sine"),
+        "sampling" => "cell_center",
+        "grids" => [Dict("n" => 16), Dict("n" => 32),
+                    Dict("n" => 64), Dict("n" => 128)],
+        "boundary_conditions" => [
+            Dict("type" => "periodic", "dimensions" => Any["x"]),
+        ],
+    )
+
+    @testset "AST-walker dispatch — centered 2nd FD as arrayop" begin
+        result = mms_convergence(centered_lowering_rule, centered_lowering_input)
+        @test result.grids == [16, 32, 64, 128]
+        @test length(result.errors) == 4
+        @test all(result.errors .> 0) && all(isfinite, result.errors)
+        @test all(result.errors[i] > result.errors[i+1] for i in 1:3)
+        @test result.declared_order == 2.0
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        @test result.orders[end] ≥ 1.95
+    end
+
+    @testset "AST-walker dispatch — verify_mms_convergence path" begin
+        expected = Dict(
+            "rule" => "centered_2nd_uniform_arrayop",
+            "metric" => "Linf",
+            "expected_min_order" => 1.9,
+        )
+        result = verify_mms_convergence(
+            centered_lowering_rule, centered_lowering_input, expected)
+        @test result.observed_min_order ≥ expected["expected_min_order"]
+    end
+
+    @testset "AST-walker dispatch — broadcast on top-level arrayop" begin
+        # Same centered-difference but expressed as
+        #   broadcast(*, 1.0, arrayop(...))
+        # to exercise the top-level broadcast path. Identity-multiplying by a
+        # scalar literal must not change the convergence rate.
+        bcast_rule = deepcopy(centered_lowering_rule)
+        inner = bcast_rule["discretizations"]["centered_2nd_uniform_arrayop"]["lowering"]
+        bcast_rule["discretizations"]["centered_2nd_uniform_arrayop"]["lowering"] = Dict(
+            "op" => "broadcast",
+            "fn" => "*",
+            "args" => Any[inner, 1.0],
+        )
+        result = mms_convergence(bcast_rule, centered_lowering_input)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+    end
+
+    @testset "AST-walker dispatch — bare-spec form" begin
+        bare = centered_lowering_rule["discretizations"]["centered_2nd_uniform_arrayop"]
+        result = mms_convergence(bare, centered_lowering_input)
+        @test abs(result.observed_min_order - 2.0) ≤ 0.2
+    end
+
+    @testset "AST-walker dispatch — error paths" begin
+        # Missing accuracy on the lowering rule.
+        no_accuracy = deepcopy(centered_lowering_rule)
+        delete!(no_accuracy["discretizations"]["centered_2nd_uniform_arrayop"], "accuracy")
+        @test_throws MMSEvaluatorError mms_convergence(
+            no_accuracy, centered_lowering_input)
+
+        # Robin BC is rejected with a clear error (out of scope for esm-4gw).
+        robin_input = Base.merge(centered_lowering_input, Dict(
+            "boundary_conditions" => Any[
+                Dict("type" => "robin", "dimensions" => Any["x"],
+                     "robin_alpha" => 1.0, "robin_beta" => 0.0,
+                     "robin_gamma" => 0.0)]))
+        @test_throws MMSEvaluatorError mms_convergence(
+            centered_lowering_rule, robin_input)
+
+        # rank-2 output is rejected (follow-up bead).
+        rank2_rule = deepcopy(centered_lowering_rule)
+        rank2_rule["discretizations"]["centered_2nd_uniform_arrayop"]["lowering"]["output_idx"] =
+            Any["i", "j"]
+        @test_throws MMSEvaluatorError mms_convergence(
+            rank2_rule, centered_lowering_input)
+
+        # Unknown op in the lowering body is rejected.
+        bad_op_rule = deepcopy(centered_lowering_rule)
+        bad_op_rule["discretizations"]["centered_2nd_uniform_arrayop"]["lowering"]["expr"] =
+            Dict("op" => "this_is_not_a_real_op", "args" => Any[1.0])
+        @test_throws MMSEvaluatorError mms_convergence(
+            bad_op_rule, centered_lowering_input)
+    end
+
+    @testset "AST-walker dispatch — periodic BC wraps explicitly" begin
+        # Verify wrap-around: the centered difference at cell 1 must equal
+        # (u[2] - u[n]) / (2 dx), i.e. the periodic BC was actually applied.
+        n = 32
+        dx = 1.0 / n
+        u = [sin(2π * (i - 0.5) * dx + 1.0) for i in 1:n]
+        env = EarthSciSerialization._LoweringEnv(
+            Dict{String,Vector{Float64}}("u" => u),
+            Dict{String,Float64}("dx" => dx, "h" => dx,
+                                 "n" => Float64(n), "domain_lo" => 0.0),
+            Dict{String,Int}(),
+            EarthSciSerialization._AxisBC[
+                EarthSciSerialization._AxisBC(:periodic, 0.0)],
+        )
+        lowering =
+            centered_lowering_rule["discretizations"]["centered_2nd_uniform_arrayop"]["lowering"]
+        result = EarthSciSerialization._eval_lowering_array(lowering, env)
+        @test length(result) == n
+        @test isapprox(result[1], (u[2] - u[n]) / (2 * dx); atol=1e-12)
+        @test isapprox(result[n], (u[1] - u[n - 1]) / (2 * dx); atol=1e-12)
+    end
 end

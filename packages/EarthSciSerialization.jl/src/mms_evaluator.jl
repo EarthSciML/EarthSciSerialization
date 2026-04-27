@@ -1083,9 +1083,12 @@ function mms_convergence(rule_json::AbstractDict, input_json::AbstractDict;
     if _mms_rule_kind(spec) === :weno5
         return mms_weno5_convergence(rule_json, input_json; manufactured=manufactured)
     end
+    if haskey(spec, "lowering")
+        return _mms_convergence_ast_lowering(spec, input_json; manufactured=manufactured)
+    end
     haskey(spec, "stencil") || throw(MMSEvaluatorError(
         "E_MMS_BAD_FIXTURE",
-        "rule $(repr(rule_name)) has no `stencil` field"))
+        "rule $(repr(rule_name)) has no `stencil` or `lowering` field"))
     stencil = spec["stencil"]
     declared = haskey(spec, "accuracy") ?
         parse_accuracy_order(String(spec["accuracy"])) :
@@ -2448,4 +2451,639 @@ function _mms_weno5_convergence_2d(spec::AbstractDict, input_json::AbstractDict,
     end
 
     return _finalize_convergence(grids, errors, declared)
+end
+
+# ============================================================
+# AST-walker dispatch for closed-AST lowerings (esm-4gw)
+# ============================================================
+#
+# Some discretization rules carry a closed §4.2 AST as their *whole* lowering
+# rather than a `stencil` block — e.g. a centered_2nd_uniform rule expressed
+# directly as `arrayop(output_idx=[i], expr=(u[i+1]-u[i-1])/(2 dx))`. The
+# walker below lets the existing convergence harness exercise such rules
+# without adding a per-scheme kernel: the same MMS sweep + L∞ measurement
+# applies, but each grid point is evaluated by walking the lowering AST
+# against a manufactured-solution sample on the declared periodic / Dirichlet
+# / Neumann domain.
+#
+# Scope (this bead): rank-1 arrayop output, scalar §4.2 ops + index +
+# broadcast + ifelse, periodic / dirichlet / neumann BCs. Robin and rank-2+
+# outputs are deferred to follow-up beads. Implementation is MTK-free so
+# Rust / Python / TS can port the same algorithm.
+
+# Per-axis BC resolved from the input fixture's `boundary_conditions` list.
+struct _AxisBC
+    kind::Symbol      # :periodic, :dirichlet, :neumann
+    value::Float64    # only meaningful for :dirichlet
+end
+
+# Walker environment carried through the recursive AST walk. `arrays` and
+# `scalars` are read-only for the duration of one sweep; `indices` is mutated
+# as the arrayop / contracted-reduction loops bind index symbols.
+mutable struct _LoweringEnv
+    arrays::Dict{String,Vector{Float64}}
+    scalars::Dict{String,Float64}
+    indices::Dict{String,Int}
+    bcs::Vector{_AxisBC}
+end
+
+# Parse `boundary_conditions` from input.esm into a list of per-axis BCs in
+# declaration order. Empty / missing → empty list (callers default to periodic
+# wrapping). One BC entry per axis; the first list entry binds to the array's
+# first axis.
+function _parse_lowering_bcs(input_json::AbstractDict)::Vector{_AxisBC}
+    bc_list = get(input_json, "boundary_conditions", nothing)
+    bc_list === nothing && return _AxisBC[]
+    bc_list isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "`boundary_conditions` must be an array, got $(typeof(bc_list))"))
+    out = _AxisBC[]
+    for entry in bc_list
+        entry isa AbstractDict || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "`boundary_conditions` entry must be a mapping, got $(typeof(entry))"))
+        kind_str = String(get(entry, "type", ""))
+        if kind_str == "periodic"
+            push!(out, _AxisBC(:periodic, 0.0))
+        elseif kind_str == "dirichlet" || kind_str == "constant"
+            value = haskey(entry, "value") ? Float64(entry["value"]) : 0.0
+            push!(out, _AxisBC(:dirichlet, value))
+        elseif kind_str == "neumann" || kind_str == "zero_gradient"
+            push!(out, _AxisBC(:neumann, 0.0))
+        elseif kind_str == "robin"
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "robin BC is not yet supported by the AST-lowering walker " *
+                "(esm-4gw scope: periodic / dirichlet / neumann)"))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "unknown boundary_conditions type $(repr(kind_str)); " *
+                "expected periodic / dirichlet / constant / neumann / zero_gradient"))
+        end
+    end
+    return out
+end
+
+# Convergence sweep for a rule whose `lowering` is a closed §4.2 AST.
+# Mirrors the 1D-cartesian path of `mms_convergence` but evaluates the
+# lowering AST against a manufactured sample instead of summing a stencil
+# coefficient list. The returned MMSConvergenceResult shape is identical so
+# downstream consumers (verify_mms_convergence, ESD walker Layer B) need no
+# change.
+function _mms_convergence_ast_lowering(spec::AbstractDict,
+                                       input_json::AbstractDict;
+                                       manufactured=nothing)::MMSConvergenceResult
+    declared = haskey(spec, "accuracy") ?
+        parse_accuracy_order(String(spec["accuracy"])) :
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "AST-lowering rule has no `accuracy` field"))
+
+    lowering = spec["lowering"]
+    lowering isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "`lowering` must be an AST node (got $(typeof(lowering)))"))
+
+    sampling = String(get(input_json, "sampling", "cell_center"))
+    sampling in ("cell_center", "cell_average") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "sampling must be \"cell_center\" or \"cell_average\" (got $(repr(sampling)))"))
+
+    output_kind = String(get(input_json, "output_kind", "derivative_at_cell_center"))
+    output_kind in OUTPUT_KINDS || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unknown output_kind $(repr(output_kind)); " *
+        "expected one of $(collect(OUTPUT_KINDS))"))
+
+    manufactured isa Union{Nothing,ManufacturedSolution} || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "AST-lowering MMS sweep requires a `ManufacturedSolution`, got $(typeof(manufactured))"))
+    ms = manufactured === nothing ?
+        lookup_manufactured_solution(input_json["manufactured_solution"]) :
+        manufactured
+
+    raw_grids = input_json["grids"]
+    raw_grids isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `grids` must be an array, got $(typeof(raw_grids))"))
+    grids = Int[Int(g["n"]) for g in raw_grids]
+    length(grids) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "convergence requires at least two grids; got $(grids)"))
+
+    bcs = _parse_lowering_bcs(input_json)
+
+    # Optional explicit input-array name: defaults to "u" so the canonical
+    # `arrayop(output_idx=[i], expr=…u[i±1]…)` form just works.
+    input_array_name = String(get(input_json, "input_array", "u"))
+
+    domain_lo, domain_hi = ms.domain
+    L = domain_hi - domain_lo
+    errors = Vector{Float64}(undef, length(grids))
+    for (k, n) in enumerate(grids)
+        dx = L / n
+        u = sampling == "cell_average" ?
+            [_cell_average(ms,
+                           domain_lo + (i - 1) * dx,
+                           domain_lo + i * dx) for i in 1:n] :
+            [ms.sample(domain_lo + (i - 0.5) * dx) for i in 1:n]
+        env = _LoweringEnv(
+            Dict{String,Vector{Float64}}(input_array_name => u),
+            Dict{String,Float64}("dx" => dx, "h" => dx,
+                                 "n" => Float64(n),
+                                 "domain_lo" => domain_lo),
+            Dict{String,Int}(),
+            bcs,
+        )
+        result = _eval_lowering_array(lowering, env)
+        result isa Vector{Float64} || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "lowering must produce a 1D array (got $(typeof(result)))"))
+        length(result) == n || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "lowering output length $(length(result)) does not match grid n=$(n)"))
+        ref = _reference_samples(ms, output_kind, domain_lo, dx, n)
+        errors[k] = maximum(abs.(result .- ref))
+    end
+
+    return _finalize_convergence(grids, errors, declared)
+end
+
+# ---- Top-level array-valued node dispatch ----
+
+function _eval_lowering_array(node, env::_LoweringEnv)
+    node isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "top-level lowering node must be a mapping, got $(typeof(node))"))
+    op = String(get(node, "op", ""))
+    if op == "arrayop"
+        return _eval_lowering_arrayop(node, env)
+    elseif op == "broadcast"
+        return _eval_lowering_broadcast(node, env)
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "top-level lowering must be `arrayop` or `broadcast` (got op=$(repr(op)))"))
+end
+
+# arrayop: rank-1 output only in this bead. Contracted indices declared in
+# `ranges` are reduced via the `reduce` op (default `+`).
+function _eval_lowering_arrayop(node::AbstractDict, env::_LoweringEnv)::Vector{Float64}
+    haskey(node, "output_idx") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "arrayop missing `output_idx`"))
+    out_idx = node["output_idx"]
+    out_idx isa AbstractVector || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arrayop `output_idx` must be an array, got $(typeof(out_idx))"))
+    length(out_idx) == 1 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "AST-lowering walker only supports rank-1 arrayop output " *
+        "(got rank $(length(out_idx))); rank-2+ is a follow-up bead"))
+    out_sym = out_idx[1]
+    out_sym isa AbstractString || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arrayop `output_idx` entry must be a string symbol (got $(typeof(out_sym)))"))
+    out_name = String(out_sym)
+
+    haskey(node, "expr") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "arrayop missing `expr`"))
+    body = node["expr"]
+
+    declared_ranges = _parse_arrayop_ranges(get(node, "ranges", nothing), env)
+
+    n_out = haskey(declared_ranges, out_name) ?
+        length(declared_ranges[out_name]) :
+        _infer_arrayop_output_length(node, env)
+
+    contracted_names = sort!(String[k for k in keys(declared_ranges) if k != out_name])
+
+    reduce_op = String(get(node, "reduce", "+"))
+    reduce_op in ("+", "*", "max", "min") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arrayop `reduce` must be one of \"+\", \"*\", \"max\", \"min\" (got $(repr(reduce_op)))"))
+
+    out_lo = haskey(declared_ranges, out_name) ?
+        first(declared_ranges[out_name]) : 1
+    out = Vector{Float64}(undef, n_out)
+    @inbounds for k in 1:n_out
+        env.indices[out_name] = out_lo + (k - 1)
+        out[k] = isempty(contracted_names) ?
+            _eval_lowering_scalar(body, env) :
+            _reduce_contracted(contracted_names, declared_ranges, env, body, reduce_op)
+    end
+    delete!(env.indices, out_name)
+    return out
+end
+
+# Recursively walk the contracted-index space, applying `reduce_op` over the
+# scalar body evaluated at every index combination. Linear in the cartesian
+# product size; the typical arrayop has 0 or 1 contracted indices so this is
+# cheap.
+function _reduce_contracted(names::Vector{String},
+                            ranges::Dict{String,UnitRange{Int}},
+                            env::_LoweringEnv, body,
+                            reduce_op::String)::Float64
+    if isempty(names)
+        return _eval_lowering_scalar(body, env)
+    end
+    head = names[1]
+    rest = @view names[2:end]
+    rest_vec = String[s for s in rest]
+    acc = _reduce_unit(reduce_op)
+    for v in ranges[head]
+        env.indices[head] = v
+        x = _reduce_contracted(rest_vec, ranges, env, body, reduce_op)
+        acc = _reduce_step(reduce_op, acc, x)
+    end
+    delete!(env.indices, head)
+    return acc
+end
+
+@inline function _reduce_unit(op::String)::Float64
+    op == "+" && return 0.0
+    op == "*" && return 1.0
+    op == "max" && return -Inf
+    op == "min" && return Inf
+    throw(ArgumentError("unreachable"))
+end
+
+@inline function _reduce_step(op::String, acc::Float64, x::Float64)::Float64
+    op == "+" && return acc + x
+    op == "*" && return acc * x
+    op == "max" && return max(acc, x)
+    op == "min" && return min(acc, x)
+    throw(ArgumentError("unreachable"))
+end
+
+# Resolve `ranges: { i: [lo, hi] | [lo, step, hi] }`. Endpoints may be int
+# literals or string scalar symbols (e.g. "n" → env.scalars["n"]). Step must
+# be 1 in this bead; non-unit strides are a follow-up.
+function _parse_arrayop_ranges(ranges_node, env::_LoweringEnv)::Dict{String,UnitRange{Int}}
+    out = Dict{String,UnitRange{Int}}()
+    ranges_node === nothing && return out
+    ranges_node isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "arrayop `ranges` must be a mapping, got $(typeof(ranges_node))"))
+    for (k, v) in ranges_node
+        kstr = String(k)
+        v isa AbstractVector || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "arrayop range for $(repr(kstr)) must be a 2- or 3-element array"))
+        if length(v) == 2
+            lo = _resolve_range_endpoint(v[1], env, kstr)
+            hi = _resolve_range_endpoint(v[2], env, kstr)
+            out[kstr] = lo:hi
+        elseif length(v) == 3
+            stp = _resolve_range_endpoint(v[2], env, kstr)
+            stp == 1 || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arrayop range step != 1 not yet supported (got $(stp) for $(repr(kstr)))"))
+            lo = _resolve_range_endpoint(v[1], env, kstr)
+            hi = _resolve_range_endpoint(v[3], env, kstr)
+            out[kstr] = lo:hi
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "arrayop range for $(repr(kstr)) must have length 2 or 3 (got $(length(v)))"))
+        end
+    end
+    return out
+end
+
+function _resolve_range_endpoint(v, env::_LoweringEnv, label::String)::Int
+    if v isa Integer
+        return Int(v)
+    elseif v isa AbstractString
+        s = String(v)
+        haskey(env.scalars, s) || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "range endpoint $(repr(s)) for index $(repr(label)) is not bound"))
+        return Int(env.scalars[s])
+    elseif v isa Number
+        return Int(v)
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "range endpoint for $(repr(label)) must be int or string symbol, got $(typeof(v))"))
+end
+
+# Infer arrayop output length from the first listed array operand when
+# `ranges[out_name]` is omitted. Falls back to env.scalars["n"]. Throws if
+# neither is available.
+function _infer_arrayop_output_length(node::AbstractDict, env::_LoweringEnv)::Int
+    args_list = get(node, "args", nothing)
+    if args_list isa AbstractVector
+        for a in args_list
+            if a isa AbstractString && haskey(env.arrays, String(a))
+                return length(env.arrays[String(a)])
+            end
+        end
+    end
+    haskey(env.scalars, "n") && return Int(env.scalars["n"])
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "cannot infer arrayop output length; provide `ranges` for the output " *
+        "index, or list an array operand in `args`, or pass scalar `n`"))
+end
+
+# ---- Scalar evaluator (used inside arrayop body) ----
+
+function _eval_lowering_scalar(node, env::_LoweringEnv)::Float64
+    if node isa AbstractDict
+        return _eval_lowering_scalar_op(node, env)
+    elseif node isa AbstractString
+        name = String(node)
+        haskey(env.indices, name) && return Float64(env.indices[name])
+        haskey(env.scalars, name) && return env.scalars[name]
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "unbound symbol $(repr(name)) in lowering body " *
+            "(no index, scalar, or array binding)"))
+    elseif node isa Bool
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "boolean literal not supported in lowering body"))
+    elseif node isa Integer
+        return Float64(node)
+    elseif node isa Number
+        return Float64(node)
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unsupported scalar node type $(typeof(node)) in lowering body"))
+end
+
+function _eval_lowering_scalar_op(node::AbstractDict, env::_LoweringEnv)::Float64
+    op = String(get(node, "op", ""))
+
+    if op == "index"
+        return _eval_lowering_index(node, env)
+    end
+    if op == "const"
+        v = node["value"]
+        v isa Bool && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "boolean const not supported in lowering body"))
+        v isa Real && return Float64(v)
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "non-scalar `const` cannot appear in scalar lowering position"))
+    end
+    if op == "ifelse"
+        args = node["args"]
+        length(args) == 3 || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "ifelse expects 3 args"))
+        cond = _eval_lowering_scalar(args[1], env)
+        return cond != 0 ?
+            _eval_lowering_scalar(args[2], env) :
+            _eval_lowering_scalar(args[3], env)
+    end
+
+    args = haskey(node, "args") ? node["args"] : Any[]
+
+    # Arithmetic
+    if op == "+"
+        s = 0.0; for a in args; s += _eval_lowering_scalar(a, env); end; return s
+    elseif op == "*"
+        p = 1.0; for a in args; p *= _eval_lowering_scalar(a, env); end; return p
+    elseif op == "-"
+        length(args) == 1 && return -_eval_lowering_scalar(args[1], env)
+        length(args) == 2 && return _eval_lowering_scalar(args[1], env) -
+                                    _eval_lowering_scalar(args[2], env)
+        throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "- expects 1 or 2 args"))
+    elseif op == "/"
+        length(args) == 2 || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "/ expects 2 args"))
+        return _eval_lowering_scalar(args[1], env) /
+               _eval_lowering_scalar(args[2], env)
+    elseif op == "^" || op == "pow"
+        length(args) == 2 || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "$op expects 2 args"))
+        return _eval_lowering_scalar(args[1], env) ^
+               _eval_lowering_scalar(args[2], env)
+    end
+
+    # Comparisons → 0/1
+    if op == "<" || op == "<=" || op == ">" || op == ">=" ||
+       op == "==" || op == "!="
+        length(args) == 2 || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "$op expects 2 args"))
+        a = _eval_lowering_scalar(args[1], env)
+        b = _eval_lowering_scalar(args[2], env)
+        op == "<"  && return a <  b ? 1.0 : 0.0
+        op == "<=" && return a <= b ? 1.0 : 0.0
+        op == ">"  && return a >  b ? 1.0 : 0.0
+        op == ">=" && return a >= b ? 1.0 : 0.0
+        op == "==" && return a == b ? 1.0 : 0.0
+        op == "!=" && return a != b ? 1.0 : 0.0
+    end
+
+    # Logical
+    if op == "and"
+        for a in args; _eval_lowering_scalar(a, env) == 0 && return 0.0; end
+        return 1.0
+    elseif op == "or"
+        for a in args; _eval_lowering_scalar(a, env) != 0 && return 1.0; end
+        return 0.0
+    elseif op == "not"
+        length(args) == 1 || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE", "not expects 1 arg"))
+        return _eval_lowering_scalar(args[1], env) == 0 ? 1.0 : 0.0
+    end
+
+    # Elementary 1-arg
+    if op == "sin"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","sin expects 1 arg"));   return sin(_eval_lowering_scalar(args[1], env)); end
+    if op == "cos"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","cos expects 1 arg"));   return cos(_eval_lowering_scalar(args[1], env)); end
+    if op == "tan"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","tan expects 1 arg"));   return tan(_eval_lowering_scalar(args[1], env)); end
+    if op == "asin"  length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","asin expects 1 arg"));  return asin(_eval_lowering_scalar(args[1], env)); end
+    if op == "acos"  length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","acos expects 1 arg"));  return acos(_eval_lowering_scalar(args[1], env)); end
+    if op == "exp"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","exp expects 1 arg"));   return exp(_eval_lowering_scalar(args[1], env)); end
+    if op == "log"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","log expects 1 arg"));   return log(_eval_lowering_scalar(args[1], env)); end
+    if op == "log10" length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","log10 expects 1 arg")); return log10(_eval_lowering_scalar(args[1], env)); end
+    if op == "sqrt"  length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","sqrt expects 1 arg"));  return sqrt(_eval_lowering_scalar(args[1], env)); end
+    if op == "abs"   length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","abs expects 1 arg"));   return abs(_eval_lowering_scalar(args[1], env)); end
+    if op == "sign"  length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","sign expects 1 arg"));  return sign(_eval_lowering_scalar(args[1], env)); end
+    if op == "floor" length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","floor expects 1 arg")); return floor(_eval_lowering_scalar(args[1], env)); end
+    if op == "ceil"  length(args) == 1 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE","ceil expects 1 arg"));  return ceil(_eval_lowering_scalar(args[1], env)); end
+
+    if op == "atan"
+        length(args) == 1 && return atan(_eval_lowering_scalar(args[1], env))
+        length(args) == 2 && return atan(_eval_lowering_scalar(args[1], env),
+                                         _eval_lowering_scalar(args[2], env))
+        throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "atan expects 1 or 2 args"))
+    elseif op == "atan2"
+        length(args) == 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "atan2 expects 2 args"))
+        return atan(_eval_lowering_scalar(args[1], env),
+                    _eval_lowering_scalar(args[2], env))
+    end
+
+    if op == "min"
+        length(args) >= 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "min needs ≥2 args"))
+        acc = _eval_lowering_scalar(args[1], env)
+        for k in 2:length(args)
+            acc = min(acc, _eval_lowering_scalar(args[k], env))
+        end
+        return acc
+    elseif op == "max"
+        length(args) >= 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "max needs ≥2 args"))
+        acc = _eval_lowering_scalar(args[1], env)
+        for k in 2:length(args)
+            acc = max(acc, _eval_lowering_scalar(args[k], env))
+        end
+        return acc
+    end
+
+    if op == "pi" || op == "π"
+        return Float64(pi)
+    elseif op == "e"
+        return Float64(ℯ)
+    end
+
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unsupported op $(repr(op)) in lowering body"))
+end
+
+# `index(arr, i₁, …, iₙ)` — extract a scalar from an array. Currently only
+# rank-1 arrays. Out-of-bounds indices are resolved against the per-axis BC
+# list: periodic wraps, dirichlet substitutes the BC value, neumann clamps to
+# the nearest in-bounds cell. The walker carries no BC AST node — BCs come
+# from the input fixture's `boundary_conditions` list.
+function _eval_lowering_index(node::AbstractDict, env::_LoweringEnv)::Float64
+    args = node["args"]
+    length(args) >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "index op requires array name + at least 1 index expression"))
+    arr_ref = args[1]
+    arr_ref isa AbstractString || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "index op first arg must be an array name string (got $(typeof(arr_ref)))"))
+    arr_name = String(arr_ref)
+    haskey(env.arrays, arr_name) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unknown array $(repr(arr_name)) in index op " *
+        "(known: $(collect(keys(env.arrays))))"))
+    arr = env.arrays[arr_name]
+
+    length(args) == 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "AST-lowering walker only supports rank-1 arrays in index op " *
+        "(got $(length(args)-1) indices); rank-2+ is a follow-up bead"))
+
+    raw = _eval_lowering_scalar(args[2], env)
+    idx_round = round(Int, raw)
+    abs(raw - idx_round) < 1e-9 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "non-integer index $(raw) into array $(repr(arr_name))"))
+
+    n = length(arr)
+    if 1 <= idx_round <= n
+        @inbounds return arr[idx_round]
+    end
+
+    bc = isempty(env.bcs) ? _AxisBC(:periodic, 0.0) : env.bcs[1]
+    if bc.kind === :periodic
+        @inbounds return arr[mod1(idx_round, n)]
+    elseif bc.kind === :dirichlet
+        return bc.value
+    elseif bc.kind === :neumann
+        @inbounds return idx_round < 1 ? arr[1] : arr[n]
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unsupported BC kind $(bc.kind) for out-of-bounds index"))
+end
+
+# ---- Top-level broadcast: element-wise scalar fn over array operands ----
+#
+# Operands may be array variable references, array-valued sub-expressions
+# (nested arrayop / broadcast), scalar literals, or scalar sub-expressions
+# (no index symbols in scope at top-level — those only bind inside arrayop).
+# Output length = length of the first array operand; all array operands must
+# match (no rank promotion in this bead).
+function _eval_lowering_broadcast(node::AbstractDict, env::_LoweringEnv)::Vector{Float64}
+    haskey(node, "fn") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "broadcast op missing `fn` field"))
+    fn = String(node["fn"])
+    args = haskey(node, "args") ? node["args"] : Any[]
+    isempty(args) && throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE", "broadcast op needs at least 1 operand"))
+
+    # Resolve each operand to either a Vector (array) or a Float64 (scalar).
+    operands = Vector{Union{Vector{Float64},Float64}}(undef, length(args))
+    out_len = -1
+    for (k, a) in enumerate(args)
+        if a isa AbstractString && haskey(env.arrays, String(a))
+            v = env.arrays[String(a)]
+            operands[k] = v
+            out_len = out_len < 0 ? length(v) :
+                length(v) == out_len ? out_len :
+                throw(MMSEvaluatorError(
+                    "E_MMS_BAD_FIXTURE",
+                    "broadcast operand length mismatch ($(length(v)) vs $(out_len))"))
+        elseif a isa Number
+            operands[k] = Float64(a)
+        elseif a isa AbstractDict && (String(get(a, "op", "")) == "arrayop" ||
+                                       String(get(a, "op", "")) == "broadcast")
+            v = _eval_lowering_array(a, env)
+            operands[k] = v
+            out_len = out_len < 0 ? length(v) :
+                length(v) == out_len ? out_len :
+                throw(MMSEvaluatorError(
+                    "E_MMS_BAD_FIXTURE",
+                    "broadcast operand length mismatch ($(length(v)) vs $(out_len))"))
+        else
+            operands[k] = _eval_lowering_scalar(a, env)
+        end
+    end
+    out_len > 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "broadcast needs at least one array operand"))
+
+    out = Vector{Float64}(undef, out_len)
+    vals = Vector{Float64}(undef, length(operands))
+    @inbounds for i in 1:out_len
+        for (k, op) in enumerate(operands)
+            vals[k] = op isa Vector{Float64} ? op[i] : op::Float64
+        end
+        out[i] = _apply_broadcast_fn(fn, vals)
+    end
+    return out
+end
+
+function _apply_broadcast_fn(fn::String, vals::Vector{Float64})::Float64
+    if fn == "+"
+        s = 0.0; for v in vals; s += v; end; return s
+    elseif fn == "*"
+        p = 1.0; for v in vals; p *= v; end; return p
+    elseif fn == "-"
+        length(vals) == 1 && return -vals[1]
+        length(vals) == 2 && return vals[1] - vals[2]
+        throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "broadcast - expects 1 or 2 args"))
+    elseif fn == "/"
+        length(vals) == 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "broadcast / expects 2 args"))
+        return vals[1] / vals[2]
+    elseif fn == "^" || fn == "pow"
+        length(vals) == 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "broadcast $fn expects 2 args"))
+        return vals[1] ^ vals[2]
+    elseif fn == "sin"  && length(vals) == 1; return sin(vals[1])
+    elseif fn == "cos"  && length(vals) == 1; return cos(vals[1])
+    elseif fn == "tan"  && length(vals) == 1; return tan(vals[1])
+    elseif fn == "exp"  && length(vals) == 1; return exp(vals[1])
+    elseif fn == "log"  && length(vals) == 1; return log(vals[1])
+    elseif fn == "sqrt" && length(vals) == 1; return sqrt(vals[1])
+    elseif fn == "abs"  && length(vals) == 1; return abs(vals[1])
+    elseif fn == "sign" && length(vals) == 1; return sign(vals[1])
+    elseif fn == "ifelse" && length(vals) == 3
+        return vals[1] != 0 ? vals[2] : vals[3]
+    elseif fn == "min"
+        length(vals) >= 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "broadcast min needs ≥2 args"))
+        acc = vals[1]; for k in 2:length(vals); acc = min(acc, vals[k]); end; return acc
+    elseif fn == "max"
+        length(vals) >= 2 || throw(MMSEvaluatorError("E_MMS_BAD_FIXTURE", "broadcast max needs ≥2 args"))
+        acc = vals[1]; for k in 2:length(vals); acc = max(acc, vals[k]); end; return acc
+    end
+    throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "unsupported broadcast fn $(repr(fn))"))
 end
