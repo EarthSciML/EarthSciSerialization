@@ -1475,9 +1475,10 @@ func parseGhostWidth(name string, raw interface{}) (*GhostWidth, error) {
 		fmt.Sprintf("rule `%s`: `ghost_width` must be a non-negative integer or an object with a `by_axis` field", name))
 }
 
-// jsonAsInt converts a JSON-decoded numeric value to int. JSON numbers in
-// Go's encoding/json default to float64, so we accept both ints and floats
-// that round-trip exactly.
+// jsonAsInt converts a JSON-decoded numeric value to int. JSON numbers
+// reach this code as either float64 (default decoder) or json.Number
+// (decoders configured with UseNumber, as the rule-engine fixture loader
+// uses); both forms must round-trip exactly to an integer.
 func jsonAsInt(v interface{}) (int, bool) {
 	switch x := v.(type) {
 	case int:
@@ -1490,6 +1491,12 @@ func jsonAsInt(v interface{}) (int, bool) {
 			return n, true
 		}
 		return 0, false
+	case json.Number:
+		n, err := x.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(n), true
 	}
 	return 0, false
 }

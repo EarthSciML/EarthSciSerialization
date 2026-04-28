@@ -1008,19 +1008,20 @@ function parseBoundaryPolicySpec(
   }
   const spec: BoundaryPolicySpec = { kind: kind as BoundaryPolicyKind }
   if (o.degree !== undefined) {
-    if (typeof o.degree !== 'number' || !Number.isInteger(o.degree)) {
+    const d = asIntStrict(o.degree)
+    if (d === undefined) {
       throw new RuleEngineError(
         E_RULE_PARSE,
         `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.degree must be an integer`,
       )
     }
-    if (o.degree < 0 || o.degree > 3) {
+    if (d < 0 || d > 3) {
       throw new RuleEngineError(
         E_RULE_PARSE,
-        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.degree must be between 0 and 3, got ${o.degree}`,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.degree must be between 0 and 3, got ${d}`,
       )
     }
-    spec.degree = o.degree
+    spec.degree = d
   }
   if (o.interior !== undefined) {
     if (typeof o.interior !== 'string') {
@@ -1060,23 +1061,28 @@ function parseBoundaryPolicySpec(
   return spec
 }
 
+// Coerce a JSON-decoded numeric value to an integer. Accepts plain
+// numbers and lossless NumericLiteral wrappers (the rule-engine
+// conformance test loader emits the latter to preserve int-vs-float
+// fidelity).
+function asIntStrict(raw: unknown): number | undefined {
+  if (typeof raw === 'number' && Number.isInteger(raw)) return raw
+  if (isIntLit(raw)) return raw.value
+  return undefined
+}
+
 function parseGhostWidth(name: string, raw: unknown): GhostWidth {
-  if (typeof raw === 'number') {
-    if (!Number.isInteger(raw)) {
+  const asInt = asIntStrict(raw)
+  if (asInt !== undefined) {
+    if (asInt < 0) {
       throw new RuleEngineError(
         E_RULE_PARSE,
-        `rule \`${name}\`: \`ghost_width\` must be an integer`,
+        `rule \`${name}\`: \`ghost_width\` must be non-negative, got ${asInt}`,
       )
     }
-    if (raw < 0) {
-      throw new RuleEngineError(
-        E_RULE_PARSE,
-        `rule \`${name}\`: \`ghost_width\` must be non-negative, got ${raw}`,
-      )
-    }
-    return raw
+    return asInt
   }
-  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw) && !isNumericLiteral(raw)) {
     const o = raw as Record<string, unknown>
     const byAxisRaw = o.by_axis
     if (byAxisRaw === undefined) {
@@ -1085,7 +1091,12 @@ function parseGhostWidth(name: string, raw: unknown): GhostWidth {
         `rule \`${name}\`: \`ghost_width\` object must have a \`by_axis\` field`,
       )
     }
-    if (typeof byAxisRaw !== 'object' || byAxisRaw === null || Array.isArray(byAxisRaw)) {
+    if (
+      typeof byAxisRaw !== 'object' ||
+      byAxisRaw === null ||
+      Array.isArray(byAxisRaw) ||
+      isNumericLiteral(byAxisRaw)
+    ) {
       throw new RuleEngineError(
         E_RULE_PARSE,
         `rule \`${name}\`: \`ghost_width.by_axis\` must be an object`,
@@ -1093,19 +1104,20 @@ function parseGhostWidth(name: string, raw: unknown): GhostWidth {
     }
     const byAxis: Record<string, number> = {}
     for (const [axis, w] of Object.entries(byAxisRaw as Record<string, unknown>)) {
-      if (typeof w !== 'number' || !Number.isInteger(w)) {
+      const wInt = asIntStrict(w)
+      if (wInt === undefined) {
         throw new RuleEngineError(
           E_RULE_PARSE,
           `rule \`${name}\`: ghost_width.by_axis.${axis} must be an integer`,
         )
       }
-      if (w < 0) {
+      if (wInt < 0) {
         throw new RuleEngineError(
           E_RULE_PARSE,
-          `rule \`${name}\`: ghost_width.by_axis.${axis} must be non-negative, got ${w}`,
+          `rule \`${name}\`: ghost_width.by_axis.${axis} must be non-negative, got ${wInt}`,
         )
       }
-      byAxis[axis] = w
+      byAxis[axis] = wInt
     }
     const out: { by_axis: Record<string, number>; description?: string } = {
       by_axis: byAxis,
