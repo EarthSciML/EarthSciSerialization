@@ -2606,6 +2606,121 @@ function _parse_input_array_specs(input_json::AbstractDict,
     return out
 end
 
+# ============================================================
+# Face-staggered bindings (esm-2q0)
+# ============================================================
+#
+# Face-staggered flux rules (`flux_1d_ppm`, `lax_friedrichs_flux`,
+# `transport_2d` Lin-Rood) need per-face manufactured fields — face-Courant `c`
+# and face-velocity `v` — that the AST-lowering walker can index alongside the
+# cell-centered input arrays. This is distinct from `input_arrays` (which are
+# cell-centered). Each binding produces a length-`n` vector for the periodic
+# 1D path: face `i` lives at `domain_lo + (i - 1) * dx` (the left face of cell
+# `i`), so under refinement the face stencil samples shrink with `dx`.
+#
+# Two binding kinds are supported in this bead:
+#   - face_velocity: sample a manufactured_solution at face positions.
+#   - face_courant:  derived from a declared face_velocity, `dt`, and the
+#                    per-face spacing — `c[i] = v[i] * dt / dx_face`.
+#
+# Companion scalar `dx_face_<axis>` is exposed for any axis named on a
+# face-binding spec, so a rule's AST can divide by face-resolution metric. On
+# a uniform 1D grid `dx_face_<axis>` equals `dx`; the per-axis name keeps the
+# binding ready for non-uniform / cubed-sphere extensions without breaking the
+# v1 contract.
+#
+# Backward compatibility: `bindings` is opt-in. Existing fixtures that do not
+# carry a `bindings` field continue to use `input_arrays` (or the default
+# `input_array` fallback) bit-for-bit unchanged.
+struct _FaceBindingSpec
+    name::String
+    kind::Symbol                       # :face_velocity, :face_courant
+    axis::String                       # "" if unspecified
+    sampler::Union{Function,Nothing}   # face_velocity only
+    velocity_symbol::String            # face_courant only
+end
+
+# Parse the optional top-level `bindings` map from input.esm. Returns an empty
+# vector when absent so the per-grid materialization step is a cheap no-op for
+# every existing fixture.
+function _parse_face_bindings(input_json::AbstractDict)::Vector{_FaceBindingSpec}
+    raw = get(input_json, "bindings", nothing)
+    raw === nothing && return _FaceBindingSpec[]
+    raw isa AbstractDict || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "input.esm `bindings` must be an object, got $(typeof(raw))"))
+    out = _FaceBindingSpec[]
+    seen = Set{String}()
+    for (k, entry) in raw
+        name = String(k)
+        name in seen && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "duplicate binding name $(repr(name)) in `bindings`"))
+        push!(seen, name)
+        entry isa AbstractDict || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "`bindings` entry $(repr(name)) must be a mapping, got $(typeof(entry))"))
+        kind_str = String(get(entry, "kind", ""))
+        axis = String(get(entry, "axis", ""))
+        if kind_str == "face_velocity"
+            haskey(entry, "manufactured_solution") || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "face_velocity binding $(repr(name)) requires `manufactured_solution`"))
+            ms = lookup_manufactured_solution(entry["manufactured_solution"])
+            sampler = (lo::Float64, dx::Float64, n::Int) ->
+                Float64[ms.sample(lo + (i - 1) * dx) for i in 1:n]
+            push!(out, _FaceBindingSpec(name, :face_velocity, axis, sampler, ""))
+        elseif kind_str == "face_courant"
+            haskey(entry, "velocity_symbol") || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "face_courant binding $(repr(name)) requires `velocity_symbol`"))
+            push!(out, _FaceBindingSpec(name, :face_courant, axis, nothing,
+                                         String(entry["velocity_symbol"])))
+        else
+            throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "unknown binding kind $(repr(kind_str)) for $(repr(name)); " *
+                "expected one of \"face_velocity\", \"face_courant\""))
+        end
+    end
+    return out
+end
+
+# Materialize face-binding arrays/scalars for one grid level. `arrays` and
+# `scalars` are mutated in place so the caller can layer face bindings on top
+# of the existing input-array bindings without rebuilding the dicts. `dt` is
+# only consulted by face_courant entries.
+function _materialize_face_bindings!(arrays::Dict{String,Vector{Float64}},
+                                      scalars::Dict{String,Float64},
+                                      specs::Vector{_FaceBindingSpec},
+                                      domain_lo::Float64, dx::Float64,
+                                      n::Int, dt::Float64)
+    isempty(specs) && return
+    # Pass 1: face_velocity. face_courant entries reference these by name, so
+    # all velocities must exist before any courant is derived.
+    for spec in specs
+        if spec.kind === :face_velocity
+            arrays[spec.name] = spec.sampler(domain_lo, dx, n)
+            isempty(spec.axis) || (scalars["dx_face_$(spec.axis)"] = dx)
+        end
+    end
+    # Pass 2: face_courant. Derived as v[i] * dt / dx_face. On a uniform 1D
+    # grid `dx_face` equals `dx`; non-uniform grids would source from the
+    # axis-specific scalar resolved above.
+    for spec in specs
+        if spec.kind === :face_courant
+            haskey(arrays, spec.velocity_symbol) || throw(MMSEvaluatorError(
+                "E_MMS_BAD_FIXTURE",
+                "face_courant binding $(repr(spec.name)) references undeclared " *
+                "velocity_symbol $(repr(spec.velocity_symbol)); " *
+                "declare a face_velocity binding with that name first"))
+            v = arrays[spec.velocity_symbol]
+            arrays[spec.name] = Float64[v[i] * dt / dx for i in 1:n]
+            isempty(spec.axis) || (scalars["dx_face_$(spec.axis)"] = dx)
+        end
+    end
+end
+
 # Convergence sweep for a rule whose `lowering` is a closed §4.2 AST.
 # Mirrors the 1D-cartesian path of `mms_convergence` but evaluates the
 # lowering AST against a manufactured sample instead of summing a stencil
@@ -2664,6 +2779,18 @@ function _mms_convergence_ast_lowering(spec::AbstractDict,
     # `input_array`/default-"u" path with no schema change.
     array_specs = _parse_input_array_specs(input_json, ms)
 
+    # Face-staggered bindings (esm-2q0). When the fixture declares any
+    # `face_courant` entries, a top-level `dt` is required (used uniformly
+    # across refinement levels in v1). `face_velocity` alone is dt-free.
+    face_specs = _parse_face_bindings(input_json)
+    dt = 0.0
+    if any(s -> s.kind === :face_courant, face_specs)
+        haskey(input_json, "dt") || throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "input.esm with `face_courant` bindings requires a top-level `dt`"))
+        dt = Float64(input_json["dt"])
+    end
+
     domain_lo, domain_hi = ms.domain
     L = domain_hi - domain_lo
     errors = Vector{Float64}(undef, length(grids))
@@ -2673,11 +2800,14 @@ function _mms_convergence_ast_lowering(spec::AbstractDict,
         for (name, sampler) in array_specs
             arrays[name] = sampler(domain_lo, dx, n, sampling)
         end
+        scalars = Dict{String,Float64}("dx" => dx, "h" => dx,
+                                        "n" => Float64(n),
+                                        "domain_lo" => domain_lo)
+        _materialize_face_bindings!(arrays, scalars, face_specs,
+                                     domain_lo, dx, n, dt)
         env = _LoweringEnv(
             arrays,
-            Dict{String,Float64}("dx" => dx, "h" => dx,
-                                 "n" => Float64(n),
-                                 "domain_lo" => domain_lo),
+            scalars,
             Dict{String,Int}(),
             bcs,
         )

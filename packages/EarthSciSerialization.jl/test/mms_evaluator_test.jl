@@ -2014,4 +2014,167 @@ using EarthSciSerialization
         @test_throws MMSEvaluatorError mms_convergence(
             weno5_lowering_rule, dup_name)
     end
+
+    # ============================================================
+    # Face-staggered Courant binding (esm-2q0)
+    # ============================================================
+    #
+    # Face-flux rules need per-face manufactured fields that the AST-lowering
+    # walker can index. Verifies:
+    #   1. Face-velocity is sampled at face positions (left edge of each cell).
+    #   2. Face-courant is derived as v[i] * dt / dx_face.
+    #   3. dx_face_<axis> scalar is exposed for the rule's metric divides.
+    #   4. A face-flux divergence rule converges at its declared order.
+    #   5. Schema errors are raised for malformed bindings.
+
+    # Face-flux divergence: forward-difference of face-sampled velocity
+    # produces a cell-centered derivative. With v sampled at left faces
+    # (v[i] = sin(2π * (i-1) * dx) for sin_2pi_x_periodic), the body
+    # `(v[i+1] - v[i]) / dx` approximates v'(x_cell_center) at second order.
+    # The face-courant binding is also declared (and references v) to
+    # exercise the courant derivation path; it is unused in the lowering body
+    # so the convergence rate is unaffected by the constant-dt CFL behavior.
+    face_div_rule = Dict(
+        "discretizations" => Dict(
+            "face_flux_div_arrayop" => Dict(
+                "applies_to" => Dict("op" => "grad", "args" => Any["\$v"], "dim" => "\$x"),
+                "grid_family" => "cartesian",
+                "accuracy" => "O(dx^2)",
+                "lowering" => Dict(
+                    "op" => "arrayop",
+                    "output_idx" => Any["i"],
+                    "ranges" => Dict("i" => Any[1, "n"]),
+                    "expr" => Dict(
+                        "op" => "/",
+                        "args" => Any[
+                            Dict("op" => "-", "args" => Any[
+                                Dict("op" => "index", "args" => Any[
+                                    "\$v",
+                                    Dict("op" => "+", "args" => Any["i", 1]),
+                                ]),
+                                Dict("op" => "index", "args" => Any["\$v", "i"]),
+                            ]),
+                            "dx_face_xi",
+                        ],
+                    ),
+                ),
+            ),
+        ),
+    )
+    face_div_input = Dict(
+        "rule" => "face_flux_div_arrayop",
+        "manufactured_solution" => Dict("name" => "sin_2pi_x_periodic"),
+        "sampling" => "cell_center",
+        "output_kind" => "derivative_at_cell_center",
+        "grids" => [Dict("n" => 16), Dict("n" => 32),
+                    Dict("n" => 64), Dict("n" => 128)],
+        "boundary_conditions" => [
+            Dict("type" => "periodic", "dimensions" => Any["x"]),
+        ],
+        "dt" => 1.0e-3,
+        "bindings" => Dict(
+            "\$v" => Dict(
+                "kind" => "face_velocity",
+                "axis" => "xi",
+                "manufactured_solution" => Dict("name" => "sin_2pi_x_periodic"),
+            ),
+            "\$c" => Dict(
+                "kind" => "face_courant",
+                "axis" => "xi",
+                "velocity_symbol" => "\$v",
+            ),
+        ),
+    )
+
+    @testset "Face-staggered Courant binding (esm-2q0)" begin
+        @testset "face-flux divergence converges at second order" begin
+            result = mms_convergence(face_div_rule, face_div_input)
+            @test result.grids == [16, 32, 64, 128]
+            @test all(result.errors .> 0) && all(isfinite, result.errors)
+            @test all(result.errors[i] > result.errors[i+1] for i in 1:3)
+            @test result.declared_order == 2.0
+            @test abs(result.observed_min_order - 2.0) ≤ 0.2
+        end
+
+        @testset "face-velocity samples at face positions, not cell centers" begin
+            # Build the env directly via the unexported helpers to inspect the
+            # materialized arrays without running the full convergence sweep.
+            specs = EarthSciSerialization._parse_face_bindings(face_div_input)
+            @test length(specs) == 2
+
+            n = 8
+            dx = 1.0 / n
+            arrays = Dict{String,Vector{Float64}}()
+            scalars = Dict{String,Float64}()
+            EarthSciSerialization._materialize_face_bindings!(
+                arrays, scalars, specs, 0.0, dx, n, 1.0e-3)
+
+            # Face-velocity at left edge of cell 1 is x = 0 → sin(0) = 0.
+            @test isapprox(arrays["\$v"][1], 0.0; atol=1e-12)
+            # Face-velocity at left edge of cell 3 (n=8) is x = 2*dx → sin(2π·0.25).
+            @test isapprox(arrays["\$v"][3], sin(2π * 2 * dx); atol=1e-12)
+            # Cell-center sampling would put v[1] at x=0.5*dx ≠ 0, so confirm
+            # the harness did NOT sample at cell centers.
+            @test !isapprox(arrays["\$v"][1], sin(2π * 0.5 * dx); atol=1e-9)
+
+            # Face-courant: v[i] * dt / dx.
+            for i in 1:n
+                @test isapprox(arrays["\$c"][i], arrays["\$v"][i] * 1.0e-3 / dx;
+                                atol=1e-12)
+            end
+
+            # Per-axis face spacing scalar exposed.
+            @test scalars["dx_face_xi"] == dx
+        end
+
+        @testset "scalar bindings remain unchanged (backward compat)" begin
+            # The pre-existing AST-walker test fixture has no `bindings` field
+            # and must continue to pass with bit-for-bit identical behavior.
+            # This is covered by the "AST-walker dispatch — centered 2nd FD"
+            # testset above; here we additionally confirm that an empty
+            # `bindings` dict is a no-op.
+            no_face_input = Base.merge(face_div_input, Dict("bindings" => Dict()))
+            # Without face-binding $v, the lowering's `index($v, ...)` op will
+            # fail. We expect an error — verifying the bindings field really
+            # was emptied (not silently merged with the prior dict).
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, no_face_input)
+        end
+
+        @testset "schema errors" begin
+            # `bindings` must be an object.
+            bad_type = Base.merge(face_div_input, Dict("bindings" => Any[]))
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, bad_type)
+
+            # Missing `manufactured_solution` on face_velocity.
+            bad_v = deepcopy(face_div_input)
+            delete!(bad_v["bindings"]["\$v"], "manufactured_solution")
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, bad_v)
+
+            # Missing `velocity_symbol` on face_courant.
+            bad_c = deepcopy(face_div_input)
+            delete!(bad_c["bindings"]["\$c"], "velocity_symbol")
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, bad_c)
+
+            # face_courant references undeclared face_velocity.
+            dangling = deepcopy(face_div_input)
+            dangling["bindings"]["\$c"]["velocity_symbol"] = "\$nonexistent"
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, dangling)
+
+            # Unknown binding kind.
+            unknown_kind = deepcopy(face_div_input)
+            unknown_kind["bindings"]["\$v"]["kind"] = "cell_centered_velocity"
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, unknown_kind)
+
+            # face_courant declared but no top-level `dt`.
+            no_dt = deepcopy(face_div_input)
+            delete!(no_dt, "dt")
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, no_dt)
+
+            # Non-mapping entry. (Use Dict{String,Any} so the test can assign
+            # a String into a slot whose original value was a Dict.)
+            bad_entry = Base.merge(face_div_input, Dict(
+                "bindings" => Dict{String,Any}("\$v" => "not a mapping")))
+            @test_throws MMSEvaluatorError mms_convergence(face_div_rule, bad_entry)
+        end
+    end
 end
