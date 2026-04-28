@@ -2177,4 +2177,237 @@ using EarthSciSerialization
             @test_throws MMSEvaluatorError mms_convergence(face_div_rule, bad_entry)
         end
     end
+
+    @testset "apply_stencil_ghosted_1d (esm-37k, RFC §5.2.8)" begin
+        # Centered 2nd-order finite difference: stencil = (-1/(2dx), 0, +1/(2dx))
+        # at offsets ±1. Used as the carrier for every boundary_policy below.
+        centered_fd = [
+            Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => -1),
+                 "coeff" => Dict("op" => "/", "args" =>
+                     Any[-1, Dict("op" => "*", "args" => Any[2, "dx"])])),
+            Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => 1),
+                 "coeff" => Dict("op" => "/", "args" =>
+                     Any[1, Dict("op" => "*", "args" => Any[2, "dx"])])),
+        ]
+
+        @testset "periodic kind: byte-equal to apply_stencil_periodic_1d" begin
+            n = 32
+            dx = 1.0 / n
+            u = [sin(2π * (i - 0.5) * dx) for i in 1:n]
+            bindings = Dict("dx" => dx)
+            ref = apply_stencil_periodic_1d(centered_fd, u, bindings)
+            for Ng in (1, 2, 5)
+                got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                               ghost_width=Ng,
+                                               boundary_policy="periodic")
+                @test got == ref  # bit-equal: periodic ghost fill is the same wrap
+            end
+        end
+
+        @testset "reflecting kind: zero-flux at boundary on a symmetric profile" begin
+            # u = cos(πx) on [0,1] (cell centers) is symmetric across the boundary
+            # face, so reflecting fill leaves the centered FD operator self-consistent.
+            n = 16
+            dx = 1.0 / n
+            u = [cos(π * (i - 0.5) * dx) for i in 1:n]
+            bindings = Dict("dx" => dx)
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy="reflecting")
+            # First interior cell: ghost is u[1] (mirror), so derivative there
+            # uses (u[2] - u[1])/(2dx) — the one-sided forward difference shape.
+            @test got[1] ≈ (u[2] - u[1]) / (2 * dx) atol=1e-12
+            @test got[n] ≈ (u[n] - u[n - 1]) / (2 * dx) atol=1e-12
+            # Compares acceptably against -π sin(πx) at interior cells.
+            ref = [-π * sin(π * (i - 0.5) * dx) for i in 1:n]
+            @test maximum(abs.(got[3:n - 2] .- ref[3:n - 2])) < 0.05
+        end
+
+        @testset "reflecting kind: ghosted neumann_zero alias" begin
+            # neumann_zero is a v0.3.x alias for reflecting (same fill semantics).
+            n = 8
+            dx = 1.0 / n
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            via_reflecting = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                                     ghost_width=1,
+                                                     boundary_policy="reflecting")
+            via_neumann = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                                  ghost_width=1,
+                                                  boundary_policy="neumann_zero")
+            @test via_neumann == via_reflecting
+        end
+
+        @testset "one_sided_extrapolation: linear default exact on linear profile" begin
+            # u = 2 + 3i on cell-index space → linear extrapolation is exact, so
+            # the centered FD reproduces du/dx ≡ slope/dx everywhere, including
+            # the first and last interior cells.
+            n = 12
+            dx = 0.1
+            u = Float64[2.0 + 3.0 * i for i in 1:n]
+            bindings = Dict("dx" => dx)
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy="one_sided_extrapolation")
+            @test all(g -> isapprox(g, 3.0 / dx; atol=1e-10), got)
+        end
+
+        @testset "one_sided_extrapolation: degree=2 exact on quadratic profile" begin
+            # u = i^2 on cell-index space → quadratic extrapolation is exact.
+            # Compare against the analytic centered-FD output of the polynomial
+            # (which is also exact for centered FD on quadratics).
+            n = 10
+            dx = 0.5
+            u = Float64[Float64(i)^2 for i in 1:n]
+            bindings = Dict("dx" => dx)
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy=Dict("kind" => "one_sided_extrapolation",
+                                                                "degree" => 2))
+            # Centered FD on i^2: ((i+1)^2 - (i-1)^2) / (2dx) = 4i / (2dx) = 2i/dx.
+            ref = Float64[2.0 * i / dx for i in 1:n]
+            @test maximum(abs.(got .- ref)) < 1e-10
+        end
+
+        @testset "one_sided_extrapolation: degree=3 exact on cubic profile" begin
+            n = 12
+            dx = 0.25
+            u = Float64[Float64(i)^3 for i in 1:n]
+            bindings = Dict("dx" => dx)
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy=Dict("kind" => "one_sided_extrapolation",
+                                                                "degree" => 3))
+            # Centered FD on i^3: ((i+1)^3 - (i-1)^3) / (2dx) = (6i^2 + 2)/(2dx).
+            ref = Float64[(6.0 * i^2 + 2.0) / (2.0 * dx) for i in 1:n]
+            @test maximum(abs.(got .- ref)) < 1e-10
+        end
+
+        @testset "one_sided_extrapolation: extrapolate alias defaults degree=1" begin
+            n = 8
+            dx = 0.1
+            u = Float64[1.5 * i + 0.5 for i in 1:n]
+            bindings = Dict("dx" => dx)
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy="extrapolate")
+            @test all(g -> isapprox(g, 1.5 / dx; atol=1e-10), got)
+        end
+
+        @testset "prescribed: caller-supplied ghost values" begin
+            n = 8
+            dx = 0.1
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            calls = Tuple{Symbol,Int}[]
+            prescribe = (side, k) -> begin
+                push!(calls, (side, k))
+                # Ghost cell k beyond the boundary at cell index 1-k (left)
+                # or n+k (right): supply the linear extension of u.
+                return side === :left ? Float64(1 - k) : Float64(n + k)
+            end
+            got = apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                           ghost_width=1,
+                                           boundary_policy="prescribed",
+                                           prescribe=prescribe)
+            # Linear u[i] = i + supplied linear ghosts → exact 1/dx everywhere.
+            @test all(g -> isapprox(g, 1.0 / dx; atol=1e-10), got)
+            @test (:left, 1) in calls
+            @test (:right, 1) in calls
+        end
+
+        @testset "prescribed: ghosted alias requires prescribe" begin
+            n = 8
+            dx = 0.1
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            err = try
+                apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                          ghost_width=1,
+                                          boundary_policy="ghosted")
+                nothing
+            catch e
+                e
+            end
+            @test err isa MMSEvaluatorError
+            @test err.code == "E_MMS_BAD_FIXTURE"
+        end
+
+        @testset "ghost_width too small for stencil offset" begin
+            wide_stencil = [
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => -2),
+                     "coeff" => Dict("op" => "/", "args" =>
+                         Any[1, Dict("op" => "*", "args" => Any[12, "dx"])])),
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => -1),
+                     "coeff" => Dict("op" => "/", "args" =>
+                         Any[-8, Dict("op" => "*", "args" => Any[12, "dx"])])),
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => 1),
+                     "coeff" => Dict("op" => "/", "args" =>
+                         Any[8, Dict("op" => "*", "args" => Any[12, "dx"])])),
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "x", "offset" => 2),
+                     "coeff" => Dict("op" => "/", "args" =>
+                         Any[-1, Dict("op" => "*", "args" => Any[12, "dx"])])),
+            ]
+            n = 16
+            dx = 1.0 / n
+            u = [sin(2π * (i - 0.5) * dx) for i in 1:n]
+            bindings = Dict("dx" => dx)
+            err = try
+                apply_stencil_ghosted_1d(wide_stencil, u, bindings;
+                                          ghost_width=1,
+                                          boundary_policy="periodic")
+                nothing
+            catch e
+                e
+            end
+            @test err isa MMSEvaluatorError
+            @test err.code == "E_GHOST_WIDTH_TOO_SMALL"
+        end
+
+        @testset "panel_dispatch is recognised but unsupported" begin
+            n = 8
+            dx = 0.1
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            err = try
+                apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                          ghost_width=1,
+                                          boundary_policy=Dict(
+                                              "kind" => "panel_dispatch",
+                                              "interior" => "dist",
+                                              "boundary" => "dist_bnd"))
+                nothing
+            catch e
+                e
+            end
+            @test err isa MMSEvaluatorError
+            @test err.code == "E_GHOST_FILL_UNSUPPORTED"
+        end
+
+        @testset "unknown boundary_policy kind" begin
+            n = 8
+            dx = 0.1
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            err = try
+                apply_stencil_ghosted_1d(centered_fd, u, bindings;
+                                          ghost_width=1,
+                                          boundary_policy="not_a_real_kind")
+                nothing
+            catch e
+                e
+            end
+            @test err isa MMSEvaluatorError
+        end
+
+        @testset "negative ghost_width" begin
+            n = 8
+            dx = 0.1
+            u = collect(Float64, 1:n)
+            bindings = Dict("dx" => dx)
+            @test_throws MMSEvaluatorError apply_stencil_ghosted_1d(
+                centered_fd, u, bindings;
+                ghost_width=-1, boundary_policy="periodic")
+        end
+    end
 end

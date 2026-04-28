@@ -548,6 +548,262 @@ function _resolve_substencil(stencil_json,
 end
 
 # ============================================================
+# Ghost-cell synthesis (RFC §5.2.8 / §7, esm-bet, esm-37k)
+# ============================================================
+
+"""
+    BOUNDARY_POLICY_KINDS
+
+Closed set of boundary-policy kinds recognised by
+[`apply_stencil_ghosted_1d`]. Mirrors the closed set declared by the
+schema parser in `rule_engine.jl`; `panel_dispatch` is parsed but not
+yet evaluated by the 1D walker (cubed-sphere only — see
+`E_GHOST_FILL_UNSUPPORTED`).
+"""
+const BOUNDARY_POLICY_KINDS = (
+    "periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+    "ghosted", "neumann_zero", "extrapolate", "panel_dispatch",
+)
+
+# Resolve v0.3.x backwards-compat aliases to the canonical kind. Mirrors
+# the alias table on `rule_engine.jl`'s `_BOUNDARY_POLICY_KIND_ALIASES`.
+function _canonical_boundary_kind(k::AbstractString)::String
+    s = String(k)
+    s == "ghosted"      && return "prescribed"
+    s == "neumann_zero" && return "reflecting"
+    s == "extrapolate"  && return "one_sided_extrapolation"
+    return s
+end
+
+"""
+    apply_stencil_ghosted_1d(stencil, u, bindings; ghost_width, boundary_policy,
+                             prescribe=nothing, degree=1, sub_stencil=nothing)
+        -> Vector{Float64}
+
+Apply a 1D Cartesian stencil on the interior sample vector `u` after
+extending it on each side by `ghost_width` cells using the rule's
+declared `boundary_policy` (RFC §5.2.8). Returns the length-`length(u)`
+interior outputs, having sliced ghosts back off.
+
+Supported `boundary_policy` values (closed set per RFC §5.2.8):
+
+- `"periodic"` — wrap-around fill. Bit-equal to
+  [`apply_stencil_periodic_1d`] on identical inputs.
+- `"reflecting"` (alias `"neumann_zero"`) — mirror across the boundary
+  face: ghost cell `k` (1 = closest to the edge) gets `u[k]` on the
+  left and `u[n - k + 1]` on the right.
+- `"one_sided_extrapolation"` (alias `"extrapolate"`) — polynomial
+  extrapolation from the interior. `degree` ∈ `0..3`; default `1`
+  (linear). Degree 0 is constant (Neumann-zero style); degree 2/3
+  fit a quadratic / cubic to the first `degree + 1` interior cells and
+  evaluate at the ghost cell centers.
+- `"prescribed"` (alias `"ghosted"`) — caller-supplied ghost values via
+  `prescribe::Function`. The callable receives `(side::Symbol, k::Int)`
+  with `side ∈ (:left, :right)` and `k ∈ 1..ghost_width` (1 = closest to
+  the boundary), returning the ghost value as a `Float64`.
+
+`ghost_width` MUST be ≥ `maximum(abs, offset)` across all stencil
+entries, else `MMSEvaluatorError(:E_GHOST_WIDTH_TOO_SMALL)` is thrown
+naming the offending offset.
+
+`panel_dispatch` is recognised but not implemented — throws
+`MMSEvaluatorError(:E_GHOST_FILL_UNSUPPORTED)`. Cubed-sphere panel-
+boundary distance switching lives behind `apply_stencil_2d_arakawa` /
+the planned cubed-sphere walker; see follow-up bead for the 1D
+adapter.
+"""
+function apply_stencil_ghosted_1d(stencil_json,
+                                  u::Vector{Float64},
+                                  bindings::Dict{String,Float64};
+                                  ghost_width::Int,
+                                  boundary_policy::Union{AbstractString,AbstractDict},
+                                  prescribe::Union{Nothing,Function}=nothing,
+                                  degree::Int=1,
+                                  sub_stencil::Union{Nothing,AbstractString}=nothing)::Vector{Float64}
+    ghost_width >= 0 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "ghost_width must be non-negative, got $(ghost_width)"))
+    entries = _resolve_substencil(stencil_json, sub_stencil)
+    coeff_pairs = Vector{Tuple{Int,Float64}}(undef, length(entries))
+    max_off = 0
+    for (k, s) in enumerate(entries)
+        sel = s["selector"]
+        off = Int(sel["offset"])
+        coeff_pairs[k] = (off, eval_coeff(s["coeff"], bindings))
+        ao = abs(off)
+        ao > max_off && (max_off = ao)
+    end
+    ghost_width >= max_off || throw(MMSEvaluatorError(
+        "E_GHOST_WIDTH_TOO_SMALL",
+        "stencil offset $(max_off) exceeds ghost_width $(ghost_width); " *
+        "rule must declare `ghost_width` ≥ max(|offset|)"))
+
+    n = length(u)
+    n >= 2 || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "ghosted stencil application requires at least 2 interior cells; got $(n)"))
+    Ng = ghost_width
+    u_ext = Vector{Float64}(undef, n + 2 * Ng)
+    @inbounds for i in 1:n
+        u_ext[Ng + i] = u[i]
+    end
+
+    kind = _canonical_boundary_kind(_extract_policy_kind(boundary_policy))
+    extra_degree = _extract_policy_degree(boundary_policy, degree)
+    if kind == "periodic"
+        _fill_ghosts_periodic!(u_ext, u, Ng)
+    elseif kind == "reflecting"
+        _fill_ghosts_reflecting!(u_ext, u, Ng)
+    elseif kind == "one_sided_extrapolation"
+        _fill_ghosts_one_sided!(u_ext, u, Ng, extra_degree)
+    elseif kind == "prescribed"
+        prescribe === nothing && throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "boundary_policy=`prescribed` requires a `prescribe::Function`; " *
+            "callable receives (side, k) with side ∈ (:left, :right) and 1 ≤ k ≤ ghost_width"))
+        _fill_ghosts_prescribed!(u_ext, Ng, prescribe)
+    elseif kind == "panel_dispatch"
+        throw(MMSEvaluatorError(
+            "E_GHOST_FILL_UNSUPPORTED",
+            "boundary_policy=`panel_dispatch` not implemented for the 1D walker " *
+            "(cubed-sphere only); see esm-37k follow-ups for the 2D adapter"))
+    else
+        valid = join(BOUNDARY_POLICY_KINDS, ", ")
+        throw(MMSEvaluatorError(
+            "E_MMS_BAD_FIXTURE",
+            "unknown boundary_policy kind $(repr(kind)); expected one of: $(valid)"))
+    end
+
+    out = zeros(Float64, n)
+    @inbounds for i in 1:n
+        acc = 0.0
+        for (off, c) in coeff_pairs
+            acc += c * u_ext[Ng + i + off]
+        end
+        out[i] = acc
+    end
+    return out
+end
+
+# Pull the kind tag out of the boundary_policy authorial form. Accepts:
+#   - String form: returned as-is.
+#   - Dict (per-axis spec for ONE axis): returns its `kind`.
+# 1D walker only: callers with a multi-axis `by_axis` dict must extract
+# their axis before calling apply_stencil_ghosted_1d.
+function _extract_policy_kind(bp::AbstractString)::String
+    return String(bp)
+end
+
+function _extract_policy_kind(bp::AbstractDict)::String
+    haskey(bp, "kind") || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "boundary_policy spec object must carry a `kind` field; got keys $(collect(keys(bp)))"))
+    return String(bp["kind"])
+end
+
+function _extract_policy_degree(::AbstractString, default::Int)::Int
+    return default
+end
+
+function _extract_policy_degree(bp::AbstractDict, default::Int)::Int
+    raw = get(bp, "degree", nothing)
+    raw === nothing && return default
+    return Int(raw)
+end
+
+function _fill_ghosts_periodic!(u_ext::Vector{Float64}, u::Vector{Float64}, Ng::Int)
+    n = length(u)
+    @inbounds for k in 1:Ng
+        u_ext[Ng - k + 1] = u[n - k + 1]   # left ghost k mirrors interior cell n-k+1 across the period
+        u_ext[Ng + n + k] = u[k]           # right ghost k mirrors interior cell k across the period
+    end
+    return u_ext
+end
+
+function _fill_ghosts_reflecting!(u_ext::Vector{Float64}, u::Vector{Float64}, Ng::Int)
+    n = length(u)
+    @inbounds for k in 1:Ng
+        # Mirror across the boundary face between cell 0 (ghost) and cell 1 (interior):
+        # ghost cell k (1 = closest to the boundary) reads interior cell k.
+        u_ext[Ng - k + 1] = u[k]
+        u_ext[Ng + n + k] = u[n - k + 1]
+    end
+    return u_ext
+end
+
+function _fill_ghosts_one_sided!(u_ext::Vector{Float64}, u::Vector{Float64},
+                                  Ng::Int, degree::Int)
+    n = length(u)
+    (0 <= degree <= 3) || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "one_sided_extrapolation degree must be in 0..3, got $(degree)"))
+    n > degree || throw(MMSEvaluatorError(
+        "E_MMS_BAD_FIXTURE",
+        "one_sided_extrapolation degree $(degree) requires at least $(degree + 1) " *
+        "interior cells; got $(n)"))
+    # Build the polynomial coefficients in interior-index space (cell centers
+    # at i = 1, 2, ..., on a uniform grid). Extrapolate at i = 1 - k (left)
+    # and i = n + k (right) for k = 1..Ng.
+    @inbounds for k in 1:Ng
+        u_ext[Ng - k + 1] = _extrapolate_left(u, degree, k)
+        u_ext[Ng + n + k] = _extrapolate_right(u, degree, k)
+    end
+    return u_ext
+end
+
+# Newton forward-difference extrapolation from the left (interior cells 1..deg+1)
+# to virtual cell index 1 - k. Closed forms match the standard polynomial
+# extrapolation through `degree + 1` equally-spaced points.
+function _extrapolate_left(u::Vector{Float64}, degree::Int, k::Int)::Float64
+    if degree == 0
+        return u[1]
+    elseif degree == 1
+        return u[1] + Float64(k) * (u[1] - u[2])
+    elseif degree == 2
+        # Quadratic through u[1], u[2], u[3] evaluated at i = 1 - k.
+        # Δi from cell 1 is -k. Lagrange form:
+        K = Float64(k)
+        return (1.0 + 1.5 * K + 0.5 * K^2) * u[1] +
+               (-2.0 * K - K^2)            * u[2] +
+               (0.5 * K + 0.5 * K^2)       * u[3]
+    end  # degree == 3
+    K = Float64(k)
+    # Cubic through u[1], u[2], u[3], u[4] evaluated at i = 1 - k.
+    return (1.0 + (11.0 / 6.0) * K + K^2 + (1.0 / 6.0) * K^3) * u[1] +
+           (-3.0 * K - 2.5 * K^2 - 0.5 * K^3)                * u[2] +
+           (1.5 * K + 2.0 * K^2 + 0.5 * K^3)                 * u[3] +
+           ((-1.0 / 3.0) * K - 0.5 * K^2 - (1.0 / 6.0) * K^3) * u[4]
+end
+
+function _extrapolate_right(u::Vector{Float64}, degree::Int, k::Int)::Float64
+    n = length(u)
+    if degree == 0
+        return u[n]
+    elseif degree == 1
+        return u[n] + Float64(k) * (u[n] - u[n - 1])
+    elseif degree == 2
+        K = Float64(k)
+        return (1.0 + 1.5 * K + 0.5 * K^2) * u[n]     +
+               (-2.0 * K - K^2)            * u[n - 1] +
+               (0.5 * K + 0.5 * K^2)       * u[n - 2]
+    end  # degree == 3
+    K = Float64(k)
+    return (1.0 + (11.0 / 6.0) * K + K^2 + (1.0 / 6.0) * K^3) * u[n]     +
+           (-3.0 * K - 2.5 * K^2 - 0.5 * K^3)                * u[n - 1] +
+           (1.5 * K + 2.0 * K^2 + 0.5 * K^3)                 * u[n - 2] +
+           ((-1.0 / 3.0) * K - 0.5 * K^2 - (1.0 / 6.0) * K^3) * u[n - 3]
+end
+
+function _fill_ghosts_prescribed!(u_ext::Vector{Float64}, Ng::Int, prescribe::Function)
+    n_interior = length(u_ext) - 2 * Ng
+    @inbounds for k in 1:Ng
+        u_ext[Ng - k + 1]   = Float64(prescribe(:left, k))
+        u_ext[Ng + n_interior + k] = Float64(prescribe(:right, k))
+    end
+    return u_ext
+end
+
+# ============================================================
 # Output-kind selector
 # ============================================================
 

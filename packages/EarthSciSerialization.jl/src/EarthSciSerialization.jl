@@ -170,6 +170,8 @@ export
     register_manufactured_solution!, eval_coeff, OUTPUT_KINDS,
     apply_stencil_periodic_1d, apply_stencil_2d_latlon,
     apply_stencil_2d_arakawa, apply_stencil_1d_vertical,
+    # Ghost-cell synthesis for non-periodic 1D walker (esm-37k)
+    apply_stencil_ghosted_1d, BOUNDARY_POLICY_KINDS,
     parabola_reconstruct_periodic_1d,
     mms_convergence, verify_mms_convergence,
     # WENO5 nonlinear reconstruction (esm-rq3)
