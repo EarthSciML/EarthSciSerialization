@@ -51,12 +51,15 @@ type Guard struct {
 // per-query-point boolean predicate AST (RFC §5.2.7); structurally
 // distinguished from the guard-list Where at parse time by JSON shape.
 //
-// BoundaryPolicy declares behavior at domain edges (RFC §5.2.8); empty
-// string means unset (semantically equivalent to "periodic" for
-// backwards compatibility). Bindings declares the time-varying / static
-// symbols the replacement may reference (RFC §5.2.8). Both fields are
-// preserved across parse/serialize roundtrips; the rule engine does not
-// branch on them.
+// BoundaryPolicy declares behavior at domain edges (RFC §5.2.8 / §7) —
+// either a uniform string form (BoundaryPolicy.Uniform) or a per-axis
+// map (BoundaryPolicy.PerAxis). A nil pointer means unset (semantically
+// equivalent to "periodic" for backwards compatibility). GhostWidth
+// declares per-axis ghost-cell padding the rule's stencil reaches
+// (RFC §5.2.8 / §7); a nil pointer means unset (== 0). Bindings declares
+// the time-varying / static symbols the replacement may reference
+// (RFC §5.2.8). All three fields are preserved across parse/serialize
+// roundtrips; the rule engine does not branch on them.
 //
 // The Go binding evaluates region.index_range, region.boundary,
 // region.panel_boundary, region.mask_field, and the where-expression
@@ -69,8 +72,55 @@ type Rule struct {
 	Region         string
 	RegionScope    *RuleRegionScope
 	WhereExpr      Expression
-	BoundaryPolicy string
+	BoundaryPolicy *BoundaryPolicy
+	GhostWidth     *GhostWidth
 	Bindings       map[string]RuleBinding
+}
+
+// BoundaryPolicy is the parsed authorial form of a rule's boundary_policy
+// field (RFC §5.2.8 / §7). Exactly one of Uniform / PerAxis is populated:
+// Uniform holds a closed-set string when the author wrote the
+// string-uniform form; PerAxis holds a {<axis>: BoundaryPolicySpec} map
+// when the author wrote the {by_axis: ...} object form. The string form
+// rejects "panel_dispatch" (which requires the per-axis form's interior /
+// boundary parameters).
+type BoundaryPolicy struct {
+	Uniform string                          // empty when PerAxis is populated
+	PerAxis map[string]BoundaryPolicySpec   // nil when Uniform is populated
+}
+
+// BoundaryPolicySpec is a single per-axis boundary-policy entry
+// (RFC §5.2.8 / §7). Kind selects the closed-set policy; per-kind
+// optional fields carry the policy's parameters.
+type BoundaryPolicySpec struct {
+	// Kind is one of: "periodic", "reflecting", "one_sided_extrapolation",
+	// "prescribed", "panel_dispatch", "ghosted" (alias for "prescribed"),
+	// "neumann_zero" (alias for "reflecting"), "extrapolate" (alias for
+	// "one_sided_extrapolation").
+	Kind string
+	// Degree is the extrapolation order for one_sided_extrapolation /
+	// extrapolate (0..3). HasDegree distinguishes "explicit zero" from
+	// "unset".
+	Degree    int
+	HasDegree bool
+	// Interior names the metric/distance field used on interior faces
+	// for panel_dispatch (e.g. "dist_xi"). Empty means unset.
+	Interior string
+	// Boundary names the metric/distance field used on panel-boundary
+	// faces for panel_dispatch (e.g. "dist_xi_bnd"). Empty means unset.
+	Boundary string
+	// Description is an optional authorial note. Empty means unset.
+	Description string
+}
+
+// GhostWidth is the parsed authorial form of a rule's ghost_width field
+// (RFC §5.2.8 / §7). Exactly one of Uniform / PerAxis is populated:
+// Uniform holds the integer scalar; PerAxis holds a {<axis>: int} map.
+// HasUniform distinguishes "uniform 0" from "per-axis form".
+type GhostWidth struct {
+	Uniform    int
+	HasUniform bool
+	PerAxis    map[string]int // nil when Uniform is populated
 }
 
 // RuleBinding is a single rule binding declaration (RFC §5.2.8).
@@ -1218,22 +1268,21 @@ func parseRuleObject(name string, obj map[string]interface{}) (Rule, error) {
 				fmt.Sprintf("rule `%s`: `region` must be a string (legacy) or object (scope)", name))
 		}
 	}
-	var boundaryPolicy string
+	var boundaryPolicy *BoundaryPolicy
 	if bpRaw, has := obj["boundary_policy"]; has {
-		bp, ok := bpRaw.(string)
-		if !ok {
-			return Rule{}, newRuleErr("E_RULE_PARSE",
-				fmt.Sprintf("rule `%s`: `boundary_policy` must be a string", name))
-		}
-		switch bp {
-		case "periodic", "ghosted", "neumann_zero", "extrapolate":
-			// ok
-		default:
-			return Rule{}, newRuleErr("E_RULE_PARSE",
-				fmt.Sprintf("rule `%s`: unknown boundary_policy `%s` "+
-					"(closed set: periodic, ghosted, neumann_zero, extrapolate)", name, bp))
+		bp, err := parseBoundaryPolicy(name, bpRaw)
+		if err != nil {
+			return Rule{}, err
 		}
 		boundaryPolicy = bp
+	}
+	var ghostWidth *GhostWidth
+	if gwRaw, has := obj["ghost_width"]; has {
+		gw, err := parseGhostWidth(name, gwRaw)
+		if err != nil {
+			return Rule{}, err
+		}
+		ghostWidth = gw
 	}
 	var bindings map[string]RuleBinding
 	if bRaw, has := obj["bindings"]; has {
@@ -1260,8 +1309,189 @@ func parseRuleObject(name string, obj map[string]interface{}) (Rule, error) {
 		RegionScope:    regionScope,
 		WhereExpr:      whereExpr,
 		BoundaryPolicy: boundaryPolicy,
+		GhostWidth:     ghostWidth,
 		Bindings:       bindings,
 	}, nil
+}
+
+var boundaryPolicyStringValues = map[string]struct{}{
+	"periodic":                {},
+	"reflecting":              {},
+	"one_sided_extrapolation": {},
+	"prescribed":              {},
+	"ghosted":                 {},
+	"neumann_zero":            {},
+	"extrapolate":             {},
+}
+
+var boundaryPolicyKindValues = map[string]struct{}{
+	"periodic":                {},
+	"reflecting":              {},
+	"one_sided_extrapolation": {},
+	"prescribed":              {},
+	"panel_dispatch":          {},
+	"ghosted":                 {},
+	"neumann_zero":            {},
+	"extrapolate":             {},
+}
+
+func parseBoundaryPolicy(name string, raw interface{}) (*BoundaryPolicy, error) {
+	switch v := raw.(type) {
+	case string:
+		if _, ok := boundaryPolicyStringValues[v]; !ok {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: unknown boundary_policy `%s` "+
+					"(closed set: periodic, reflecting, one_sided_extrapolation, prescribed, ghosted, neumann_zero, extrapolate)",
+					name, v))
+		}
+		return &BoundaryPolicy{Uniform: v}, nil
+	case map[string]interface{}:
+		byAxisRaw, has := v["by_axis"]
+		if !has {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `boundary_policy` object must have a `by_axis` field", name))
+		}
+		byAxisMap, ok := byAxisRaw.(map[string]interface{})
+		if !ok {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `boundary_policy.by_axis` must be an object", name))
+		}
+		out := make(map[string]BoundaryPolicySpec, len(byAxisMap))
+		for axis, specRaw := range byAxisMap {
+			spec, err := parseBoundaryPolicySpec(name, axis, specRaw)
+			if err != nil {
+				return nil, err
+			}
+			out[axis] = spec
+		}
+		return &BoundaryPolicy{PerAxis: out}, nil
+	}
+	return nil, newRuleErr("E_RULE_PARSE",
+		fmt.Sprintf("rule `%s`: `boundary_policy` must be a string or an object with a `by_axis` field", name))
+}
+
+func parseBoundaryPolicySpec(ruleName, axis string, raw interface{}) (BoundaryPolicySpec, error) {
+	obj, ok := raw.(map[string]interface{})
+	if !ok {
+		return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s must be an object", ruleName, axis))
+	}
+	kindV, has := obj["kind"]
+	if !has {
+		return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s missing required string `kind`", ruleName, axis))
+	}
+	kind, ok := kindV.(string)
+	if !ok {
+		return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.kind must be a string", ruleName, axis))
+	}
+	if _, ok := boundaryPolicyKindValues[kind]; !ok {
+		return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+			fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s: unknown kind `%s`", ruleName, axis, kind))
+	}
+	spec := BoundaryPolicySpec{Kind: kind}
+	if dRaw, has := obj["degree"]; has {
+		n, ok := jsonAsInt(dRaw)
+		if !ok {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.degree must be an integer", ruleName, axis))
+		}
+		if n < 0 || n > 3 {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.degree must be between 0 and 3, got %d", ruleName, axis, n))
+		}
+		spec.Degree = n
+		spec.HasDegree = true
+	}
+	if iRaw, has := obj["interior"]; has {
+		s, ok := iRaw.(string)
+		if !ok {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.interior must be a string", ruleName, axis))
+		}
+		spec.Interior = s
+	}
+	if bRaw, has := obj["boundary"]; has {
+		s, ok := bRaw.(string)
+		if !ok {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.boundary must be a string", ruleName, axis))
+		}
+		spec.Boundary = s
+	}
+	if descRaw, has := obj["description"]; has {
+		s, ok := descRaw.(string)
+		if !ok {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s.description must be a string", ruleName, axis))
+		}
+		spec.Description = s
+	}
+	if kind == "panel_dispatch" {
+		if spec.Interior == "" || spec.Boundary == "" {
+			return BoundaryPolicySpec{}, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: boundary_policy.by_axis.%s: panel_dispatch requires `interior` and `boundary` field names", ruleName, axis))
+		}
+	}
+	return spec, nil
+}
+
+func parseGhostWidth(name string, raw interface{}) (*GhostWidth, error) {
+	if n, ok := jsonAsInt(raw); ok {
+		if n < 0 {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `ghost_width` must be non-negative, got %d", name, n))
+		}
+		return &GhostWidth{Uniform: n, HasUniform: true}, nil
+	}
+	if obj, ok := raw.(map[string]interface{}); ok {
+		byAxisRaw, has := obj["by_axis"]
+		if !has {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `ghost_width` object must have a `by_axis` field", name))
+		}
+		byAxisMap, ok := byAxisRaw.(map[string]interface{})
+		if !ok {
+			return nil, newRuleErr("E_RULE_PARSE",
+				fmt.Sprintf("rule `%s`: `ghost_width.by_axis` must be an object", name))
+		}
+		out := make(map[string]int, len(byAxisMap))
+		for axis, w := range byAxisMap {
+			n, ok := jsonAsInt(w)
+			if !ok {
+				return nil, newRuleErr("E_RULE_PARSE",
+					fmt.Sprintf("rule `%s`: ghost_width.by_axis.%s must be an integer", name, axis))
+			}
+			if n < 0 {
+				return nil, newRuleErr("E_RULE_PARSE",
+					fmt.Sprintf("rule `%s`: ghost_width.by_axis.%s must be non-negative, got %d", name, axis, n))
+			}
+			out[axis] = n
+		}
+		return &GhostWidth{PerAxis: out}, nil
+	}
+	return nil, newRuleErr("E_RULE_PARSE",
+		fmt.Sprintf("rule `%s`: `ghost_width` must be a non-negative integer or an object with a `by_axis` field", name))
+}
+
+// jsonAsInt converts a JSON-decoded numeric value to int. JSON numbers in
+// Go's encoding/json default to float64, so we accept both ints and floats
+// that round-trip exactly.
+func jsonAsInt(v interface{}) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case int64:
+		return int(x), true
+	case float64:
+		n := int(x)
+		if float64(n) == x {
+			return n, true
+		}
+		return 0, false
+	}
+	return 0, false
 }
 
 func parseRuleBinding(ruleName, bindingName string, v interface{}) (RuleBinding, error) {

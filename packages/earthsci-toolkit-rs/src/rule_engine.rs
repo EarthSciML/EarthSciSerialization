@@ -96,36 +96,101 @@ pub enum RuleRegion {
     IndexRange { axis: String, lo: i64, hi: i64 },
 }
 
-/// Closed set of rule edge-behavior policies (RFC §5.2.8). Omission is
-/// equivalent to [`BoundaryPolicy::Periodic`] for backwards compatibility.
+/// Closed set of policy kinds accepted in either the string-form
+/// `boundary_policy` or as [`BoundaryPolicySpec::kind`] (RFC §5.2.8 / §7).
+/// `PanelDispatch` is object-form only because it carries required
+/// `interior`/`boundary` parameters; the string form rejects it.
+///
+/// `Ghosted`/`NeumannZero`/`Extrapolate` are v0.3.x backwards-compatible
+/// aliases for `Prescribed`/`Reflecting`/`OneSidedExtrapolation`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BoundaryPolicy {
+pub enum BoundaryPolicyKind {
     Periodic,
+    Reflecting,
+    OneSidedExtrapolation,
+    Prescribed,
+    PanelDispatch,
     Ghosted,
     NeumannZero,
     Extrapolate,
 }
 
-impl BoundaryPolicy {
+impl BoundaryPolicyKind {
     /// Wire-form value as it appears in JSON.
     pub fn as_str(&self) -> &'static str {
         match self {
-            BoundaryPolicy::Periodic => "periodic",
-            BoundaryPolicy::Ghosted => "ghosted",
-            BoundaryPolicy::NeumannZero => "neumann_zero",
-            BoundaryPolicy::Extrapolate => "extrapolate",
+            BoundaryPolicyKind::Periodic => "periodic",
+            BoundaryPolicyKind::Reflecting => "reflecting",
+            BoundaryPolicyKind::OneSidedExtrapolation => "one_sided_extrapolation",
+            BoundaryPolicyKind::Prescribed => "prescribed",
+            BoundaryPolicyKind::PanelDispatch => "panel_dispatch",
+            BoundaryPolicyKind::Ghosted => "ghosted",
+            BoundaryPolicyKind::NeumannZero => "neumann_zero",
+            BoundaryPolicyKind::Extrapolate => "extrapolate",
         }
     }
 
     fn from_str(s: &str) -> Option<Self> {
         match s {
-            "periodic" => Some(BoundaryPolicy::Periodic),
-            "ghosted" => Some(BoundaryPolicy::Ghosted),
-            "neumann_zero" => Some(BoundaryPolicy::NeumannZero),
-            "extrapolate" => Some(BoundaryPolicy::Extrapolate),
+            "periodic" => Some(BoundaryPolicyKind::Periodic),
+            "reflecting" => Some(BoundaryPolicyKind::Reflecting),
+            "one_sided_extrapolation" => Some(BoundaryPolicyKind::OneSidedExtrapolation),
+            "prescribed" => Some(BoundaryPolicyKind::Prescribed),
+            "panel_dispatch" => Some(BoundaryPolicyKind::PanelDispatch),
+            "ghosted" => Some(BoundaryPolicyKind::Ghosted),
+            "neumann_zero" => Some(BoundaryPolicyKind::NeumannZero),
+            "extrapolate" => Some(BoundaryPolicyKind::Extrapolate),
             _ => None,
         }
     }
+}
+
+/// Per-axis boundary-policy entry (RFC §5.2.8 / §7). `kind` selects the
+/// policy; sibling fields carry kind-specific parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundaryPolicySpec {
+    pub kind: BoundaryPolicyKind,
+    /// `OneSidedExtrapolation` / `Extrapolate`: extrapolation order
+    /// (0..=3). `None` means default (linear).
+    pub degree: Option<i64>,
+    /// `PanelDispatch`: name of the metric field for interior faces.
+    pub interior: Option<String>,
+    /// `PanelDispatch`: name of the metric field for panel-boundary faces.
+    pub boundary: Option<String>,
+    pub description: Option<String>,
+}
+
+impl BoundaryPolicySpec {
+    pub fn new(kind: BoundaryPolicyKind) -> Self {
+        Self {
+            kind,
+            degree: None,
+            interior: None,
+            boundary: None,
+            description: None,
+        }
+    }
+}
+
+/// Authorial form of a rule's `boundary_policy` (RFC §5.2.8 / §7). Either
+/// a closed-set string applied uniformly to every axis the rule's stencil
+/// reaches, or a per-axis map (required for `panel_dispatch` and for
+/// axis-heterogeneous rules).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BoundaryPolicy {
+    /// Uniform string form. Excludes `PanelDispatch`, which requires the
+    /// per-axis form.
+    Uniform(BoundaryPolicyKind),
+    /// `{by_axis: {<axis>: BoundaryPolicySpec}}` per-axis form.
+    PerAxis(HashMap<String, BoundaryPolicySpec>),
+}
+
+/// Authorial form of a rule's `ghost_width` (RFC §5.2.8 / §7). Either a
+/// non-negative integer applied uniformly to every axis, or a per-axis map.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GhostWidth {
+    Uniform(i64),
+    PerAxis(HashMap<String, i64>),
 }
 
 /// Rule binding cadence (RFC §5.2.8).
@@ -174,10 +239,13 @@ pub struct RuleBinding {
 /// at the author level, structurally distinguished by JSON shape at
 /// parse time.
 ///
-/// `boundary_policy` declares behavior at domain edges (RFC §5.2.8).
-/// `bindings` declares the time-varying / static symbols the
-/// replacement may reference (RFC §5.2.8). Both fields are stored
-/// verbatim; the rule engine does not branch on them.
+/// `boundary_policy` declares behavior at domain edges (RFC §5.2.8 / §7) —
+/// either a uniform string form or a per-axis map (required for
+/// `panel_dispatch`). `ghost_width` declares per-axis ghost-cell padding
+/// the rule's stencil reaches (RFC §5.2.8 / §7). `bindings` declares the
+/// time-varying / static symbols the replacement may reference
+/// (RFC §5.2.8). All three fields are stored verbatim; the rule engine
+/// does not branch on them.
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub name: String,
@@ -187,6 +255,7 @@ pub struct Rule {
     pub region: Option<RuleRegion>,
     pub where_expr: Option<Expr>,
     pub boundary_policy: Option<BoundaryPolicy>,
+    pub ghost_width: Option<GhostWidth>,
     pub bindings: Option<HashMap<String, RuleBinding>>,
 }
 
@@ -200,6 +269,7 @@ impl Rule {
             region: None,
             where_expr: None,
             boundary_policy: None,
+            ghost_width: None,
             bindings: None,
         }
     }
@@ -715,6 +785,7 @@ fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngin
     let (where_, where_expr) = parse_where(name, v.get("where"))?;
     let region = parse_region(name, v.get("region"))?;
     let boundary_policy = parse_boundary_policy(name, v.get("boundary_policy"))?;
+    let ghost_width = parse_ghost_width(name, v.get("ghost_width"))?;
     let bindings = parse_bindings(name, v.get("bindings"))?;
     Ok(Rule {
         name: name.to_string(),
@@ -724,9 +795,31 @@ fn parse_rule_named(name: &str, v: &serde_json::Value) -> Result<Rule, RuleEngin
         region,
         where_expr,
         boundary_policy,
+        ghost_width,
         bindings,
     })
 }
+
+const BOUNDARY_POLICY_STRING_VALUES: &[&str] = &[
+    "periodic",
+    "reflecting",
+    "one_sided_extrapolation",
+    "prescribed",
+    "ghosted",
+    "neumann_zero",
+    "extrapolate",
+];
+
+const BOUNDARY_POLICY_KIND_VALUES: &[&str] = &[
+    "periodic",
+    "reflecting",
+    "one_sided_extrapolation",
+    "prescribed",
+    "panel_dispatch",
+    "ghosted",
+    "neumann_zero",
+    "extrapolate",
+];
 
 fn parse_boundary_policy(
     name: &str,
@@ -735,21 +828,198 @@ fn parse_boundary_policy(
     let Some(v) = v else {
         return Ok(None);
     };
-    let s = v.as_str().ok_or_else(|| {
+    if let Some(s) = v.as_str() {
+        if !BOUNDARY_POLICY_STRING_VALUES.contains(&s) {
+            return Err(RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{name}`: unknown boundary_policy `{s}` (closed set: {})",
+                    BOUNDARY_POLICY_STRING_VALUES.join(", ")
+                ),
+            ));
+        }
+        // Safe: we just validated against the string-values list which
+        // never contains panel_dispatch.
+        let kind = BoundaryPolicyKind::from_str(s).expect("validated above");
+        return Ok(Some(BoundaryPolicy::Uniform(kind)));
+    }
+    if let Some(obj) = v.as_object() {
+        let by_axis_raw = obj.get("by_axis").ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `boundary_policy` object must have a `by_axis` field"),
+            )
+        })?;
+        let by_axis_obj = by_axis_raw.as_object().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `boundary_policy.by_axis` must be an object"),
+            )
+        })?;
+        let mut out = HashMap::with_capacity(by_axis_obj.len());
+        for (axis, spec_raw) in by_axis_obj {
+            out.insert(
+                axis.clone(),
+                parse_boundary_policy_spec(name, axis, spec_raw)?,
+            );
+        }
+        return Ok(Some(BoundaryPolicy::PerAxis(out)));
+    }
+    Err(RuleEngineError::new(
+        "E_RULE_PARSE",
+        format!(
+            "rule `{name}`: `boundary_policy` must be a string or an object with a `by_axis` field"
+        ),
+    ))
+}
+
+fn parse_boundary_policy_spec(
+    rule_name: &str,
+    axis: &str,
+    v: &serde_json::Value,
+) -> Result<BoundaryPolicySpec, RuleEngineError> {
+    let obj = v.as_object().ok_or_else(|| {
         RuleEngineError::new(
             "E_RULE_PARSE",
-            format!("rule `{name}`: `boundary_policy` must be a string"),
+            format!("rule `{rule_name}`: boundary_policy.by_axis.{axis} must be an object"),
         )
     })?;
-    BoundaryPolicy::from_str(s).map(Some).ok_or_else(|| {
+    let kind_raw = obj.get("kind").and_then(|s| s.as_str()).ok_or_else(|| {
         RuleEngineError::new(
             "E_RULE_PARSE",
             format!(
-                "rule `{name}`: unknown boundary_policy `{s}` \
-                 (closed set: periodic, ghosted, neumann_zero, extrapolate)"
+                "rule `{rule_name}`: boundary_policy.by_axis.{axis} missing required string `kind`"
             ),
         )
-    })
+    })?;
+    if !BOUNDARY_POLICY_KIND_VALUES.contains(&kind_raw) {
+        return Err(RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!(
+                "rule `{rule_name}`: boundary_policy.by_axis.{axis}: unknown kind `{kind_raw}` (closed set: {})",
+                BOUNDARY_POLICY_KIND_VALUES.join(", ")
+            ),
+        ));
+    }
+    let kind = BoundaryPolicyKind::from_str(kind_raw).expect("validated above");
+    let mut spec = BoundaryPolicySpec::new(kind);
+    if let Some(d) = obj.get("degree") {
+        let n = d.as_i64().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: boundary_policy.by_axis.{axis}.degree must be an integer"
+                ),
+            )
+        })?;
+        if !(0..=3).contains(&n) {
+            return Err(RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: boundary_policy.by_axis.{axis}.degree must be between 0 and 3, got {n}"
+                ),
+            ));
+        }
+        spec.degree = Some(n);
+    }
+    if let Some(s) = obj.get("interior") {
+        spec.interior = Some(s.as_str().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: boundary_policy.by_axis.{axis}.interior must be a string"
+                ),
+            )
+        })?.to_string());
+    }
+    if let Some(s) = obj.get("boundary") {
+        spec.boundary = Some(s.as_str().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: boundary_policy.by_axis.{axis}.boundary must be a string"
+                ),
+            )
+        })?.to_string());
+    }
+    if let Some(s) = obj.get("description") {
+        spec.description = Some(s.as_str().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!(
+                    "rule `{rule_name}`: boundary_policy.by_axis.{axis}.description must be a string"
+                ),
+            )
+        })?.to_string());
+    }
+    if matches!(kind, BoundaryPolicyKind::PanelDispatch)
+        && (spec.interior.is_none() || spec.boundary.is_none())
+    {
+        return Err(RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!(
+                "rule `{rule_name}`: boundary_policy.by_axis.{axis}: panel_dispatch requires `interior` and `boundary` field names"
+            ),
+        ));
+    }
+    Ok(spec)
+}
+
+fn parse_ghost_width(
+    name: &str,
+    v: Option<&serde_json::Value>,
+) -> Result<Option<GhostWidth>, RuleEngineError> {
+    let Some(v) = v else {
+        return Ok(None);
+    };
+    if let Some(n) = v.as_i64() {
+        if n < 0 {
+            return Err(RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `ghost_width` must be non-negative, got {n}"),
+            ));
+        }
+        return Ok(Some(GhostWidth::Uniform(n)));
+    }
+    if let Some(obj) = v.as_object() {
+        let by_axis_raw = obj.get("by_axis").ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `ghost_width` object must have a `by_axis` field"),
+            )
+        })?;
+        let by_axis_obj = by_axis_raw.as_object().ok_or_else(|| {
+            RuleEngineError::new(
+                "E_RULE_PARSE",
+                format!("rule `{name}`: `ghost_width.by_axis` must be an object"),
+            )
+        })?;
+        let mut out = HashMap::with_capacity(by_axis_obj.len());
+        for (axis, w) in by_axis_obj {
+            let n = w.as_i64().ok_or_else(|| {
+                RuleEngineError::new(
+                    "E_RULE_PARSE",
+                    format!("rule `{name}`: ghost_width.by_axis.{axis} must be an integer"),
+                )
+            })?;
+            if n < 0 {
+                return Err(RuleEngineError::new(
+                    "E_RULE_PARSE",
+                    format!(
+                        "rule `{name}`: ghost_width.by_axis.{axis} must be non-negative, got {n}"
+                    ),
+                ));
+            }
+            out.insert(axis.clone(), n);
+        }
+        return Ok(Some(GhostWidth::PerAxis(out)));
+    }
+    Err(RuleEngineError::new(
+        "E_RULE_PARSE",
+        format!(
+            "rule `{name}`: `ghost_width` must be a non-negative integer or an object with a `by_axis` field"
+        ),
+    ))
 }
 
 fn parse_bindings(
@@ -1493,6 +1763,7 @@ mod tests {
             region: None,
             where_expr: None,
             boundary_policy: None,
+            ghost_width: None,
             bindings: None,
         };
         let mut ctx = RuleContext::default();
