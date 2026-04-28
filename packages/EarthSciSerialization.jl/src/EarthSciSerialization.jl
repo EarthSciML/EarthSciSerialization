@@ -117,6 +117,7 @@ export
     canonicalize, canonical_json, format_canonical_float, CanonicalizeError,
     # Rule engine (RFC §5.2, §5.2.7, §5.2.8)
     Rule, Guard, RuleContext, RuleEngineError, RuleBinding,
+    BoundaryPolicy, BoundaryPolicySpec, GhostWidth,
     RuleRegion, RegionBoundary, RegionPanelBoundary,
     RegionMaskField, RegionIndexRange,
     match_pattern, apply_bindings, rewrite,

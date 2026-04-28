@@ -418,36 +418,106 @@ agnostic to the upstream source; only the populated
 from `ctx.mask_fields`, the rule falls through (same
 W_UNEVAL_SCOPE handling as any unimplemented scope).
 
-#### 5.2.8 `boundary_policy` and `bindings` (new in v0.3.x; resolves esm-m5s)
+#### 5.2.8 `boundary_policy`, `ghost_width`, and `bindings` (new in v0.3.x; resolves esm-m5s, esm-bet)
 
-Two additive optional fields on the Rule object (§5.2 schema, §7.2 expansion)
+Three additive optional fields on the Rule object (§5.2 schema, §7.2 expansion)
 extend rules to flux-form transport schemes whose stencil semantics depend on
 the rule's edge behavior and whose coefficients reference time-varying state
 that is not authored as a model variable.
 
 ##### `boundary_policy`
 
-A string drawn from the closed set `{"periodic", "ghosted", "neumann_zero",
-"extrapolate"}`. Declares what the rule expects to happen when the matched
-pattern's stencil reaches a domain edge.
+Declares what the rule expects to happen when the matched pattern's stencil
+reaches a domain edge. Two authorial forms are accepted:
 
-| Value | Semantics at edge query points |
+**String form (axis-uniform).** A string drawn from the closed set
+`{"periodic", "ghosted", "neumann_zero", "extrapolate", "reflecting",
+"one_sided_extrapolation", "prescribed"}`, applied uniformly to every axis the
+rule's stencil reaches.
+
+**Object form (per-axis).** An object `{"by_axis": {<axis>: BoundaryPolicySpec, ...}}`
+where each `BoundaryPolicySpec` is a `{kind, ...}` object. The per-axis form is
+required for cubed-sphere `panel_dispatch` (which carries `interior` /
+`boundary` field-name parameters) and for rules whose axes need different
+policies (e.g. periodic in longitude, reflecting in vertical).
+
+The closed set of policy kinds (string values and `BoundaryPolicySpec.kind`):
+
+| Kind | Semantics at edge query points |
 |---|---|
 | `periodic` (default when omitted) | Wrap-around indexing on every spatial dimension. Equivalent to v0.2/v0.3 implicit behavior. Suitable for periodic Cartesian grids and for rules that emit `index` expressions that wrap around dimension extent. |
-| `ghosted` | Rule presumes ghost cells are filled by an upstream BC pass (RFC §9). Out-of-range `index` expressions in the rule's replacement read from the ghost layer and the rule fires unmodified at the edge. |
-| `neumann_zero` | At the edge, the rule's stencil is reflected (mirror BC) so that any out-of-range `index` reads its in-range image; emitted fluxes through the boundary are zero. Suitable for closed walls. |
-| `extrapolate` | At the edge, the rule expects interior-extrapolated values (linear or higher-order, binding-defined) at out-of-range positions. Suitable for outflow rules in advection-dominated problems. |
+| `reflecting` | At the edge, the rule's stencil is mirrored across the domain edge so that any out-of-range `index` reads its in-range image. Suitable for closed walls / symmetry boundaries. |
+| `one_sided_extrapolation` | The runtime fills ghost values by extrapolating from the interior. Carries an optional `degree` parameter (`0` constant, `1` linear (default), `2` quadratic, `3` cubic). |
+| `prescribed` | The caller supplies ghost values in the input array; the runtime treats the input as already-extended and the rule fires unmodified at the edge. Used for hand-set Dirichlet, externally-driven BCs, and runtimes whose upstream BC pass already filled ghost cells. |
+| `panel_dispatch` (object form only) | Cubed-sphere panel boundaries: switch between two metric/distance fields based on whether a face is at a panel boundary. Takes sibling fields `interior` and `boundary`, each naming a metric/distance array on the rule's grid (e.g. `{kind: "panel_dispatch", interior: "dist_xi", boundary: "dist_xi_bnd"}`). At a panel-boundary face the runtime substitutes the `boundary` array for the `interior` array in the rule's expansion; on interior faces the `interior` array is used as-is. |
+| `ghosted` | v0.3.x alias for `prescribed` — retained for backwards compatibility with rules authored before v0.3.x. New rules SHOULD use `prescribed`. |
+| `neumann_zero` | v0.3.x alias for `reflecting` — retained for backwards compatibility. New rules SHOULD use `reflecting`. |
+| `extrapolate` | v0.3.x alias for `one_sided_extrapolation` (defaulting to `degree: 1` when omitted). |
 
 The field is **declarative**. The rule engine itself (§5.2 pattern matcher,
 §7.2 expander) does not branch on `boundary_policy`; downstream pipeline
-phases (BC pass §9, ghost-cell synthesis, edge-rule fall-through) consult it.
-A binding that does not yet implement `ghosted`/`neumann_zero`/`extrapolate`
-edge handling MUST preserve the field through parse/serialize roundtrips and
-MAY emit `W_UNEVAL_BOUNDARY_POLICY` at the first non-`periodic` policy it
-encounters at rewrite time.
+phases (BC pass §9, ghost-cell synthesis, edge-rule fall-through, panel
+metric selection) consult it. A binding that does not yet implement a
+non-`periodic` kind MUST preserve the field through parse/serialize
+roundtrips and MAY emit `W_UNEVAL_BOUNDARY_POLICY` at the first
+non-`periodic` policy it encounters at rewrite time.
 
-Omission is equivalent to `periodic`. This preserves the v0.2/v0.3 implicit
-contract on Cartesian periodic grids.
+Omission is equivalent to the string form `"periodic"`, which is in turn
+equivalent to `{by_axis: {<every-axis>: {kind: "periodic"}}}`. This
+preserves the v0.2/v0.3 implicit contract on Cartesian periodic grids.
+
+##### `ghost_width`
+
+Declares the per-axis ghost-cell padding the rule's stencil reaches outside
+the in-bounds region. The runtime preparing inputs to the rule SHALL extend
+each axis's input array by at least `ghost_width[axis]` cells on each side,
+using the rule's declared `boundary_policy` for that axis to fill the
+extension.
+
+Two authorial forms are accepted:
+
+**Scalar form (axis-uniform).** A non-negative integer applied to every axis
+the rule's stencil reaches. Example: `"ghost_width": 3` requests three ghost
+cells per side on every axis.
+
+**Object form (per-axis).** `{"by_axis": {<axis>: <int>, ...}}` declaring
+the width independently per axis. Example:
+
+```json
+"ghost_width": {
+  "by_axis": {"xi": 3, "eta": 3}
+}
+```
+
+Omission is equivalent to `0` — the rule reads only in-bounds indices and
+needs no input extension. The field is metadata; bindings preserve it across
+roundtrips. Loaders that do not yet implement input extension MAY emit
+`W_UNEVAL_GHOST_WIDTH` at the first non-zero `ghost_width` they encounter.
+
+##### Worked example — FV PPM transport on cubed sphere
+
+```json
+{
+  "name": "flux_1d_ppm_xi",
+  "pattern": { "op": "flux_advect", "args": ["$q"], "dim": "xi" },
+  "where": [ { "guard": "var_has_grid", "pvar": "$q", "grid": "cubed_sphere" } ],
+  "ghost_width": { "by_axis": { "xi": 3, "eta": 3 } },
+  "boundary_policy": {
+    "by_axis": {
+      "xi":  { "kind": "panel_dispatch", "interior": "dist_xi",  "boundary": "dist_xi_bnd"  },
+      "eta": { "kind": "panel_dispatch", "interior": "dist_eta", "boundary": "dist_eta_bnd" }
+    }
+  },
+  "bindings": {
+    "dt": { "kind": "per_step", "description": "Adaptive timestep, set from CFL <= 0.5." }
+  },
+  "replacement": "..."
+}
+```
+
+This declares: a 6-point xi-stencil that reaches 3 ghost cells on each side
+of every face, with the runtime selecting `dist_xi` on interior faces and
+`dist_xi_bnd` on panel-boundary faces of the cubed sphere.
 
 ##### `bindings`
 

@@ -72,21 +72,85 @@ export type RuleRegionScope =
   | { kind: 'index_range'; axis: string; lo: number; hi: number }
 
 /**
- * Closed set of valid rule edge-behavior policies (RFC §5.2.8).
- * Omission is equivalent to `'periodic'` for backwards compatibility.
+ * Closed set of policy kinds accepted in the string-form `boundary_policy`
+ * or as `BoundaryPolicySpec.kind` (RFC §5.2.8 / §7). `panel_dispatch` is
+ * object-form only because it carries required `interior`/`boundary`
+ * parameters; the string form rejects it.
+ *
+ * `ghosted`/`neumann_zero`/`extrapolate` are v0.3.x backwards-compatible
+ * aliases for `prescribed`/`reflecting`/`one_sided_extrapolation`.
  */
-export type BoundaryPolicy =
+export type BoundaryPolicyKind =
   | 'periodic'
+  | 'reflecting'
+  | 'one_sided_extrapolation'
+  | 'prescribed'
+  | 'panel_dispatch'
   | 'ghosted'
   | 'neumann_zero'
   | 'extrapolate'
 
-const BOUNDARY_POLICY_VALUES: readonly BoundaryPolicy[] = [
+/**
+ * String-form `boundary_policy` values (uniform across all axes). Excludes
+ * `panel_dispatch`, which requires the per-axis object form.
+ */
+export type BoundaryPolicyString = Exclude<BoundaryPolicyKind, 'panel_dispatch'>
+
+const BOUNDARY_POLICY_KIND_VALUES: readonly BoundaryPolicyKind[] = [
   'periodic',
+  'reflecting',
+  'one_sided_extrapolation',
+  'prescribed',
+  'panel_dispatch',
   'ghosted',
   'neumann_zero',
   'extrapolate',
 ]
+
+const BOUNDARY_POLICY_STRING_VALUES: readonly BoundaryPolicyString[] = [
+  'periodic',
+  'reflecting',
+  'one_sided_extrapolation',
+  'prescribed',
+  'ghosted',
+  'neumann_zero',
+  'extrapolate',
+]
+
+/**
+ * Per-axis boundary policy entry (RFC §5.2.8 / §7). `kind` selects the
+ * policy; sibling fields carry kind-specific parameters.
+ */
+export interface BoundaryPolicySpec {
+  kind: BoundaryPolicyKind
+  /** one_sided_extrapolation / extrapolate: order 0..3 (default linear=1). */
+  degree?: number
+  /** panel_dispatch: name of the metric field for interior faces. */
+  interior?: string
+  /** panel_dispatch: name of the metric field for panel-boundary faces. */
+  boundary?: string
+  /** Free-form authorial note. */
+  description?: string
+}
+
+/**
+ * Authorial form of a rule's `boundary_policy` (RFC §5.2.8 / §7). Either:
+ * (1) a closed-set string applied uniformly to every axis the rule's
+ * stencil reaches, or (2) an object with `by_axis` declaring per-axis
+ * policies (required for `panel_dispatch` and for axis-heterogeneous rules).
+ */
+export type BoundaryPolicy =
+  | BoundaryPolicyString
+  | { by_axis: Record<string, BoundaryPolicySpec>; description?: string }
+
+/**
+ * Authorial form of a rule's `ghost_width` (RFC §5.2.8 / §7). Either a
+ * non-negative integer applied uniformly to every axis, or an object with
+ * `by_axis` declaring per-axis non-negative integers.
+ */
+export type GhostWidth =
+  | number
+  | { by_axis: Record<string, number>; description?: string }
 
 /**
  * Rule binding declaration (RFC §5.2.8). Declares the cadence at which
@@ -132,10 +196,18 @@ export interface Rule {
    */
   whereExpr?: Expr
   /**
-   * Behavior at domain edges (RFC §5.2.8). Omission == 'periodic'.
-   * Stored verbatim; the rule engine does not branch on this field.
+   * Behavior at domain edges (RFC §5.2.8 / §7). Either a closed-set
+   * string (uniform across axes) or a `{by_axis}` object (per-axis,
+   * required for `panel_dispatch`). Omission == 'periodic'. Stored
+   * verbatim; the rule engine does not branch on this field.
    */
   boundaryPolicy?: BoundaryPolicy
+  /**
+   * Per-axis ghost-cell padding the rule's stencil reaches (RFC §5.2.8
+   * / §7). Either a non-negative integer (uniform) or a `{by_axis}`
+   * object. Omission == 0. Stored verbatim.
+   */
+  ghostWidth?: GhostWidth
   /**
    * Map from bare identifier name to a {@link RuleBinding} declaration
    * (RFC §5.2.8). Documents the time-varying / static symbols the
@@ -832,20 +904,11 @@ function parseRuleNamed(name: string, v: unknown): Rule {
   }
   let boundaryPolicy: BoundaryPolicy | undefined
   if ('boundary_policy' in obj && obj.boundary_policy !== undefined) {
-    const bp = obj.boundary_policy
-    if (typeof bp !== 'string') {
-      throw new RuleEngineError(
-        E_RULE_PARSE,
-        `rule \`${name}\`: \`boundary_policy\` must be a string`,
-      )
-    }
-    if (!(BOUNDARY_POLICY_VALUES as readonly string[]).includes(bp)) {
-      throw new RuleEngineError(
-        E_RULE_PARSE,
-        `rule \`${name}\`: unknown boundary_policy \`${bp}\` (closed set: ${BOUNDARY_POLICY_VALUES.join(', ')})`,
-      )
-    }
-    boundaryPolicy = bp as BoundaryPolicy
+    boundaryPolicy = parseBoundaryPolicy(name, obj.boundary_policy)
+  }
+  let ghostWidth: GhostWidth | undefined
+  if ('ghost_width' in obj && obj.ghost_width !== undefined) {
+    ghostWidth = parseGhostWidth(name, obj.ghost_width)
   }
   let bindings: Record<string, RuleBinding> | undefined
   if ('bindings' in obj && obj.bindings !== undefined) {
@@ -870,8 +933,192 @@ function parseRuleNamed(name: string, v: unknown): Rule {
     regionScope,
     whereExpr,
     boundaryPolicy,
+    ghostWidth,
     bindings,
   }
+}
+
+function parseBoundaryPolicy(name: string, raw: unknown): BoundaryPolicy {
+  if (typeof raw === 'string') {
+    if (!(BOUNDARY_POLICY_STRING_VALUES as readonly string[]).includes(raw)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: unknown boundary_policy \`${raw}\` (closed set: ${BOUNDARY_POLICY_STRING_VALUES.join(', ')})`,
+      )
+    }
+    return raw as BoundaryPolicyString
+  }
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>
+    const byAxisRaw = o.by_axis
+    if (byAxisRaw === undefined) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`boundary_policy\` object must have a \`by_axis\` field`,
+      )
+    }
+    if (typeof byAxisRaw !== 'object' || byAxisRaw === null || Array.isArray(byAxisRaw)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`boundary_policy.by_axis\` must be an object`,
+      )
+    }
+    const byAxis: Record<string, BoundaryPolicySpec> = {}
+    for (const [axis, spec] of Object.entries(byAxisRaw as Record<string, unknown>)) {
+      byAxis[axis] = parseBoundaryPolicySpec(name, axis, spec)
+    }
+    const out: { by_axis: Record<string, BoundaryPolicySpec>; description?: string } = {
+      by_axis: byAxis,
+    }
+    if (typeof o.description === 'string') {
+      out.description = o.description
+    }
+    return out
+  }
+  throw new RuleEngineError(
+    E_RULE_PARSE,
+    `rule \`${name}\`: \`boundary_policy\` must be a string or an object with a \`by_axis\` field`,
+  )
+}
+
+function parseBoundaryPolicySpec(
+  ruleName: string,
+  axis: string,
+  raw: unknown,
+): BoundaryPolicySpec {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: boundary_policy.by_axis.${axis} must be an object`,
+    )
+  }
+  const o = raw as Record<string, unknown>
+  const kind = o.kind
+  if (typeof kind !== 'string') {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: boundary_policy.by_axis.${axis} missing required string \`kind\``,
+    )
+  }
+  if (!(BOUNDARY_POLICY_KIND_VALUES as readonly string[]).includes(kind)) {
+    throw new RuleEngineError(
+      E_RULE_PARSE,
+      `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}: unknown kind \`${kind}\` (closed set: ${BOUNDARY_POLICY_KIND_VALUES.join(', ')})`,
+    )
+  }
+  const spec: BoundaryPolicySpec = { kind: kind as BoundaryPolicyKind }
+  if (o.degree !== undefined) {
+    if (typeof o.degree !== 'number' || !Number.isInteger(o.degree)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.degree must be an integer`,
+      )
+    }
+    if (o.degree < 0 || o.degree > 3) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.degree must be between 0 and 3, got ${o.degree}`,
+      )
+    }
+    spec.degree = o.degree
+  }
+  if (o.interior !== undefined) {
+    if (typeof o.interior !== 'string') {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.interior must be a string`,
+      )
+    }
+    spec.interior = o.interior
+  }
+  if (o.boundary !== undefined) {
+    if (typeof o.boundary !== 'string') {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.boundary must be a string`,
+      )
+    }
+    spec.boundary = o.boundary
+  }
+  if (o.description !== undefined) {
+    if (typeof o.description !== 'string') {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}.description must be a string`,
+      )
+    }
+    spec.description = o.description
+  }
+  if (kind === 'panel_dispatch') {
+    if (spec.interior === undefined || spec.boundary === undefined) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${ruleName}\`: boundary_policy.by_axis.${axis}: panel_dispatch requires \`interior\` and \`boundary\` field names`,
+      )
+    }
+  }
+  return spec
+}
+
+function parseGhostWidth(name: string, raw: unknown): GhostWidth {
+  if (typeof raw === 'number') {
+    if (!Number.isInteger(raw)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`ghost_width\` must be an integer`,
+      )
+    }
+    if (raw < 0) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`ghost_width\` must be non-negative, got ${raw}`,
+      )
+    }
+    return raw
+  }
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>
+    const byAxisRaw = o.by_axis
+    if (byAxisRaw === undefined) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`ghost_width\` object must have a \`by_axis\` field`,
+      )
+    }
+    if (typeof byAxisRaw !== 'object' || byAxisRaw === null || Array.isArray(byAxisRaw)) {
+      throw new RuleEngineError(
+        E_RULE_PARSE,
+        `rule \`${name}\`: \`ghost_width.by_axis\` must be an object`,
+      )
+    }
+    const byAxis: Record<string, number> = {}
+    for (const [axis, w] of Object.entries(byAxisRaw as Record<string, unknown>)) {
+      if (typeof w !== 'number' || !Number.isInteger(w)) {
+        throw new RuleEngineError(
+          E_RULE_PARSE,
+          `rule \`${name}\`: ghost_width.by_axis.${axis} must be an integer`,
+        )
+      }
+      if (w < 0) {
+        throw new RuleEngineError(
+          E_RULE_PARSE,
+          `rule \`${name}\`: ghost_width.by_axis.${axis} must be non-negative, got ${w}`,
+        )
+      }
+      byAxis[axis] = w
+    }
+    const out: { by_axis: Record<string, number>; description?: string } = {
+      by_axis: byAxis,
+    }
+    if (typeof o.description === 'string') {
+      out.description = o.description
+    }
+    return out
+  }
+  throw new RuleEngineError(
+    E_RULE_PARSE,
+    `rule \`${name}\`: \`ghost_width\` must be a non-negative integer or an object with a \`by_axis\` field`,
+  )
 }
 
 function parseRuleBinding(

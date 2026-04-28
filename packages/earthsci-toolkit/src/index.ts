@@ -119,6 +119,10 @@ export type {
   GridMeta,
   VariableMeta,
   BoundaryPolicy,
+  BoundaryPolicyKind,
+  BoundaryPolicyString,
+  BoundaryPolicySpec,
+  GhostWidth,
   RuleBinding,
 } from './rule-engine.js'
 

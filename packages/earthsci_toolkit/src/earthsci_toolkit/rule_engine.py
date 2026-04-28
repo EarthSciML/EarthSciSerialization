@@ -48,8 +48,56 @@ class Guard:
     params: Dict[str, Any] = field(default_factory=dict)
 
 
-_BOUNDARY_POLICY_VALUES = ("periodic", "ghosted", "neumann_zero", "extrapolate")
+# Closed set of policy kinds accepted in either the string-form
+# ``boundary_policy`` or in :class:`BoundaryPolicySpec.kind`
+# (RFC §5.2.8 / §7). ``panel_dispatch`` is object-form only because it
+# carries required ``interior``/``boundary`` parameters; the string form
+# rejects it.
+_BOUNDARY_POLICY_KIND_VALUES = (
+    "periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+    "panel_dispatch",
+    # v0.3.x backwards-compatible aliases
+    "ghosted", "neumann_zero", "extrapolate",
+)
+
+_BOUNDARY_POLICY_STRING_VALUES = (
+    "periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+    "ghosted", "neumann_zero", "extrapolate",
+)
+
 _BINDING_KIND_VALUES = ("static", "per_step", "per_cell")
+
+
+@dataclass
+class BoundaryPolicySpec:
+    """A single per-axis boundary-policy entry (RFC §5.2.8 / §7).
+
+    ``kind`` is one of the closed-set tags listed in
+    :data:`_BOUNDARY_POLICY_KIND_VALUES`; the remaining fields are
+    kind-specific:
+
+    - ``degree``: ``one_sided_extrapolation`` / ``extrapolate`` —
+      extrapolation order (0..3). ``None`` means default (linear).
+    - ``interior``: ``panel_dispatch`` — name of the metric field for
+      interior faces.
+    - ``boundary``: ``panel_dispatch`` — name of the metric field for
+      panel-boundary faces.
+    - ``description``: free-form authorial note.
+    """
+
+    kind: str
+    degree: Optional[int] = None
+    interior: Optional[str] = None
+    boundary: Optional[str] = None
+    description: Optional[str] = None
+
+
+# Type alias documenting the closed set of authorial forms for a rule's
+# ``boundary_policy`` (RFC §5.2.8 / §7): ``None`` (omitted, equivalent to
+# ``"periodic"``), a string from the closed set (uniform across axes), or
+# a ``{by_axis: {<axis>: BoundaryPolicySpec}}`` dict (per-axis form).
+BoundaryPolicy = Union[str, Dict[str, Any], None]
+GhostWidth = Union[int, Dict[str, Any], None]
 
 
 @dataclass
@@ -85,10 +133,17 @@ class Rule:
     and ``region.mask_field`` parse and round-trip but do not evaluate
     (conservative fall-through, equivalent to RFC §5.2.7's W_UNEVAL_SCOPE).
 
-    ``boundary_policy`` declares behavior at domain edges (RFC §5.2.8); one
-    of ``"periodic"`` (default when ``None``), ``"ghosted"``,
-    ``"neumann_zero"``, ``"extrapolate"``. Stored verbatim; the rule engine
-    does not branch on it.
+    ``boundary_policy`` declares behavior at domain edges (RFC §5.2.8 / §7).
+    It is one of: ``None`` (default — equivalent to ``"periodic"``), a
+    ``str`` from the closed set (uniform across all axes), or a
+    ``Dict[str, BoundaryPolicySpec]`` (per-axis form, required for
+    ``panel_dispatch`` and for axis-heterogeneous policies). Stored
+    verbatim; the rule engine does not branch on it.
+
+    ``ghost_width`` declares per-axis ghost-cell padding the rule's stencil
+    reaches (RFC §5.2.8 / §7). It is one of: ``None`` (default — 0), an
+    ``int`` (uniform across all axes), or a ``Dict[str, int]`` (per-axis
+    form). Stored verbatim.
 
     ``bindings`` is an optional mapping from bare identifier name to a
     :class:`RuleBinding` declaration (RFC §5.2.8). Stored verbatim.
@@ -100,7 +155,8 @@ class Rule:
     where: List[Guard] = field(default_factory=list)
     region: Optional[Any] = None
     where_expr: Optional[Expr] = None
-    boundary_policy: Optional[str] = None
+    boundary_policy: Union[str, Dict[str, BoundaryPolicySpec], None] = None
+    ghost_width: Union[int, Dict[str, int], None] = None
     bindings: Optional[Dict[str, RuleBinding]] = None
 
 
@@ -751,23 +807,8 @@ def parse_rule(obj: Mapping[str, Any], name: Optional[str] = None) -> Rule:
             "E_RULE_PARSE",
             f"rule {name}: 'region' must be a string (legacy) or object (scope)",
         )
-    bp_raw = obj.get("boundary_policy")
-    boundary_policy: Optional[str]
-    if bp_raw is None:
-        boundary_policy = None
-    elif isinstance(bp_raw, str):
-        if bp_raw not in _BOUNDARY_POLICY_VALUES:
-            valid = ", ".join(_BOUNDARY_POLICY_VALUES)
-            raise RuleEngineError(
-                "E_RULE_PARSE",
-                f"rule {name}: unknown boundary_policy `{bp_raw}` (closed set: {valid})",
-            )
-        boundary_policy = bp_raw
-    else:
-        raise RuleEngineError(
-            "E_RULE_PARSE",
-            f"rule {name}: `boundary_policy` must be a string",
-        )
+    boundary_policy = _parse_boundary_policy(name, obj.get("boundary_policy"))
+    ghost_width = _parse_ghost_width(name, obj.get("ghost_width"))
     bindings_raw = obj.get("bindings")
     bindings: Optional[Dict[str, RuleBinding]]
     if bindings_raw is None:
@@ -789,7 +830,163 @@ def parse_rule(obj: Mapping[str, Any], name: Optional[str] = None) -> Rule:
         region=region,
         where_expr=where_expr,
         boundary_policy=boundary_policy,
+        ghost_width=ghost_width,
         bindings=bindings,
+    )
+
+
+def _parse_boundary_policy(
+    name: str, raw: Any
+) -> Union[str, Dict[str, BoundaryPolicySpec], None]:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        if raw not in _BOUNDARY_POLICY_STRING_VALUES:
+            valid = ", ".join(_BOUNDARY_POLICY_STRING_VALUES)
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: unknown boundary_policy `{raw}` (closed set: {valid})",
+            )
+        return raw
+    if isinstance(raw, Mapping):
+        by_axis_raw = raw.get("by_axis")
+        if by_axis_raw is None:
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: `boundary_policy` object must have a `by_axis` field",
+            )
+        if not isinstance(by_axis_raw, Mapping):
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: `boundary_policy.by_axis` must be an object",
+            )
+        out: Dict[str, BoundaryPolicySpec] = {}
+        for axis, spec in by_axis_raw.items():
+            saxis = str(axis)
+            out[saxis] = _parse_boundary_policy_spec(name, saxis, spec)
+        return out
+    raise RuleEngineError(
+        "E_RULE_PARSE",
+        f"rule {name}: `boundary_policy` must be a string or an object with a `by_axis` field",
+    )
+
+
+def _parse_boundary_policy_spec(
+    rule_name: str, axis: str, raw: Any
+) -> BoundaryPolicySpec:
+    if not isinstance(raw, Mapping):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis} must be an object",
+        )
+    kind = raw.get("kind")
+    if not isinstance(kind, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis} missing required string `kind`",
+        )
+    if kind not in _BOUNDARY_POLICY_KIND_VALUES:
+        valid = ", ".join(_BOUNDARY_POLICY_KIND_VALUES)
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis}: unknown kind `{kind}` "
+            f"(closed set: {valid})",
+        )
+    degree = raw.get("degree")
+    degree_val: Optional[int] = None
+    if degree is not None:
+        if not isinstance(degree, int) or isinstance(degree, bool):
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {rule_name}: boundary_policy.by_axis.{axis}.degree must be an integer",
+            )
+        if not (0 <= degree <= 3):
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {rule_name}: boundary_policy.by_axis.{axis}.degree must be between 0 and 3, got {degree}",
+            )
+        degree_val = degree
+    interior = raw.get("interior")
+    if interior is not None and not isinstance(interior, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis}.interior must be a string",
+        )
+    boundary = raw.get("boundary")
+    if boundary is not None and not isinstance(boundary, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis}.boundary must be a string",
+        )
+    desc = raw.get("description")
+    if desc is not None and not isinstance(desc, str):
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {rule_name}: boundary_policy.by_axis.{axis}.description must be a string",
+        )
+    if kind == "panel_dispatch":
+        if interior is None or boundary is None:
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {rule_name}: boundary_policy.by_axis.{axis}: panel_dispatch requires `interior` and `boundary` field names",
+            )
+    return BoundaryPolicySpec(
+        kind=kind,
+        degree=degree_val,
+        interior=interior,
+        boundary=boundary,
+        description=desc,
+    )
+
+
+def _parse_ghost_width(
+    name: str, raw: Any
+) -> Union[int, Dict[str, int], None]:
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        # Reject bool before int catches it (bool is an int subclass).
+        raise RuleEngineError(
+            "E_RULE_PARSE",
+            f"rule {name}: `ghost_width` must be a non-negative integer or an object with a `by_axis` field",
+        )
+    if isinstance(raw, int):
+        if raw < 0:
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: `ghost_width` must be non-negative, got {raw}",
+            )
+        return raw
+    if isinstance(raw, Mapping):
+        by_axis_raw = raw.get("by_axis")
+        if by_axis_raw is None:
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: `ghost_width` object must have a `by_axis` field",
+            )
+        if not isinstance(by_axis_raw, Mapping):
+            raise RuleEngineError(
+                "E_RULE_PARSE",
+                f"rule {name}: `ghost_width.by_axis` must be an object",
+            )
+        out: Dict[str, int] = {}
+        for axis, w in by_axis_raw.items():
+            saxis = str(axis)
+            if isinstance(w, bool) or not isinstance(w, int):
+                raise RuleEngineError(
+                    "E_RULE_PARSE",
+                    f"rule {name}: ghost_width.by_axis.{saxis} must be an integer",
+                )
+            if w < 0:
+                raise RuleEngineError(
+                    "E_RULE_PARSE",
+                    f"rule {name}: ghost_width.by_axis.{saxis} must be non-negative, got {w}",
+                )
+            out[saxis] = w
+        return out
+    raise RuleEngineError(
+        "E_RULE_PARSE",
+        f"rule {name}: `ghost_width` must be a non-negative integer or an object with a `by_axis` field",
     )
 
 

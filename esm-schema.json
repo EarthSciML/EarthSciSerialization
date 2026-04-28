@@ -2321,9 +2321,10 @@
           }
         },
         "boundary_policy": {
-          "type": "string",
-          "enum": ["periodic", "ghosted", "neumann_zero", "extrapolate"],
-          "description": "Behavior of this rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. 'ghosted' declares the rule requires ghost cells filled by an upstream BC pass and may emit raw interior-form stencils that read out-of-bounds. 'neumann_zero' declares mirror/zero-flux behavior at edges. 'extrapolate' declares the rule expects interior-extrapolated values at edges. Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (e.g. ghost-cell synthesis, edge-rule fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures."
+          "$ref": "#/$defs/BoundaryPolicy"
+        },
+        "ghost_width": {
+          "$ref": "#/$defs/GhostWidth"
         },
         "bindings": {
           "type": "object",
@@ -2336,6 +2337,93 @@
         { "required": ["replacement"] },
         { "required": ["use"] },
         { "required": ["produces"] }
+      ]
+    },
+
+    "BoundaryPolicy": {
+      "description": "Behavior of a rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8 / §7). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. Two authorial forms are accepted: (1) a STRING from the closed set ['periodic','ghosted','neumann_zero','extrapolate','reflecting','one_sided_extrapolation','prescribed'] — a uniform policy across all axes whose ghost values, when needed, are governed by the rule's 'ghost_width'; (2) an OBJECT with a 'by_axis' map declaring per-axis policy entries (each entry is a BoundaryPolicySpec — a {kind, ...} object). The per-axis form is required for cubed-sphere 'panel_dispatch' and for rules that need different policies on different axes (e.g. periodic in latitude, reflecting in vertical). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (ghost-cell synthesis, panel metric selection, edge fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["periodic", "ghosted", "neumann_zero", "extrapolate", "reflecting", "one_sided_extrapolation", "prescribed"]
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis policy. Keys are axis names from the rule's grid (e.g. 'xi','eta','x','y','z','lat','lon','lev'); values are BoundaryPolicySpec objects.",
+              "additionalProperties": { "$ref": "#/$defs/BoundaryPolicySpec" }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "BoundaryPolicySpec": {
+      "type": "object",
+      "description": "A single per-axis boundary policy (RFC §5.2.8 / §7). The 'kind' tag selects from the closed set described in BoundaryPolicy; per-kind sibling fields carry the policy's parameters.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["periodic", "reflecting", "one_sided_extrapolation", "prescribed", "panel_dispatch", "ghosted", "neumann_zero", "extrapolate"],
+          "description": "Closed-set tag. 'periodic' wraps around. 'reflecting' mirrors across the edge. 'one_sided_extrapolation' fills ghost values from interior using the 'degree' parameter. 'prescribed' declares the caller supplies ghost values; the runtime treats the input as already-extended. 'panel_dispatch' (cubed-sphere only) selects between two metric/distance fields based on whether a face lies at a panel boundary; takes 'interior' and 'boundary' field names. 'ghosted' is retained as a v0.3.x alias for 'prescribed' (caller-supplied ghost cells via an upstream BC pass). 'neumann_zero' is retained as a v0.3.x alias for 'reflecting' (mirror BC, zero flux). 'extrapolate' is retained as a v0.3.x alias for 'one_sided_extrapolation' (defaulting to linear when 'degree' is omitted)."
+        },
+        "degree": {
+          "description": "one_sided_extrapolation / extrapolate: extrapolation order. 0 = constant (zeroth-order), 1 = linear (default if omitted), 2 = quadratic, 3 = cubic. Higher orders are rejected by the schema.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "interior": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for interior (non-panel-boundary) faces of this axis. The field must be addressable on the rule's grid (e.g. 'dist_xi' on a cubed-sphere grid)."
+        },
+        "boundary": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for panel-boundary faces of this axis (e.g. 'dist_xi_bnd')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note explaining the policy choice."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "panel_dispatch" } } },
+          "then": { "required": ["interior", "boundary"] }
+        }
+      ]
+    },
+
+    "GhostWidth": {
+      "description": "Required ghost-cell padding per axis for a rule (RFC §5.2.8 / §7). The runtime preparing inputs to a rule SHALL extend each axis's input array by at least 'ghost_width[axis]' cells on each side, using the rule's declared 'boundary_policy' for that axis to fill the extension. Two authorial forms are accepted: (1) a non-negative INTEGER — uniform width applied to every axis the rule's stencil reaches; (2) an OBJECT with 'by_axis' giving per-axis non-negative integers. Omission is equivalent to 0 (rule reads only in-bounds indices). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis ghost width. Keys are axis names from the rule's grid; values are non-negative integers.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "description": { "type": "string" }
+          }
+        }
       ]
     },
 

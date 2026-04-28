@@ -122,8 +122,67 @@ RuleBinding(kind::AbstractString;
     RuleBinding(String(kind), default, description === nothing ? nothing : String(description))
 
 """
+    BoundaryPolicySpec(kind, degree, interior, boundary, description)
+
+A single per-axis boundary-policy entry (RFC §5.2.8 / §7). `kind` is one of
+the closed-set tags listed in [`_BOUNDARY_POLICY_KIND_VALUES`](@ref); the
+remaining fields are kind-specific:
+
+- `degree::Union{Int,Nothing}` — `one_sided_extrapolation` / `extrapolate`:
+  extrapolation order (0..3). `nothing` means default (linear).
+- `interior::Union{String,Nothing}` — `panel_dispatch`: name of the metric
+  field for interior faces.
+- `boundary::Union{String,Nothing}` — `panel_dispatch`: name of the metric
+  field for panel-boundary faces.
+- `description::Union{String,Nothing}` — free-form authorial note.
+
+Stored verbatim; the rule engine does not branch on the policy.
+"""
+struct BoundaryPolicySpec
+    kind::String
+    degree::Union{Int,Nothing}
+    interior::Union{String,Nothing}
+    boundary::Union{String,Nothing}
+    description::Union{String,Nothing}
+end
+
+BoundaryPolicySpec(kind::AbstractString;
+                   degree::Union{Int,Nothing}=nothing,
+                   interior::Union{Nothing,AbstractString}=nothing,
+                   boundary::Union{Nothing,AbstractString}=nothing,
+                   description::Union{Nothing,AbstractString}=nothing) =
+    BoundaryPolicySpec(String(kind), degree,
+                       interior === nothing ? nothing : String(interior),
+                       boundary === nothing ? nothing : String(boundary),
+                       description === nothing ? nothing : String(description))
+
+"""
+    BoundaryPolicy
+
+Type alias for a rule's `boundary_policy` field (RFC §5.2.8 / §7). One of:
+
+- `Nothing` — omitted; equivalent to `"periodic"`.
+- `String` — uniform string form; one of the closed-set tags.
+- `Dict{String,BoundaryPolicySpec}` — per-axis form; keys are axis names,
+  values are [`BoundaryPolicySpec`](@ref) entries.
+"""
+const BoundaryPolicy = Union{String, Dict{String,BoundaryPolicySpec}, Nothing}
+
+"""
+    GhostWidth
+
+Type alias for a rule's `ghost_width` field (RFC §5.2.8 / §7). One of:
+
+- `Nothing` — omitted; equivalent to `0`.
+- `Int` — uniform width across all axes.
+- `Dict{String,Int}` — per-axis form; keys are axis names, values are
+  non-negative integers.
+"""
+const GhostWidth = Union{Int, Dict{String,Int}, Nothing}
+
+"""
     Rule(name, pattern, where, replacement, region, where_expr,
-         boundary_policy, bindings)
+         boundary_policy, ghost_width, bindings)
 
 A rewrite rule. `pattern` is an AST with `\$`-prefixed pattern variables;
 `where` is a vector of [`Guard`](@ref) constraints applied at rule-
@@ -139,9 +198,17 @@ concrete [`RuleRegion`](@ref) object (normative per-point scope).
 (RFC §5.2.7). Mutually exclusive at the author level with guard-list
 `where`; structurally distinguished by JSON shape at parse time.
 
-`boundary_policy` declares behavior at domain edges (RFC §5.2.8); one of
-`"periodic"` (default when `nothing`), `"ghosted"`, `"neumann_zero"`,
-`"extrapolate"`. Stored verbatim; the rule engine does not branch on it.
+`boundary_policy` declares behavior at domain edges (RFC §5.2.8 / §7). It is
+one of: `nothing` (default — equivalent to `"periodic"`), a `String` from
+the closed set (uniform across all axes), or a
+`Dict{String,BoundaryPolicySpec}` (per-axis form, required for
+`panel_dispatch` and for axis-heterogeneous policies). Stored verbatim;
+the rule engine does not branch on it.
+
+`ghost_width` declares per-axis ghost-cell padding the rule's stencil
+reaches (RFC §5.2.8 / §7). It is one of: `nothing` (default — 0), an
+`Int` (uniform across all axes), or a `Dict{String,Int}` (per-axis form).
+Stored verbatim.
 
 `bindings` is an optional `Dict{String,RuleBinding}` declaring the
 non-pattern-variable, non-canonical-index symbols the replacement may
@@ -155,7 +222,8 @@ struct Rule
     replacement::Expr
     region::Union{String,RuleRegion,Nothing}
     where_expr::Union{Expr,Nothing}
-    boundary_policy::Union{String,Nothing}
+    boundary_policy::BoundaryPolicy
+    ghost_width::GhostWidth
     bindings::Union{Dict{String,RuleBinding},Nothing}
 end
 
@@ -163,21 +231,31 @@ Rule(name::String, pattern::Expr, replacement::Expr;
      where::Vector{Guard}=Guard[],
      region::Union{String,RuleRegion,Nothing}=nothing,
      where_expr::Union{Expr,Nothing}=nothing,
-     boundary_policy::Union{String,Nothing}=nothing,
+     boundary_policy::BoundaryPolicy=nothing,
+     ghost_width::GhostWidth=nothing,
      bindings::Union{Dict{String,RuleBinding},Nothing}=nothing) =
     Rule(name, pattern, where, replacement, region, where_expr,
-         boundary_policy, bindings)
+         boundary_policy, ghost_width, bindings)
 
 # Backward-compatible 5-arg positional constructor (pre-§5.2.7 callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      region::Union{String,RuleRegion,Nothing}) =
-    Rule(name, pattern, where, replacement, region, nothing, nothing, nothing)
+    Rule(name, pattern, where, replacement, region, nothing, nothing, nothing, nothing)
 
 # Backward-compatible 6-arg positional constructor (pre-§5.2.8 callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      region::Union{String,RuleRegion,Nothing},
      where_expr::Union{Expr,Nothing}) =
-    Rule(name, pattern, where, replacement, region, where_expr, nothing, nothing)
+    Rule(name, pattern, where, replacement, region, where_expr, nothing, nothing, nothing)
+
+# Backward-compatible 8-arg positional constructor (pre-esm-bet ghost_width callers).
+Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
+     region::Union{String,RuleRegion,Nothing},
+     where_expr::Union{Expr,Nothing},
+     boundary_policy::BoundaryPolicy,
+     bindings::Union{Dict{String,RuleBinding},Nothing}) =
+    Rule(name, pattern, where, replacement, region, where_expr,
+         boundary_policy, nothing, bindings)
 
 # ============================================================================
 # Pattern variable detection
@@ -626,25 +704,122 @@ function parse_rule(name::AbstractString, obj)::Rule
     region = _parse_region(String(name), region_raw)
     bp_raw = _getkey(obj, "boundary_policy"; default=nothing)
     boundary_policy = _parse_boundary_policy(String(name), bp_raw)
+    gw_raw = _getkey(obj, "ghost_width"; default=nothing)
+    ghost_width = _parse_ghost_width(String(name), gw_raw)
     bindings_raw = _getkey(obj, "bindings"; default=nothing)
     bindings = _parse_bindings(String(name), bindings_raw)
     return Rule(String(name), pat, guards, repl, region, where_expr,
-                boundary_policy, bindings)
+                boundary_policy, ghost_width, bindings)
 end
 
-const _BOUNDARY_POLICY_VALUES = ("periodic", "ghosted", "neumann_zero", "extrapolate")
+# Closed set of policy kinds accepted in either the string-form
+# `boundary_policy` or in `BoundaryPolicySpec.kind` (RFC §5.2.8 / §7).
+# `panel_dispatch` is object-form only; the string form rejects it because
+# it carries required interior/boundary parameters.
+const _BOUNDARY_POLICY_KIND_VALUES = (
+    "periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+    "panel_dispatch",
+    # v0.3.x backwards-compatible aliases
+    "ghosted", "neumann_zero", "extrapolate",
+)
 
-function _parse_boundary_policy(name::String, raw)::Union{String,Nothing}
+const _BOUNDARY_POLICY_STRING_VALUES = (
+    "periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+    "ghosted", "neumann_zero", "extrapolate",
+)
+
+function _parse_boundary_policy(name::String, raw)::BoundaryPolicy
     raw === nothing && return nothing
-    raw isa AbstractString || throw(RuleEngineError("E_RULE_PARSE",
-        "rule $name: `boundary_policy` must be a string"))
-    s = String(raw)
-    if !(s in _BOUNDARY_POLICY_VALUES)
-        valid = join(_BOUNDARY_POLICY_VALUES, ", ")
-        throw(RuleEngineError("E_RULE_PARSE",
-            "rule $name: unknown boundary_policy `$s` (closed set: $valid)"))
+    if raw isa AbstractString
+        s = String(raw)
+        if !(s in _BOUNDARY_POLICY_STRING_VALUES)
+            valid = join(_BOUNDARY_POLICY_STRING_VALUES, ", ")
+            throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: unknown boundary_policy `$s` (closed set: $valid)"))
+        end
+        return s
     end
-    return s
+    if _is_dict_like(raw)
+        by_axis_raw = _getkey(raw, "by_axis"; default=nothing)
+        by_axis_raw === nothing && throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `boundary_policy` object must have a `by_axis` field"))
+        _is_dict_like(by_axis_raw) || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `boundary_policy.by_axis` must be an object"))
+        out = Dict{String,BoundaryPolicySpec}()
+        for (axis, spec_raw) in _iterate_dict(by_axis_raw)
+            saxis = String(axis)
+            out[saxis] = _parse_boundary_policy_spec(name, saxis, spec_raw)
+        end
+        return out
+    end
+    throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `boundary_policy` must be a string or an object with a `by_axis` field"))
+end
+
+function _parse_boundary_policy_spec(name::String, axis::String, raw)::BoundaryPolicySpec
+    _is_dict_like(raw) || throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: boundary_policy.by_axis.$axis must be an object"))
+    kind_raw = _getkey(raw, "kind"; default=nothing)
+    kind_raw === nothing && throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: boundary_policy.by_axis.$axis missing required field `kind`"))
+    kind = String(kind_raw)
+    if !(kind in _BOUNDARY_POLICY_KIND_VALUES)
+        valid = join(_BOUNDARY_POLICY_KIND_VALUES, ", ")
+        throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: boundary_policy.by_axis.$axis: unknown kind `$kind` (closed set: $valid)"))
+    end
+    degree_raw = _getkey(raw, "degree"; default=nothing)
+    degree::Union{Int,Nothing} = nothing
+    if degree_raw !== nothing
+        (degree_raw isa Integer) || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: boundary_policy.by_axis.$axis.degree must be an integer"))
+        d = Int(degree_raw)
+        (0 <= d <= 3) || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: boundary_policy.by_axis.$axis.degree must be between 0 and 3, got $d"))
+        degree = d
+    end
+    interior_raw = _getkey(raw, "interior"; default=nothing)
+    interior = interior_raw === nothing ? nothing : String(interior_raw)
+    boundary_raw = _getkey(raw, "boundary"; default=nothing)
+    boundary = boundary_raw === nothing ? nothing : String(boundary_raw)
+    desc_raw = _getkey(raw, "description"; default=nothing)
+    desc = desc_raw === nothing ? nothing : String(desc_raw)
+    if kind == "panel_dispatch"
+        (interior !== nothing && boundary !== nothing) ||
+            throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: boundary_policy.by_axis.$axis: panel_dispatch requires `interior` and `boundary` field names"))
+    end
+    return BoundaryPolicySpec(kind, degree, interior, boundary, desc)
+end
+
+function _parse_ghost_width(name::String, raw)::GhostWidth
+    raw === nothing && return nothing
+    if raw isa Integer
+        n = Int(raw)
+        n >= 0 || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `ghost_width` must be non-negative, got $n"))
+        return n
+    end
+    if _is_dict_like(raw)
+        by_axis_raw = _getkey(raw, "by_axis"; default=nothing)
+        by_axis_raw === nothing && throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `ghost_width` object must have a `by_axis` field"))
+        _is_dict_like(by_axis_raw) || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `ghost_width.by_axis` must be an object"))
+        out = Dict{String,Int}()
+        for (axis, w_raw) in _iterate_dict(by_axis_raw)
+            saxis = String(axis)
+            (w_raw isa Integer) || throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: ghost_width.by_axis.$saxis must be an integer"))
+            w = Int(w_raw)
+            w >= 0 || throw(RuleEngineError("E_RULE_PARSE",
+                "rule $name: ghost_width.by_axis.$saxis must be non-negative, got $w"))
+            out[saxis] = w
+        end
+        return out
+    end
+    throw(RuleEngineError("E_RULE_PARSE",
+        "rule $name: `ghost_width` must be a non-negative integer or an object with a `by_axis` field"))
 end
 
 const _BINDING_KIND_VALUES = ("static", "per_step", "per_cell")
