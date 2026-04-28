@@ -199,13 +199,28 @@ func lowerExprNodeEnums(node ExprNode, enums map[string]map[string]int) (Express
 		}
 		newArgs[i] = la
 	}
+	// Recurse into table_lookup axes (per-axis input expressions).
+	var newTableAxes map[string]Expression
+	if node.TableAxes != nil {
+		newTableAxes = make(map[string]Expression, len(node.TableAxes))
+		for k, v := range node.TableAxes {
+			lv, err := lowerExprEnums(v, enums)
+			if err != nil {
+				return nil, err
+			}
+			newTableAxes[k] = lv
+		}
+	}
 	out := ExprNode{
-		Op:    node.Op,
-		Args:  newArgs,
-		Wrt:   node.Wrt,
-		Dim:   node.Dim,
-		Name:  node.Name,
-		Value: node.Value,
+		Op:        node.Op,
+		Args:      newArgs,
+		Wrt:       node.Wrt,
+		Dim:       node.Dim,
+		Name:      node.Name,
+		Value:     node.Value,
+		Table:     node.Table,
+		TableAxes: newTableAxes,
+		Output:    node.Output,
 	}
 	return out, nil
 }

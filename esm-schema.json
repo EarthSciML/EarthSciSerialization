@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.3.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.4.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
+  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -71,6 +71,11 @@
       "type": "object",
       "description": "Named staggering conventions that declare where quantities live on a grid. The unstructured_c_grid kind (RFC §7.4) captures MPAS-style C-grid placement — scalars at Voronoi cell centers, normal velocities at edge midpoints, vorticity at triangle vertices — and is the prerequisite declaration for the §7.3 worked-example discretizations (mpas_divergence_flux_form, mpas_gradient_edge_difference). Each entry references a grids.<g> entry by name.",
       "additionalProperties": { "$ref": "#/$defs/StaggeringRule" }
+    },
+    "function_tables": {
+      "type": "object",
+      "description": "Component-scoped sampled function tables (v0.4.0). Each entry declares ordered named axes plus a literal nested-array data block, optionally tagged with output names; the `table_lookup` AST op references a table by id, supplies a per-axis input-coordinate expression map, and selects which output to return. Tables are syntactic sugar over `interp.linear` / `interp.bilinear` / `index`: a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup. See esm-spec.md §9.5 and docs/rfcs/sampled-tables.md.",
+      "additionalProperties": { "$ref": "#/$defs/FunctionTable" }
     }
   },
 
@@ -154,7 +159,7 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "fn", "enum", "const", "bc"
+            "fn", "enum", "const", "bc", "table_lookup"
           ]
         },
         "args": {
@@ -260,6 +265,22 @@
         "side": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
+        },
+        "table": {
+          "type": "string",
+          "description": "For table_lookup: the id of the function_tables entry to evaluate. Bindings MUST reject references to undeclared tables at file-load time with diagnostic 'table_lookup_unknown_table'."
+        },
+        "axes": {
+          "type": "object",
+          "description": "For table_lookup: a map from axis name (matching one of the referenced table's `axes[].name` entries) to the scalar input expression supplying that coordinate at evaluation time. Every axis declared on the table MUST appear as a key; extra keys are rejected with 'table_lookup_axis_name_mismatch'. `args` MUST be empty for a table_lookup node — the per-axis expressions live here.",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
+        },
+        "output": {
+          "description": "For table_lookup: which output of a multi-output table to return. Either a non-negative integer (0-based index into the leading data dimension) or a string (an entry in the table's `outputs` array). Single-output tables MAY omit this field (defaults to 0). Out-of-range or unknown-name selectors are rejected with 'table_lookup_output_out_of_range'.",
+          "oneOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "string" }
+          ]
         }
       },
       "additionalProperties": false,
@@ -308,6 +329,15 @@
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
           "then": { "required": ["kind", "side"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "table_lookup" } }, "required": ["op"] },
+          "then": {
+            "required": ["table", "axes"],
+            "properties": {
+              "args": { "type": "array", "maxItems": 0 }
+            }
+          }
         }
       ]
     },
@@ -3096,6 +3126,78 @@
         },
         "description": { "type": "string" },
         "reference": { "$ref": "#/$defs/Reference" }
+      }
+    },
+
+    "FunctionTable": {
+      "type": "object",
+      "description": "A sampled function table (esm-spec.md §9.5). Carries one or more named axes and a literal nested-array data block. The shape of `data` is [len(outputs), len(axes[0].values), len(axes[1].values), ...] when `outputs` is declared; otherwise [len(axes[0].values), ...] (single-output convenience form). `table_lookup` AST nodes evaluate this table by supplying a per-axis input expression and selecting an output. Tables are syntactic sugar over `interp.linear` (1 axis) / `interp.bilinear` (2 axes) / `index` (nearest); the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup.",
+      "required": ["axes", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "axes": {
+          "type": "array",
+          "description": "Ordered list of named axes. The order of entries defines the order of inner dimensions in `data` (after the leading output dimension when `outputs` is present). Axis names within a single table MUST be unique.",
+          "items": { "$ref": "#/$defs/FunctionTableAxis" },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "interpolation": {
+          "type": "string",
+          "description": "Interpolation kind applied by `table_lookup`. 'linear' (1 axis) lowers to `interp.linear`. 'bilinear' (2 axes) lowers to `interp.bilinear`. 'nearest' lowers to `index` after `interp.searchsorted`. The chosen kind MUST be consistent with the number of axes; mismatch is rejected at load time with diagnostic 'table_interpolation_axes_mismatch'.",
+          "enum": ["linear", "bilinear", "nearest"],
+          "default": "linear"
+        },
+        "out_of_bounds": {
+          "type": "string",
+          "description": "Out-of-bounds policy applied to query coordinates that fall outside an axis range. 'clamp' pins to the nearest edge — this matches the semantics of `interp.linear` and `interp.bilinear` (extrapolate-flat). 'error' MUST raise at evaluation time; bindings emit diagnostic 'table_lookup_out_of_bounds' on first violation. v0.4.0: 'clamp' is the only policy required of all five bindings; 'error' is conformant when the binding implements it.",
+          "enum": ["clamp", "error"],
+          "default": "clamp"
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Optional ordered list of output names. When present, `table_lookup.output` MAY name an entry of this list (in addition to using a 0-based integer index). Names within a table MUST be unique. The leading dimension of `data` MUST equal the length of `outputs`.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "data": {
+          "description": "Nested-array literal carrying the table's sampled values. Leaves MUST be finite numbers (NaN entries are rejected at load time with 'table_data_nan'). Shape: [len(outputs), len(axes[0].values), ...] when `outputs` is present; [len(axes[0].values), ...] otherwise. Mismatched nesting is rejected with 'table_data_shape_mismatch'."
+        },
+        "shape": {
+          "type": "array",
+          "description": "Optional redundant shape assertion. If present, MUST match the actual nesting of `data`; loaders verify and reject mismatches with 'table_data_shape_mismatch'. `data` is the canonical representation; `shape` is a load-time assertion only.",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 1
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Optional pin of the table-schema minor version this entry was authored against. Bindings ignore the value beyond a same-major-version compatibility check; informational for tooling.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+
+    "FunctionTableAxis": {
+      "type": "object",
+      "description": "A single named axis inside a FunctionTable. The `values` array supplies the sample coordinates along this axis; it MUST be strictly increasing finite floats with at least 2 entries (mirrors the `interp.linear` / `interp.bilinear` axis contract in §9.2).",
+      "required": ["name", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Axis identifier. Used as the key in `table_lookup.axes` to bind the input-coordinate expression."
+        },
+        "units": {
+          "type": "string",
+          "description": "Optional advisory units string (e.g. 'Pa', 'K'). v0.4.0 records this for documentation only — no load-time unit checking is performed against the supplied input expression. Promotion to enforcement is deferred to a future units RFC."
+        },
+        "values": {
+          "type": "array",
+          "description": "Strictly-increasing finite floats. Bindings MUST reject non-monotonic axes at load time with diagnostic 'table_axis_non_monotonic' and NaN entries with 'table_axis_nan'.",
+          "items": { "type": "number" },
+          "minItems": 2
+        }
       }
     }
   }

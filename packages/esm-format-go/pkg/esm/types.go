@@ -25,6 +25,19 @@ type ExprNode struct {
 	// (esm-spec §4.2 / §9.3); `Args` MUST be empty for a const node. Any
 	// JSON value (number, integer, or nested array thereof).
 	Value interface{} `json:"value,omitempty"`
+	// Table is the function_tables entry id targeted by a `table_lookup` op
+	// (esm-spec §9.5).
+	Table *string `json:"table,omitempty"`
+	// TableAxes is the per-axis input-coordinate expression map for a
+	// `table_lookup` op. Keys MUST match the names declared on the referenced
+	// FunctionTable's Axes; values are arbitrary scalar Expressions. Args MUST
+	// be empty for a table_lookup node.
+	TableAxes map[string]Expression `json:"axes,omitempty"`
+	// Output selects which output of a multi-output table to return for a
+	// `table_lookup` op. Either a non-negative integer (0-based index into the
+	// leading data dimension) or a string (an entry of the table's Outputs
+	// list). Single-output tables MAY omit this (defaults to 0).
+	Output interface{} `json:"output,omitempty"`
 }
 
 // Expression represents the union type: number | string | ExprNode
@@ -744,6 +757,36 @@ type EsmFile struct {
 	Grids map[string]Grid `json:"grids,omitempty"`
 	// StaggeringRules holds top-level staggering-rule declarations (RFC §7.4).
 	StaggeringRules map[string]StaggeringRule `json:"staggering_rules,omitempty"`
+	// FunctionTables holds top-level sampled function tables (esm-spec §9.5,
+	// v0.4.0). Each entry is a FunctionTable referenced by `table_lookup` AST
+	// op nodes via its key.
+	FunctionTables map[string]FunctionTable `json:"function_tables,omitempty"`
+}
+
+// FunctionTableAxis is a single named axis inside a FunctionTable.
+// `Values` MUST be strictly-increasing finite floats with at least 2 entries
+// (mirrors the §9.2 interp.linear / interp.bilinear axis contract).
+type FunctionTableAxis struct {
+	Name   string    `json:"name"`
+	Units  *string   `json:"units,omitempty"`
+	Values []float64 `json:"values"`
+}
+
+// FunctionTable is a sampled function table (esm-spec §9.5). The shape of
+// Data is [len(Outputs), len(Axes[0].Values), len(Axes[1].Values), ...] when
+// Outputs is non-empty; [len(Axes[0].Values), ...] otherwise. Tables are
+// syntactic sugar over interp.linear / interp.bilinear / index — a
+// table_lookup query MUST be bit-equivalent to the equivalent inline-const
+// lookup.
+type FunctionTable struct {
+	Description   *string             `json:"description,omitempty"`
+	Axes          []FunctionTableAxis `json:"axes"`
+	Interpolation *string             `json:"interpolation,omitempty"`
+	OutOfBounds   *string             `json:"out_of_bounds,omitempty"`
+	Outputs       []string            `json:"outputs,omitempty"`
+	Data          interface{}         `json:"data"`
+	Shape         []int               `json:"shape,omitempty"`
+	SchemaVersion *string             `json:"schema_version,omitempty"`
 }
 
 // Discretization is a named discretization scheme. Four variants are
@@ -1250,6 +1293,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		Discretizations map[string]Discretization `json:"discretizations,omitempty"`
 		Grids           map[string]Grid           `json:"grids,omitempty"`
 		StaggeringRules map[string]StaggeringRule `json:"staggering_rules,omitempty"`
+		FunctionTables  map[string]FunctionTable  `json:"function_tables,omitempty"`
 	}
 
 	var temp TempEsmFile
@@ -1269,6 +1313,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.Discretizations = temp.Discretizations
 	esm.Grids = temp.Grids
 	esm.StaggeringRules = temp.StaggeringRules
+	esm.FunctionTables = temp.FunctionTables
 
 	// Handle coupling array with proper type deserialization
 	if len(temp.Coupling) > 0 && string(temp.Coupling) != "null" {

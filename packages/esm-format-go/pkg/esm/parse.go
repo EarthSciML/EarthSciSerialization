@@ -245,10 +245,22 @@ func normalizeExpression(expr Expression) Expression {
 		for i, a := range e.Args {
 			e.Args[i] = normalizeExpression(a)
 		}
+		for k, v := range e.TableAxes {
+			e.TableAxes[k] = normalizeExpression(v)
+		}
+		if n, ok := e.Output.(json.Number); ok {
+			e.Output = normalizeJSONNumber(n)
+		}
 		return e
 	case *ExprNode:
 		for i, a := range e.Args {
 			e.Args[i] = normalizeExpression(a)
+		}
+		for k, v := range e.TableAxes {
+			e.TableAxes[k] = normalizeExpression(v)
+		}
+		if n, ok := e.Output.(json.Number); ok {
+			e.Output = normalizeJSONNumber(n)
 		}
 		return e
 	case []interface{}:
@@ -367,6 +379,11 @@ func rejectCallOps(file *EsmFile) error {
 			}
 			for _, a := range e.Args {
 				if err := visit(a); err != nil {
+					return err
+				}
+			}
+			for _, v := range e.TableAxes {
+				if err := visit(v); err != nil {
 					return err
 				}
 			}

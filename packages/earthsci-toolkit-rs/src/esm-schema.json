@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.3.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.4.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
+  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -71,6 +71,11 @@
       "type": "object",
       "description": "Named staggering conventions that declare where quantities live on a grid. The unstructured_c_grid kind (RFC §7.4) captures MPAS-style C-grid placement — scalars at Voronoi cell centers, normal velocities at edge midpoints, vorticity at triangle vertices — and is the prerequisite declaration for the §7.3 worked-example discretizations (mpas_divergence_flux_form, mpas_gradient_edge_difference). Each entry references a grids.<g> entry by name.",
       "additionalProperties": { "$ref": "#/$defs/StaggeringRule" }
+    },
+    "function_tables": {
+      "type": "object",
+      "description": "Component-scoped sampled function tables (v0.4.0). Each entry declares ordered named axes plus a literal nested-array data block, optionally tagged with output names; the `table_lookup` AST op references a table by id, supplies a per-axis input-coordinate expression map, and selects which output to return. Tables are syntactic sugar over `interp.linear` / `interp.bilinear` / `index`: a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup. See esm-spec.md §9.5 and docs/rfcs/sampled-tables.md.",
+      "additionalProperties": { "$ref": "#/$defs/FunctionTable" }
     }
   },
 
@@ -154,7 +159,7 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "fn", "enum", "const", "bc"
+            "fn", "enum", "const", "bc", "table_lookup"
           ]
         },
         "args": {
@@ -260,6 +265,22 @@
         "side": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
+        },
+        "table": {
+          "type": "string",
+          "description": "For table_lookup: the id of the function_tables entry to evaluate. Bindings MUST reject references to undeclared tables at file-load time with diagnostic 'table_lookup_unknown_table'."
+        },
+        "axes": {
+          "type": "object",
+          "description": "For table_lookup: a map from axis name (matching one of the referenced table's `axes[].name` entries) to the scalar input expression supplying that coordinate at evaluation time. Every axis declared on the table MUST appear as a key; extra keys are rejected with 'table_lookup_axis_name_mismatch'. `args` MUST be empty for a table_lookup node — the per-axis expressions live here.",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
+        },
+        "output": {
+          "description": "For table_lookup: which output of a multi-output table to return. Either a non-negative integer (0-based index into the leading data dimension) or a string (an entry in the table's `outputs` array). Single-output tables MAY omit this field (defaults to 0). Out-of-range or unknown-name selectors are rejected with 'table_lookup_output_out_of_range'.",
+          "oneOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "string" }
+          ]
         }
       },
       "additionalProperties": false,
@@ -308,6 +329,15 @@
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
           "then": { "required": ["kind", "side"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "table_lookup" } }, "required": ["op"] },
+          "then": {
+            "required": ["table", "axes"],
+            "properties": {
+              "args": { "type": "array", "maxItems": 0 }
+            }
+          }
         }
       ]
     },
@@ -2320,6 +2350,17 @@
             "additionalProperties": true
           }
         },
+        "boundary_policy": {
+          "$ref": "#/$defs/BoundaryPolicy"
+        },
+        "ghost_width": {
+          "$ref": "#/$defs/GhostWidth"
+        },
+        "bindings": {
+          "type": "object",
+          "description": "Declares the symbolic identifiers (other than pattern variables and canonical grid indices i/j/k/...) that the rule's replacement AST may reference, together with the rate at which each binding's value changes at runtime (RFC §5.2.8). This is metadata: loaders preserve it across roundtrips but the rule engine does not consult it during pattern matching or expansion. Time-varying bindings (per_step, per_cell) document a contract between the rule author and the host runtime that supplies values during simulation. Static bindings are equivalent to model parameters and may be evaluated at load time. Keys are bare identifier names (e.g. 'dt', 'dx', 'velocity', 'cos_lat'); '$'-prefixed pattern-variable names are NOT permitted here (declare those via the pattern itself).",
+          "additionalProperties": { "$ref": "#/$defs/RuleBinding" }
+        },
         "description": { "type": "string" }
       },
       "oneOf": [
@@ -2327,6 +2368,115 @@
         { "required": ["use"] },
         { "required": ["produces"] }
       ]
+    },
+
+    "BoundaryPolicy": {
+      "description": "Behavior of a rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8 / §7). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. Two authorial forms are accepted: (1) a STRING from the closed set ['periodic','ghosted','neumann_zero','extrapolate','reflecting','one_sided_extrapolation','prescribed'] — a uniform policy across all axes whose ghost values, when needed, are governed by the rule's 'ghost_width'; (2) an OBJECT with a 'by_axis' map declaring per-axis policy entries (each entry is a BoundaryPolicySpec — a {kind, ...} object). The per-axis form is required for cubed-sphere 'panel_dispatch' and for rules that need different policies on different axes (e.g. periodic in latitude, reflecting in vertical). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (ghost-cell synthesis, panel metric selection, edge fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["periodic", "ghosted", "neumann_zero", "extrapolate", "reflecting", "one_sided_extrapolation", "prescribed"]
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis policy. Keys are axis names from the rule's grid (e.g. 'xi','eta','x','y','z','lat','lon','lev'); values are BoundaryPolicySpec objects.",
+              "additionalProperties": { "$ref": "#/$defs/BoundaryPolicySpec" }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "BoundaryPolicySpec": {
+      "type": "object",
+      "description": "A single per-axis boundary policy (RFC §5.2.8 / §7). The 'kind' tag selects from the closed set described in BoundaryPolicy; per-kind sibling fields carry the policy's parameters.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["periodic", "reflecting", "one_sided_extrapolation", "prescribed", "panel_dispatch", "ghosted", "neumann_zero", "extrapolate"],
+          "description": "Closed-set tag. 'periodic' wraps around. 'reflecting' mirrors across the edge. 'one_sided_extrapolation' fills ghost values from interior using the 'degree' parameter. 'prescribed' declares the caller supplies ghost values; the runtime treats the input as already-extended. 'panel_dispatch' (cubed-sphere only) selects between two metric/distance fields based on whether a face lies at a panel boundary; takes 'interior' and 'boundary' field names. 'ghosted' is retained as a v0.3.x alias for 'prescribed' (caller-supplied ghost cells via an upstream BC pass). 'neumann_zero' is retained as a v0.3.x alias for 'reflecting' (mirror BC, zero flux). 'extrapolate' is retained as a v0.3.x alias for 'one_sided_extrapolation' (defaulting to linear when 'degree' is omitted)."
+        },
+        "degree": {
+          "description": "one_sided_extrapolation / extrapolate: extrapolation order. 0 = constant (zeroth-order), 1 = linear (default if omitted), 2 = quadratic, 3 = cubic. Higher orders are rejected by the schema.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "interior": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for interior (non-panel-boundary) faces of this axis. The field must be addressable on the rule's grid (e.g. 'dist_xi' on a cubed-sphere grid)."
+        },
+        "boundary": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for panel-boundary faces of this axis (e.g. 'dist_xi_bnd')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note explaining the policy choice."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "panel_dispatch" } } },
+          "then": { "required": ["interior", "boundary"] }
+        }
+      ]
+    },
+
+    "GhostWidth": {
+      "description": "Required ghost-cell padding per axis for a rule (RFC §5.2.8 / §7). The runtime preparing inputs to a rule SHALL extend each axis's input array by at least 'ghost_width[axis]' cells on each side, using the rule's declared 'boundary_policy' for that axis to fill the extension. Two authorial forms are accepted: (1) a non-negative INTEGER — uniform width applied to every axis the rule's stencil reaches; (2) an OBJECT with 'by_axis' giving per-axis non-negative integers. Omission is equivalent to 0 (rule reads only in-bounds indices). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis ghost width. Keys are axis names from the rule's grid; values are non-negative integers.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "RuleBinding": {
+      "type": "object",
+      "description": "A single binding declaration for a rule (RFC §5.2.8). Carries the binding's update cadence ('static', 'per_step', 'per_cell') and an optional default-value expression. The schema does not require 'default' — a binding with no default declares a runtime-supplied value with no compile-time fallback.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["static", "per_step", "per_cell"],
+          "description": "Update cadence. 'static' = constant for the whole simulation (e.g. Earth radius R, fixed grid spacing dlon). 'per_step' = may change once per time-step (e.g. an adaptive dt, an externally-driven max wind speed). 'per_cell' = varies across the grid at runtime (e.g. cell-centered velocity, latitudinally-varying cos_lat); the value is indexed by the canonical grid indices in scope."
+        },
+        "default": {
+          "$ref": "#/$defs/ExpressionNode",
+          "description": "Optional default value as an §4 expression. For 'static' bindings this is the value used when the runtime supplies no override. For 'per_step' and 'per_cell' bindings it is an authorial fallback — bindings MAY ignore it if the runtime always supplies a live value."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note about what this binding represents (e.g. 'Courant number, set per-step from max|u|·dt/dx')."
+        }
+      }
     },
 
     "NeighborSelector": {
@@ -2976,6 +3126,78 @@
         },
         "description": { "type": "string" },
         "reference": { "$ref": "#/$defs/Reference" }
+      }
+    },
+
+    "FunctionTable": {
+      "type": "object",
+      "description": "A sampled function table (esm-spec.md §9.5). Carries one or more named axes and a literal nested-array data block. The shape of `data` is [len(outputs), len(axes[0].values), len(axes[1].values), ...] when `outputs` is declared; otherwise [len(axes[0].values), ...] (single-output convenience form). `table_lookup` AST nodes evaluate this table by supplying a per-axis input expression and selecting an output. Tables are syntactic sugar over `interp.linear` (1 axis) / `interp.bilinear` (2 axes) / `index` (nearest); the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup.",
+      "required": ["axes", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "axes": {
+          "type": "array",
+          "description": "Ordered list of named axes. The order of entries defines the order of inner dimensions in `data` (after the leading output dimension when `outputs` is present). Axis names within a single table MUST be unique.",
+          "items": { "$ref": "#/$defs/FunctionTableAxis" },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "interpolation": {
+          "type": "string",
+          "description": "Interpolation kind applied by `table_lookup`. 'linear' (1 axis) lowers to `interp.linear`. 'bilinear' (2 axes) lowers to `interp.bilinear`. 'nearest' lowers to `index` after `interp.searchsorted`. The chosen kind MUST be consistent with the number of axes; mismatch is rejected at load time with diagnostic 'table_interpolation_axes_mismatch'.",
+          "enum": ["linear", "bilinear", "nearest"],
+          "default": "linear"
+        },
+        "out_of_bounds": {
+          "type": "string",
+          "description": "Out-of-bounds policy applied to query coordinates that fall outside an axis range. 'clamp' pins to the nearest edge — this matches the semantics of `interp.linear` and `interp.bilinear` (extrapolate-flat). 'error' MUST raise at evaluation time; bindings emit diagnostic 'table_lookup_out_of_bounds' on first violation. v0.4.0: 'clamp' is the only policy required of all five bindings; 'error' is conformant when the binding implements it.",
+          "enum": ["clamp", "error"],
+          "default": "clamp"
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Optional ordered list of output names. When present, `table_lookup.output` MAY name an entry of this list (in addition to using a 0-based integer index). Names within a table MUST be unique. The leading dimension of `data` MUST equal the length of `outputs`.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "data": {
+          "description": "Nested-array literal carrying the table's sampled values. Leaves MUST be finite numbers (NaN entries are rejected at load time with 'table_data_nan'). Shape: [len(outputs), len(axes[0].values), ...] when `outputs` is present; [len(axes[0].values), ...] otherwise. Mismatched nesting is rejected with 'table_data_shape_mismatch'."
+        },
+        "shape": {
+          "type": "array",
+          "description": "Optional redundant shape assertion. If present, MUST match the actual nesting of `data`; loaders verify and reject mismatches with 'table_data_shape_mismatch'. `data` is the canonical representation; `shape` is a load-time assertion only.",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 1
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Optional pin of the table-schema minor version this entry was authored against. Bindings ignore the value beyond a same-major-version compatibility check; informational for tooling.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+
+    "FunctionTableAxis": {
+      "type": "object",
+      "description": "A single named axis inside a FunctionTable. The `values` array supplies the sample coordinates along this axis; it MUST be strictly increasing finite floats with at least 2 entries (mirrors the `interp.linear` / `interp.bilinear` axis contract in §9.2).",
+      "required": ["name", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Axis identifier. Used as the key in `table_lookup.axes` to bind the input-coordinate expression."
+        },
+        "units": {
+          "type": "string",
+          "description": "Optional advisory units string (e.g. 'Pa', 'K'). v0.4.0 records this for documentation only — no load-time unit checking is performed against the supplied input expression. Promotion to enforcement is deferred to a future units RFC."
+        },
+        "values": {
+          "type": "array",
+          "description": "Strictly-increasing finite floats. Bindings MUST reject non-monotonic axes at load time with diagnostic 'table_axis_non_monotonic' and NaN entries with 'table_axis_nan'.",
+          "items": { "type": "number" },
+          "minItems": 2
+        }
       }
     }
   }

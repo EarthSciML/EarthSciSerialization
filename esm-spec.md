@@ -30,12 +30,13 @@ The closed function registry is **closed**: bindings MUST reject any `fn` node w
 
 ```json
 {
-  "esm": "0.3.0",
+  "esm": "0.4.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
   "data_loaders": { ... },
   "enums": { ... },
+  "function_tables": { ... },
   "coupling": [ ... ],
   "domains": { ... },
   "interfaces": { ... },
@@ -51,6 +52,7 @@ The closed function registry is **closed**: bindings MUST reject any `fn` node w
 | `reaction_systems` | | Reaction network components (fully specified) |
 | `data_loaders` | | External data source registrations (by reference) |
 | `enums` | | File-local symbol → positive-integer mappings used by the `enum` op to make categorical lookups cross-binding-portable (see Section 9.3) |
+| `function_tables` | | Component-scoped sampled function tables — named axes plus literal nested-array data, referenced by the `table_lookup` AST op (see Section 9.5) |
 | `coupling` | | Composition and coupling rules |
 | `domains` | | Named spatial/temporal domain specifications (see Section 11) |
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
@@ -160,6 +162,7 @@ MUST reject `fn` nodes that only re-implement these in disguise (see §0).
 |---|---|---|
 | `fn` | `name` | Invoke a spec-defined closed function. `name` is a dotted module path (e.g. `"datetime.julian_day"`) drawn from the closed registry in Section 9. `args` are the evaluated argument expressions, passed positionally. See Section 4.4. |
 | `enum` | — | Resolve a file-local symbolic name to its declared positive integer. `args` is `[enum_name, symbol]`, both string literals; lowering happens at load time. See Section 4.5 and the `enums` top-level block (Section 9.3). |
+| `table_lookup` | `table`, `axes` (object); optional `output` | Evaluate a sampled function table from the top-level `function_tables` block. `table` is the table id; `axes` maps each declared axis name to a scalar input expression; `output` selects which output (integer index or named entry) to return. `args` MUST be empty. Lowers at load time to the equivalent `interp.linear` / `interp.bilinear` / `index` form (bit-equivalent). See Section 9.5. |
 
 #### Inline Constants
 
@@ -2108,6 +2111,150 @@ Each function in §9.2 ships, in lockstep with the spec rev that introduces it, 
 3. A binding implementation contract: each binding's test harness loads the fixture, evaluates the `fn` node against the inputs, and asserts per-element agreement with the reference output within the declared tolerance.
 
 `scripts/test-conformance.sh` MUST run the closed-function fixtures across all five bindings on every PR. A binding that fails any fixture fails CI.
+
+### 9.5 Function tables (v0.4.0)
+
+Components that depend on tabulated functions — most prominently the `fastjx` photolysis component, with 18 actinic-flux slabs and ~220 σ-chain bindings sharing the same `(P, cos_sza, T)` axes — would otherwise inline the same data and the same axis declarations on every binding. The top-level `function_tables` block lifts each table once; the new `table_lookup` AST op references it by id. Tables are **syntactic sugar over §9.2's `interp.linear` / `interp.bilinear` / `index`**: the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-`const` lookup. Lifting data does not change semantics.
+
+#### 9.5.1 `function_tables` block
+
+```jsonc
+{
+  "function_tables": {
+    "sigma_O3_298": {
+      "description": "O3 absorption cross-section vs. wavelength bin index, T=298 K.",
+      "axes": [
+        { "name": "lambda_idx", "values": [1, 2, 3, 4, 5, 6, 7, 8] }
+      ],
+      "interpolation": "linear",
+      "out_of_bounds": "clamp",
+      "data": [1.1e-17, 1.0e-17, 9.5e-18, 8.7e-18, 7.9e-18, 7.0e-18, 6.1e-18, 5.2e-18]
+    },
+    "F_actinic": {
+      "description": "Actinic flux F vs. (P, cos_sza), 3 species outputs.",
+      "axes": [
+        { "name": "P",       "units": "Pa", "values": [10.0, 100.0, 1000.0] },
+        { "name": "cos_sza",                "values": [0.1, 0.5, 1.0] }
+      ],
+      "interpolation": "bilinear",
+      "outputs": ["NO2", "O3", "HCHO"],
+      "data": [
+        [[1.0, 1.5, 2.0], [1.1, 1.6, 2.1], [1.2, 1.7, 2.2]],
+        [[2.0, 2.5, 3.0], [2.1, 2.6, 3.1], [2.2, 2.7, 3.2]],
+        [[3.0, 3.5, 4.0], [3.1, 3.6, 4.1], [3.2, 3.7, 4.2]]
+      ]
+    }
+  }
+}
+```
+
+**Schema:**
+
+- Each entry is a `FunctionTable` carrying `axes`, `data`, and (optionally) `description`, `interpolation`, `out_of_bounds`, `outputs`, `shape`, `schema_version`.
+- `axes` is an ordered list of named `FunctionTableAxis` entries. Axis order defines the order of inner dimensions of `data` (after the leading output dimension when `outputs` is present). Axis names within a single table MUST be unique. v0.4.0 caps axis count at 2 (matching the §9.2 `interp.linear` / `interp.bilinear` set); higher-dimensional lookups are deferred until the closed registry adds `interp.trilinear`.
+- Each axis declares `name`, `values` (strictly-increasing finite floats, ≥ 2 entries), and an optional advisory `units` string. **`units` is advisory in v0.4.0** — bindings record it for documentation only; load-time unit-checking against `table_lookup.axes` input expressions is deferred to a future units RFC.
+- `interpolation` is `"linear"` (1 axis), `"bilinear"` (2 axes), or `"nearest"` (1 axis, lowering to `index` after `interp.searchsorted`). Default is `"linear"`. Bindings MUST reject mismatched (`linear` with 2 axes, `bilinear` with 1 axis, etc.) at load time with diagnostic `table_interpolation_axes_mismatch`.
+- `out_of_bounds` is `"clamp"` (default, matches `interp.linear` / `interp.bilinear` extrapolate-flat semantics) or `"error"` (raise at evaluation time with `table_lookup_out_of_bounds`). v0.4.0 requires all five bindings to implement `"clamp"`; `"error"` is conformant when implemented.
+- `outputs` is an optional ordered list of output names (strings, unique within the table). When present, the leading dimension of `data` MUST equal the length of `outputs`, and `table_lookup.output` MAY name an entry of this list in addition to using a 0-based integer index. When absent, the table is single-output and `table_lookup.output` defaults to `0`.
+- `data` is the canonical, nested-array literal. Leaves MUST be finite numbers — NaN entries are rejected at load time with `table_data_nan`. Shape: `[len(outputs), len(axes[0].values), len(axes[1].values), ...]` when `outputs` is present; `[len(axes[0].values), len(axes[1].values), ...]` otherwise. Loaders verify the actual nesting; mismatched shapes raise `table_data_shape_mismatch`.
+- `shape` is an optional redundant assertion on `data`'s shape. If present, MUST match the actual nesting; loaders reject mismatches. **`data` is the source of truth — `shape` is a load-time assertion only.** Round-trippers MUST NOT fabricate a `shape` field when the author did not write one.
+
+**Authoring policy:** tables are **opt-in**. Loaders MUST NOT silently auto-promote inline `const`-op arrays into `function_tables` entries during round-trip. The migration of an existing inline-const-heavy `.esm` to `function_tables` is a one-shot author-driven refactor, not a load-time canonicalization. This preserves the existing `tests/` corpus, the `esm-editor` round-trip property, and the `esm-format-go` byte-exact reload guarantee.
+
+#### 9.5.2 `table_lookup` AST op
+
+```jsonc
+{
+  "op": "table_lookup",
+  "table": "F_actinic",
+  "axes": {
+    "P":        "P_atm",
+    "cos_sza":  { "op": "cos", "args": ["sza"] }
+  },
+  "output": "O3"
+}
+```
+
+**Fields:**
+
+- `table` (string, required): id of a `function_tables` entry. References to undeclared tables raise `table_lookup_unknown_table` at load time.
+- `axes` (object, required): map from axis name to scalar input expression. The set of keys MUST exactly match the names of the referenced table's `axes[]` (same set, no extras, no omissions); mismatch raises `table_lookup_axis_name_mismatch`. Each value is an arbitrary scalar `Expression` (number literal, variable reference, or AST node).
+- `output` (integer ≥ 0 OR string): which output to return. Integer is a 0-based index into the table's leading data dimension. String MUST be an entry of the table's `outputs` array. Out-of-range integer or unknown name raises `table_lookup_output_out_of_range`. May be omitted when the table has no `outputs` declaration (defaults to `0`).
+- `args` MUST be empty `[]` for a `table_lookup` node — the per-axis input expressions live under `axes`, not `args`.
+
+#### 9.5.3 Lowering to `interp.linear` / `interp.bilinear` / `index`
+
+A `table_lookup` node lowers at load time to a structurally-equivalent `fn` (or `index`) tree using the existing §9.2 closed-function set. The lowered tree is bit-equivalent: a `table_lookup` query and the equivalent inline lookup that an author would have written by hand produce the same IEEE-754 `binary64` result on the same axis weights and table values, modulo the same FMA caveats described in §9.2.
+
+For a `table_lookup` referencing a 1-axis table with `interpolation: "linear"`, output `i`, the lowered AST is:
+
+```jsonc
+{ "op": "fn", "name": "interp.linear", "args": [
+    { "op": "const", "value": data[i] },           // 1-D table slice for output i
+    { "op": "const", "value": axes[0].values },    // axis values
+    <axis_input_expression>                         // the user-supplied axes[axis[0].name]
+] }
+```
+
+For a 2-axis table with `interpolation: "bilinear"`, output `i`:
+
+```jsonc
+{ "op": "fn", "name": "interp.bilinear", "args": [
+    { "op": "const", "value": data[i] },           // 2-D table slice for output i (Nx × Ny)
+    { "op": "const", "value": axes[0].values },    // axis_x values
+    { "op": "const", "value": axes[1].values },    // axis_y values
+    <x_input_expression>,                           // axes[axes[0].name]
+    <y_input_expression>                            // axes[axes[1].name]
+] }
+```
+
+For `interpolation: "nearest"` on a 1-axis table:
+
+```jsonc
+{ "op": "index", "args": [
+    { "op": "const", "value": data[i] },
+    { "op": "fn", "name": "interp.searchsorted", "args": [
+        <axis_input_expression>,
+        { "op": "const", "value": axes[0].values } ] }
+] }
+```
+
+Bindings MAY satisfy this lowering by an in-memory transformation at load time (resulting AST contains no `table_lookup` nodes after load) or by a thin evaluator that dispatches on `table_lookup` directly to the existing `interp.linear` / `interp.bilinear` / `index` implementations. Both are conformant. The serializer of every binding MUST round-trip the authored form (see §9.5.4).
+
+#### 9.5.4 Round-tripping
+
+`function_tables` and `table_lookup` are first-class authored constructs. Loaders MUST preserve them on save:
+
+- A file whose source contains `table_lookup` nodes serializes back with `table_lookup` nodes — bindings MUST NOT canonicalize a `table_lookup` to its lowered `fn` form on save.
+- A file whose source contains inline `const` lookups serializes back with inline `const` lookups — bindings MUST NOT canonicalize inline lookups into `table_lookup` references.
+
+The migration of inline-const lookups to tables is a one-shot author-driven refactor, recorded as its own bead per component, never a load-time rewrite.
+
+#### 9.5.5 Errors (load time)
+
+| Diagnostic code | Condition |
+|---|---|
+| `table_axis_non_monotonic` | An axis's `values` is not strictly increasing. |
+| `table_axis_nan` | An axis's `values` contains NaN. |
+| `table_data_shape_mismatch` | The actual nesting of `data` does not match the shape implied by `axes` (and `outputs`, when present), or the redundant `shape` assertion does not match `data`. |
+| `table_data_nan` | A leaf of `data` is NaN. |
+| `table_interpolation_axes_mismatch` | `interpolation` and the number of axes are inconsistent (`linear` requires 1, `bilinear` requires 2, `nearest` requires 1). |
+| `table_outputs_length_mismatch` | The leading dimension of `data` does not equal `len(outputs)` when `outputs` is declared. |
+| `table_axis_duplicate_name` | Two axes within a single table share the same `name`. |
+| `table_outputs_duplicate_name` | Two entries of `outputs` share the same name. |
+| `table_lookup_unknown_table` | `table_lookup.table` references an id not declared in `function_tables`. |
+| `table_lookup_axis_name_mismatch` | The set of keys in `table_lookup.axes` does not match the set of axis names declared on the referenced table. |
+| `table_lookup_output_out_of_range` | `table_lookup.output` integer is ≥ `len(outputs)` (or ≥ leading dimension of `data` when `outputs` is absent), or its string is not an entry of `outputs`. |
+
+#### 9.5.6 Conformance fixtures
+
+Conformance fixtures under `tests/conformance/function_tables/` exercise:
+
+1. A single-output 1-axis linear table (canonical 1-D blend) — `linear/`.
+2. A multi-output 2-axis bilinear table with named outputs — `bilinear/`.
+3. A roundtrip-preservation case (load + save reproduces the authored byte sequence modulo whitespace, with NO promotion or demotion across the inline-const ↔ table_lookup boundary) — `roundtrip/`.
+
+Each fixture pairs an `.esm` file with a small numeric harness that asserts the lowered evaluation matches the equivalent inline-const lookup at the §9.2 tolerance contract (`abs: 0, rel: 0` non-FMA, `abs: 0, rel: 4e-16` mixed-FMA cross-binding). All five bindings MUST pass.
 
 ---
 
