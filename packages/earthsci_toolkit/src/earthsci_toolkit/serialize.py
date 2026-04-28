@@ -86,6 +86,17 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
             result["name"] = expr.name
         if expr.value is not None:
             result["value"] = expr.value
+        # table_lookup (esm-spec §9.5, v0.4.0). Stored under JSON key "axes"
+        # on the wire; the per-axis input expressions are serialized
+        # recursively. ``output`` is preserved verbatim (int or string).
+        if expr.table is not None:
+            result["table"] = expr.table
+        if expr.table_axes is not None:
+            result["axes"] = {
+                k: _serialize_expression(v) for k, v in expr.table_axes.items()
+            }
+        if expr.output is not None:
+            result["output"] = expr.output
         return result
     else:
         raise ValueError(f"Invalid expression type: {type(expr)}")
@@ -1054,6 +1065,39 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             enum_name: dict(mapping)
             for enum_name, mapping in esm_file.enums.items()
         }
+
+    # Serialize top-level function_tables block (esm-spec §9.5, v0.4.0).
+    # Tables are first-class authored constructs — round-trip MUST preserve
+    # the authored form (no auto-promotion of inline-const lookups).
+    if getattr(esm_file, "function_tables", None):
+        import copy as _copy_ft
+        ft_out = {}
+        for ft_name, ft in esm_file.function_tables.items():
+            entry: Dict[str, Any] = {
+                "axes": [
+                    {
+                        "name": a.name,
+                        "values": list(a.values),
+                        **({"units": a.units} if a.units is not None else {}),
+                    }
+                    for a in ft.axes
+                ],
+                "data": _copy_ft.deepcopy(ft.data),
+            }
+            if ft.description is not None:
+                entry["description"] = ft.description
+            if ft.interpolation is not None:
+                entry["interpolation"] = ft.interpolation
+            if ft.out_of_bounds is not None:
+                entry["out_of_bounds"] = ft.out_of_bounds
+            if ft.outputs is not None:
+                entry["outputs"] = list(ft.outputs)
+            if ft.shape is not None:
+                entry["shape"] = list(ft.shape)
+            if ft.schema_version is not None:
+                entry["schema_version"] = ft.schema_version
+            ft_out[ft_name] = entry
+        result["function_tables"] = ft_out
 
     # Serialize coupling
     if esm_file.coupling:

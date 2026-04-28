@@ -100,6 +100,16 @@ struct OpExpr <: Expr
     fn::Union{String,Nothing}
     name::Union{String,Nothing}
     value::Any
+    # table_lookup (esm-spec §9.5, v0.4.0): the function_tables entry id this
+    # node references. ``args`` MUST be empty for a table_lookup node — the
+    # per-axis input expressions live in ``table_axes``.
+    table::Union{String,Nothing}
+    # Per-axis input-coordinate expression map for a table_lookup node.
+    # Stored under the JSON key ``axes`` on the wire.
+    table_axes::Union{Dict{String,Expr},Nothing}
+    # Output selector for a multi-output table_lookup. Either a non-negative
+    # integer (0-based index) or a string (entry of the table's outputs).
+    output::Any
 
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
@@ -107,13 +117,15 @@ struct OpExpr <: Expr
            ranges=nothing, regions=nothing, values=nothing,
            shape=nothing, perm=nothing, axis=nothing, fn=nothing,
            name=nothing, value=nothing,
+           table=nothing, table_axes=nothing, output=nothing,
            # `handler_id` was the v0.2.x field for the now-removed `call`
            # op (esm-spec §9.2 closure). Accept and ignore on construction
            # so internal helpers that still pass it through don't break
            # mid-migration; the field is no longer stored or serialized.
            handler_id=nothing) =
         new(op, args, wrt, dim, output_idx, expr_body, reduce, ranges,
-            regions, values, shape, perm, axis, fn, name, value)
+            regions, values, shape, perm, axis, fn, name, value,
+            table, table_axes, output)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
@@ -1093,6 +1105,50 @@ struct Metadata
 end
 
 """
+    FunctionTableAxis
+
+A single named axis inside a [`FunctionTable`](@ref) (esm-spec §9.5).
+`values` MUST be strictly-increasing finite floats with at least 2 entries
+(mirrors the §9.2 interp.linear / interp.bilinear axis contract). `units`
+is advisory only in v0.4.0.
+"""
+struct FunctionTableAxis
+    name::String
+    values::Vector{Float64}
+    units::Union{String,Nothing}
+    FunctionTableAxis(name::AbstractString, values::AbstractVector;
+                      units=nothing) =
+        new(String(name), Vector{Float64}(values), units)
+end
+
+"""
+    FunctionTable
+
+A sampled function table referenced by `table_lookup` AST op nodes
+(esm-spec §9.5, v0.4.0). Tables are syntactic sugar over §9.2's
+`interp.linear` / `interp.bilinear` / `index` — a `table_lookup` query
+MUST be bit-equivalent to the equivalent inline-`const` lookup. Shape of
+`data` is `[len(outputs), len(axes[0].values), len(axes[1].values), ...]`
+when `outputs` is non-`nothing`; `[len(axes[0].values), ...]` otherwise.
+"""
+struct FunctionTable
+    axes::Vector{FunctionTableAxis}
+    data::Any  # Nested-array literal of finite numbers
+    description::Union{String,Nothing}
+    interpolation::Union{String,Nothing}  # "linear" | "bilinear" | "nearest"
+    out_of_bounds::Union{String,Nothing}  # "clamp" | "error"
+    outputs::Union{Vector{String},Nothing}
+    shape::Union{Vector{Int},Nothing}
+    schema_version::Union{String,Nothing}
+    FunctionTable(axes::AbstractVector{FunctionTableAxis}, data;
+                  description=nothing, interpolation=nothing,
+                  out_of_bounds=nothing, outputs=nothing,
+                  shape=nothing, schema_version=nothing) =
+        new(Vector{FunctionTableAxis}(axes), data, description,
+            interpolation, out_of_bounds, outputs, shape, schema_version)
+end
+
+"""
     EsmFile
 
 Main ESM file structure containing all components.
@@ -1121,6 +1177,10 @@ struct EsmFile
     # `enum`-op nodes are lowered to `const`-int nodes at load time, so the
     # in-memory expression tree never carries enum strings.
     enums::Union{Dict{String,Dict{String,Int}},Nothing}
+    # Component-scoped sampled function tables (esm-spec §9.5, v0.4.0).
+    # Keys are table ids; values are FunctionTable entries referenced by
+    # table_lookup AST nodes.
+    function_tables::Union{Dict{String,FunctionTable},Nothing}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -1135,11 +1195,12 @@ struct EsmFile
             grids=nothing,
             staggering_rules=nothing,
             discretizations=nothing,
-            enums=nothing) =
+            enums=nothing,
+            function_tables=nothing) =
         new(esm, metadata, models, reaction_systems, data_loaders,
             operators, registered_functions,
             coupling, domains, interfaces, grids,
-            staggering_rules, discretizations, enums)
+            staggering_rules, discretizations, enums, function_tables)
 end
 
 # ========================================

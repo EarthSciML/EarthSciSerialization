@@ -571,12 +571,26 @@ function _lower_expr_enums(e::OpExpr,
             end
         end
     end
-    if !changed && !body_changed && !values_changed
+    # Recurse into table_lookup.axes (per-axis input expression map).
+    new_table_axes = e.table_axes
+    table_axes_changed = false
+    if e.table_axes !== nothing
+        new_table_axes = Dict{String,Expr}()
+        for (k, v) in e.table_axes
+            new_v = _lower_expr_enums(v, enums)
+            new_table_axes[k] = new_v
+            if !(new_v === v)
+                table_axes_changed = true
+            end
+        end
+    end
+    if !changed && !body_changed && !values_changed && !table_axes_changed
         return e
     end
     return OpExpr(e.op, new_args;
         wrt=e.wrt, dim=e.dim, output_idx=e.output_idx,
         expr_body=new_body, reduce=e.reduce, ranges=e.ranges,
         regions=e.regions, values=new_values, shape=e.shape,
-        perm=e.perm, axis=e.axis, fn=e.fn, name=e.name, value=e.value)
+        perm=e.perm, axis=e.axis, fn=e.fn, name=e.name, value=e.value,
+        table=e.table, table_axes=new_table_axes, output=e.output)
 end

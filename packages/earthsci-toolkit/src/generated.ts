@@ -6,7 +6,7 @@
  */
 
 /**
- * EarthSciML Serialization Format (v0.3.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.3.0 closes the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
+ * EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
  */
 export type ESMFormat = ESMFormat1 & ESMFormat2;
 export type ESMFormat1 = {
@@ -106,7 +106,8 @@ export type ExpressionNode = ExpressionNode1 & {
     | "fn"
     | "enum"
     | "const"
-    | "bc";
+    | "bc"
+    | "table_lookup";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -187,6 +188,20 @@ export type ExpressionNode = ExpressionNode1 & {
    * For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2.
    */
   side?: string;
+  /**
+   * For table_lookup: the id of the function_tables entry to evaluate. Bindings MUST reject references to undeclared tables at file-load time with diagnostic 'table_lookup_unknown_table'.
+   */
+  table?: string;
+  /**
+   * For table_lookup: a map from axis name (matching one of the referenced table's `axes[].name` entries) to the scalar input expression supplying that coordinate at evaluation time. Every axis declared on the table MUST appear as a key; extra keys are rejected with 'table_lookup_axis_name_mismatch'. `args` MUST be empty for a table_lookup node — the per-axis expressions live here.
+   */
+  axes?: {
+    [k: string]: Expression;
+  };
+  /**
+   * For table_lookup: which output of a multi-output table to return. Either a non-negative integer (0-based index into the leading data dimension) or a string (an entry in the table's `outputs` array). Single-output tables MAY omit this field (defaults to 0). Out-of-range or unknown-name selectors are rejected with 'table_lookup_output_out_of_range'.
+   */
+  output?: number | string;
 };
 export type ExpressionNode1 = {
   [k: string]: unknown;
@@ -1033,6 +1048,12 @@ export interface ESMFormat2 {
    */
   staggering_rules?: {
     [k: string]: StaggeringRule;
+  };
+  /**
+   * Component-scoped sampled function tables (v0.4.0). Each entry declares ordered named axes plus a literal nested-array data block, optionally tagged with output names; the `table_lookup` AST op references a table by id, supplies a per-axis input-coordinate expression map, and selects which output to return. Tables are syntactic sugar over `interp.linear` / `interp.bilinear` / `index`: a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup. See esm-spec.md §9.5 and docs/rfcs/sampled-tables.md.
+   */
+  function_tables?: {
+    [k: string]: FunctionTable;
   };
 }
 /**
@@ -2180,4 +2201,66 @@ export interface GridConnectivity {
    */
   field?: string;
   generator?: GridMetricGenerator2;
+}
+/**
+ * A sampled function table (esm-spec.md §9.5). Carries one or more named axes and a literal nested-array data block. The shape of `data` is [len(outputs), len(axes[0].values), len(axes[1].values), ...] when `outputs` is declared; otherwise [len(axes[0].values), ...] (single-output convenience form). `table_lookup` AST nodes evaluate this table by supplying a per-axis input expression and selecting an output. Tables are syntactic sugar over `interp.linear` (1 axis) / `interp.bilinear` (2 axes) / `index` (nearest); the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup.
+ */
+export interface FunctionTable {
+  description?: string;
+  /**
+   * Ordered list of named axes. The order of entries defines the order of inner dimensions in `data` (after the leading output dimension when `outputs` is present). Axis names within a single table MUST be unique.
+   *
+   * @minItems 1
+   * @maxItems 2
+   */
+  axes: [FunctionTableAxis] | [FunctionTableAxis, FunctionTableAxis];
+  /**
+   * Interpolation kind applied by `table_lookup`. 'linear' (1 axis) lowers to `interp.linear`. 'bilinear' (2 axes) lowers to `interp.bilinear`. 'nearest' lowers to `index` after `interp.searchsorted`. The chosen kind MUST be consistent with the number of axes; mismatch is rejected at load time with diagnostic 'table_interpolation_axes_mismatch'.
+   */
+  interpolation?: "linear" | "bilinear" | "nearest";
+  /**
+   * Out-of-bounds policy applied to query coordinates that fall outside an axis range. 'clamp' pins to the nearest edge — this matches the semantics of `interp.linear` and `interp.bilinear` (extrapolate-flat). 'error' MUST raise at evaluation time; bindings emit diagnostic 'table_lookup_out_of_bounds' on first violation. v0.4.0: 'clamp' is the only policy required of all five bindings; 'error' is conformant when the binding implements it.
+   */
+  out_of_bounds?: "clamp" | "error";
+  /**
+   * Optional ordered list of output names. When present, `table_lookup.output` MAY name an entry of this list (in addition to using a 0-based integer index). Names within a table MUST be unique. The leading dimension of `data` MUST equal the length of `outputs`.
+   *
+   * @minItems 1
+   */
+  outputs?: [string, ...string[]];
+  /**
+   * Nested-array literal carrying the table's sampled values. Leaves MUST be finite numbers (NaN entries are rejected at load time with 'table_data_nan'). Shape: [len(outputs), len(axes[0].values), ...] when `outputs` is present; [len(axes[0].values), ...] otherwise. Mismatched nesting is rejected with 'table_data_shape_mismatch'.
+   */
+  data: {
+    [k: string]: unknown;
+  };
+  /**
+   * Optional redundant shape assertion. If present, MUST match the actual nesting of `data`; loaders verify and reject mismatches with 'table_data_shape_mismatch'. `data` is the canonical representation; `shape` is a load-time assertion only.
+   *
+   * @minItems 1
+   */
+  shape?: [number, ...number[]];
+  /**
+   * Optional pin of the table-schema minor version this entry was authored against. Bindings ignore the value beyond a same-major-version compatibility check; informational for tooling.
+   */
+  schema_version?: string;
+}
+/**
+ * A single named axis inside a FunctionTable. The `values` array supplies the sample coordinates along this axis; it MUST be strictly increasing finite floats with at least 2 entries (mirrors the `interp.linear` / `interp.bilinear` axis contract in §9.2).
+ */
+export interface FunctionTableAxis {
+  /**
+   * Axis identifier. Used as the key in `table_lookup.axes` to bind the input-coordinate expression.
+   */
+  name: string;
+  /**
+   * Optional advisory units string (e.g. 'Pa', 'K'). v0.4.0 records this for documentation only — no load-time unit checking is performed against the supplied input expression. Promotion to enforcement is deferred to a future units RFC.
+   */
+  units?: string;
+  /**
+   * Strictly-increasing finite floats. Bindings MUST reject non-monotonic axes at load time with diagnostic 'table_axis_non_monotonic' and NaN entries with 'table_axis_nan'.
+   *
+   * @minItems 2
+   */
+  values: [number, number, ...number[]];
 }

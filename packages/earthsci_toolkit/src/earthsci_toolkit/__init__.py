@@ -46,6 +46,8 @@ from .esm_types import (
     Metadata,
     EsmFile,
     StaggeringRule,
+    FunctionTable,
+    FunctionTableAxis,
 )
 
 # Core parsing and serialization
@@ -319,6 +321,8 @@ __all__ = [
     "Reference",
     "Metadata",
     "EsmFile",
+    "FunctionTable",
+    "FunctionTableAxis",
 
     # Core parsing and serialization
     "load",

@@ -69,166 +69,273 @@ const KNOWN_GRID_BUILTINS = new Set<string>([
 // Embedded ESM schema - browser-compatible (no file system access required)
 const schema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.3.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.4.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.3.0) — closes the function-registry extension point. The top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn`, `enum`, and `const` AST ops are added (esm-spec §9 / docs/rfcs/closed-function-registry.md).",
+  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
-  "required": ["esm", "metadata"],
+  "required": [
+    "esm",
+    "metadata"
+  ],
   "additionalProperties": false,
   "anyOf": [
-    { "required": ["models"] },
-    { "required": ["reaction_systems"] }
+    {
+      "required": [
+        "models"
+      ]
+    },
+    {
+      "required": [
+        "reaction_systems"
+      ]
+    }
   ],
   "properties": {
     "esm": {
       "type": "string",
-      "enum": ["0.1.0", "0.2.0", "0.3.0"],
-      "description": "Format version string (semver). v0.3.0 closes the function registry; see esm-spec §9."
+      "description": "Format version string (semver).",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
     },
-    "metadata": { "$ref": "#/$defs/Metadata" },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
     "models": {
       "type": "object",
       "description": "ODE-based model components, keyed by unique identifier.",
-      "additionalProperties": { "$ref": "#/$defs/Model" }
+      "additionalProperties": {
+        "$ref": "#/$defs/Model"
+      }
     },
     "reaction_systems": {
       "type": "object",
       "description": "Reaction network components, keyed by unique identifier.",
-      "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
+      "additionalProperties": {
+        "$ref": "#/$defs/ReactionSystem"
+      }
     },
     "data_loaders": {
       "type": "object",
       "description": "External data source registrations (by reference).",
-      "additionalProperties": { "$ref": "#/$defs/DataLoader" }
+      "additionalProperties": {
+        "$ref": "#/$defs/DataLoader"
+      }
     },
     "enums": {
       "type": "object",
-      "description": "File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. See esm-spec §9.3.",
-      "additionalProperties": { "$ref": "#/$defs/EnumDeclaration" }
+      "description": "File-local symbol-to-positive-integer mappings used by the 'enum' AST op to make categorical lookups cross-binding-portable. Each entry is an enum name; its value is an object mapping symbolic names (strings) to positive integers. Two .esm files may declare an enum of the same name with different mappings; enums are file-local and never merged across files. See esm-spec.md §9.3.",
+      "additionalProperties": {
+        "$ref": "#/$defs/EnumDeclaration"
+      }
     },
     "coupling": {
       "type": "array",
       "description": "Composition and coupling rules.",
-      "items": { "$ref": "#/$defs/CouplingEntry" }
+      "items": {
+        "$ref": "#/$defs/CouplingEntry"
+      }
     },
     "domains": {
       "type": "object",
-      "description": "Named spatiotemporal domains, keyed by unique identifier.",
-      "additionalProperties": { "$ref": "#/$defs/Domain" }
+      "description": "Named spatial/temporal domain specifications.",
+      "additionalProperties": {
+        "$ref": "#/$defs/Domain"
+      }
     },
     "interfaces": {
       "type": "object",
-      "description": "Named coupling interfaces between domains.",
-      "additionalProperties": { "$ref": "#/$defs/Interface" }
+      "description": "Geometric connections between domains of different dimensionality.",
+      "additionalProperties": {
+        "$ref": "#/$defs/Interface"
+      }
+    },
+    "discretizations": {
+      "type": "object",
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (§7.1) or a CrossMetricStencilRule composite (§7.4) that combines per-axis stencils and metric components for covariant operators on curvilinear grids.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Discretization"
+          },
+          {
+            "$ref": "#/$defs/CrossMetricStencilRule"
+          }
+        ]
+      }
     },
     "grids": {
       "type": "object",
       "description": "Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured/cubed_sphere topology with dimensions, staggering locations, metric arrays, and (for unstructured/cubed-sphere) connectivity tables. See docs/rfcs/discretization.md §6.",
-      "additionalProperties": { "$ref": "#/$defs/Grid" }
+      "additionalProperties": {
+        "$ref": "#/$defs/Grid"
+      }
     },
-    "discretizations": {
+    "staggering_rules": {
       "type": "object",
-      "description": "Named stencil templates (discretization RFC §7). Each entry is either a standard stencil-template Discretization (§7.1) or a CrossMetricStencilRule composite (§7.4). The embedded TS schema validates these opaquely — full structural validation uses the canonical esm-schema.json in conformance.",
-      "additionalProperties": { "type": "object" }
+      "description": "Named staggering conventions that declare where quantities live on a grid. The unstructured_c_grid kind (RFC §7.4) captures MPAS-style C-grid placement — scalars at Voronoi cell centers, normal velocities at edge midpoints, vorticity at triangle vertices — and is the prerequisite declaration for the §7.3 worked-example discretizations (mpas_divergence_flux_form, mpas_gradient_edge_difference). Each entry references a grids.<g> entry by name.",
+      "additionalProperties": {
+        "$ref": "#/$defs/StaggeringRule"
+      }
+    },
+    "function_tables": {
+      "type": "object",
+      "description": "Component-scoped sampled function tables (v0.4.0). Each entry declares ordered named axes plus a literal nested-array data block, optionally tagged with output names; the `table_lookup` AST op references a table by id, supplies a per-axis input-coordinate expression map, and selects which output to return. Tables are syntactic sugar over `interp.linear` / `interp.bilinear` / `index`: a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup. See esm-spec.md §9.5 and docs/rfcs/sampled-tables.md.",
+      "additionalProperties": {
+        "$ref": "#/$defs/FunctionTable"
+      }
     }
   },
-
   "$defs": {
-
     "Metadata": {
       "type": "object",
       "description": "Authorship, provenance, and description.",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
           "description": "Short identifier for the model configuration."
         },
-        "description": { "type": "string" },
+        "description": {
+          "type": "string"
+        },
         "authors": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
-        "license": { "type": "string" },
+        "license": {
+          "type": "string"
+        },
         "created": {
           "type": "string",
-          "description": "ISO 8601 creation timestamp or date.",
-          "anyOf": [
-            { "format": "date-time" },
-            { "format": "date" }
-          ]
+          "format": "date-time",
+          "description": "ISO 8601 creation timestamp."
         },
         "modified": {
           "type": "string",
-          "description": "ISO 8601 last-modified timestamp or date.",
-          "anyOf": [
-            { "format": "date-time" },
-            { "format": "date" }
-          ]
+          "format": "date-time",
+          "description": "ISO 8601 last-modified timestamp."
         },
         "tags": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "references": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Reference" }
+          "items": {
+            "$ref": "#/$defs/Reference"
+          }
         }
       }
     },
-
     "Reference": {
       "type": "object",
       "description": "Academic citation or data source reference.",
       "additionalProperties": false,
       "properties": {
         "doi": {
-          "type": "string",
-          "pattern": "^10\\.\\d{4,}/"
+          "type": "string"
         },
-        "citation": { "type": "string" },
-        "url": { "type": "string", "format": "uri" },
-        "notes": { "type": "string" }
+        "citation": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "notes": {
+          "type": "string"
+        }
       }
     },
-
     "Expression": {
       "description": "Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.",
       "oneOf": [
-        { "type": "number" },
-        { "type": "string" },
-        { "$ref": "#/$defs/ExpressionNode" }
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ExpressionNode"
+        }
       ]
     },
-
     "ExpressionNode": {
       "type": "object",
       "description": "An operation in the expression AST.",
-      "required": ["op", "args"],
+      "required": [
+        "op",
+        "args"
+      ],
       "properties": {
         "op": {
           "type": "string",
           "description": "Operator name.",
           "enum": [
-            "+", "-", "*", "/", "^",
-            "D", "grad", "div", "laplacian",
-            "exp", "log", "log10", "sqrt", "abs",
-            "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-            "min", "max", "floor", "ceil",
+            "+",
+            "-",
+            "*",
+            "/",
+            "^",
+            "D",
+            "grad",
+            "div",
+            "laplacian",
+            "exp",
+            "log",
+            "log10",
+            "sqrt",
+            "abs",
+            "sin",
+            "cos",
+            "tan",
+            "asin",
+            "acos",
+            "atan",
+            "atan2",
+            "min",
+            "max",
+            "floor",
+            "ceil",
             "ifelse",
-            ">", "<", ">=", "<=", "==", "!=",
-            "and", "or", "not",
+            ">",
+            "<",
+            ">=",
+            "<=",
+            "==",
+            "!=",
+            "and",
+            "or",
+            "not",
             "Pre",
             "sign",
+            "arrayop",
+            "makearray",
             "index",
-            "fn", "enum", "const",
-            "bc"
+            "broadcast",
+            "reshape",
+            "transpose",
+            "concat",
+            "fn",
+            "enum",
+            "const",
+            "bc",
+            "table_lookup"
           ]
         },
         "args": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Expression" },
+          "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
           "minItems": 0
         },
         "wrt": {
@@ -239,68 +346,369 @@ const schema = {
           "type": "string",
           "description": "Spatial dimension for grad operator (e.g., \"x\", \"y\", \"z\")."
         },
+        "output_idx": {
+          "type": "array",
+          "description": "For arrayop: the result's index signature. Each entry is either a string (a symbolic index variable like \"i\", \"j\") or the integer 1 (a literal singleton dimension for reshape/broadcast). Mirrors SymbolicUtils.ArrayOp.output_idx.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "const": 1
+              }
+            ]
+          }
+        },
+        "expr": {
+          "$ref": "#/$defs/Expression",
+          "description": "For arrayop: the scalar body evaluated at each index point. May reference index symbols declared in output_idx as well as additional (contracted) index symbols. Mirrors SymbolicUtils.ArrayOp.expr."
+        },
+        "reduce": {
+          "type": "string",
+          "description": "For arrayop: the reduction operator applied to any index symbol that appears in expr but not in output_idx. Default is \"+\".",
+          "enum": [
+            "+",
+            "*",
+            "max",
+            "min"
+          ],
+          "default": "+"
+        },
+        "ranges": {
+          "type": "object",
+          "description": "For arrayop: optional map from index symbol name to the range it iterates over. Each value is either a 2-element array [start, stop] (unit step) or a 3-element array [start, step, stop]. Indices not present are inferred from the domain / operand shapes at runtime. Mirrors SymbolicUtils.ArrayOp.ranges.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 3
+          }
+        },
+        "regions": {
+          "type": "array",
+          "description": "For makearray: list of sub-region boxes of the output array. Each region is an array of [start, stop] pairs, one per output dimension. The nth region is filled with the nth entry of values. Overlapping regions are permitted; later regions overwrite earlier ones. Mirrors SymbolicUtils.ArrayMaker.regions.",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 1
+          }
+        },
+        "values": {
+          "type": "array",
+          "description": "For makearray: list of expressions, one per entry in regions. Each value may be a scalar expression (broadcast across the region) or an array-valued expression whose shape matches the region (excluding singleton dimensions). Mirrors SymbolicUtils.ArrayMaker.values.",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "shape": {
+          "type": "array",
+          "description": "For reshape: the target shape. Each entry is either an integer (a concrete length) or a string (a symbolic dimension reference).",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "minItems": 1
+        },
+        "perm": {
+          "type": "array",
+          "description": "For transpose: optional axis permutation. A list of 0-based axis indices giving the new order. If omitted, the matrix-transpose convention is used (reverse axes).",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "axis": {
+          "type": "integer",
+          "description": "For concat: the 0-based axis along which to concatenate the operand arrays. All operands must have identical shape on every other axis.",
+          "minimum": 0
+        },
+        "fn": {
+          "type": "string",
+          "description": "For broadcast: the name of the scalar operator to apply element-wise to the operands in args. Must be an ExpressionNode op name drawn from the scalar subset (arithmetic, elementary functions, comparisons, etc.)."
+        },
         "name": {
           "type": "string",
-          "description": "For fn: dotted module path of a function in the closed function registry (esm-spec §9.2). v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear."
+          "description": "For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear."
         },
         "value": {
-          "description": "For const: inline literal value carried by the node (number, integer, or nested array thereof). args MUST be empty for a const node."
+          "description": "For const: the inline literal value carried by this expression node. Any JSON number, integer, or nested array thereof. `args` MUST be empty for a const node."
         },
         "kind": {
           "type": "string",
-          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"],
-          "description": "For the 'bc' pattern-match op: BC kind to match (RFC §9.2)."
+          "description": "For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.",
+          "enum": [
+            "constant",
+            "dirichlet",
+            "neumann",
+            "robin",
+            "zero_gradient",
+            "periodic",
+            "flux_contrib"
+          ]
         },
         "side": {
           "type": "string",
-          "description": "For the 'bc' pattern-match op: BC side to match (RFC §9.2)."
+          "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
+        },
+        "table": {
+          "type": "string",
+          "description": "For table_lookup: the id of the function_tables entry to evaluate. Bindings MUST reject references to undeclared tables at file-load time with diagnostic 'table_lookup_unknown_table'."
+        },
+        "axes": {
+          "type": "object",
+          "description": "For table_lookup: a map from axis name (matching one of the referenced table's `axes[].name` entries) to the scalar input expression supplying that coordinate at evaluation time. Every axis declared on the table MUST appear as a key; extra keys are rejected with 'table_lookup_axis_name_mismatch'. `args` MUST be empty for a table_lookup node — the per-axis expressions live here.",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "output": {
+          "description": "For table_lookup: which output of a multi-output table to return. Either a non-negative integer (0-based index into the leading data dimension) or a string (an entry in the table's `outputs` array). Single-output tables MAY omit this field (defaults to 0). Out-of-range or unknown-name selectors are rejected with 'table_lookup_output_out_of_range'.",
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "allOf": [
         {
-          "if": { "properties": { "op": { "const": "fn" } }, "required": ["op"] },
-          "then": { "required": ["name"] }
-        },
-        {
-          "if": { "properties": { "op": { "const": "const" } }, "required": ["op"] },
+          "if": {
+            "properties": {
+              "op": {
+                "const": "arrayop"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
           "then": {
-            "required": ["value"],
-            "properties": { "args": { "type": "array", "maxItems": 0 } }
+            "required": [
+              "output_idx",
+              "expr"
+            ]
           }
         },
         {
-          "if": { "properties": { "op": { "const": "enum" } }, "required": ["op"] },
+          "if": {
+            "properties": {
+              "op": {
+                "const": "makearray"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "regions",
+              "values"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "broadcast"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "fn"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "reshape"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "shape"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "concat"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "axis"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "fn"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "name"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "const"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
           "then": {
             "properties": {
               "args": {
                 "type": "array",
                 "minItems": 2,
                 "maxItems": 2,
-                "items": { "type": "string" }
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "bc"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "side"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "table_lookup"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "table",
+              "axes"
+            ],
+            "properties": {
+              "args": {
+                "type": "array",
+                "maxItems": 0
               }
             }
           }
         }
       ]
     },
-
     "Equation": {
       "type": "object",
       "description": "An equation: lhs = rhs (or lhs ~ rhs in MTK notation).",
-      "required": ["lhs", "rhs"],
+      "required": [
+        "lhs",
+        "rhs"
+      ],
       "additionalProperties": false,
       "properties": {
-        "lhs": { "$ref": "#/$defs/Expression" },
-        "rhs": { "$ref": "#/$defs/Expression" },
-        "_comment": { "type": "string" }
+        "lhs": {
+          "$ref": "#/$defs/Expression"
+        },
+        "rhs": {
+          "$ref": "#/$defs/Expression"
+        },
+        "_comment": {
+          "type": "string"
+        }
       }
     },
-
     "AffectEquation": {
       "type": "object",
       "description": "An affect equation in an event: lhs is the target variable (string), rhs is an expression.",
-      "required": ["lhs", "rhs"],
+      "required": [
+        "lhs",
+        "rhs"
+      ],
       "additionalProperties": false,
       "properties": {
         "lhs": {
@@ -313,11 +721,13 @@ const schema = {
         }
       }
     },
-
     "ContinuousEvent": {
       "type": "object",
       "description": "Fires when a condition expression crosses zero (root-finding). Maps to MTK SymbolicContinuousCallback.",
-      "required": ["conditions", "affects"],
+      "required": [
+        "conditions",
+        "affects"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -327,28 +737,40 @@ const schema = {
         "conditions": {
           "type": "array",
           "description": "Expressions that trigger the event when they cross zero.",
-          "items": { "$ref": "#/$defs/Expression" },
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
           "minItems": 1
         },
         "affects": {
           "type": "array",
           "description": "Affect equations applied on positive-going zero crossings (or both directions if affect_neg is absent). Empty array for pure detection.",
-          "items": { "$ref": "#/$defs/AffectEquation" }
+          "items": {
+            "$ref": "#/$defs/AffectEquation"
+          }
         },
         "affect_neg": {
           "description": "Separate affects for negative-going zero crossings. If null or absent, affects is used for both directions.",
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "array",
-              "items": { "$ref": "#/$defs/AffectEquation" }
+              "items": {
+                "$ref": "#/$defs/AffectEquation"
+              }
             }
           ]
         },
         "root_find": {
           "type": "string",
           "description": "Root-finding direction.",
-          "enum": ["left", "right", "all"],
+          "enum": [
+            "left",
+            "right",
+            "all"
+          ],
           "default": "left"
         },
         "reinitialize": {
@@ -356,30 +778,43 @@ const schema = {
           "description": "Whether to reinitialize the system after the event.",
           "default": false
         },
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "DiscreteEventTrigger": {
       "description": "Trigger specification for a discrete event.",
       "oneOf": [
         {
           "type": "object",
           "description": "Fires when the boolean expression is true at the end of a timestep.",
-          "required": ["type", "expression"],
+          "required": [
+            "type",
+            "expression"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "const": "condition" },
-            "expression": { "$ref": "#/$defs/Expression" }
+            "type": {
+              "const": "condition"
+            },
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
           }
         },
         {
           "type": "object",
           "description": "Fires every interval time units.",
-          "required": ["type", "interval"],
+          "required": [
+            "type",
+            "interval"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "const": "periodic" },
+            "type": {
+              "const": "periodic"
+            },
             "interval": {
               "type": "number",
               "exclusiveMinimum": 0,
@@ -395,13 +830,20 @@ const schema = {
         {
           "type": "object",
           "description": "Fires at each specified time.",
-          "required": ["type", "times"],
+          "required": [
+            "type",
+            "times"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "const": "preset_times" },
+            "type": {
+              "const": "preset_times"
+            },
             "times": {
               "type": "array",
-              "items": { "type": "number" },
+              "items": {
+                "type": "number"
+              },
               "minItems": 1,
               "description": "Array of simulation times at which to fire."
             }
@@ -409,11 +851,14 @@ const schema = {
         }
       ]
     },
-
     "FunctionalAffect": {
       "type": "object",
       "description": "A registered functional affect handler for complex event behavior that cannot be expressed symbolically.",
-      "required": ["handler_id", "read_vars", "read_params"],
+      "required": [
+        "handler_id",
+        "read_vars",
+        "read_params"
+      ],
       "additionalProperties": false,
       "properties": {
         "handler_id": {
@@ -422,17 +867,23 @@ const schema = {
         },
         "read_vars": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "State variables accessed by the handler."
         },
         "read_params": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Parameters accessed by the handler."
         },
         "modified_params": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Parameters modified by the handler (implicitly discrete parameters)."
         },
         "config": {
@@ -442,22 +893,27 @@ const schema = {
         }
       }
     },
-
     "DiscreteEvent": {
       "type": "object",
       "description": "Fires when a boolean condition is true at end of a timestep, or at preset/periodic times. Maps to MTK SymbolicDiscreteCallback.",
-      "required": ["trigger"],
+      "required": [
+        "trigger"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
           "description": "Human-readable identifier."
         },
-        "trigger": { "$ref": "#/$defs/DiscreteEventTrigger" },
+        "trigger": {
+          "$ref": "#/$defs/DiscreteEventTrigger"
+        },
         "affects": {
           "type": "array",
           "description": "Affect equations. Required unless functional_affect is used.",
-          "items": { "$ref": "#/$defs/AffectEquation" }
+          "items": {
+            "$ref": "#/$defs/AffectEquation"
+          }
         },
         "functional_affect": {
           "$ref": "#/$defs/FunctionalAffect",
@@ -465,260 +921,372 @@ const schema = {
         },
         "discrete_parameters": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Parameters modified by this event. Required when affects modify parameters rather than state variables."
         },
         "reinitialize": {
           "type": "boolean",
           "description": "Whether to reinitialize the system after the event."
         },
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       },
       "oneOf": [
-        { "required": ["affects"] },
-        { "required": ["functional_affect"] }
+        {
+          "required": [
+            "affects"
+          ]
+        },
+        {
+          "required": [
+            "functional_affect"
+          ]
+        }
       ]
     },
-
     "ModelVariable": {
       "type": "object",
       "description": "A variable in an ODE/SDE model.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["state", "parameter", "observed", "brownian"],
-          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise source (Wiener) that drives an SDE."
+          "enum": [
+            "state",
+            "parameter",
+            "observed",
+            "brownian"
+          ],
+          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise process (Wiener) that drives an SDE — the presence of any brownian variable promotes the enclosing model from an ODE system to an SDE system."
         },
-        "units": { "type": "string" },
-        "default": { "type": "number" },
-        "description": { "type": "string" },
+        "units": {
+          "type": "string"
+        },
+        "default": {
+          "type": "number"
+        },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. When present, validators flag a unit_inconsistency error if these do not match the declared units (including dimensionally incompatible cases like K vs kg, and same-dimension mismatches like K vs degC). Default is the same as `units`."
+        },
+        "description": {
+          "type": "string"
+        },
         "expression": {
           "$ref": "#/$defs/Expression",
           "description": "Defining expression for observed variables."
         },
         "shape": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Arrayed-variable shape: ordered dimension names from the enclosing model's domain.spatial."
+          "items": {
+            "type": "string"
+          },
+          "description": "Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC §10.2)."
         },
         "location": {
           "type": "string",
-          "description": "Staggered-grid location tag (e.g., cell_center, edge_normal, vertex)."
+          "description": "Staggered-grid location tag (e.g., \"cell_center\", \"edge_normal\", \"x_face\", \"vertex\"). Omitted indicates no explicit staggering; the spatialization step defaults to \"cell_center\" when the variable's model has a grid (discretization RFC §10.2, §11 step 2)."
         },
         "noise_kind": {
           "type": "string",
-          "enum": ["wiener"],
+          "enum": [
+            "wiener"
+          ],
           "default": "wiener",
-          "description": "Brownian-only: kind of stochastic process."
+          "description": "Brownian-only: kind of stochastic process. Currently only \"wiener\" (zero-mean unit-variance Gaussian increments) is supported; reserved for future extension to \"colored\", \"correlated\", etc."
         },
         "correlation_group": {
           "type": "string",
-          "description": "Brownian-only: opaque tag grouping correlated noise sources."
+          "description": "Brownian-only: optional opaque tag used to group correlated noise sources. Brownian variables sharing a group label are interpreted by the runtime as drawn from a joint multivariate normal whose correlation matrix is supplied externally. Brownian variables without a group label are independent. The spec does not currently encode the correlation matrix itself; that is left to a future extension."
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "type": { "const": "observed" } }, "required": ["type"] },
-          "then": { "required": ["expression"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "observed"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "expression"
+            ]
+          }
         },
         {
-          "if": { "not": { "properties": { "type": { "const": "brownian" } }, "required": ["type"] } },
-          "then": { "not": { "anyOf": [{ "required": ["noise_kind"] }, { "required": ["correlation_group"] }] } }
+          "if": {
+            "not": {
+              "properties": {
+                "type": {
+                  "const": "brownian"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "noise_kind"
+                  ]
+                },
+                {
+                  "required": [
+                    "correlation_group"
+                  ]
+                }
+              ]
+            }
+          }
         }
       ]
     },
-
     "Model": {
       "type": "object",
       "description": "An ODE system — a fully specified set of time-dependent equations.",
-      "required": ["variables", "equations"],
+      "required": [
+        "variables",
+        "equations"
+      ],
       "additionalProperties": false,
       "properties": {
         "domain": {
-          "description": "Domain this model belongs to.",
+          "description": "Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) models.",
           "oneOf": [
-            { "type": "string" },
-            { "type": "null" }
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "coupletype": {
-          "description": "Coupling type name for couple dispatch.",
+          "description": "Coupling type name. Informational label identifying this system's role in coupling.",
           "oneOf": [
-            { "type": "string" },
-            { "type": "null" }
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
-        "reference": { "$ref": "#/$defs/Reference" },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        },
         "variables": {
           "type": "object",
           "description": "All variables, keyed by name.",
-          "additionalProperties": { "$ref": "#/$defs/ModelVariable" }
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelVariable"
+          }
         },
         "equations": {
           "type": "array",
           "description": "Array of {lhs, rhs} equation objects.",
-          "items": { "$ref": "#/$defs/Equation" }
+          "items": {
+            "$ref": "#/$defs/Equation"
+          }
         },
         "initialization_equations": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Equation" }
+          "description": "Equations that hold only at t=0 (not dynamically). Used by models whose initialization requires solving an auxiliary system before time-stepping begins (e.g. aerosol equilibrium, plume rise). Each entry is a {lhs, rhs} equation evaluated/solved at t=0.",
+          "items": {
+            "$ref": "#/$defs/Equation"
+          }
         },
         "guesses": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/Expression" }
+          "description": "Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are Expression graphs (numbers, strings, or ExpressionNode).",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         },
         "system_kind": {
           "type": "string",
-          "enum": ["ode", "nonlinear", "sde", "pde"]
+          "description": "Discriminates the MTK system type this model maps to. Defaults to 'ode' (time-stepping). 'nonlinear' for algebraic-only systems (no time derivative; e.g. aerosol equilibrium, Mogi). 'sde' when brownian variables are present. 'pde' for models with a spatial domain plus differential operators (often implied by the domain field; set explicitly to disambiguate).",
+          "enum": [
+            "ode",
+            "nonlinear",
+            "sde",
+            "pde"
+          ]
         },
         "discrete_events": {
           "type": "array",
-          "items": { "$ref": "#/$defs/DiscreteEvent" }
+          "items": {
+            "$ref": "#/$defs/DiscreteEvent"
+          }
         },
         "continuous_events": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ContinuousEvent" }
+          "items": {
+            "$ref": "#/$defs/ContinuousEvent"
+          }
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\".",
-          "additionalProperties": { "$ref": "#/$defs/Model" }
+          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Model"
+              },
+              {
+                "$ref": "#/$defs/SubsystemRef"
+              }
+            ]
+          }
         },
-        "tolerance": { "$ref": "#/$defs/Tolerance" },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Model-level default numerical tolerance for tests, used when a test or assertion does not provide its own."
+        },
         "tests": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Test" }
+          "description": "Inline validation tests that exercise this model in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (variable, time) points.",
+          "items": {
+            "$ref": "#/$defs/Test"
+          }
         },
         "examples": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Example" }
+          "description": "Inline illustrative examples of how to run this model. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
+          "items": {
+            "$ref": "#/$defs/Example"
+          }
         },
         "boundary_conditions": {
           "type": "object",
-          "description": "Model-level boundary conditions keyed by user-supplied id (v0.2.0, RFC §9). Replaces the v0.1.0 domain-level list; old-style files emit E_DEPRECATED_DOMAIN_BC.",
-          "additionalProperties": { "$ref": "#/$defs/ModelBoundaryCondition" }
+          "description": "Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).",
+          "additionalProperties": {
+            "$ref": "#/$defs/BoundaryCondition"
+          }
         }
       }
     },
-
-    "ModelBoundaryCondition": {
+    "SubsystemRef": {
       "type": "object",
-      "description": "Model-level boundary condition entry (v0.2.0, RFC §9.2).",
-      "required": ["variable", "side", "kind"],
+      "description": "A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.",
+      "required": [
+        "ref"
+      ],
       "additionalProperties": false,
       "properties": {
-        "variable": { "type": "string" },
-        "side": { "type": "string" },
-        "kind": {
+        "ref": {
           "type": "string",
-          "enum": ["constant", "dirichlet", "neumann", "robin", "zero_gradient", "periodic", "flux_contrib"]
-        },
-        "value": {
-          "oneOf": [
-            { "type": "number" },
-            { "type": "string" },
-            { "$ref": "#/$defs/ExpressionNode" }
-          ]
-        },
-        "robin_alpha": {
-          "oneOf": [
-            { "type": "number" },
-            { "type": "string" },
-            { "$ref": "#/$defs/ExpressionNode" }
-          ]
-        },
-        "robin_beta": {
-          "oneOf": [
-            { "type": "number" },
-            { "type": "string" },
-            { "$ref": "#/$defs/ExpressionNode" }
-          ]
-        },
-        "robin_gamma": {
-          "oneOf": [
-            { "type": "number" },
-            { "type": "string" },
-            { "$ref": "#/$defs/ExpressionNode" }
-          ]
-        },
-        "face_coords": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "contributed_by": {
-          "type": "object",
-          "required": ["component"],
-          "additionalProperties": false,
-          "properties": {
-            "component": { "type": "string" },
-            "flux_sign": { "type": "string", "enum": ["+", "-"] }
-          }
-        },
-        "description": { "type": "string" }
+          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition."
+        }
       }
     },
-
     "Species": {
       "type": "object",
       "description": "A reactive species in a reaction system.",
       "additionalProperties": false,
       "properties": {
-        "units": { "type": "string" },
-        "default": { "type": "number" },
-        "description": { "type": "string" },
+        "units": {
+          "type": "string"
+        },
+        "default": {
+          "type": "number"
+        },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics."
+        },
+        "description": {
+          "type": "string"
+        },
         "constant": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the species participates in reactions but its concentration is held fixed (no ODE)."
+          "description": "When true, the species participates in reactions as a reactant/product but its concentration is held fixed (no ODE integration) — a reservoir species. Maps to Catalyst's @species [isconstantspecies=true]. Absent or false means an ordinary state species with an ODE."
         }
       }
     },
-
     "Parameter": {
       "type": "object",
       "description": "A parameter in a reaction system.",
       "additionalProperties": false,
       "properties": {
-        "units": { "type": "string" },
-        "default": { "type": "number" },
-        "description": { "type": "string" }
+        "units": {
+          "type": "string"
+        },
+        "default": {
+          "type": "number"
+        },
+        "default_units": {
+          "type": "string",
+          "description": "Units of the default value, if different from the declared units field. See ModelVariable.default_units for semantics."
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "StoichiometryEntry": {
       "type": "object",
       "description": "A species with its stoichiometric coefficient in a reaction. Coefficients MUST be positive and finite (NaN / ±Infinity are rejected at parse time). Fractional values are supported to preserve fidelity with atmospheric-chemistry mechanisms whose products include non-integer yields (e.g. `0.87 CH2O`, `1.86 CH3O2`). Integer values remain valid — they are a subset of the permitted number range.",
-      "required": ["species", "stoichiometry"],
+      "required": [
+        "species",
+        "stoichiometry"
+      ],
       "additionalProperties": false,
       "properties": {
-        "species": { "type": "string" },
+        "species": {
+          "type": "string"
+        },
         "stoichiometry": {
           "type": "number",
           "exclusiveMinimum": 0
         }
       }
     },
-
     "Reaction": {
       "type": "object",
       "description": "A single reaction in a reaction system.",
-      "required": ["id", "substrates", "products", "rate"],
+      "required": [
+        "id",
+        "substrates",
+        "products",
+        "rate"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique reaction identifier (e.g., \"R1\")."
         },
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "substrates": {
           "description": "Array of {species, stoichiometry} or null for source reactions (∅ → X).",
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "array",
-              "items": { "$ref": "#/$defs/StoichiometryEntry" },
+              "items": {
+                "$ref": "#/$defs/StoichiometryEntry"
+              },
               "minItems": 1
             }
           ]
@@ -726,10 +1294,14 @@ const schema = {
         "products": {
           "description": "Array of {species, stoichiometry} or null for sink reactions (X → ∅).",
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "array",
-              "items": { "$ref": "#/$defs/StoichiometryEntry" },
+              "items": {
+                "$ref": "#/$defs/StoichiometryEntry"
+              },
               "minItems": 1
             }
           ]
@@ -738,74 +1310,653 @@ const schema = {
           "$ref": "#/$defs/Expression",
           "description": "Rate expression: a parameter reference string, number, or expression AST."
         },
-        "reference": { "$ref": "#/$defs/Reference" }
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
       }
     },
-
     "ReactionSystem": {
       "type": "object",
       "description": "A reaction network — declarative representation of chemical or biological reactions.",
-      "required": ["species", "parameters", "reactions"],
+      "required": [
+        "species",
+        "parameters",
+        "reactions"
+      ],
       "additionalProperties": false,
       "properties": {
-        "coupletype": {
-          "description": "Coupling type name for couple dispatch.",
+        "domain": {
+          "description": "Name of a domain from the domains section. Omit or set to null for 0D (non-spatial) systems.",
           "oneOf": [
-            { "type": "string" },
-            { "type": "null" }
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
-        "reference": { "$ref": "#/$defs/Reference" },
+        "coupletype": {
+          "description": "Coupling type name. Informational label identifying this system's role in coupling.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        },
         "species": {
           "type": "object",
           "description": "Named reactive species.",
-          "additionalProperties": { "$ref": "#/$defs/Species" }
+          "additionalProperties": {
+            "$ref": "#/$defs/Species"
+          }
         },
         "parameters": {
           "type": "object",
           "description": "Named parameters (rate constants, temperature, photolysis rates, etc.).",
-          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+          "additionalProperties": {
+            "$ref": "#/$defs/Parameter"
+          }
         },
         "reactions": {
           "type": "array",
           "description": "Array of reaction definitions.",
-          "items": { "$ref": "#/$defs/Reaction" },
+          "items": {
+            "$ref": "#/$defs/Reaction"
+          },
           "minItems": 1
         },
         "constraint_equations": {
           "type": "array",
           "description": "Additional algebraic or ODE constraints.",
-          "items": { "$ref": "#/$defs/Equation" }
+          "items": {
+            "$ref": "#/$defs/Equation"
+          }
         },
         "discrete_events": {
           "type": "array",
-          "items": { "$ref": "#/$defs/DiscreteEvent" }
+          "items": {
+            "$ref": "#/$defs/DiscreteEvent"
+          }
         },
         "continuous_events": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ContinuousEvent" }
+          "items": {
+            "$ref": "#/$defs/ContinuousEvent"
+          }
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\".",
-          "additionalProperties": { "$ref": "#/$defs/ReactionSystem" }
+          "description": "Named child reaction systems (subsystems), keyed by unique identifier. Enables hierarchical system composition. Variables in subsystems are referenced via dot notation: \"ParentSystem.ChildSystem.species\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ReactionSystem"
+              },
+              {
+                "$ref": "#/$defs/SubsystemRef"
+              }
+            ]
+          }
         },
-        "tolerance": { "$ref": "#/$defs/Tolerance" },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "System-level default numerical tolerance for tests, used when a test or assertion does not provide its own."
+        },
         "tests": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Test" }
+          "description": "Inline validation tests that exercise this reaction system in isolation. Each test specifies initial conditions, parameter overrides, a time span, and scalar assertions at specific (species/variable, time) points.",
+          "items": {
+            "$ref": "#/$defs/Test"
+          }
         },
         "examples": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Example" }
+          "description": "Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
+          "items": {
+            "$ref": "#/$defs/Example"
+          }
         }
       }
     },
-
+    "Tolerance": {
+      "type": "object",
+      "description": "Numerical comparison tolerance. Any of abs/rel may be specified. If both are given, an assertion passes when either bound is satisfied: |actual - expected| <= abs  OR  |actual - expected| / max(|expected|, epsilon) <= rel.",
+      "additionalProperties": false,
+      "properties": {
+        "abs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute tolerance: |actual - expected| <= abs."
+        },
+        "rel": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Relative tolerance: |actual - expected| / max(|expected|, epsilon) <= rel."
+        }
+      }
+    },
+    "Assertion": {
+      "type": "object",
+      "description": "A single scalar check against a model variable at a specific (variable, time) point. PDE-aware variants pin a spatial point via `coords`, or reduce the field to a scalar via `reduce` (domain-integral, mean, max, min, or an error-norm against a `reference` solution). `coords` and `reduce` are mutually exclusive; if neither is given the assertion is pointwise and only valid on a 0-D component. Error-norm reductions (L2_error, Linf_error) require `reference`.",
+      "required": [
+        "variable",
+        "time",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Name of the variable or species to check. Use the local name (e.g., \"O3\") or a scoped reference relative to this component (e.g., \"subsystem.X\")."
+        },
+        "time": {
+          "type": "number",
+          "description": "Simulation time at which to evaluate the assertion. Must lie within [time_span.start, time_span.end]."
+        },
+        "expected": {
+          "type": "number",
+          "description": "Expected scalar value of the variable at the given time."
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Per-assertion tolerance override. If present, this takes precedence over the test-level and model-level defaults."
+        },
+        "coords": {
+          "type": "object",
+          "description": "Spatial-point evaluation: map from the enclosing component's domain dimension name (e.g., \"x\", \"lon\") to the numeric coordinate at which to sample the field. All keys MUST be names of dimensions declared in the component's domain.spatial. Mutually exclusive with `reduce`.",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "minProperties": 1
+        },
+        "reduce": {
+          "type": "string",
+          "description": "Domain reduction: collapse the spatial field to a single scalar before comparison. `integral`/`mean`/`max`/`min` are pure reductions; `L2_error`/`Linf_error` require a `reference` solution and compute ||u_actual - u_reference||_norm. Mutually exclusive with `coords`.",
+          "enum": [
+            "integral",
+            "mean",
+            "max",
+            "min",
+            "L2_error",
+            "Linf_error"
+          ]
+        },
+        "reference": {
+          "description": "Reference (analytic or precomputed) solution required by error-norm reductions. Either an inline Expression evaluated over the component's domain coordinates, or a from_file shape pointing at a precomputed snapshot.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "path"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "from_file"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "coords",
+              "reduce"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reduce": {
+                "enum": [
+                  "L2_error",
+                  "Linf_error"
+                ]
+              }
+            },
+            "required": [
+              "reduce"
+            ]
+          },
+          "then": {
+            "required": [
+              "reference"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reduce": {
+                "enum": [
+                  "integral",
+                  "mean",
+                  "max",
+                  "min"
+                ]
+              }
+            },
+            "required": [
+              "reduce"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "reference"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Test": {
+      "type": "object",
+      "description": "An inline validation test for the enclosing model or reaction system. Defines the run configuration (initial conditions, parameter overrides, time span) and the scalar assertions that must hold.",
+      "required": [
+        "id",
+        "time_span",
+        "assertions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this component's tests array."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this test verifies."
+        },
+        "initial_conditions": {
+          "type": "object",
+          "description": "Initial-value overrides for state variables, keyed by variable name (local to this component). Values not listed fall back to the variable's declared default.",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "parameter_overrides": {
+          "type": "object",
+          "description": "Parameter overrides, keyed by parameter name (local to this component). Values not listed fall back to the parameter's declared default.",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "time_span": {
+          "$ref": "#/$defs/TimeSpan"
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Tolerance",
+          "description": "Test-level default tolerance applied to all assertions in this test that do not override it."
+        },
+        "assertions": {
+          "type": "array",
+          "description": "Scalar (variable, time) checks that define the pass/fail criterion of the test.",
+          "items": {
+            "$ref": "#/$defs/Assertion"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "TimeSpan": {
+      "type": "object",
+      "description": "Simulation time interval expressed in the component's time units.",
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        }
+      }
+    },
+    "SweepRange": {
+      "type": "object",
+      "description": "Generated range of parameter values.",
+      "required": [
+        "start",
+        "stop",
+        "count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "number"
+        },
+        "stop": {
+          "type": "number"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "scale": {
+          "type": "string",
+          "enum": [
+            "linear",
+            "log"
+          ],
+          "default": "linear",
+          "description": "Spacing: linear = evenly spaced between start and stop; log = logarithmically spaced (start and stop must be strictly positive)."
+        }
+      }
+    },
+    "SweepDimension": {
+      "type": "object",
+      "description": "One axis of a parameter sweep: exactly one of values or range must be given.",
+      "required": [
+        "parameter"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "parameter": {
+          "type": "string",
+          "description": "Name of the parameter to vary (local to this component)."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "description": "Enumerated values to use for this axis."
+        },
+        "range": {
+          "$ref": "#/$defs/SweepRange",
+          "description": "Generated range; mutually exclusive with values."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "values"
+          ]
+        },
+        {
+          "required": [
+            "range"
+          ]
+        }
+      ]
+    },
+    "ParameterSweep": {
+      "type": "object",
+      "description": "A parameter sweep specification. Currently only Cartesian product sweeps are supported — the total run count is the product of each dimension's length.",
+      "required": [
+        "type",
+        "dimensions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "cartesian"
+          ],
+          "description": "Sweep combination strategy. Currently only cartesian (full Cartesian product) is supported."
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SweepDimension"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "PlotAxis": {
+      "type": "object",
+      "description": "Axis specification: any state variable, observed variable, parameter name, or swept parameter may be used.",
+      "required": [
+        "variable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Variable or parameter name (local to this component or scoped within a subsystem)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable axis label. Viewers should fall back to the variable name if omitted."
+        }
+      }
+    },
+    "PlotValue": {
+      "type": "object",
+      "description": "A scalar value derived from a trajectory: used for heatmap z / color channels. Exactly one of at_time or reduce should be specified; if both are given, at_time takes precedence.",
+      "required": [
+        "variable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Variable whose trajectory is reduced to a scalar per run."
+        },
+        "at_time": {
+          "type": "number",
+          "description": "Specific simulation time at which to sample the variable."
+        },
+        "reduce": {
+          "type": "string",
+          "enum": [
+            "max",
+            "min",
+            "mean",
+            "integral",
+            "final"
+          ],
+          "description": "Time-reduction applied to the trajectory: max/min/mean over the run, time integral, or the final value at time_span.end."
+        }
+      }
+    },
+    "PlotSeries": {
+      "type": "object",
+      "description": "A single named series for multi-series line or scatter plots.",
+      "required": [
+        "name",
+        "variable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "variable": {
+          "type": "string"
+        }
+      }
+    },
+    "Plot": {
+      "type": "object",
+      "description": "A plot specification associated with an example. Only structural information is recorded — axes, series selection, and value reductions. Styling (colors, fonts, legends, themes) is the viewer's concern. PDE-aware plot types `field_slice` and `field_snapshot` visualize spatial fields at a fixed time; `x` (and `y` for snapshots) name domain dimensions, the variable value becomes the y / color channel, and any non-plotted spatial dimension MUST be pinned in `pinned_coords`.",
+      "required": [
+        "id",
+        "type",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this example's plots array."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "line",
+            "scatter",
+            "heatmap",
+            "field_slice",
+            "field_snapshot"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "x": {
+          "$ref": "#/$defs/PlotAxis"
+        },
+        "y": {
+          "$ref": "#/$defs/PlotAxis"
+        },
+        "value": {
+          "$ref": "#/$defs/PlotValue",
+          "description": "Required for heatmap; defines the color channel. Ignored for line/scatter. For field_snapshot, the variable plotted as the color channel (use `value.variable`); `at_time` and `reduce` are ignored — the field is sampled at `at_time` declared on the plot."
+        },
+        "series": {
+          "type": "array",
+          "description": "Multiple named series for line or scatter plots. Ignored for heatmap and field plots.",
+          "items": {
+            "$ref": "#/$defs/PlotSeries"
+          }
+        },
+        "at_time": {
+          "type": "number",
+          "description": "Required for field_slice and field_snapshot: simulation time at which to extract the spatial field. Must lie within the example's time_span."
+        },
+        "pinned_coords": {
+          "type": "object",
+          "description": "Required for field_slice and field_snapshot when the component domain has more spatial dimensions than the plot's spatial axes (1 for field_slice, 2 for field_snapshot). Maps each non-plotted spatial dimension name to the numeric coordinate at which to slice. Keys MUST be names of dimensions in component.domain.spatial that are not used by `x` (or `y` for field_snapshot).",
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "heatmap"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "field_slice"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "at_time"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "field_snapshot"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "at_time",
+              "value"
+            ]
+          }
+        }
+      ]
+    },
+    "Example": {
+      "type": "object",
+      "description": "An inline illustrative example of how to run the enclosing component. Defines the run configuration and one or more plots derived from the result.",
+      "required": [
+        "id",
+        "time_span"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier unique within this component's examples array."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this example illustrates."
+        },
+        "initial_state": {
+          "$ref": "#/$defs/InitialConditions",
+          "description": "Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file)."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Parameter overrides, keyed by parameter name (local to this component).",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "time_span": {
+          "$ref": "#/$defs/TimeSpan"
+        },
+        "parameter_sweep": {
+          "$ref": "#/$defs/ParameterSweep",
+          "description": "Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory."
+        },
+        "plots": {
+          "type": "array",
+          "description": "Plot specifications derived from this example's run(s).",
+          "items": {
+            "$ref": "#/$defs/Plot"
+          }
+        }
+      }
+    },
     "DataLoaderSource": {
       "type": "object",
       "description": "File discovery configuration. Describes how to locate data files at runtime via URL templates with date/variable substitutions.",
-      "required": ["url_template"],
+      "required": [
+        "url_template"
+      ],
       "additionalProperties": false,
       "properties": {
         "url_template": {
@@ -815,11 +1966,12 @@ const schema = {
         "mirrors": {
           "type": "array",
           "description": "Ordered fallback URL templates. Runtime tries each in order, first is primary. Follows the same substitution grammar as url_template.",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-
     "DataLoaderTemporal": {
       "type": "object",
       "description": "Temporal coverage and record layout for a data source.",
@@ -845,8 +1997,16 @@ const schema = {
         },
         "records_per_file": {
           "oneOf": [
-            { "type": "integer", "minimum": 1 },
-            { "type": "string", "enum": ["auto"] }
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "enum": [
+                "auto"
+              ]
+            }
           ],
           "description": "Number of time records per file. \"auto\" means read from file at runtime."
         },
@@ -856,20 +2016,24 @@ const schema = {
         }
       }
     },
-
     "DataLoaderStaggering": {
       "type": "object",
       "description": "Per-dimension grid staggering (centered or edge-aligned).",
       "additionalProperties": {
         "type": "string",
-        "enum": ["center", "edge"]
+        "enum": [
+          "center",
+          "edge"
+        ]
       }
     },
-
     "DataLoaderSpatial": {
       "type": "object",
       "description": "Spatial grid description for a data source.",
-      "required": ["crs", "grid_type"],
+      "required": [
+        "crs",
+        "grid_type"
+      ],
       "additionalProperties": false,
       "properties": {
         "crs": {
@@ -888,29 +2052,37 @@ const schema = {
           ],
           "description": "Structural grid family. Use \"unstructured\" for mesh/point datasets."
         },
-        "staggering": { "$ref": "#/$defs/DataLoaderStaggering" },
+        "staggering": {
+          "$ref": "#/$defs/DataLoaderStaggering"
+        },
         "resolution": {
           "type": "object",
           "description": "Per-dimension resolution in native CRS units. Optional; some datasets only know this at runtime.",
-          "additionalProperties": { "type": "number" }
+          "additionalProperties": {
+            "type": "number"
+          }
         },
         "extent": {
           "type": "object",
           "description": "Per-dimension [min, max] extent in native CRS units. Optional; runtime can infer from files.",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "number" },
+            "items": {
+              "type": "number"
+            },
             "minItems": 2,
             "maxItems": 2
           }
         }
       }
     },
-
     "DataLoaderVariable": {
       "type": "object",
       "description": "A variable exposed by a data loader, mapped from a source-file variable.",
-      "required": ["file_variable", "units"],
+      "required": [
+        "file_variable",
+        "units"
+      ],
       "additionalProperties": false,
       "properties": {
         "file_variable": {
@@ -923,16 +2095,23 @@ const schema = {
         },
         "unit_conversion": {
           "oneOf": [
-            { "type": "number" },
-            { "$ref": "#/$defs/Expression" }
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Expression"
+            }
           ],
           "description": "Optional multiplicative factor or Expression AST applied to convert source-file values to the declared units."
         },
-        "description": { "type": "string" },
-        "reference": { "$ref": "#/$defs/Reference" }
+        "description": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
       }
     },
-
     "DataLoaderRegridding": {
       "type": "object",
       "description": "Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.",
@@ -944,80 +2123,150 @@ const schema = {
         },
         "extrapolation": {
           "type": "string",
-          "enum": ["clamp", "nan", "periodic"],
+          "enum": [
+            "clamp",
+            "nan",
+            "periodic"
+          ],
           "description": "Behavior when regridding targets fall outside the source extent. Defaults to \"clamp\"."
         }
       }
     },
-
     "DataLoaderMesh": {
       "type": "object",
-      "description": "Mesh-loader descriptor (esm-spec §8.9, discretization RFC §8.A). Only meaningful when the enclosing DataLoader has kind='mesh'.",
-      "required": ["topology", "connectivity_fields", "metric_fields"],
+      "description": "Mesh-loader descriptor (discretization RFC §8.A). Declares which loader fields are integer-typed connectivity tables vs float-typed metric arrays and the topological family the loader serves. Only meaningful when the enclosing DataLoader has kind='mesh'.",
+      "required": [
+        "topology",
+        "connectivity_fields",
+        "metric_fields"
+      ],
       "additionalProperties": false,
       "properties": {
         "topology": {
           "type": "string",
-          "enum": ["mpas_voronoi", "fesom_triangular", "icon_triangular"],
-          "description": "Closed topology enum."
+          "enum": [
+            "mpas_voronoi",
+            "fesom_triangular",
+            "icon_triangular"
+          ],
+          "description": "Closed topology enum. 'mpas_voronoi' is the v0.2.0 MVP; 'fesom_triangular' and 'icon_triangular' are reserved. Adding a new value is a minor version bump (RFC §8.A.1)."
         },
         "connectivity_fields": {
           "type": "array",
-          "items": { "type": "string" },
+          "description": "Integer-typed fields the loader exposes, which are referenceable from grids.<g>.connectivity.<name>.field (e.g. 'cellsOnEdge', 'edgesOnCell', 'verticesOnEdge', 'nEdgesOnCell').",
+          "items": {
+            "type": "string"
+          },
           "minItems": 1
         },
         "metric_fields": {
           "type": "array",
-          "items": { "type": "string" },
+          "description": "Float-typed fields the loader exposes, which are referenceable from grids.<g>.metric_arrays.<name>.generator.field (e.g. 'dcEdge', 'dvEdge', 'areaCell').",
+          "items": {
+            "type": "string"
+          },
           "minItems": 1
         },
         "dimension_sizes": {
           "type": "object",
+          "description": "Map of dimension name → integer extent or the literal string 'from_file'. Values feed grid-level parameters marked value='from_loader' (RFC §6.6).",
           "additionalProperties": {
             "oneOf": [
-              { "type": "integer", "minimum": 0 },
-              { "type": "string", "enum": ["from_file"] }
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "from_file"
+                ]
+              }
             ]
           }
         }
       }
     },
-
     "DataLoaderDeterminism": {
       "type": "object",
-      "description": "Reproducibility contract a loader advertises to bindings (esm-spec §8.9.2).",
+      "description": "Reproducibility contract a mesh (or grid) loader advertises to bindings (discretization RFC §8.A and §14 item 4). A binding that cannot honor the declared endian / float_format / integer_width MUST reject the file at load rather than silently reinterpreting bytes.",
       "additionalProperties": false,
       "properties": {
-        "endian": { "type": "string", "enum": ["little", "big"] },
-        "float_format": { "type": "string", "enum": ["ieee754_single", "ieee754_double"] },
-        "integer_width": { "type": "integer", "enum": [32, 64] }
+        "endian": {
+          "type": "string",
+          "enum": [
+            "little",
+            "big"
+          ],
+          "description": "Byte order of on-wire numeric fields."
+        },
+        "float_format": {
+          "type": "string",
+          "enum": [
+            "ieee754_single",
+            "ieee754_double"
+          ],
+          "description": "Floating-point format of metric fields."
+        },
+        "integer_width": {
+          "type": "integer",
+          "enum": [
+            32,
+            64
+          ],
+          "description": "Integer width (in bits) of connectivity fields."
+        }
       }
     },
-
     "DataLoader": {
       "type": "object",
       "description": "A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
-      "required": ["kind", "source", "variables"],
+      "required": [
+        "kind",
+        "source",
+        "variables"
+      ],
       "additionalProperties": false,
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["grid", "points", "static", "mesh"],
-          "description": "Structural kind of the dataset. 'grid' / 'points' / 'static' are the classical kinds; 'mesh' (esm-spec §8.9) declares a mesh loader. Scientific role is not schema-validated and belongs in metadata.tags."
+          "enum": [
+            "grid",
+            "points",
+            "static",
+            "mesh"
+          ],
+          "description": "Structural kind of the dataset. 'grid' / 'points' / 'static' are the classical kinds; 'mesh' (discretization RFC §8.A) declares a mesh loader that publishes integer connectivity tables and float metric arrays under mesh.connectivity_fields / mesh.metric_fields. Scientific role (emissions, meteorology, elevation, ...) is not schema-validated and belongs in metadata.tags."
         },
-        "source": { "$ref": "#/$defs/DataLoaderSource" },
-        "temporal": { "$ref": "#/$defs/DataLoaderTemporal" },
-        "spatial": { "$ref": "#/$defs/DataLoaderSpatial" },
-        "mesh": { "$ref": "#/$defs/DataLoaderMesh" },
-        "determinism": { "$ref": "#/$defs/DataLoaderDeterminism" },
+        "source": {
+          "$ref": "#/$defs/DataLoaderSource"
+        },
+        "temporal": {
+          "$ref": "#/$defs/DataLoaderTemporal"
+        },
+        "spatial": {
+          "$ref": "#/$defs/DataLoaderSpatial"
+        },
+        "mesh": {
+          "$ref": "#/$defs/DataLoaderMesh"
+        },
+        "determinism": {
+          "$ref": "#/$defs/DataLoaderDeterminism"
+        },
         "variables": {
           "type": "object",
           "description": "Variables exposed by this loader, keyed by schema-level variable name.",
           "minProperties": 1,
-          "additionalProperties": { "$ref": "#/$defs/DataLoaderVariable" }
+          "additionalProperties": {
+            "$ref": "#/$defs/DataLoaderVariable"
+          }
         },
-        "regridding": { "$ref": "#/$defs/DataLoaderRegridding" },
-        "reference": { "$ref": "#/$defs/Reference" },
+        "regridding": {
+          "$ref": "#/$defs/DataLoaderRegridding"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        },
         "metadata": {
           "type": "object",
           "description": "Free-form metadata about the data source. The \"tags\" field (array of strings) is conventional for expressing scientific role (e.g. \"emissions\", \"reanalysis\") and is not schema-validated.",
@@ -1025,49 +2274,73 @@ const schema = {
           "properties": {
             "tags": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             }
           }
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "kind": { "const": "mesh" } }, "required": ["kind"] },
-          "then": { "required": ["mesh"] }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mesh"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "mesh"
+            ]
+          }
         }
       ]
     },
-
     "EnumDeclaration": {
       "type": "object",
-      "description": "A file-local enum mapping symbolic names to positive integers (esm-spec §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.",
+      "description": "A file-local enum mapping symbolic names to positive integers (esm-spec.md §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.",
       "minProperties": 1,
       "additionalProperties": {
         "type": "integer",
         "minimum": 1
       }
     },
-
     "TranslateTarget": {
       "description": "Translation target: a simple variable reference string or an object with var and factor.",
       "oneOf": [
-        { "type": "string" },
+        {
+          "type": "string"
+        },
         {
           "type": "object",
-          "required": ["var"],
+          "required": [
+            "var"
+          ],
           "additionalProperties": false,
           "properties": {
-            "var": { "type": "string" },
-            "factor": { "type": "number" }
+            "var": {
+              "type": "string"
+            },
+            "factor": {
+              "type": "number"
+            }
           }
         }
       ]
     },
-
     "ConnectorEquation": {
       "type": "object",
       "description": "A single equation in a ConnectorSystem linking two coupled systems.",
-      "required": ["from", "to", "transform"],
+      "required": [
+        "from",
+        "to",
+        "transform"
+      ],
       "additionalProperties": false,
       "properties": {
         "from": {
@@ -1080,7 +2353,11 @@ const schema = {
         },
         "transform": {
           "type": "string",
-          "enum": ["additive", "multiplicative", "replacement"],
+          "enum": [
+            "additive",
+            "multiplicative",
+            "replacement"
+          ],
           "description": "How the expression modifies the target."
         },
         "expression": {
@@ -1089,29 +2366,43 @@ const schema = {
         }
       }
     },
-
     "CouplingEntry": {
-      "description": "A single coupling rule connecting models, reaction systems, data loaders, or operators.",
+      "description": "A single coupling rule connecting models, reaction systems, or data loaders.",
       "oneOf": [
-        { "$ref": "#/$defs/CouplingOperatorCompose" },
-        { "$ref": "#/$defs/CouplingCouple" },
-        { "$ref": "#/$defs/CouplingVariableMap" },
-        { "$ref": "#/$defs/CouplingOperatorApply" },
-        { "$ref": "#/$defs/CouplingCallback" },
-        { "$ref": "#/$defs/CouplingEvent" }
+        {
+          "$ref": "#/$defs/CouplingOperatorCompose"
+        },
+        {
+          "$ref": "#/$defs/CouplingCouple"
+        },
+        {
+          "$ref": "#/$defs/CouplingVariableMap"
+        },
+        {
+          "$ref": "#/$defs/CouplingCallback"
+        },
+        {
+          "$ref": "#/$defs/CouplingEvent"
+        }
       ]
     },
-
     "CouplingOperatorCompose": {
       "type": "object",
       "description": "Match LHS time derivatives and add RHS terms together.",
-      "required": ["type", "systems"],
+      "required": [
+        "type",
+        "systems"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "operator_compose" },
+        "type": {
+          "const": "operator_compose"
+        },
         "systems": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 2,
           "maxItems": 2,
           "description": "The two systems to compose."
@@ -1119,48 +2410,99 @@ const schema = {
         "translate": {
           "type": "object",
           "description": "Variable mappings when LHS variables don't have matching names.",
-          "additionalProperties": { "$ref": "#/$defs/TranslateTarget" }
+          "additionalProperties": {
+            "$ref": "#/$defs/TranslateTarget"
+          }
         },
-        "description": { "type": "string" }
+        "interface": {
+          "type": "string",
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
+        },
+        "lifting": {
+          "type": "string",
+          "enum": [
+            "pointwise",
+            "broadcast",
+            "mean",
+            "integral"
+          ],
+          "description": "Strategy for mapping between 0D and spatial systems."
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "CouplingCouple": {
       "type": "object",
-      "description": "Bi-directional coupling via connector equations.",
-      "required": ["type", "systems", "connector"],
+      "description": "Bi-directional coupling via explicit ConnectorSystem equations.",
+      "required": [
+        "type",
+        "systems",
+        "connector"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "couple" },
+        "type": {
+          "const": "couple"
+        },
         "systems": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 2,
           "maxItems": 2
         },
         "connector": {
           "type": "object",
-          "required": ["equations"],
+          "required": [
+            "equations"
+          ],
           "additionalProperties": false,
           "properties": {
             "equations": {
               "type": "array",
-              "items": { "$ref": "#/$defs/ConnectorEquation" },
+              "items": {
+                "$ref": "#/$defs/ConnectorEquation"
+              },
               "minItems": 1
             }
           }
         },
-        "description": { "type": "string" }
+        "interface": {
+          "type": "string",
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
+        },
+        "lifting": {
+          "type": "string",
+          "enum": [
+            "pointwise",
+            "broadcast",
+            "mean",
+            "integral"
+          ],
+          "description": "Strategy for mapping between 0D and spatial systems."
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "CouplingVariableMap": {
       "type": "object",
       "description": "Replace a parameter in one system with a variable from another.",
-      "required": ["type", "from", "to", "transform"],
+      "required": [
+        "type",
+        "from",
+        "to",
+        "transform"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "variable_map" },
+        "type": {
+          "const": "variable_map"
+        },
         "from": {
           "type": "string",
           "description": "Source variable (scoped reference, e.g., \"GEOSFP.T\")."
@@ -1171,7 +2513,13 @@ const schema = {
         },
         "transform": {
           "type": "string",
-          "enum": ["param_to_var", "identity", "additive", "multiplicative", "conversion_factor"],
+          "enum": [
+            "param_to_var",
+            "identity",
+            "additive",
+            "multiplicative",
+            "conversion_factor"
+          ],
           "description": "How the mapping is applied."
         },
         "factor": {
@@ -1180,38 +2528,35 @@ const schema = {
         },
         "interface": {
           "type": "string",
-          "description": "Name of the interface this mapping uses."
+          "description": "Name of an interface from the interfaces section for cross-domain coupling."
         },
         "lifting": {
           "type": "string",
-          "description": "Lifting strategy (e.g., pointwise, interpolation)."
+          "enum": [
+            "pointwise",
+            "broadcast",
+            "mean",
+            "integral"
+          ],
+          "description": "Strategy for mapping between 0D and spatial systems."
         },
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       }
     },
-
-    "CouplingOperatorApply": {
-      "type": "object",
-      "description": "Register an Operator to run during simulation.",
-      "required": ["type", "operator"],
-      "additionalProperties": false,
-      "properties": {
-        "type": { "const": "operator_apply" },
-        "operator": {
-          "type": "string",
-          "description": "Name of the operator (key in the operators section)."
-        },
-        "description": { "type": "string" }
-      }
-    },
-
     "CouplingCallback": {
       "type": "object",
       "description": "Register a callback for simulation events.",
-      "required": ["type", "callback_id"],
+      "required": [
+        "type",
+        "callback_id"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "callback" },
+        "type": {
+          "const": "callback"
+        },
         "callback_id": {
           "type": "string",
           "description": "Registered identifier for the callback."
@@ -1220,20 +2565,29 @@ const schema = {
           "type": "object",
           "additionalProperties": true
         },
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "CouplingEvent": {
       "type": "object",
       "description": "Cross-system event involving variables from multiple coupled systems.",
-      "required": ["type", "event_type"],
+      "required": [
+        "type",
+        "event_type"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "event" },
+        "type": {
+          "const": "event"
+        },
         "event_type": {
           "type": "string",
-          "enum": ["continuous", "discrete"],
+          "enum": [
+            "continuous",
+            "discrete"
+          ],
           "description": "Whether this is a continuous or discrete event."
         },
         "name": {
@@ -1242,7 +2596,9 @@ const schema = {
         },
         "conditions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Expression" },
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
           "description": "Condition expressions (zero-crossing for continuous, boolean for discrete)."
         },
         "trigger": {
@@ -1251,7 +2607,9 @@ const schema = {
         },
         "affects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/AffectEquation" },
+          "items": {
+            "$ref": "#/$defs/AffectEquation"
+          },
           "description": "Affect equations. Required unless functional_affect is used."
         },
         "functional_affect": {
@@ -1260,174 +2618,371 @@ const schema = {
         },
         "affect_neg": {
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "array",
-              "items": { "$ref": "#/$defs/AffectEquation" }
+              "items": {
+                "$ref": "#/$defs/AffectEquation"
+              }
             }
           ]
         },
         "discrete_parameters": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "root_find": {
           "type": "string",
-          "enum": ["left", "right", "all"]
+          "enum": [
+            "left",
+            "right",
+            "all"
+          ]
         },
-        "reinitialize": { "type": "boolean" },
-        "description": { "type": "string" }
+        "reinitialize": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
       },
       "oneOf": [
-        { "required": ["affects"] },
-        { "required": ["functional_affect"] }
+        {
+          "required": [
+            "affects"
+          ]
+        },
+        {
+          "required": [
+            "functional_affect"
+          ]
+        }
       ],
       "allOf": [
         {
           "if": {
-            "properties": { "event_type": { "const": "continuous" } }
+            "properties": {
+              "event_type": {
+                "const": "continuous"
+              }
+            }
           },
           "then": {
-            "required": ["conditions"]
+            "required": [
+              "conditions"
+            ]
           }
         },
         {
           "if": {
-            "properties": { "event_type": { "const": "discrete" } }
+            "properties": {
+              "event_type": {
+                "const": "discrete"
+              }
+            }
           },
           "then": {
-            "required": ["trigger"]
+            "required": [
+              "trigger"
+            ]
           }
         }
       ]
     },
-
     "SpatialDimension": {
       "type": "object",
       "description": "Specification of a single spatial dimension.",
-      "required": ["min", "max"],
+      "required": [
+        "min",
+        "max"
+      ],
       "additionalProperties": false,
       "properties": {
-        "min": { "type": "number" },
-        "max": { "type": "number" },
-        "units": { "type": "string" },
-        "grid_spacing": { "type": "number", "exclusiveMinimum": 0 }
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "units": {
+          "type": "string"
+        },
+        "grid_spacing": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
       }
     },
-
     "CoordinateTransform": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
+        "id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "dimensions": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-
     "InitialConditions": {
-      "description": "Initial conditions for state variables.",
+      "description": "Initial conditions for state variables. Four shapes: `constant` (uniform scalar), `per_variable` (uniform per variable), `from_file` (load a precomputed field), and `expression` (per-variable Expressions over the component's domain coordinates — a serializable closed-form initial field for PDE components).",
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "const": "constant" },
-            "value": { "type": "number" }
-          }
-        },
-        {
-          "type": "object",
-          "required": ["type", "values"],
-          "additionalProperties": false,
-          "properties": {
-            "type": { "const": "per_variable" },
-            "values": {
-              "type": "object",
-              "additionalProperties": { "type": "number" }
+            "type": {
+              "const": "constant"
+            },
+            "value": {
+              "type": "number"
             }
           }
         },
         {
           "type": "object",
-          "required": ["type", "path"],
+          "required": [
+            "type",
+            "values"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "const": "from_file" },
-            "path": { "type": "string" },
-            "format": { "type": "string" }
+            "type": {
+              "const": "per_variable"
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "from_file"
+            },
+            "path": {
+              "type": "string"
+            },
+            "format": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "values"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "expression"
+            },
+            "values": {
+              "type": "object",
+              "description": "Map from variable name to an Expression that yields the variable's initial field. Free symbols in the Expression MUST be names of the component domain's spatial dimensions (e.g., \"x\", \"y\"). The runtime evaluates the Expression at every grid point to produce u(x, 0). Only meaningful on PDE (≥1-D spatial) components.",
+              "additionalProperties": {
+                "$ref": "#/$defs/Expression"
+              },
+              "minProperties": 1
+            }
           }
         }
       ]
     },
-
-    "BoundaryCondition": {
+    "DeprecatedDomainBoundaryCondition": {
       "type": "object",
-      "description": "Boundary condition for one or more dimensions.",
-      "required": ["type", "dimensions"],
+      "description": "DEPRECATED v0.1.0 domain-level boundary condition entry. Retained for the v0.2.0 transitional window only (RFC §10.1). Loaders emit E_DEPRECATED_DOMAIN_BC when encountering it; use Model.boundary_conditions (keyed map of BoundaryCondition entries) instead.",
+      "deprecated": true,
+      "required": [
+        "type",
+        "dimensions"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["constant", "zero_gradient", "periodic", "dirichlet", "neumann", "robin"],
-          "description": "constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n = 0; periodic = wrap-around; robin = αu + β∂u/∂n = γ."
+          "enum": [
+            "constant",
+            "zero_gradient",
+            "periodic",
+            "dirichlet",
+            "neumann",
+            "robin"
+          ]
         },
         "dimensions": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 1
         },
         "value": {
-          "type": "number",
-          "description": "Boundary value (for constant type)."
+          "type": "number"
         },
         "function": {
-          "type": "string",
-          "description": "Function specification for time/space-varying boundaries."
+          "type": "string"
         },
         "robin_alpha": {
-          "type": "number",
-          "description": "Robin BC coefficient α for u term in αu + β∂u/∂n = γ."
+          "type": "number"
         },
         "robin_beta": {
-          "type": "number",
-          "description": "Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ."
+          "type": "number"
         },
         "robin_gamma": {
-          "type": "number",
-          "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ."
+          "type": "number"
         }
       }
     },
-
-    "Interface": {
+    "BoundaryCondition": {
       "type": "object",
-      "description": "A coupling interface between domains.",
-      "additionalProperties": true,
+      "description": "Model-level boundary condition entry (v0.2.0). Constrains one model variable on one boundary side. See docs/rfcs/discretization.md §9.2 for full semantics. This object lives under models.<M>.boundary_conditions keyed by user-supplied id; it replaces the v0.1.0 domains.<d>.boundary_conditions list.",
+      "required": [
+        "variable",
+        "side",
+        "kind"
+      ],
+      "additionalProperties": false,
       "properties": {
-        "description": { "type": "string" },
-        "domains": {
+        "variable": {
+          "type": "string",
+          "description": "Name of the model variable the BC constrains. Must resolve to a variable declared in the enclosing model's variables map (or a dot-qualified subsystem variable)."
+        },
+        "side": {
+          "type": "string",
+          "description": "Boundary side the BC applies to. Closed-vocabulary axis sides ('xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'tmin', 'tmax'), grid-family-specific seams ('panel_seam' for cubed-sphere), or generic unstructured boundary markers ('mesh_boundary'). Authors MAY introduce additional named sides (e.g., 'north', 'surface') provided the grid they reference declares them."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "constant",
+            "dirichlet",
+            "neumann",
+            "robin",
+            "zero_gradient",
+            "periodic",
+            "flux_contrib"
+          ],
+          "description": "BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n-based; robin = αu + β∂u/∂n = γ; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template."
+        },
+        "value": {
+          "description": "BC value: numeric literal, variable/parameter reference string, or expression AST. Required for kind='constant' and kind='dirichlet'; semantics for other kinds per RFC §9.2.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "robin_alpha": {
+          "description": "Robin BC coefficient α for the u term in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "robin_beta": {
+          "description": "Robin BC coefficient β for the ∂u/∂n term in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "robin_gamma": {
+          "description": "Robin BC RHS value γ in αu + β∂u/∂n = γ.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "face_coords": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Domain names this interface connects."
+          "description": "Reduced face-coordinate index names used when `value` contains an `index` op into a loader-provided time-varying field (§9.2 / §8.A.3). E.g., for side='zmin' on a 3D grid, face_coords: ['i', 'j']. Omit when `value` does not index into a time-varying loader field.",
+          "items": {
+            "type": "string"
+          }
         },
-        "dimension_mapping": {
+        "contributed_by": {
           "type": "object",
-          "description": "How dimensions map across the interface.",
-          "additionalProperties": true
+          "description": "Optional component-contribution marker identifying the model component (deposition, emissions, surface-flux scheme) providing this flux. The rewrite engine sums all flux_contrib entries for the same (variable, side) pair into a single aggregated flux, then applies the enclosing kind's BC template. See RFC §9.3.",
+          "additionalProperties": false,
+          "required": [
+            "component"
+          ],
+          "properties": {
+            "component": {
+              "type": "string",
+              "description": "Name of the contributing component."
+            },
+            "flux_sign": {
+              "type": "string",
+              "enum": [
+                "+",
+                "-"
+              ],
+              "description": "Sign of the contribution in the aggregated flux sum. Default '+'.",
+              "default": "+"
+            }
+          }
         },
-        "regridding": {
-          "type": "object",
-          "description": "Regridding configuration.",
-          "additionalProperties": true
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the BC."
         }
       }
     },
-
     "Domain": {
       "type": "object",
       "description": "Spatiotemporal domain specification (DomainInfo).",
@@ -1442,32 +2997,54 @@ const schema = {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "start": { "type": "string", "format": "date-time" },
-            "end": { "type": "string", "format": "date-time" },
-            "reference_time": { "type": "string", "format": "date-time" }
+            "start": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "end": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "reference_time": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
         "spatial": {
           "type": "object",
           "description": "Spatial dimensions, keyed by name (e.g., lon, lat, lev).",
-          "additionalProperties": { "$ref": "#/$defs/SpatialDimension" }
+          "additionalProperties": {
+            "$ref": "#/$defs/SpatialDimension"
+          }
         },
         "coordinate_transforms": {
           "type": "array",
-          "items": { "$ref": "#/$defs/CoordinateTransform" }
+          "items": {
+            "$ref": "#/$defs/CoordinateTransform"
+          }
         },
         "spatial_ref": {
           "type": "string",
           "description": "Coordinate reference system (e.g., \"WGS84\")."
         },
-        "initial_conditions": { "$ref": "#/$defs/InitialConditions" },
+        "initial_conditions": {
+          "$ref": "#/$defs/InitialConditions"
+        },
         "boundary_conditions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/BoundaryCondition" }
+          "description": "DEPRECATED (v0.2.0, RFC §10.1): domain-level boundary_conditions is superseded by model-level boundary_conditions (models.<M>.boundary_conditions). Retained in the schema only as a transitional compatibility shim; loaders MUST emit E_DEPRECATED_DOMAIN_BC when this field is present. A follow-up release will remove this field entirely.",
+          "deprecated": true,
+          "items": {
+            "$ref": "#/$defs/DeprecatedDomainBoundaryCondition"
+          }
         },
         "element_type": {
           "type": "string",
-          "enum": ["Float32", "Float64"],
+          "enum": [
+            "Float32",
+            "Float64"
+          ],
           "description": "Floating point precision.",
           "default": "Float64"
         },
@@ -1478,315 +3055,2139 @@ const schema = {
         }
       }
     },
-
-    "Tolerance": {
+    "InterfaceConstraint": {
       "type": "object",
+      "description": "Constraint on a non-shared dimension at the interface.",
+      "required": [
+        "value"
+      ],
       "additionalProperties": false,
       "properties": {
-        "abs": { "type": "number", "minimum": 0 },
-        "rel": { "type": "number", "minimum": 0 }
-      }
-    },
-
-    "Assertion": {
-      "type": "object",
-      "required": ["variable", "time", "expected"],
-      "additionalProperties": false,
-      "properties": {
-        "variable": { "type": "string" },
-        "time": { "type": "number" },
-        "expected": { "type": "number" },
-        "tolerance": { "$ref": "#/$defs/Tolerance" }
-      }
-    },
-
-    "TimeSpan": {
-      "type": "object",
-      "required": ["start", "end"],
-      "additionalProperties": false,
-      "properties": {
-        "start": { "type": "number" },
-        "end": { "type": "number" }
-      }
-    },
-
-    "Test": {
-      "type": "object",
-      "required": ["id", "time_span", "assertions"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "initial_conditions": {
-          "type": "object",
-          "additionalProperties": { "type": "number" }
+        "value": {
+          "description": "Where the dimension is constrained: 'min', 'max', 'boundary', or a numeric coordinate.",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "min",
+                "max",
+                "boundary"
+              ]
+            },
+            {
+              "type": "number"
+            }
+          ]
         },
-        "parameter_overrides": {
-          "type": "object",
-          "additionalProperties": { "type": "number" }
-        },
-        "time_span": { "$ref": "#/$defs/TimeSpan" },
-        "tolerance": { "$ref": "#/$defs/Tolerance" },
-        "assertions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Assertion" },
-          "minItems": 1
+        "description": {
+          "type": "string"
         }
       }
     },
-
-    "SweepRange": {
-      "type": "object",
-      "required": ["start", "stop", "count"],
-      "additionalProperties": false,
-      "properties": {
-        "start": { "type": "number" },
-        "stop":  { "type": "number" },
-        "count": { "type": "integer", "minimum": 2 },
-        "scale": { "type": "string", "enum": ["linear", "log"], "default": "linear" }
-      }
-    },
-
-    "SweepDimension": {
-      "type": "object",
-      "required": ["parameter"],
-      "additionalProperties": false,
-      "properties": {
-        "parameter": { "type": "string" },
-        "values": {
-          "type": "array",
-          "items": { "type": "number" },
-          "minItems": 1
-        },
-        "range": { "$ref": "#/$defs/SweepRange" }
-      },
-      "oneOf": [
-        { "required": ["values"] },
-        { "required": ["range"] }
-      ]
-    },
-
-    "ParameterSweep": {
-      "type": "object",
-      "required": ["type", "dimensions"],
-      "additionalProperties": false,
-      "properties": {
-        "type": { "type": "string", "enum": ["cartesian"] },
-        "dimensions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/SweepDimension" },
-          "minItems": 1
-        }
-      }
-    },
-
-    "PlotAxis": {
-      "type": "object",
-      "required": ["variable"],
-      "additionalProperties": false,
-      "properties": {
-        "variable": { "type": "string" },
-        "label": { "type": "string" }
-      }
-    },
-
-    "PlotValue": {
-      "type": "object",
-      "required": ["variable"],
-      "additionalProperties": false,
-      "properties": {
-        "variable": { "type": "string" },
-        "at_time": { "type": "number" },
-        "reduce": { "type": "string", "enum": ["max", "min", "mean", "integral", "final"] }
-      }
-    },
-
-    "PlotSeries": {
-      "type": "object",
-      "required": ["name", "variable"],
-      "additionalProperties": false,
-      "properties": {
-        "name": { "type": "string" },
-        "variable": { "type": "string" }
-      }
-    },
-
-    "Plot": {
-      "type": "object",
-      "required": ["id", "type", "x", "y"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "type": "string" },
-        "type": { "type": "string", "enum": ["line", "scatter", "heatmap"] },
-        "description": { "type": "string" },
-        "x": { "$ref": "#/$defs/PlotAxis" },
-        "y": { "$ref": "#/$defs/PlotAxis" },
-        "value": { "$ref": "#/$defs/PlotValue" },
-        "series": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/PlotSeries" }
-        }
-      },
-      "if": {
-        "properties": { "type": { "const": "heatmap" } }
-      },
-      "then": {
-        "required": ["value"]
-      }
-    },
-
-    "Example": {
-      "type": "object",
-      "required": ["id", "time_span"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "initial_state": { "$ref": "#/$defs/InitialConditions" },
-        "parameters": {
-          "type": "object",
-          "additionalProperties": { "type": "number" }
-        },
-        "time_span": { "$ref": "#/$defs/TimeSpan" },
-        "parameter_sweep": { "$ref": "#/$defs/ParameterSweep" },
-        "plots": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Plot" }
-        }
-      }
-    },
-
     "GridMetricGenerator": {
       "type": "object",
-      "description": "Generator for a grid metric array (RFC §6.5). Exactly one kind: 'expression', 'loader', or 'builtin'.",
-      "required": ["kind"],
+      "description": "Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently 'gnomonic_c6_neighbors' and 'gnomonic_c6_d4_action'; adding a new builtin is a minor version bump per §6.4.1).",
+      "required": [
+        "kind"
+      ],
       "additionalProperties": false,
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["expression", "loader", "builtin"]
-        },
-        "expr": {
-          "oneOf": [
-            { "type": "number" },
-            { "type": "string" },
-            { "$ref": "#/$defs/ExpressionNode" }
+          "enum": [
+            "expression",
+            "loader",
+            "builtin"
           ]
         },
-        "loader": { "type": "string" },
-        "field": { "type": "string" },
-        "name": { "type": "string" }
+        "expr": {
+          "description": "For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "loader": {
+          "type": "string",
+          "description": "For kind='loader': name of a data_loaders entry that produces the array."
+        },
+        "field": {
+          "type": "string",
+          "description": "For kind='loader': named field within the referenced loader's output."
+        },
+        "name": {
+          "type": "string",
+          "description": "For kind='builtin': canonical name from the closed set defined in §6.4 (currently 'gnomonic_c6_neighbors', 'gnomonic_c6_d4_action'). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN."
+        }
       },
       "allOf": [
-        { "if": { "properties": { "kind": { "const": "expression" } }, "required": ["kind"] },
-          "then": { "required": ["expr"] } },
-        { "if": { "properties": { "kind": { "const": "loader" } }, "required": ["kind"] },
-          "then": { "required": ["loader", "field"] } },
-        { "if": { "properties": { "kind": { "const": "builtin" } }, "required": ["kind"] },
-          "then": { "required": ["name"] } }
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "expression"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "expr"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "loader"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "loader",
+              "field"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "builtin"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "name"
+            ]
+          }
+        }
       ]
     },
-
     "GridMetricArray": {
       "type": "object",
-      "description": "A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See RFC §6.5.",
-      "required": ["rank", "generator"],
+      "description": "A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.",
+      "required": [
+        "rank",
+        "generator"
+      ],
       "additionalProperties": false,
       "properties": {
-        "rank": { "type": "integer", "minimum": 0 },
-        "dim": { "type": "string" },
+        "rank": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tensor rank of the array: 0 = scalar (uniform spacing), 1 = 1D along a single dim, 2+ = multidimensional."
+        },
+        "dim": {
+          "type": "string",
+          "description": "For rank=1: the dimension the array is indexed by (one of the grid's dimensions)."
+        },
         "dims": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          },
+          "description": "For rank≥2: ordered list of dimensions the array is indexed by."
         },
-        "shape": { "type": "array" },
-        "generator": { "$ref": "#/$defs/GridMetricGenerator" }
+        "shape": {
+          "type": "array",
+          "description": "Optional declared shape (parameter names or integer literals per dimension). Used by connectivity/panel tables; redundant with dim/dims for metric arrays."
+        },
+        "generator": {
+          "$ref": "#/$defs/GridMetricGenerator"
+        }
       }
     },
-
     "GridConnectivity": {
       "type": "object",
-      "description": "Unstructured-grid connectivity table (e.g., cellsOnEdge) or cubed-sphere panel_connectivity. See RFC §6.3 and §6.4.",
-      "required": ["shape", "rank"],
+      "description": "Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-indexed lookup produced by a mesh loader. See §6.3.",
+      "required": [
+        "shape",
+        "rank"
+      ],
       "additionalProperties": false,
       "properties": {
-        "shape": { "type": "array" },
-        "rank": { "type": "integer", "minimum": 1 },
-        "loader": { "type": "string" },
-        "field": { "type": "string" },
-        "generator": { "$ref": "#/$defs/GridMetricGenerator" }
+        "shape": {
+          "type": "array",
+          "description": "Ordered list of dimension sizes (parameter names or integer literals). E.g., ['nEdges', 2] for cellsOnEdge."
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "loader": {
+          "type": "string",
+          "description": "Name of a data_loaders entry that supplies this table."
+        },
+        "field": {
+          "type": "string",
+          "description": "Named field within the referenced loader's output."
+        },
+        "generator": {
+          "$ref": "#/$defs/GridMetricGenerator",
+          "description": "Alternative to loader/field: for generator-backed connectivity (e.g., cubed-sphere panel_connectivity uses kind='builtin')."
+        }
       }
     },
-
     "GridExtent": {
       "type": "object",
-      "description": "Per-dimension extent for cartesian or cubed_sphere grids (RFC §6.2, §6.4).",
-      "required": ["n"],
+      "description": "Per-dimension extent for cartesian or cubed_sphere grids. `n` is either an integer literal or a parameter reference naming the dimension count; `spacing` is 'uniform' or 'nonuniform' for cartesian (determines whether metric arrays are scalar or rank-1).",
+      "required": [
+        "n"
+      ],
       "additionalProperties": false,
       "properties": {
         "n": {
           "oneOf": [
-            { "type": "integer", "minimum": 1 },
-            { "type": "string" }
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string"
+            }
           ]
         },
         "spacing": {
           "type": "string",
-          "enum": ["uniform", "nonuniform"]
+          "enum": [
+            "uniform",
+            "nonuniform"
+          ]
         }
       }
     },
-
     "Grid": {
       "type": "object",
-      "description": "A named discretization grid (v0.2.0, RFC §6). Selects one of three topologies via `family`: cartesian / unstructured / cubed_sphere.",
-      "required": ["family", "dimensions"],
+      "description": "A named discretization grid. The `family` selects one of three topologies (cartesian / unstructured / cubed_sphere) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.",
+      "required": [
+        "family",
+        "dimensions"
+      ],
       "additionalProperties": false,
       "properties": {
         "family": {
           "type": "string",
-          "enum": ["cartesian", "unstructured", "cubed_sphere"]
+          "enum": [
+            "cartesian",
+            "unstructured",
+            "cubed_sphere"
+          ]
         },
-        "description": { "type": "string" },
+        "description": {
+          "type": "string"
+        },
         "dimensions": {
           "type": "array",
-          "items": { "type": "string" },
-          "minItems": 1
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Ordered list of logical dimension names."
         },
         "locations": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          },
+          "description": "Declared stagger locations used by variables on this grid (see §11)."
         },
         "metric_arrays": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/GridMetricArray" }
+          "additionalProperties": {
+            "$ref": "#/$defs/GridMetricArray"
+          }
         },
         "parameters": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+          "description": "Grid-level parameters. Reuses the ordinary ESM Parameter schema. Parameters with value='from_loader' are resolved at load time from a referenced data_loaders entry (§6.6).",
+          "additionalProperties": {
+            "$ref": "#/$defs/Parameter"
+          }
         },
-        "domain": { "type": "string" },
+        "domain": {
+          "type": "string",
+          "description": "Optional name of the domains entry this grid refines. If a domain declares grid_spacing for the same dimension, the grid's extents.<dim>.spacing wins (§6.1)."
+        },
         "extents": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/GridExtent" }
+          "description": "Per-dimension extents. Required for 'cartesian' and 'cubed_sphere'; not used by 'unstructured'.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GridExtent"
+          }
         },
         "connectivity": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/GridConnectivity" }
+          "description": "Unstructured-family connectivity tables. Keys are table names (e.g., cellsOnEdge). Required for 'unstructured'; forbidden otherwise.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GridConnectivity"
+          }
         },
         "panel_connectivity": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/GridConnectivity" }
+          "description": "Cubed-sphere panel_connectivity tables (e.g., neighbors, axis_flip). Required for 'cubed_sphere'; forbidden otherwise. Typically built from the gnomonic_c6_* builtins.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GridConnectivity"
+          }
         }
       },
       "allOf": [
-        { "if": { "properties": { "family": { "const": "cartesian" } }, "required": ["family"] },
-          "then": { "required": ["extents"] } },
-        { "if": { "properties": { "family": { "const": "unstructured" } }, "required": ["family"] },
-          "then": { "required": ["connectivity"] } },
-        { "if": { "properties": { "family": { "const": "cubed_sphere" } }, "required": ["family"] },
-          "then": { "required": ["extents", "panel_connectivity"] } }
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "cartesian"
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "required": [
+              "extents"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "unstructured"
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "required": [
+              "connectivity"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "cubed_sphere"
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "required": [
+              "extents",
+              "panel_connectivity"
+            ]
+          }
+        }
       ]
+    },
+    "Interface": {
+      "type": "object",
+      "description": "Geometric connection between two domains of potentially different dimensionality.",
+      "required": [
+        "domains",
+        "dimension_mapping"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The two domains connected by this interface."
+        },
+        "dimension_mapping": {
+          "type": "object",
+          "description": "Specifies shared dimensions and constraints.",
+          "additionalProperties": false,
+          "properties": {
+            "shared": {
+              "type": "object",
+              "description": "Mapping of corresponding dimensions across domains, keyed by 'domain.dimension'.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "constraints": {
+              "type": "object",
+              "description": "Non-shared dimensions fixed at the interface, keyed by 'domain.dimension'.",
+              "additionalProperties": {
+                "$ref": "#/$defs/InterfaceConstraint"
+              }
+            }
+          }
+        },
+        "regridding": {
+          "type": "object",
+          "description": "Regridding strategy when shared dimensions differ in resolution.",
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "bilinear",
+                "conservative",
+                "nearest",
+                "patch"
+              ],
+              "description": "Interpolation method for regridding."
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "PatternNode": {
+      "description": "A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.",
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PatternNode"
+          }
+        }
+      ]
+    },
+    "RuleGuard": {
+      "type": "object",
+      "description": "A rule-selection-time guard constraining a pattern-variable binding. Drawn from the §5.2.4 closed vocabulary; unknown guard names MUST be rejected at parse time.",
+      "required": [
+        "guard"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "guard": {
+          "type": "string",
+          "description": "Guard name (one of the §5.2.4 closed set: 'dim_is_spatial_dim_of', 'var_location_is', 'var_has_grid', 'dim_is_periodic', 'dim_is_nonuniform', 'var_shape_rank', 'var_is_spatial_dim_of' legacy alias).",
+          "enum": [
+            "dim_is_spatial_dim_of",
+            "var_is_spatial_dim_of",
+            "var_location_is",
+            "var_has_grid",
+            "dim_is_periodic",
+            "dim_is_nonuniform",
+            "var_shape_rank"
+          ]
+        },
+        "pvar": {
+          "type": "string",
+          "description": "Pattern variable the guard constrains (prefixed '$')."
+        }
+      }
+    },
+    "RuleRegion": {
+      "description": "Spatial scope of a rule (discretization RFC §7.2). When absent the rule applies everywhere the pattern matches. When a string, it is an informational/advisory tag with no runtime effect (legacy form from v0.2 §5.2). When an object, it is a normative scoping predicate evaluated per query point; the rule applies ONLY at points satisfying the predicate, and falls through to the next matching rule otherwise.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Legacy advisory tag. No runtime effect — authors may group rules by region in editors but the rule engine does not consult it."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "boundary",
+                "panel_boundary",
+                "mask_field",
+                "index_range"
+              ],
+              "description": "Scope variant tag."
+            },
+            "side": {
+              "type": "string",
+              "description": "For kind='boundary' and kind='panel_boundary': the boundary side (e.g. 'xmin', 'xmax', 'west', 'east', 'south', 'north', 'top', 'bottom'). Site-specific sides (seams) are permitted when declared by the grid.",
+              "enum": [
+                "xmin",
+                "xmax",
+                "ymin",
+                "ymax",
+                "zmin",
+                "zmax",
+                "tmin",
+                "tmax",
+                "west",
+                "east",
+                "south",
+                "north",
+                "top",
+                "bottom",
+                "panel_seam",
+                "mesh_boundary"
+              ]
+            },
+            "panel": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "For kind='panel_boundary' (cubed_sphere): panel index. Combined with 'side' to identify a specific panel edge."
+            },
+            "field": {
+              "type": "string",
+              "description": "For kind='mask_field': name of a data_loaders entry OR a boolean-typed model variable whose per-point value gates rule application (truthy ⇒ rule applies)."
+            },
+            "axis": {
+              "type": "string",
+              "description": "For kind='index_range': canonical grid-family index name (cartesian: 'i', 'j', 'k', 'l', 'm'; cubed_sphere: 'i', 'j'; unstructured: 'c', 'e', 'v' or a reduction 'k_bound' name)."
+            },
+            "lo": {
+              "type": "integer",
+              "description": "For kind='index_range': inclusive lower bound on the axis index."
+            },
+            "hi": {
+              "type": "integer",
+              "description": "For kind='index_range': inclusive upper bound on the axis index."
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "boundary"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "side"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "panel_boundary"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "panel",
+                  "side"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "mask_field"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "field"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "index_range"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "axis",
+                  "lo",
+                  "hi"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Rule": {
+      "type": "object",
+      "description": "A single rewrite rule (discretization RFC §5.2). Matches an AST pattern with pattern variables, optionally guarded, and replaces the match with an inline AST ('replacement') or a named scheme ('use'). Region-of-applicability and per-point predicates are optional.",
+      "required": [
+        "pattern"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Rule identifier. When rules are authored as an object keyed by name, the name is the key; when rules are authored as an array, 'name' is a required field of each entry."
+        },
+        "pattern": {
+          "$ref": "#/$defs/PatternNode",
+          "description": "Match pattern — an AST with '$'-prefixed pattern variables (§5.2). Depth and shape are enforced by the rule engine, not the schema."
+        },
+        "where": {
+          "description": "Rule-selection-time predicate. Accepts either (a) an ARRAY of §5.2.4 guard objects constraining pattern-variable bindings before the rule fires, or (b) an OBJECT expression-AST predicate evaluated per query point (§7.2; reuses §4 expression ops — e.g. {\"op\":\"==\",\"args\":[\"i\",0]}) whose value is coerced to bool. When an expression predicate is supplied, the rule applies ONLY at points where it evaluates true; the engine falls through to the next matching rule otherwise. Bindings that do not implement the per-point evaluator treat an object 'where' as a load-time parse success plus a runtime no-op that disables the rule (conservative fall-through).",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RuleGuard"
+              }
+            },
+            {
+              "$ref": "#/$defs/ExpressionNode"
+            }
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/RuleRegion"
+        },
+        "replacement": {
+          "$ref": "#/$defs/PatternNode",
+          "description": "Inline replacement AST over the same pattern variables. Mutually exclusive with 'use'."
+        },
+        "use": {
+          "type": "string",
+          "description": "Name of a scheme from 'discretizations.<name>' to invoke for expansion (§7.2.1). Mutually exclusive with 'replacement'."
+        },
+        "produces": {
+          "type": "array",
+          "description": "Optional side-equation emission entries (§9.4). A rule with 'produces' alone (no 'replacement'/'use') is legal.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "boundary_policy": {
+          "$ref": "#/$defs/BoundaryPolicy"
+        },
+        "ghost_width": {
+          "$ref": "#/$defs/GhostWidth"
+        },
+        "bindings": {
+          "type": "object",
+          "description": "Declares the symbolic identifiers (other than pattern variables and canonical grid indices i/j/k/...) that the rule's replacement AST may reference, together with the rate at which each binding's value changes at runtime (RFC §5.2.8). This is metadata: loaders preserve it across roundtrips but the rule engine does not consult it during pattern matching or expansion. Time-varying bindings (per_step, per_cell) document a contract between the rule author and the host runtime that supplies values during simulation. Static bindings are equivalent to model parameters and may be evaluated at load time. Keys are bare identifier names (e.g. 'dt', 'dx', 'velocity', 'cos_lat'); '$'-prefixed pattern-variable names are NOT permitted here (declare those via the pattern itself).",
+          "additionalProperties": {
+            "$ref": "#/$defs/RuleBinding"
+          }
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "replacement"
+          ]
+        },
+        {
+          "required": [
+            "use"
+          ]
+        },
+        {
+          "required": [
+            "produces"
+          ]
+        }
+      ]
+    },
+    "BoundaryPolicy": {
+      "description": "Behavior of a rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8 / §7). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. Two authorial forms are accepted: (1) a STRING from the closed set ['periodic','ghosted','neumann_zero','extrapolate','reflecting','one_sided_extrapolation','prescribed'] — a uniform policy across all axes whose ghost values, when needed, are governed by the rule's 'ghost_width'; (2) an OBJECT with a 'by_axis' map declaring per-axis policy entries (each entry is a BoundaryPolicySpec — a {kind, ...} object). The per-axis form is required for cubed-sphere 'panel_dispatch' and for rules that need different policies on different axes (e.g. periodic in latitude, reflecting in vertical). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (ghost-cell synthesis, panel metric selection, edge fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "periodic",
+            "ghosted",
+            "neumann_zero",
+            "extrapolate",
+            "reflecting",
+            "one_sided_extrapolation",
+            "prescribed"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "by_axis"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis policy. Keys are axis names from the rule's grid (e.g. 'xi','eta','x','y','z','lat','lon','lev'); values are BoundaryPolicySpec objects.",
+              "additionalProperties": {
+                "$ref": "#/$defs/BoundaryPolicySpec"
+              }
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "BoundaryPolicySpec": {
+      "type": "object",
+      "description": "A single per-axis boundary policy (RFC §5.2.8 / §7). The 'kind' tag selects from the closed set described in BoundaryPolicy; per-kind sibling fields carry the policy's parameters.",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "periodic",
+            "reflecting",
+            "one_sided_extrapolation",
+            "prescribed",
+            "panel_dispatch",
+            "ghosted",
+            "neumann_zero",
+            "extrapolate"
+          ],
+          "description": "Closed-set tag. 'periodic' wraps around. 'reflecting' mirrors across the edge. 'one_sided_extrapolation' fills ghost values from interior using the 'degree' parameter. 'prescribed' declares the caller supplies ghost values; the runtime treats the input as already-extended. 'panel_dispatch' (cubed-sphere only) selects between two metric/distance fields based on whether a face lies at a panel boundary; takes 'interior' and 'boundary' field names. 'ghosted' is retained as a v0.3.x alias for 'prescribed' (caller-supplied ghost cells via an upstream BC pass). 'neumann_zero' is retained as a v0.3.x alias for 'reflecting' (mirror BC, zero flux). 'extrapolate' is retained as a v0.3.x alias for 'one_sided_extrapolation' (defaulting to linear when 'degree' is omitted)."
+        },
+        "degree": {
+          "description": "one_sided_extrapolation / extrapolate: extrapolation order. 0 = constant (zeroth-order), 1 = linear (default if omitted), 2 = quadratic, 3 = cubic. Higher orders are rejected by the schema.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "interior": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for interior (non-panel-boundary) faces of this axis. The field must be addressable on the rule's grid (e.g. 'dist_xi' on a cubed-sphere grid)."
+        },
+        "boundary": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for panel-boundary faces of this axis (e.g. 'dist_xi_bnd')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note explaining the policy choice."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "panel_dispatch"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "interior",
+              "boundary"
+            ]
+          }
+        }
+      ]
+    },
+    "GhostWidth": {
+      "description": "Required ghost-cell padding per axis for a rule (RFC §5.2.8 / §7). The runtime preparing inputs to a rule SHALL extend each axis's input array by at least 'ghost_width[axis]' cells on each side, using the rule's declared 'boundary_policy' for that axis to fill the extension. Two authorial forms are accepted: (1) a non-negative INTEGER — uniform width applied to every axis the rule's stencil reaches; (2) an OBJECT with 'by_axis' giving per-axis non-negative integers. Omission is equivalent to 0 (rule reads only in-bounds indices). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "required": [
+            "by_axis"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis ghost width. Keys are axis names from the rule's grid; values are non-negative integers.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "RuleBinding": {
+      "type": "object",
+      "description": "A single binding declaration for a rule (RFC §5.2.8). Carries the binding's update cadence ('static', 'per_step', 'per_cell') and an optional default-value expression. The schema does not require 'default' — a binding with no default declares a runtime-supplied value with no compile-time fallback.",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "static",
+            "per_step",
+            "per_cell"
+          ],
+          "description": "Update cadence. 'static' = constant for the whole simulation (e.g. Earth radius R, fixed grid spacing dlon). 'per_step' = may change once per time-step (e.g. an adaptive dt, an externally-driven max wind speed). 'per_cell' = varies across the grid at runtime (e.g. cell-centered velocity, latitudinally-varying cos_lat); the value is indexed by the canonical grid indices in scope."
+        },
+        "default": {
+          "$ref": "#/$defs/ExpressionNode",
+          "description": "Optional default value as an §4 expression. For 'static' bindings this is the value used when the runtime supplies no override. For 'per_step' and 'per_cell' bindings it is an authorial fallback — bindings MAY ignore it if the runtime always supplies a live value."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note about what this binding represents (e.g. 'Courant number, set per-step from max|u|·dt/dx')."
+        }
+      }
+    },
+    "NeighborSelector": {
+      "type": "object",
+      "description": "Discretization stencil neighbor selector (RFC §4, §7.2). The selector.kind tag discriminates between cartesian, panel, indirect, and reduction selectors. Additional per-kind fields are permitted so that pattern variables such as $x can appear in e.g. axis/offset positions.",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "panel",
+            "indirect",
+            "reduction"
+          ],
+          "description": "Selector family; must agree with the enclosing Discretization's grid_family (cartesian↔cartesian, cubed_sphere↔panel, unstructured↔indirect|reduction)."
+        },
+        "axis": {
+          "description": "cartesian: axis name (string or pattern variable e.g. \"$x\"). Ignored for other kinds."
+        },
+        "offset": {
+          "description": "cartesian: integer offset along the axis. May be a pattern variable or an expression node for symbolic strides."
+        },
+        "side": {
+          "description": "panel: cubed-sphere face side identifier (\"east\", \"west\", \"north\", \"south\", \"ne\", \"nw\", \"se\", \"sw\") or a pattern variable.",
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "di": {
+          "description": "panel: local panel-i displacement (integer or pattern variable)."
+        },
+        "dj": {
+          "description": "panel: local panel-j displacement (integer or pattern variable)."
+        },
+        "index_expr": {
+          "description": "indirect: single index expression producing the neighbor's index in the indexed variable (AST).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "table": {
+          "type": "string",
+          "description": "reduction/indirect: name of the connectivity array (e.g. \"edgesOnCell\") providing the neighbor list; referenced inside coeff via index(table, $target, k)."
+        },
+        "count_expr": {
+          "description": "reduction: AST expression producing the per-target neighbor count (e.g. index(nEdgesOnCell, $target)).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "k_bound": {
+          "type": "string",
+          "description": "reduction: name of the local iteration index (in scope inside coeff alongside $target); conventionally \"k\"."
+        },
+        "combine": {
+          "type": "string",
+          "enum": [
+            "+",
+            "*",
+            "min",
+            "max"
+          ],
+          "description": "reduction: how element contributions combine across the neighbor loop (default \"+\" when omitted)."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cartesian"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "axis",
+              "offset"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "reduction"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "table",
+              "count_expr",
+              "k_bound"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "indirect"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "index_expr"
+            ]
+          }
+        }
+      ]
+    },
+    "StencilEntry": {
+      "type": "object",
+      "description": "One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.",
+      "required": [
+        "selector",
+        "coeff"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/NeighborSelector"
+        },
+        "coeff": {
+          "description": "Coefficient expression. May reference grid metric arrays (bare strings or index nodes), grid parameters, pattern variables bound by the triggering rule, k_bound if a reduction selector is used, and $target components.",
+          "$ref": "#/$defs/PatternNode"
+        }
+      }
+    },
+    "GhostVarDecl": {
+      "type": "object",
+      "description": "Optional ghost-cell variable declaration used by a discretization scheme (e.g. a periodic-BC halo). See RFC §9 for boundary-condition interaction.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Ghost variable name."
+        },
+        "source": {
+          "type": "string",
+          "description": "How the ghost is populated: a symbolic hint like \"periodic\", \"copy\", \"reflect\" or a free-form note."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "Discretization": {
+      "type": "object",
+      "description": "A named discretization scheme. Three kinds are supported: (a) \"stencil\" (default) — a template mapping a PDE operator class (via applies_to) to a combination (combine) over neighbors with symbolic coefficients (RFC §7.1); (b) \"dimensional_split\" — a composite scheme that applies a 1D inner scheme along each of several orthogonal axes via Strang/Lie operator splitting (RFC §7.5); (c) \"flux_form_semi_lagrangian\" — a flux-form semi-Lagrangian (FFSL) advection scheme (Lin & Rood 1996 MWR) that combines a piecewise reconstruction with flux-form remapping over declared advection axes, described in RFC §7.7. A scheme may additionally carry a `grid_dispatch` block (RFC §7.8) instead of an inline body — a list of {grid_family, body} variants whose body fields (stencil / inner_rule / etc.) replace the inline ones at load time, picked by the active grid's family.",
+      "required": [
+        "applies_to"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "stencil",
+            "dimensional_split",
+            "flux_form_semi_lagrangian"
+          ],
+          "default": "stencil",
+          "description": "Scheme kind discriminator. \"stencil\" (default when omitted) selects the neighbor-combination template described in RFC §7.1; \"dimensional_split\" selects the axis-sweep composite described in RFC §7.5, which requires axes / inner_rule / splitting; \"flux_form_semi_lagrangian\" selects the FFSL advection family described in RFC §7.7, which requires reconstruction / remap / cfl_policy / dimensions (and forbids stencil / axes / inner_rule)."
+        },
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes. Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). For dimensional_split schemes this names the N-D operator that the sweep composite stands in for (e.g. a 2D advection op whose inner_rule is a 1D PPM flux divergence).",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "cubed_sphere",
+            "unstructured"
+          ],
+          "description": "Grid family this scheme targets; the stencil's selector.kind must match this family. dimensional_split requires \"cartesian\" or \"cubed_sphere\" (unstructured grids have no intrinsic orthogonal-axis ordering)."
+        },
+        "combine": {
+          "type": "string",
+          "enum": [
+            "+",
+            "*",
+            "min",
+            "max"
+          ],
+          "default": "+",
+          "description": "stencil: how stencil entries are combined. Not applicable to dimensional_split schemes."
+        },
+        "stencil": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/StencilEntry"
+          },
+          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\"."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "dimensional_split: ordered list of spatial axes (names from the target grid's dimensions) along which the inner scheme is swept. Each axis is visited once per Lie step and twice (symmetrically) per Strang step. See RFC §7.5."
+        },
+        "inner_rule": {
+          "type": "string",
+          "description": "dimensional_split: name of a sibling discretization scheme (must be declared under the enclosing file's \"discretizations\" section) that provides the 1D operator applied on each axis. The inner scheme is typically itself kind=\"stencil\" with grid_family=\"cartesian\" and a single cartesian axis in its selector."
+        },
+        "splitting": {
+          "type": "string",
+          "enum": [
+            "strang",
+            "lie",
+            "none"
+          ],
+          "description": "dimensional_split: operator-splitting convention. \"lie\" applies each axis once in sequence (first-order in time). \"strang\" uses a symmetric half-step pattern with axes swept forward at Δt/2, the last axis applied at Δt, then the remaining axes swept in reverse at Δt/2 (second-order in time). \"none\" declares the composite structurally without prescribing a splitting order (e.g. for static metadata or parallel-split runtimes that choose their own order)."
+        },
+        "order_of_sweeps": {
+          "type": "string",
+          "enum": [
+            "forward",
+            "reverse",
+            "alternating"
+          ],
+          "default": "forward",
+          "description": "dimensional_split: optional direction pattern governing the per-timestep axis traversal. \"forward\" walks axes in listed order each step; \"reverse\" walks them in reverse; \"alternating\" flips direction on successive timesteps to reduce splitting bias (Strang-typical). Ignored when splitting is \"strang\" (which defines its own symmetric order) or \"none\"."
+        },
+        "reconstruction": {
+          "description": "flux_form_semi_lagrangian (RFC §7.7): the sub-cell reconstruction used to build cell-edge fluxes. Either a string naming a sibling discretizations entry (rule ref), or an inline object declaring a reconstruction scheme — `order` (e.g. \"PPM\", \"PLM\", \"centered\") plus optional free-form `parameters`. Composes with `limiter` when one is declared.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Name of a sibling discretizations entry providing the reconstruction stencil (e.g. PPM from ESD src/operators/reconstruction.jl)."
+            },
+            {
+              "type": "object",
+              "required": [
+                "order"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "order": {
+                  "type": "string",
+                  "description": "Reconstruction order / family name (e.g. \"PPM\", \"PLM\", \"centered\", \"WENO5\"). Not an enum — runtimes may add families; unknown values are the rule engine's responsibility to reject."
+                },
+                "parameters": {
+                  "type": "object",
+                  "description": "Free-form key/value parameters for the reconstruction (e.g. monotonicity controls). Schema is intentionally open; consumers validate per-order.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          ]
+        },
+        "remap": {
+          "type": "object",
+          "description": "flux_form_semi_lagrangian (RFC §7.7): flux-form remap semantics — how reconstructed sub-cell profiles are integrated across cell faces and used to update cell averages.",
+          "required": [
+            "semantics"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "semantics": {
+              "type": "string",
+              "enum": [
+                "conservative",
+                "non_conservative"
+              ],
+              "description": "Remap family. `conservative` preserves the volume-integrated tracer mass per Lin & Rood (1996) §2. `non_conservative` uses pointwise trajectory remap (Staniforth & Côté 1991)."
+            },
+            "flux_form": {
+              "type": "string",
+              "description": "Optional sub-kind identifier (e.g. \"lin_rood_1996\", \"colella_woodward_1984\")."
+            },
+            "parameters": {
+              "type": "object",
+              "description": "Free-form parameters for the remap (e.g. sub-cycle count, flux clipping thresholds).",
+              "additionalProperties": true
+            }
+          }
+        },
+        "limiter": {
+          "description": "flux_form_semi_lagrangian (RFC §7.7): optional slope/flux limiter applied during reconstruction to preserve monotonicity. Either a string naming a sibling discretizations entry (rule ref — e.g. a named monotonic limiter scheme), or an inline object declaring a limiter family.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Name of a sibling discretizations entry providing the limiter stencil."
+            },
+            {
+              "type": "object",
+              "required": [
+                "family"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "family": {
+                  "type": "string",
+                  "description": "Limiter family name (e.g. \"monotonic\", \"van_leer\", \"positive_definite\")."
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          ]
+        },
+        "cfl_policy": {
+          "type": "string",
+          "enum": [
+            "conservative",
+            "non_conservative"
+          ],
+          "description": "flux_form_semi_lagrangian (RFC §7.7): CFL policy governing the reconstruction/remap pairing. `conservative`: mass-conserving flux-form (Lin & Rood 1996); `non_conservative`: pointwise SL trajectory without flux conservation."
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "flux_form_semi_lagrangian (RFC §7.7): axis names along which the rule advects, in application order. The named axes must appear in the enclosing grid's `dimensions`; each axis is swept once per step. Composes with dimensional_split (a dimensional_split scheme's `inner_rule` may reference an FFSL scheme whose `dimensions` is a single axis)."
+        },
+        "accuracy": {
+          "type": "string",
+          "description": "Informational: truncation order (e.g. \"O(dx^2)\", or for dimensional_split \"O(dt^2)\" under Strang splitting)."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional scalar selector for stencil width / truncation order. Positive integer. For families that admit a parameterized order (e.g. arbitrary-order centered uniform finite differences via Fornberg-recursion weights), this field picks the concrete scheme: centered uniform FD uses positive even integers (2, 4, 6, 8, …); one-sided or upwind schemes use any positive integer. Absence means the rule's default applies (e.g. the hard-coded order=2 of centered_2nd_uniform). The field is consumed by the rule engine / scheme authoring layer — schema accepts any positive integer; family-specific parity constraints (even for centered) are enforced by the rule implementation, not the schema. See discretization RFC §7.1."
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "If set, the operand variable must carry one of these staggered-grid locations."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Staggered-grid location the scheme emits (e.g. \"cell_center\", \"edge_normal\"). Used to pin $target on unstructured grids (RFC §7.1.1)."
+        },
+        "target_binding": {
+          "type": "string",
+          "default": "$target",
+          "description": "Reserved name for the target index binding."
+        },
+        "ghost_vars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GhostVarDecl"
+          },
+          "description": "Optional ghost-cell variable declarations used by the scheme."
+        },
+        "free_variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of free pattern-variable names (e.g. [\"$u\", \"$x\"]) that the scheme expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        },
+        "grid_dispatch": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/DiscretizationVariant"
+          },
+          "description": "RFC §7.8: family-keyed variant table. When present, the scheme declares two or more grid-family-specific bodies in place of an inline one — each variant carries its own `grid_family` plus the body fields (stencil / kind / axes / inner_rule / splitting / order_of_sweeps / terms / boundary_fallback / reconstruction / remap / limiter / cfl_policy / dimensions / combine) that would otherwise live on the parent. The loader picks the variant whose `grid_family` matches the active grid family at expansion time and substitutes its body in place of the parent's. Top-level `grid_family` and any inline body field MUST be absent when `grid_dispatch` is present; shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) remain on the parent and apply to every variant. Each variant's `grid_family` MUST be unique within the array; ordering is not significant. The use case is operators whose form differs across grid topologies — e.g. PPM on cartesian interiors vs. cubed-sphere panels — without forking the scheme name."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "grid_dispatch"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "grid_family"
+                  ]
+                },
+                {
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "required": [
+                    "combine"
+                  ]
+                },
+                {
+                  "required": [
+                    "stencil"
+                  ]
+                },
+                {
+                  "required": [
+                    "axes"
+                  ]
+                },
+                {
+                  "required": [
+                    "inner_rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "splitting"
+                  ]
+                },
+                {
+                  "required": [
+                    "order_of_sweeps"
+                  ]
+                },
+                {
+                  "required": [
+                    "reconstruction"
+                  ]
+                },
+                {
+                  "required": [
+                    "remap"
+                  ]
+                },
+                {
+                  "required": [
+                    "limiter"
+                  ]
+                },
+                {
+                  "required": [
+                    "cfl_policy"
+                  ]
+                },
+                {
+                  "required": [
+                    "dimensions"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "grid_family"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "dimensional_split"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "axes",
+              "inner_rule",
+              "splitting"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "stencil"
+                  ]
+                },
+                {
+                  "required": [
+                    "reconstruction"
+                  ]
+                },
+                {
+                  "required": [
+                    "remap"
+                  ]
+                },
+                {
+                  "required": [
+                    "limiter"
+                  ]
+                },
+                {
+                  "required": [
+                    "cfl_policy"
+                  ]
+                },
+                {
+                  "required": [
+                    "dimensions"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "flux_form_semi_lagrangian"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "reconstruction",
+              "remap",
+              "cfl_policy",
+              "dimensions"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "stencil"
+                  ]
+                },
+                {
+                  "required": [
+                    "axes"
+                  ]
+                },
+                {
+                  "required": [
+                    "inner_rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "splitting"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "grid_dispatch"
+                  ]
+                }
+              },
+              {
+                "anyOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  {
+                    "properties": {
+                      "kind": {
+                        "const": "stencil"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "stencil"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "reconstruction"
+                  ]
+                },
+                {
+                  "required": [
+                    "remap"
+                  ]
+                },
+                {
+                  "required": [
+                    "limiter"
+                  ]
+                },
+                {
+                  "required": [
+                    "cfl_policy"
+                  ]
+                },
+                {
+                  "required": [
+                    "dimensions"
+                  ]
+                },
+                {
+                  "required": [
+                    "axes"
+                  ]
+                },
+                {
+                  "required": [
+                    "inner_rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "splitting"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "DiscretizationVariant": {
+      "type": "object",
+      "description": "RFC §7.8: one entry of a Discretization's `grid_dispatch` block. Declares a per-grid-family body that replaces the parent's inline body when the active grid's family matches `grid_family`. The body fields (`kind`, `combine`, `stencil`, `axes`, `inner_rule`, `splitting`, `order_of_sweeps`, `reconstruction`, `remap`, `limiter`, `cfl_policy`, `dimensions`) follow the same kind-discriminated semantics and mutual-exclusion rules as the parent Discretization. Shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) live on the parent and are not duplicated here. A variant whose `grid_family` matches no active grid is inert. CrossMetricStencilRule entries (RFC §7.6) are a sibling top-level shape and not eligible for `grid_dispatch`; author per-family CrossMetric rules as separate `discretizations` entries instead.",
+      "required": [
+        "grid_family"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "grid_family": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "cubed_sphere",
+            "unstructured"
+          ],
+          "description": "Grid family this variant targets; selected when the active grid's family equals this value."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "stencil",
+            "dimensional_split",
+            "flux_form_semi_lagrangian"
+          ],
+          "default": "stencil",
+          "description": "Variant kind discriminator; same vocabulary and semantics as the parent Discretization's `kind`."
+        },
+        "combine": {
+          "type": "string",
+          "enum": [
+            "+",
+            "*",
+            "min",
+            "max"
+          ],
+          "default": "+",
+          "description": "Variant: how stencil entries are combined. See parent Discretization."
+        },
+        "stencil": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/StencilEntry"
+          },
+          "description": "Variant: stencil entries. Required when this variant's kind is \"stencil\" or omitted."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Variant: dimensional_split axes (or cross_metric axes when terms is present)."
+        },
+        "inner_rule": {
+          "type": "string",
+          "description": "Variant: dimensional_split inner scheme name."
+        },
+        "splitting": {
+          "type": "string",
+          "enum": [
+            "strang",
+            "lie",
+            "none"
+          ],
+          "description": "Variant: dimensional_split operator-splitting convention."
+        },
+        "order_of_sweeps": {
+          "type": "string",
+          "enum": [
+            "forward",
+            "reverse",
+            "alternating"
+          ],
+          "default": "forward",
+          "description": "Variant: dimensional_split per-step traversal direction."
+        },
+        "reconstruction": {
+          "description": "Variant: FFSL sub-cell reconstruction (string ref or inline {order, parameters}).",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "order"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "order": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          ]
+        },
+        "remap": {
+          "type": "object",
+          "required": [
+            "semantics"
+          ],
+          "additionalProperties": false,
+          "description": "Variant: FFSL flux-form remap semantics.",
+          "properties": {
+            "semantics": {
+              "type": "string",
+              "enum": [
+                "conservative",
+                "non_conservative"
+              ]
+            },
+            "flux_form": {
+              "type": "string"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "limiter": {
+          "description": "Variant: FFSL limiter (string ref or inline {family, parameters}).",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "family"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "family": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          ]
+        },
+        "cfl_policy": {
+          "type": "string",
+          "enum": [
+            "conservative",
+            "non_conservative"
+          ],
+          "description": "Variant: FFSL CFL policy."
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Variant: FFSL advection axes."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "dimensional_split"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "axes",
+              "inner_rule",
+              "splitting"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "stencil"
+                  ]
+                },
+                {
+                  "required": [
+                    "reconstruction"
+                  ]
+                },
+                {
+                  "required": [
+                    "remap"
+                  ]
+                },
+                {
+                  "required": [
+                    "limiter"
+                  ]
+                },
+                {
+                  "required": [
+                    "cfl_policy"
+                  ]
+                },
+                {
+                  "required": [
+                    "dimensions"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "flux_form_semi_lagrangian"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "reconstruction",
+              "remap",
+              "cfl_policy",
+              "dimensions"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "stencil"
+                  ]
+                },
+                {
+                  "required": [
+                    "axes"
+                  ]
+                },
+                {
+                  "required": [
+                    "inner_rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "splitting"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "not": {
+                  "required": [
+                    "kind"
+                  ]
+                }
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "stencil"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "stencil"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "reconstruction"
+                  ]
+                },
+                {
+                  "required": [
+                    "remap"
+                  ]
+                },
+                {
+                  "required": [
+                    "limiter"
+                  ]
+                },
+                {
+                  "required": [
+                    "cfl_policy"
+                  ]
+                },
+                {
+                  "required": [
+                    "dimensions"
+                  ]
+                },
+                {
+                  "required": [
+                    "axes"
+                  ]
+                },
+                {
+                  "required": [
+                    "inner_rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "splitting"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "StaggeringRule": {
+      "type": "object",
+      "description": "A named staggering convention declaring where quantities live on a grid. The `kind` discriminant selects the staggering family. For MPAS Voronoi meshes (kind='unstructured_c_grid'), scalars live at Voronoi cell centers, normal velocities at edge midpoints, and vorticity at triangle vertices — a topology fundamentally unstructured. The referenced `grid` must be a grids.<g> entry of family 'unstructured'. See discretization RFC §7.4.",
+      "required": [
+        "kind",
+        "grid"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "unstructured_c_grid"
+          ],
+          "description": "Staggering family discriminant. v0.2.0 defines one kind: 'unstructured_c_grid' (MPAS Voronoi C-grid). Future kinds (e.g. 'arakawa_c_structured') require a spec bump."
+        },
+        "grid": {
+          "type": "string",
+          "description": "Name of a grids.<g> entry that this staggering rule applies to. For kind='unstructured_c_grid', the referenced grid's family must be 'unstructured' and its `locations` list must include the C-grid staples ('cell_center', 'edge_normal', 'vertex')."
+        },
+        "description": {
+          "type": "string"
+        },
+        "cell_quantity_locations": {
+          "type": "object",
+          "description": "Mapping of quantity names (variable or metric names) to their staggered locations on the grid. Each value is one of the three C-grid staples. Consumers (e.g. the mpas_divergence_flux_form discretization) read this map to know that, e.g., normal-velocity `u` lives at 'edge_midpoint' so that flux divergence can be emitted at 'cell_center' via the reduction selector over edgesOnCell.",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "cell_center",
+              "edge_midpoint",
+              "vertex"
+            ]
+          }
+        },
+        "edge_normal_convention": {
+          "type": "string",
+          "enum": [
+            "outward_from_first_cell",
+            "outward_from_second_cell",
+            "right_hand_tangent"
+          ],
+          "description": "Orientation semantics for edge-normal fluxes. 'outward_from_first_cell' is the MPAS convention: the normal at edge e points from cellsOnEdge[e, 0] (interior) to cellsOnEdge[e, 1] (exterior). 'outward_from_second_cell' is the reverse. 'right_hand_tangent' orients by verticesOnEdge (used by some vorticity schemes)."
+        },
+        "dual_mesh_ref": {
+          "type": "string",
+          "description": "Optional name of a grids.<g> entry representing the Delaunay dual of the Voronoi primal grid. MPAS needs the dual mesh for vorticity computations at triangle vertices; leaving this unset is legal when the rule is used only for divergence/gradient schemes that do not touch vorticity."
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "unstructured_c_grid"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "cell_quantity_locations",
+              "edge_normal_convention"
+            ]
+          }
+        }
+      ]
+    },
+    "CrossMetricTerm": {
+      "type": "object",
+      "description": "One term of a CrossMetricStencilRule composite expansion (RFC §7.4). Semantically, the term contributes `sign * metric_component(target) * axis_stencil(field, axis)` to the composite, where `axis_stencil` names another Discretization whose expansion is substituted point-wise and `metric_component` names a metric array from the grid's metric_arrays block. Terms with identical `axis_stencil` but distinct `metric_component` are how cross-derivative composites (e.g. g_xieta · ∂²/∂ξ∂η) are assembled.",
+      "required": [
+        "axis_stencil",
+        "metric_component"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "axis_stencil": {
+          "type": "string",
+          "description": "Name of a per-axis Discretization entry (in the same discretizations block) whose expansion supplies this term's 1D directional derivative. Must resolve to a Discretization whose grid_family is compatible with the composite's grid_family."
+        },
+        "metric_component": {
+          "type": "string",
+          "description": "Name of a metric array (entry of the grid's metric_arrays block, e.g. 'J', 'g_xixi', 'g_etaeta', 'g_xieta', 'ginv_xixi'). Resolved point-wise at $target via the grid accessor's metric_eval contract."
+        },
+        "sign": {
+          "type": "integer",
+          "enum": [
+            -1,
+            1
+          ],
+          "default": 1,
+          "description": "Sign applied to this term's contribution; defaults to +1."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "CrossMetricStencilRule": {
+      "type": "object",
+      "description": "Cross-metric composite stencil rule (RFC §7.4). Expresses operators whose discretization does not fit the single-axis stencil shape — specifically covariant PDE operators on curvilinear grids where metric-tensor components (J, g_xixi, g_etaeta, g_xieta, ginv_*) weight a sum of per-axis stencil applications. The canonical example is the full covariant Laplacian on a cubed-sphere panel, which combines ∂/∂ξ and ∂/∂η stencils with metric weights in a 9-point composite.\n\nExpansion semantics: given a rule match at $target, the composite expands to `Σ_terms[ sign_t · metric_component_t($target) · axis_stencil_t(field, axes_t) ]`, where each `axis_stencil_t` is the expansion of the referenced Discretization at $target along its declared axis. The composite's own `combine` field (default '+') determines how terms are combined.",
+      "required": [
+        "applies_to",
+        "grid_family",
+        "axes",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "cross_metric",
+          "description": "Discriminator for bindings that need to distinguish this rule type from a standard Discretization. Optional (presence of `terms` is sufficient), but recommended for statically-typed bindings."
+        },
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this composite discretizes (e.g. a 2D Laplacian). Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). Same shape as Discretization.applies_to.",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "cubed_sphere",
+            "unstructured"
+          ],
+          "description": "Grid family this composite targets. In practice cross-metric composites are primarily used on 'cubed_sphere' (curvilinear, non-orthogonal panels) and 'cartesian' (as a conformance-friendly degenerate case where off-diagonal metric components vanish)."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of coordinate axes the composition spans (e.g. ['xi','eta']). Each axis name must match an axis referenced by one of the composite's terms' axis_stencil. The order is informational (binding-readable) and does not affect expansion."
+        },
+        "combine": {
+          "type": "string",
+          "enum": [
+            "+",
+            "*",
+            "min",
+            "max"
+          ],
+          "default": "+",
+          "description": "How the composite's terms are combined. Defaults to '+' (the natural choice for a summed tensor expansion)."
+        },
+        "terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CrossMetricTerm"
+          },
+          "description": "Array of CrossMetricTerm entries. Must contain at least one term."
+        },
+        "boundary_fallback": {
+          "type": "string",
+          "description": "Name of another Discretization or CrossMetricStencilRule (in the same discretizations block) to apply at edges, corners, or cross-panel boundaries where the composite's full stencil cannot be evaluated (e.g. cubed-sphere corner halos with incomplete metric support). Optional — when omitted, boundary handling falls through to the model's boundary_conditions."
+        },
+        "accuracy": {
+          "type": "string",
+          "description": "Informational: truncation order (e.g. 'O(dx^2)')."
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "If set, the operand variable must carry one of these staggered-grid locations (mirrors Discretization.requires_locations)."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Staggered-grid location the composite emits (mirrors Discretization.emits_location)."
+        },
+        "target_binding": {
+          "type": "string",
+          "default": "$target",
+          "description": "Reserved name for the target index binding (mirrors Discretization.target_binding)."
+        },
+        "free_variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of free pattern-variable names (e.g. ['$u']) that the composite expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      }
+    },
+    "FunctionTable": {
+      "type": "object",
+      "description": "A sampled function table (esm-spec.md §9.5). Carries one or more named axes and a literal nested-array data block. The shape of `data` is [len(outputs), len(axes[0].values), len(axes[1].values), ...] when `outputs` is declared; otherwise [len(axes[0].values), ...] (single-output convenience form). `table_lookup` AST nodes evaluate this table by supplying a per-axis input expression and selecting an output. Tables are syntactic sugar over `interp.linear` (1 axis) / `interp.bilinear` (2 axes) / `index` (nearest); the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup.",
+      "required": [
+        "axes",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "axes": {
+          "type": "array",
+          "description": "Ordered list of named axes. The order of entries defines the order of inner dimensions in `data` (after the leading output dimension when `outputs` is present). Axis names within a single table MUST be unique.",
+          "items": {
+            "$ref": "#/$defs/FunctionTableAxis"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "interpolation": {
+          "type": "string",
+          "description": "Interpolation kind applied by `table_lookup`. 'linear' (1 axis) lowers to `interp.linear`. 'bilinear' (2 axes) lowers to `interp.bilinear`. 'nearest' lowers to `index` after `interp.searchsorted`. The chosen kind MUST be consistent with the number of axes; mismatch is rejected at load time with diagnostic 'table_interpolation_axes_mismatch'.",
+          "enum": [
+            "linear",
+            "bilinear",
+            "nearest"
+          ],
+          "default": "linear"
+        },
+        "out_of_bounds": {
+          "type": "string",
+          "description": "Out-of-bounds policy applied to query coordinates that fall outside an axis range. 'clamp' pins to the nearest edge — this matches the semantics of `interp.linear` and `interp.bilinear` (extrapolate-flat). 'error' MUST raise at evaluation time; bindings emit diagnostic 'table_lookup_out_of_bounds' on first violation. v0.4.0: 'clamp' is the only policy required of all five bindings; 'error' is conformant when the binding implements it.",
+          "enum": [
+            "clamp",
+            "error"
+          ],
+          "default": "clamp"
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Optional ordered list of output names. When present, `table_lookup.output` MAY name an entry of this list (in addition to using a 0-based integer index). Names within a table MUST be unique. The leading dimension of `data` MUST equal the length of `outputs`.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "data": {
+          "description": "Nested-array literal carrying the table's sampled values. Leaves MUST be finite numbers (NaN entries are rejected at load time with 'table_data_nan'). Shape: [len(outputs), len(axes[0].values), ...] when `outputs` is present; [len(axes[0].values), ...] otherwise. Mismatched nesting is rejected with 'table_data_shape_mismatch'."
+        },
+        "shape": {
+          "type": "array",
+          "description": "Optional redundant shape assertion. If present, MUST match the actual nesting of `data`; loaders verify and reject mismatches with 'table_data_shape_mismatch'. `data` is the canonical representation; `shape` is a load-time assertion only.",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Optional pin of the table-schema minor version this entry was authored against. Bindings ignore the value beyond a same-major-version compatibility check; informational for tooling.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+    "FunctionTableAxis": {
+      "type": "object",
+      "description": "A single named axis inside a FunctionTable. The `values` array supplies the sample coordinates along this axis; it MUST be strictly increasing finite floats with at least 2 entries (mirrors the `interp.linear` / `interp.bilinear` axis contract in §9.2).",
+      "required": [
+        "name",
+        "values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Axis identifier. Used as the key in `table_lookup.axes` to bind the input-coordinate expression."
+        },
+        "units": {
+          "type": "string",
+          "description": "Optional advisory units string (e.g. 'Pa', 'K'). v0.4.0 records this for documentation only — no load-time unit checking is performed against the supplied input expression. Promotion to enforcement is deferred to a future units RFC."
+        },
+        "values": {
+          "type": "array",
+          "description": "Strictly-increasing finite floats. Bindings MUST reject non-monotonic axes at load time with diagnostic 'table_axis_non_monotonic' and NaN entries with 'table_axis_nan'.",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2
+        }
+      }
     }
   }
 }

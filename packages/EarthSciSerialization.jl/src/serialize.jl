@@ -85,6 +85,19 @@ function serialize_expression(expr::Expr)
         if expr.value !== nothing
             result["value"] = expr.value
         end
+        # table_lookup (esm-spec §9.5, v0.4.0). Stored under JSON key "axes"
+        # on the wire. ``output`` is preserved verbatim (Int or String).
+        if expr.table !== nothing
+            result["table"] = expr.table
+        end
+        if expr.table_axes !== nothing
+            result["axes"] = Dict{String,Any}(
+                k => serialize_expression(v) for (k, v) in expr.table_axes
+            )
+        end
+        if expr.output !== nothing
+            result["output"] = expr.output
+        end
         return result
     else
         throw(ArgumentError("Unknown expression type: $(typeof(expr))"))
@@ -1027,6 +1040,13 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
         result["enums"] = Dict{String,Any}(
             k => Dict{String,Int}(s => i for (s, i) in v) for (k, v) in file.enums)
     end
+    if file.function_tables !== nothing
+        # esm-spec §9.5 — sampled function tables (v0.4.0). Tables are
+        # first-class authored constructs; round-trip MUST preserve the
+        # authored form (no auto-promotion of inline-const lookups).
+        result["function_tables"] = Dict{String,Any}(
+            k => serialize_function_table(v) for (k, v) in file.function_tables)
+    end
     if !isempty(file.coupling)
         result["coupling"] = [serialize_coupling_entry(c) for c in file.coupling]
     end
@@ -1061,6 +1081,50 @@ dictionary pass-through (round-trip lossless), mirroring `serialize_grid`.
 """
 function serialize_staggering_rule(rule::StaggeringRule)::Dict{String,Any}
     return rule.data
+end
+
+"""
+    serialize_function_table(ft::FunctionTable) -> Dict{String,Any}
+
+Serialize a [`FunctionTable`](@ref) (esm-spec §9.5) back to a JSON-compatible
+dict. Tables are first-class authored constructs; no auto-promotion or
+demotion of inline-const lookups happens at serialize time.
+"""
+function serialize_function_table(ft::FunctionTable)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "axes" => [serialize_function_table_axis(ax) for ax in ft.axes],
+        "data" => ft.data,
+    )
+    if ft.description !== nothing
+        result["description"] = ft.description
+    end
+    if ft.interpolation !== nothing
+        result["interpolation"] = ft.interpolation
+    end
+    if ft.out_of_bounds !== nothing
+        result["out_of_bounds"] = ft.out_of_bounds
+    end
+    if ft.outputs !== nothing
+        result["outputs"] = ft.outputs
+    end
+    if ft.shape !== nothing
+        result["shape"] = ft.shape
+    end
+    if ft.schema_version !== nothing
+        result["schema_version"] = ft.schema_version
+    end
+    return result
+end
+
+function serialize_function_table_axis(ax::FunctionTableAxis)::Dict{String,Any}
+    result = Dict{String,Any}(
+        "name" => ax.name,
+        "values" => ax.values,
+    )
+    if ax.units !== nothing
+        result["units"] = ax.units
+    end
+    return result
 end
 
 """

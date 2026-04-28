@@ -580,13 +580,25 @@ def _lower_expr(node: Any, enums: Dict[str, Dict[str, int]]) -> Any:
         if node.values is not None
         else None
     )
+    # Recurse into table_lookup.axes (per-axis input expression map).
+    new_table_axes = (
+        {k: _lower_expr(v, enums) for k, v in node.table_axes.items()}
+        if node.table_axes is not None
+        else None
+    )
     changed = (
         any(a is not b for a, b in zip(new_args, node.args))
         or body is not node.expr
         or (new_values is not None and any(
             a is not b for a, b in zip(new_values, node.values)
         ))
+        or (new_table_axes is not None and any(
+            new_table_axes[k] is not v for k, v in node.table_axes.items()
+        ))
     )
     if not changed:
         return node
-    return replace(node, args=new_args, expr=body, values=new_values)
+    return replace(
+        node, args=new_args, expr=body, values=new_values,
+        table_axes=new_table_axes,
+    )

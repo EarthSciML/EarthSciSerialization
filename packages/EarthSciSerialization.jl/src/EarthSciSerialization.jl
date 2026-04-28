@@ -74,6 +74,7 @@ export
     DomainExtentMismatchError, SliceOutOfDomainError, CyclicPromotionError,
     # System types
     Domain, Interface, Grid, StaggeringRule, Reference, Metadata, EsmFile,
+    FunctionTable, FunctionTableAxis,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
     # Subsystem reference resolution

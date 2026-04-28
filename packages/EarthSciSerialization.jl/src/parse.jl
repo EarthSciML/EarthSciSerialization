@@ -59,12 +59,12 @@ function parse_expression(data::Any)::Expr
         return _parse_op_dict(data, "op", "args", "wrt", "dim",
                               "output_idx", "expr", "reduce", "ranges",
                               "regions", "values", "shape", "perm", "axis", "fn",
-                              "name", "value")
+                              "name", "value", "table", "axes", "output")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
                               :output_idx, :expr, :reduce, :ranges,
                               :regions, :values, :shape, :perm, :axis, :fn,
-                              :name, :value)
+                              :name, :value, :table, :axes, :output)
     else
         throw(ParseError("Invalid expression format: expected number, string, or object with 'op' field. Got: $(typeof(data))"))
     end
@@ -75,7 +75,7 @@ end
 function _parse_op_dict(data, kop, kargs, kwrt, kdim,
                         koutput_idx, kexpr, kreduce, kranges,
                         kregions, kvalues, kshape, kperm, kaxis, kfn,
-                        kname, kvalue)
+                        kname, kvalue, ktable, ktable_axes, koutput)
     op = string(data[kop])
     if op == "call"
         # The `call` op + `registered_functions` extension point was removed in
@@ -115,13 +115,40 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     # doesn't have to special-case JSON3 types.
     value_native = value_raw === nothing ? nothing : _to_native_json(value_raw)
 
+    # table_lookup (esm-spec §9.5, v0.4.0): table id, per-axis input expression
+    # map (carried under JSON key "axes"), optional output selector. ``args``
+    # MUST be empty for a table_lookup node.
+    table_val = get(data, ktable, nothing)
+    table_str = table_val === nothing ? nothing : string(table_val)
+    table_axes_raw = get(data, ktable_axes, nothing)
+    table_axes_dict = nothing
+    if op == "table_lookup"
+        if table_str === nothing
+            throw(ParseError("`table_lookup` op requires `table` field (esm-spec §9.5)"))
+        end
+        if table_axes_raw === nothing
+            throw(ParseError("`table_lookup` op requires `axes` field (per-axis input expression map, esm-spec §9.5)"))
+        end
+        table_axes_dict = Dict{String,EarthSciSerialization.Expr}()
+        for (k, v) in pairs(table_axes_raw)
+            table_axes_dict[string(k)] = parse_expression(v)
+        end
+        if !isempty(args)
+            throw(ParseError("`table_lookup` op must have empty `args` (per-axis inputs live under `axes`, esm-spec §9.5)"))
+        end
+    end
+    output_raw = get(data, koutput, nothing)
+    output_native = output_raw === nothing ? nothing :
+        (isa(output_raw, Integer) ? Int(output_raw) : string(output_raw))
+
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
         output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
         perm=perm_vec, axis=axis_int, fn=fn_str,
-        name=name_str, value=value_native)
+        name=name_str, value=value_native,
+        table=table_str, table_axes=table_axes_dict, output=output_native)
 end
 
 function _coerce_output_idx(data)
@@ -357,6 +384,15 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    # Component-scoped sampled function tables (esm-spec §9.5, v0.4.0). Each
+    # entry carries named axes plus a literal nested-array data block;
+    # referenced by table_lookup AST nodes via the table id key.
+    function_tables = if haskey(data, :function_tables) && data.function_tables !== nothing
+        coerce_function_tables(data.function_tables)
+    else
+        nothing
+    end
+
     file = EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
@@ -369,7 +405,8 @@ function coerce_esm_file(data::Any)::EsmFile
                   grids=grids,
                   staggering_rules=staggering_rules,
                   discretizations=discretizations,
-                  enums=enums)
+                  enums=enums,
+                  function_tables=function_tables)
     # Lower every `enum` op to a `const` integer using the file-local map.
     # This runs once at load time so downstream consumers (evaluators,
     # canonicalize, codegen) never see enum strings in expression trees.
@@ -421,6 +458,73 @@ function coerce_enums(data)::Dict{String,Dict{String,Int}}
             mapping[sym] = int_v
         end
         out[enum_name] = mapping
+    end
+    return out
+end
+
+"""
+    coerce_function_tables(data) -> Dict{String,FunctionTable}
+
+Coerce the top-level `function_tables` JSON block into the typed map
+carried on [`EsmFile`](@ref) (esm-spec §9.5, v0.4.0). Each entry holds
+ordered named axes plus a literal nested-array data block referenced by
+`table_lookup` AST nodes.
+"""
+function coerce_function_tables(data)::Dict{String,FunctionTable}
+    out = Dict{String,FunctionTable}()
+    for (table_name_raw, entry_raw) in pairs(data)
+        table_name = string(table_name_raw)
+        if isempty(table_name)
+            throw(ParseError("function_tables: table name must be non-empty"))
+        end
+        if !(entry_raw isa AbstractDict || entry_raw isa JSON3.Object)
+            throw(ParseError("function_tables.$(table_name): entry must be a JSON object"))
+        end
+        axes_raw = get(entry_raw, :axes, nothing)
+        if axes_raw === nothing
+            throw(ParseError("function_tables.$(table_name): `axes` is required (esm-spec §9.5)"))
+        end
+        axes_vec = Vector{FunctionTableAxis}()
+        for ax_raw in axes_raw
+            ax_name = string(get(ax_raw, :name, ""))
+            if isempty(ax_name)
+                throw(ParseError("function_tables.$(table_name).axes: axis `name` must be non-empty"))
+            end
+            ax_values_raw = get(ax_raw, :values, nothing)
+            if ax_values_raw === nothing
+                throw(ParseError("function_tables.$(table_name).axes.$(ax_name): `values` is required"))
+            end
+            ax_values = Vector{Float64}([Float64(v) for v in ax_values_raw])
+            ax_units_raw = get(ax_raw, :units, nothing)
+            ax_units = ax_units_raw === nothing ? nothing : string(ax_units_raw)
+            push!(axes_vec, FunctionTableAxis(ax_name, ax_values; units=ax_units))
+        end
+        if !haskey(entry_raw, :data)
+            throw(ParseError("function_tables.$(table_name): `data` is required (esm-spec §9.5)"))
+        end
+        data_native = _to_native_json(entry_raw.data)
+        description = haskey(entry_raw, :description) && entry_raw.description !== nothing ?
+            string(entry_raw.description) : nothing
+        interpolation = haskey(entry_raw, :interpolation) && entry_raw.interpolation !== nothing ?
+            string(entry_raw.interpolation) : nothing
+        out_of_bounds = haskey(entry_raw, :out_of_bounds) && entry_raw.out_of_bounds !== nothing ?
+            string(entry_raw.out_of_bounds) : nothing
+        outputs = if haskey(entry_raw, :outputs) && entry_raw.outputs !== nothing
+            Vector{String}([string(s) for s in entry_raw.outputs])
+        else
+            nothing
+        end
+        shape = if haskey(entry_raw, :shape) && entry_raw.shape !== nothing
+            Vector{Int}([Int(s) for s in entry_raw.shape])
+        else
+            nothing
+        end
+        schema_version = haskey(entry_raw, :schema_version) && entry_raw.schema_version !== nothing ?
+            string(entry_raw.schema_version) : nothing
+        out[table_name] = FunctionTable(axes_vec, data_native;
+            description=description, interpolation=interpolation,
+            out_of_bounds=out_of_bounds, outputs=outputs, shape=shape,
+            schema_version=schema_version)
     end
     return out
 end

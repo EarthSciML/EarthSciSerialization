@@ -46,6 +46,20 @@ class ExprNode:
     # array thereof. Used to thread const-array tables through the AST without
     # premature numeric collapse (notably as `xs` for `interp.searchsorted`).
     value: Optional[Any] = None
+    # table_lookup (esm-spec §9.5, v0.4.0): the function_tables entry id this
+    # node references. ``args`` MUST be empty for a table_lookup node — the
+    # per-axis input expressions live in ``table_axes``.
+    table: Optional[str] = None
+    # table_lookup: per-axis input-coordinate expression map. Keys MUST match
+    # the axis names declared on the referenced FunctionTable; values are
+    # arbitrary scalar Expressions (number, variable reference, or AST node).
+    # Stored under the JSON key ``axes`` on the wire.
+    table_axes: Optional[Dict[str, 'Expr']] = None
+    # table_lookup: which output of a multi-output table to return. Either a
+    # non-negative integer (0-based index into the leading data dimension) or
+    # a string (an entry of the table's outputs list). Single-output tables
+    # MAY omit this (defaults to 0 at lowering time).
+    output: Optional[Union[int, str]] = None
 
 
 # Recursive type definition for expressions
@@ -787,6 +801,41 @@ class StaggeringRule:
 
 
 @dataclass
+class FunctionTableAxis:
+    """A single named axis inside a FunctionTable (esm-spec §9.5).
+
+    ``values`` MUST be strictly-increasing finite floats with at least 2
+    entries (mirrors the §9.2 interp.linear / interp.bilinear axis contract).
+    ``units`` is advisory only in v0.4.0 — recorded for documentation, not
+    used for load-time unit-checking.
+    """
+    name: str
+    values: List[float]
+    units: Optional[str] = None
+
+
+@dataclass
+class FunctionTable:
+    """A sampled function table referenced by table_lookup AST ops
+    (esm-spec §9.5, v0.4.0).
+
+    Tables are syntactic sugar over §9.2's interp.linear / interp.bilinear /
+    index — a table_lookup query MUST be bit-equivalent to the equivalent
+    inline-const lookup. The shape of ``data`` is
+    ``[len(outputs), len(axes[0].values), len(axes[1].values), ...]`` when
+    ``outputs`` is non-empty; ``[len(axes[0].values), ...]`` otherwise.
+    """
+    axes: List[FunctionTableAxis]
+    data: Any  # Nested-array literal of finite numbers
+    description: Optional[str] = None
+    interpolation: Optional[str] = None  # 'linear' | 'bilinear' | 'nearest'
+    out_of_bounds: Optional[str] = None  # 'clamp' | 'error'
+    outputs: Optional[List[str]] = None
+    shape: Optional[List[int]] = None
+    schema_version: Optional[str] = None
+
+
+@dataclass
 class EsmFile:
     """Root container for an ESM format file."""
     version: str
@@ -802,6 +851,10 @@ class EsmFile:
     # enum name; each value maps symbolic names to positive integers. Resolved
     # at load time by `lower_enums` before expression evaluation.
     enums: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    # Component-scoped sampled function tables (esm-spec §9.5, v0.4.0). Keyed
+    # by table id; each value is a FunctionTable referenced by table_lookup
+    # AST nodes.
+    function_tables: Dict[str, FunctionTable] = field(default_factory=dict)
     domains: Dict[str, Domain] = field(default_factory=dict)
     grids: Dict[str, Grid] = field(default_factory=dict)
     staggering_rules: Dict[str, StaggeringRule] = field(default_factory=dict)

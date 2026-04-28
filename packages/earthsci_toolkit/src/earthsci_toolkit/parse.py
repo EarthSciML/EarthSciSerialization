@@ -50,6 +50,7 @@ from .esm_types import (
     SweepRange, SweepDimension, ParameterSweep, Example,
     Grid, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
     StaggeringRule,
+    FunctionTable, FunctionTableAxis,
 )
 
 
@@ -81,10 +82,10 @@ class SubsystemRefError(Exception):
     pass
 
 
-# Current library version for compatibility checking. Bumped to 0.3.0 with the
-# closed function registry (esm-spec.md §9.2 / §9.3 / esm-tzp / esm-4ia):
-# the `fn`/`enum`/`const` AST ops and the top-level `enums` block.
-_CURRENT_VERSION = (0, 3, 0)
+# Current library version for compatibility checking. Bumped to 0.4.0 with the
+# sampled-function-tables landing (esm-spec.md §9.5 / esm-jcj / esm-hid):
+# the top-level `function_tables` block plus the `table_lookup` AST op.
+_CURRENT_VERSION = (0, 4, 0)
 
 
 def _check_version_compatibility(version_string: str) -> None:
@@ -182,6 +183,22 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         if op == "const" and "value" not in expr_data:
             raise ValueError("Operator 'const' requires 'value' field to be specified")
 
+        # table_lookup (esm-spec §9.5, v0.4.0): table id, per-axis input
+        # expression map (carried under JSON key "axes"), optional output
+        # selector. ``args`` MUST be empty for a table_lookup node.
+        table = expr_data.get("table")
+        table_axes_raw = expr_data.get("axes") if op == "table_lookup" else None
+        table_axes = None
+        if op == "table_lookup":
+            if table is None:
+                raise ValueError("Operator 'table_lookup' requires 'table' field to be specified")
+            if not isinstance(table_axes_raw, dict):
+                raise ValueError("Operator 'table_lookup' requires 'axes' to be an object mapping axis names to input expressions")
+            table_axes = {k: _parse_expression(v) for k, v in table_axes_raw.items()}
+            if args:
+                raise ValueError("Operator 'table_lookup' must have empty 'args' (per-axis inputs live under 'axes')")
+        output = expr_data.get("output")
+
         return ExprNode(
             op=op,
             args=args,
@@ -200,6 +217,9 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
             handler_id=handler_id,
             name=name,
             value=value,
+            table=table,
+            table_axes=table_axes,
+            output=output,
         )
     else:
         raise ValueError(f"Invalid expression data: {expr_data}")
@@ -1525,6 +1545,48 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                 grid_name, grid_data, data_loaders=data_loaders,
             )
 
+    # Parse function_tables (esm-spec §9.5, v0.4.0). Each entry is a
+    # FunctionTable carrying named axes plus literal nested-array data,
+    # referenced by table_lookup AST nodes.
+    function_tables: Dict[str, FunctionTable] = {}
+    if "function_tables" in data and data["function_tables"] is not None:
+        ft_map = data["function_tables"]
+        if not isinstance(ft_map, dict):
+            raise ValueError(
+                "Top-level 'function_tables' must be an object keyed by table id "
+                f"(esm-spec §9.5). Got: {type(ft_map).__name__}"
+            )
+        for ft_name, ft_data in ft_map.items():
+            axes_raw = ft_data.get("axes")
+            if not isinstance(axes_raw, list):
+                raise ValueError(
+                    f"function_tables['{ft_name}']: 'axes' must be a list "
+                    f"(esm-spec §9.5)"
+                )
+            axes = [
+                FunctionTableAxis(
+                    name=a["name"],
+                    values=list(a["values"]),
+                    units=a.get("units"),
+                )
+                for a in axes_raw
+            ]
+            if "data" not in ft_data:
+                raise ValueError(
+                    f"function_tables['{ft_name}']: 'data' is required "
+                    f"(esm-spec §9.5)"
+                )
+            function_tables[ft_name] = FunctionTable(
+                axes=axes,
+                data=copy.deepcopy(ft_data["data"]),
+                description=ft_data.get("description"),
+                interpolation=ft_data.get("interpolation"),
+                out_of_bounds=ft_data.get("out_of_bounds"),
+                outputs=list(ft_data["outputs"]) if "outputs" in ft_data else None,
+                shape=list(ft_data["shape"]) if "shape" in ft_data else None,
+                schema_version=ft_data.get("schema_version"),
+            )
+
     # Parse staggering_rules (RFC §7.4). Must happen after grids so we can
     # validate that referenced grid entries exist and have a compatible family.
     staggering_rules: Dict[str, StaggeringRule] = {}
@@ -1580,6 +1642,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         operators=operators,
         registered_functions=registered_functions,
         enums=enums,
+        function_tables=function_tables,
         coupling=coupling,
         domains=domains,
         grids=grids,
