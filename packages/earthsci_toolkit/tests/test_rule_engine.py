@@ -11,6 +11,7 @@ import pytest
 from earthsci_toolkit.canonicalize import canonical_json
 from earthsci_toolkit.esm_types import ExprNode
 from earthsci_toolkit.rule_engine import (
+    BoundaryPolicySpec,
     Guard,
     Rule,
     RuleContext,
@@ -308,3 +309,203 @@ class TestParseRule:
             ]
         )
         assert [r.name for r in rules] == ["r1", "r2"]
+
+
+class TestBoundaryPolicy:
+    """RFC §5.2.8 / §7 (esm-bet) — boundary_policy supports two forms:
+    a closed-set string (uniform across axes) and a {by_axis: ...} object."""
+
+    def test_uniform_string_form(self):
+        for kind in (
+            "periodic",
+            "reflecting",
+            "one_sided_extrapolation",
+            "prescribed",
+            "ghosted",
+            "neumann_zero",
+            "extrapolate",
+        ):
+            r = parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "boundary_policy": kind,
+                }
+            )
+            assert r.boundary_policy == kind
+
+    def test_uniform_string_form_rejects_unknown(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "boundary_policy": "nonexistent",
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+    def test_uniform_string_form_rejects_panel_dispatch(self):
+        # panel_dispatch is object-form-only — it requires interior/boundary parameters.
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "boundary_policy": "panel_dispatch",
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+    def test_per_axis_form_panel_dispatch(self):
+        r = parse_rule(
+            {
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "boundary_policy": {
+                    "by_axis": {
+                        "xi": {
+                            "kind": "panel_dispatch",
+                            "interior": "dist_xi",
+                            "boundary": "dist_xi_bnd",
+                        },
+                        "eta": {
+                            "kind": "panel_dispatch",
+                            "interior": "dist_eta",
+                            "boundary": "dist_eta_bnd",
+                        },
+                    }
+                },
+            }
+        )
+        assert isinstance(r.boundary_policy, dict)
+        xi = r.boundary_policy["xi"]
+        assert isinstance(xi, BoundaryPolicySpec)
+        assert xi.kind == "panel_dispatch"
+        assert xi.interior == "dist_xi"
+        assert xi.boundary == "dist_xi_bnd"
+
+    def test_per_axis_form_one_sided_extrapolation_with_degree(self):
+        r = parse_rule(
+            {
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "boundary_policy": {
+                    "by_axis": {
+                        "x": {"kind": "one_sided_extrapolation", "degree": 2}
+                    }
+                },
+            }
+        )
+        spec = r.boundary_policy["x"]
+        assert spec.kind == "one_sided_extrapolation"
+        assert spec.degree == 2
+
+    def test_panel_dispatch_requires_interior_and_boundary(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "boundary_policy": {
+                        "by_axis": {"xi": {"kind": "panel_dispatch"}}
+                    },
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+    def test_per_axis_form_rejects_invalid_degree(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "boundary_policy": {
+                        "by_axis": {
+                            "x": {"kind": "one_sided_extrapolation", "degree": 5}
+                        }
+                    },
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+
+class TestGhostWidth:
+    """RFC §5.2.8 / §7 (esm-bet) — ghost_width is either a non-negative
+    integer (axis-uniform) or a {by_axis: ...} object."""
+
+    def test_scalar_form(self):
+        r = parse_rule(
+            {
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "ghost_width": 3,
+            }
+        )
+        assert r.ghost_width == 3
+
+    def test_scalar_form_zero(self):
+        r = parse_rule(
+            {
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "ghost_width": 0,
+            }
+        )
+        assert r.ghost_width == 0
+
+    def test_scalar_form_rejects_negative(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "ghost_width": -1,
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+    def test_per_axis_form(self):
+        r = parse_rule(
+            {
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "ghost_width": {"by_axis": {"xi": 3, "eta": 2}},
+            }
+        )
+        assert r.ghost_width == {"xi": 3, "eta": 2}
+
+    def test_per_axis_form_rejects_negative(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "ghost_width": {"by_axis": {"xi": -1}},
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"
+
+    def test_rejects_string(self):
+        with pytest.raises(RuleEngineError) as exc:
+            parse_rule(
+                {
+                    "name": "r",
+                    "pattern": "$a",
+                    "replacement": "$a",
+                    "ghost_width": "3",
+                }
+            )
+        assert exc.value.code == "E_RULE_PARSE"

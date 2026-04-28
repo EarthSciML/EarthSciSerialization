@@ -141,3 +141,144 @@ func TestParseRuleMissingReplacement(t *testing.T) {
 		t.Errorf("got %v, want E_RULE_REPLACEMENT_MISSING", err)
 	}
 }
+
+// RFC §5.2.8 / §7 (esm-bet) — boundary_policy + ghost_width fields.
+
+func parseOneRule(t *testing.T, body string) Rule {
+	t.Helper()
+	raw := []byte("[" + body + "]")
+	rs, err := ParseRules(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(rs) != 1 {
+		t.Fatalf("got %d rules, want 1", len(rs))
+	}
+	return rs[0]
+}
+
+func TestBoundaryPolicyStringFormAllKinds(t *testing.T) {
+	for _, kind := range []string{
+		"periodic", "reflecting", "one_sided_extrapolation", "prescribed",
+		"ghosted", "neumann_zero", "extrapolate",
+	} {
+		body := `{"name": "r", "pattern": "$a", "replacement": "$a", "boundary_policy": "` + kind + `"}`
+		r := parseOneRule(t, body)
+		if r.BoundaryPolicy == nil || r.BoundaryPolicy.Uniform != kind {
+			t.Errorf("kind=%s: got %+v", kind, r.BoundaryPolicy)
+		}
+	}
+}
+
+func TestBoundaryPolicyStringFormRejectsUnknown(t *testing.T) {
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a", "boundary_policy": "nope"}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}
+
+func TestBoundaryPolicyStringFormRejectsPanelDispatch(t *testing.T) {
+	// panel_dispatch needs interior/boundary parameters → object form only.
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a", "boundary_policy": "panel_dispatch"}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}
+
+func TestBoundaryPolicyPerAxisPanelDispatch(t *testing.T) {
+	body := `{
+		"name": "ppm",
+		"pattern": "$a",
+		"replacement": "$a",
+		"boundary_policy": {"by_axis": {
+			"xi":  {"kind": "panel_dispatch", "interior": "dist_xi",  "boundary": "dist_xi_bnd"},
+			"eta": {"kind": "panel_dispatch", "interior": "dist_eta", "boundary": "dist_eta_bnd"}
+		}}
+	}`
+	r := parseOneRule(t, body)
+	if r.BoundaryPolicy == nil || r.BoundaryPolicy.PerAxis == nil {
+		t.Fatalf("expected per-axis form: %+v", r.BoundaryPolicy)
+	}
+	xi := r.BoundaryPolicy.PerAxis["xi"]
+	if xi.Kind != "panel_dispatch" || xi.Interior != "dist_xi" || xi.Boundary != "dist_xi_bnd" {
+		t.Errorf("xi spec wrong: %+v", xi)
+	}
+}
+
+func TestBoundaryPolicyPerAxisOneSidedExtrapolationDegree(t *testing.T) {
+	body := `{
+		"name": "r",
+		"pattern": "$a",
+		"replacement": "$a",
+		"boundary_policy": {"by_axis": {
+			"x": {"kind": "one_sided_extrapolation", "degree": 2}
+		}}
+	}`
+	r := parseOneRule(t, body)
+	x := r.BoundaryPolicy.PerAxis["x"]
+	if x.Kind != "one_sided_extrapolation" || !x.HasDegree || x.Degree != 2 {
+		t.Errorf("x spec wrong: %+v", x)
+	}
+}
+
+func TestBoundaryPolicyPanelDispatchRequiresInteriorAndBoundary(t *testing.T) {
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a",
+		"boundary_policy": {"by_axis": {"xi": {"kind": "panel_dispatch"}}}}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}
+
+func TestBoundaryPolicyRejectsOutOfRangeDegree(t *testing.T) {
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a",
+		"boundary_policy": {"by_axis": {"x": {"kind": "one_sided_extrapolation", "degree": 5}}}}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}
+
+func TestGhostWidthScalarForm(t *testing.T) {
+	body := `{"name": "r", "pattern": "$a", "replacement": "$a", "ghost_width": 3}`
+	r := parseOneRule(t, body)
+	if r.GhostWidth == nil || !r.GhostWidth.HasUniform || r.GhostWidth.Uniform != 3 {
+		t.Errorf("got %+v", r.GhostWidth)
+	}
+}
+
+func TestGhostWidthPerAxisForm(t *testing.T) {
+	body := `{"name": "r", "pattern": "$a", "replacement": "$a",
+		"ghost_width": {"by_axis": {"xi": 3, "eta": 2}}}`
+	r := parseOneRule(t, body)
+	if r.GhostWidth == nil || r.GhostWidth.PerAxis == nil {
+		t.Fatalf("expected per-axis form: %+v", r.GhostWidth)
+	}
+	if r.GhostWidth.PerAxis["xi"] != 3 || r.GhostWidth.PerAxis["eta"] != 2 {
+		t.Errorf("got %+v", r.GhostWidth.PerAxis)
+	}
+}
+
+func TestGhostWidthRejectsNegative(t *testing.T) {
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a", "ghost_width": -1}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}
+
+func TestGhostWidthRejectsString(t *testing.T) {
+	raw := []byte(`[{"name": "r", "pattern": "$a", "replacement": "$a", "ghost_width": "3"}]`)
+	_, err := ParseRules(raw)
+	re, ok := err.(*RuleEngineError)
+	if !ok || re.Code != "E_RULE_PARSE" {
+		t.Errorf("got %v, want E_RULE_PARSE", err)
+	}
+}

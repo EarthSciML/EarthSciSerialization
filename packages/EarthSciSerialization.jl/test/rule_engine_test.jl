@@ -205,4 +205,120 @@ const ESM_Expr = EarthSciSerialization.Expr
         @test check_unrewritten_pde_ops(expr2) === nothing
     end
 
+    @testset "boundary_policy + ghost_width (RFC §5.2.8 / §7, esm-bet)" begin
+        @testset "string-form boundary_policy: new closed-set kinds" begin
+            for kind in ("periodic", "reflecting", "one_sided_extrapolation",
+                         "prescribed", "ghosted", "neumann_zero", "extrapolate")
+                json = """
+                {"name": "r", "pattern": "\$a", "replacement": "\$a",
+                 "boundary_policy": "$kind"}
+                """
+                obj = JSON3.read(json)
+                rules = parse_rules([obj])
+                @test rules[1].boundary_policy == kind
+            end
+        end
+
+        @testset "string-form boundary_policy rejects unknown" begin
+            json = """{"name": "r", "pattern": "\$a", "replacement": "\$a",
+                       "boundary_policy": "nope"}"""
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+
+        @testset "string-form rejects panel_dispatch (object-form-only)" begin
+            json = """{"name": "r", "pattern": "\$a", "replacement": "\$a",
+                       "boundary_policy": "panel_dispatch"}"""
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+
+        @testset "per-axis boundary_policy with panel_dispatch" begin
+            json = """
+            {"name": "ppm", "pattern": "\$a", "replacement": "\$a",
+             "boundary_policy": {"by_axis": {
+               "xi":  {"kind": "panel_dispatch", "interior": "dist_xi",  "boundary": "dist_xi_bnd"},
+               "eta": {"kind": "panel_dispatch", "interior": "dist_eta", "boundary": "dist_eta_bnd"}
+             }}}
+            """
+            obj = JSON3.read(json)
+            rules = parse_rules([obj])
+            bp = rules[1].boundary_policy
+            @test bp isa Dict
+            @test bp["xi"].kind == "panel_dispatch"
+            @test bp["xi"].interior == "dist_xi"
+            @test bp["xi"].boundary == "dist_xi_bnd"
+            @test bp["eta"].kind == "panel_dispatch"
+        end
+
+        @testset "per-axis one_sided_extrapolation with degree" begin
+            json = """
+            {"name": "r", "pattern": "\$a", "replacement": "\$a",
+             "boundary_policy": {"by_axis": {
+               "x": {"kind": "one_sided_extrapolation", "degree": 2}
+             }}}
+            """
+            obj = JSON3.read(json)
+            rules = parse_rules([obj])
+            spec = rules[1].boundary_policy["x"]
+            @test spec.kind == "one_sided_extrapolation"
+            @test spec.degree == 2
+        end
+
+        @testset "panel_dispatch requires interior + boundary" begin
+            json = """
+            {"name": "r", "pattern": "\$a", "replacement": "\$a",
+             "boundary_policy": {"by_axis": {"xi": {"kind": "panel_dispatch"}}}}
+            """
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+
+        @testset "rejects out-of-range degree" begin
+            json = """
+            {"name": "r", "pattern": "\$a", "replacement": "\$a",
+             "boundary_policy": {"by_axis": {
+               "x": {"kind": "one_sided_extrapolation", "degree": 5}
+             }}}
+            """
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+
+        @testset "ghost_width scalar form" begin
+            json = """{"name": "r", "pattern": "\$a", "replacement": "\$a",
+                       "ghost_width": 3}"""
+            obj = JSON3.read(json)
+            rules = parse_rules([obj])
+            @test rules[1].ghost_width == 3
+        end
+
+        @testset "ghost_width per-axis form" begin
+            json = """
+            {"name": "r", "pattern": "\$a", "replacement": "\$a",
+             "ghost_width": {"by_axis": {"xi": 3, "eta": 2}}}
+            """
+            obj = JSON3.read(json)
+            rules = parse_rules([obj])
+            gw = rules[1].ghost_width
+            @test gw isa Dict
+            @test gw["xi"] == 3
+            @test gw["eta"] == 2
+        end
+
+        @testset "ghost_width rejects negative" begin
+            json = """{"name": "r", "pattern": "\$a", "replacement": "\$a",
+                       "ghost_width": -1}"""
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+
+        @testset "ghost_width rejects string" begin
+            json = """{"name": "r", "pattern": "\$a", "replacement": "\$a",
+                       "ghost_width": "3"}"""
+            obj = JSON3.read(json)
+            @test_throws RuleEngineError parse_rules([obj])
+        end
+    end
+
 end

@@ -217,3 +217,170 @@ describe('rule engine — defaults', () => {
     expect(DEFAULT_MAX_PASSES).toBe(32)
   })
 })
+
+// RFC §5.2.8 / §7 (esm-bet) — boundary_policy + ghost_width fields.
+describe('rule engine — boundary_policy + ghost_width (esm-bet)', () => {
+  function parseOne(rule: object) {
+    const rs = parseRules([rule])
+    expect(rs).toHaveLength(1)
+    return rs[0]!
+  }
+
+  it('accepts every string-form boundary_policy kind', () => {
+    for (const kind of [
+      'periodic',
+      'reflecting',
+      'one_sided_extrapolation',
+      'prescribed',
+      'ghosted',
+      'neumann_zero',
+      'extrapolate',
+    ]) {
+      const r = parseOne({
+        name: 'r',
+        pattern: '$a',
+        replacement: '$a',
+        boundary_policy: kind,
+      })
+      expect(r.boundaryPolicy).toBe(kind)
+    }
+  })
+
+  it('rejects unknown string-form boundary_policy', () => {
+    try {
+      parseRules([
+        { name: 'r', pattern: '$a', replacement: '$a', boundary_policy: 'nope' },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+
+  it('rejects panel_dispatch in string-form (object-form-only)', () => {
+    try {
+      parseRules([
+        {
+          name: 'r',
+          pattern: '$a',
+          replacement: '$a',
+          boundary_policy: 'panel_dispatch',
+        },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+
+  it('parses per-axis boundary_policy with panel_dispatch', () => {
+    const r = parseOne({
+      name: 'ppm',
+      pattern: '$a',
+      replacement: '$a',
+      boundary_policy: {
+        by_axis: {
+          xi: { kind: 'panel_dispatch', interior: 'dist_xi', boundary: 'dist_xi_bnd' },
+          eta: { kind: 'panel_dispatch', interior: 'dist_eta', boundary: 'dist_eta_bnd' },
+        },
+      },
+    })
+    expect(typeof r.boundaryPolicy).toBe('object')
+    const bp = r.boundaryPolicy as { by_axis: Record<string, { kind: string; interior?: string; boundary?: string }> }
+    expect(bp.by_axis.xi!.kind).toBe('panel_dispatch')
+    expect(bp.by_axis.xi!.interior).toBe('dist_xi')
+    expect(bp.by_axis.xi!.boundary).toBe('dist_xi_bnd')
+  })
+
+  it('parses per-axis one_sided_extrapolation with degree', () => {
+    const r = parseOne({
+      name: 'r',
+      pattern: '$a',
+      replacement: '$a',
+      boundary_policy: {
+        by_axis: { x: { kind: 'one_sided_extrapolation', degree: 2 } },
+      },
+    })
+    const bp = r.boundaryPolicy as { by_axis: Record<string, { kind: string; degree?: number }> }
+    expect(bp.by_axis.x!.kind).toBe('one_sided_extrapolation')
+    expect(bp.by_axis.x!.degree).toBe(2)
+  })
+
+  it('rejects panel_dispatch missing interior/boundary', () => {
+    try {
+      parseRules([
+        {
+          name: 'r',
+          pattern: '$a',
+          replacement: '$a',
+          boundary_policy: { by_axis: { xi: { kind: 'panel_dispatch' } } },
+        },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+
+  it('rejects out-of-range degree', () => {
+    try {
+      parseRules([
+        {
+          name: 'r',
+          pattern: '$a',
+          replacement: '$a',
+          boundary_policy: {
+            by_axis: { x: { kind: 'one_sided_extrapolation', degree: 5 } },
+          },
+        },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+
+  it('parses ghost_width scalar form', () => {
+    const r = parseOne({
+      name: 'r',
+      pattern: '$a',
+      replacement: '$a',
+      ghost_width: 3,
+    })
+    expect(r.ghostWidth).toBe(3)
+  })
+
+  it('parses ghost_width per-axis form', () => {
+    const r = parseOne({
+      name: 'r',
+      pattern: '$a',
+      replacement: '$a',
+      ghost_width: { by_axis: { xi: 3, eta: 2 } },
+    })
+    const gw = r.ghostWidth as { by_axis: Record<string, number> }
+    expect(gw.by_axis.xi).toBe(3)
+    expect(gw.by_axis.eta).toBe(2)
+  })
+
+  it('rejects negative ghost_width', () => {
+    try {
+      parseRules([
+        { name: 'r', pattern: '$a', replacement: '$a', ghost_width: -1 },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+
+  it('rejects string ghost_width', () => {
+    try {
+      parseRules([
+        { name: 'r', pattern: '$a', replacement: '$a', ghost_width: '3' },
+      ])
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(RuleEngineError)
+    }
+  })
+})

@@ -1980,4 +1980,192 @@ mod tests {
             vec!["first", "second"]
         );
     }
+
+    // RFC §5.2.8 / §7 (esm-bet) — boundary_policy + ghost_width fields.
+
+    fn parse_one(v: serde_json::Value) -> Result<Rule, RuleEngineError> {
+        parse_rules(&serde_json::json!([v])).map(|mut rs| rs.remove(0))
+    }
+
+    #[test]
+    fn boundary_policy_string_form_all_kinds() {
+        for kind in [
+            "periodic",
+            "reflecting",
+            "one_sided_extrapolation",
+            "prescribed",
+            "ghosted",
+            "neumann_zero",
+            "extrapolate",
+        ] {
+            let r = parse_one(serde_json::json!({
+                "name": "r",
+                "pattern": "$a",
+                "replacement": "$a",
+                "boundary_policy": kind,
+            }))
+            .unwrap();
+            match r.boundary_policy.unwrap() {
+                BoundaryPolicy::Uniform(k) => assert_eq!(k.as_str(), kind),
+                _ => panic!("expected uniform form"),
+            }
+        }
+    }
+
+    #[test]
+    fn boundary_policy_string_form_rejects_unknown() {
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": "nope",
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
+
+    #[test]
+    fn boundary_policy_string_form_rejects_panel_dispatch() {
+        // panel_dispatch needs interior/boundary parameters → object form only.
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": "panel_dispatch",
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
+
+    #[test]
+    fn boundary_policy_per_axis_panel_dispatch() {
+        let r = parse_one(serde_json::json!({
+            "name": "ppm",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": {
+                "by_axis": {
+                    "xi":  {"kind": "panel_dispatch", "interior": "dist_xi",  "boundary": "dist_xi_bnd"},
+                    "eta": {"kind": "panel_dispatch", "interior": "dist_eta", "boundary": "dist_eta_bnd"}
+                }
+            },
+        }))
+        .unwrap();
+        let map = match r.boundary_policy.unwrap() {
+            BoundaryPolicy::PerAxis(m) => m,
+            _ => panic!("expected per-axis form"),
+        };
+        let xi = &map["xi"];
+        assert!(matches!(xi.kind, BoundaryPolicyKind::PanelDispatch));
+        assert_eq!(xi.interior.as_deref(), Some("dist_xi"));
+        assert_eq!(xi.boundary.as_deref(), Some("dist_xi_bnd"));
+    }
+
+    #[test]
+    fn boundary_policy_per_axis_one_sided_extrapolation_with_degree() {
+        let r = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": {
+                "by_axis": {
+                    "x": {"kind": "one_sided_extrapolation", "degree": 2}
+                }
+            },
+        }))
+        .unwrap();
+        let map = match r.boundary_policy.unwrap() {
+            BoundaryPolicy::PerAxis(m) => m,
+            _ => panic!("expected per-axis form"),
+        };
+        assert!(matches!(
+            map["x"].kind,
+            BoundaryPolicyKind::OneSidedExtrapolation
+        ));
+        assert_eq!(map["x"].degree, Some(2));
+    }
+
+    #[test]
+    fn boundary_policy_panel_dispatch_requires_interior_and_boundary() {
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": {
+                "by_axis": {"xi": {"kind": "panel_dispatch"}}
+            },
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
+
+    #[test]
+    fn boundary_policy_rejects_out_of_range_degree() {
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "boundary_policy": {
+                "by_axis": {"x": {"kind": "one_sided_extrapolation", "degree": 5}}
+            },
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
+
+    #[test]
+    fn ghost_width_scalar_form() {
+        let r = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "ghost_width": 3,
+        }))
+        .unwrap();
+        match r.ghost_width.unwrap() {
+            GhostWidth::Uniform(n) => assert_eq!(n, 3),
+            _ => panic!("expected uniform form"),
+        }
+    }
+
+    #[test]
+    fn ghost_width_per_axis_form() {
+        let r = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "ghost_width": {"by_axis": {"xi": 3, "eta": 2}},
+        }))
+        .unwrap();
+        let map = match r.ghost_width.unwrap() {
+            GhostWidth::PerAxis(m) => m,
+            _ => panic!("expected per-axis form"),
+        };
+        assert_eq!(map["xi"], 3);
+        assert_eq!(map["eta"], 2);
+    }
+
+    #[test]
+    fn ghost_width_rejects_negative() {
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "ghost_width": -1,
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
+
+    #[test]
+    fn ghost_width_rejects_string() {
+        let err = parse_one(serde_json::json!({
+            "name": "r",
+            "pattern": "$a",
+            "replacement": "$a",
+            "ghost_width": "3",
+        }))
+        .unwrap_err();
+        assert_eq!(err.code, "E_RULE_PARSE");
+    }
 }
