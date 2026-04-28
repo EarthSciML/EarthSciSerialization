@@ -11,6 +11,7 @@ import type { EsmFile, Expression, CouplingEntry } from './types.js'
 import { validateUnits } from './units.js'
 import { isNumericLiteral, losslessJsonParse } from './numeric-literal.js'
 import { lowerEnums } from './lower_enums.js'
+import { expandExpressionTemplates } from './expression-templates.js'
 
 /**
  * Schema validation error with JSON Pointer path
@@ -82,8 +83,8 @@ const schema = {
   "properties": {
     "esm": {
       "type": "string",
-      "enum": ["0.1.0", "0.2.0", "0.3.0"],
-      "description": "Format version string (semver). v0.3.0 closes the function registry; see esm-spec §9."
+      "enum": ["0.1.0", "0.2.0", "0.3.0", "0.4.0"],
+      "description": "Format version string (semver). v0.4.0 adds the in-file AST templates mechanism (RFC docs/content/rfcs/ast-expression-templates.md, esm-giy)."
     },
     "metadata": { "$ref": "#/$defs/Metadata" },
     "models": {
@@ -223,7 +224,8 @@ const schema = {
             "sign",
             "index",
             "fn", "enum", "const",
-            "bc"
+            "bc",
+            "apply_expression_template"
           ]
         },
         "args": {
@@ -254,6 +256,11 @@ const schema = {
         "side": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: BC side to match (RFC §9.2)."
+        },
+        "bindings": {
+          "type": "object",
+          "description": "For 'apply_expression_template': map of template parameter name → bound Expression. Every parameter declared in the template's `params` MUST have a value here. Substituted into the template body at parse time (RFC v2 §5.2).",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
         }
       },
       "additionalProperties": false,
@@ -281,8 +288,27 @@ const schema = {
               }
             }
           }
+        },
+        {
+          "if": { "properties": { "op": { "const": "apply_expression_template" } }, "required": ["op"] },
+          "then": { "required": ["name", "bindings"] }
         }
       ]
+    },
+
+    "ExpressionTemplate": {
+      "type": "object",
+      "description": "A named factoring of a recurring Expression AST shape (RFC v2 §5.1). Expanded at parse time wherever an apply_expression_template op references it.",
+      "required": ["params", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "body": { "$ref": "#/$defs/Expression" }
+      }
     },
 
     "Equation": {
@@ -599,6 +625,11 @@ const schema = {
           "type": "object",
           "description": "Model-level boundary conditions keyed by user-supplied id (v0.2.0, RFC §9). Replaces the v0.1.0 domain-level list; old-style files emit E_DEPRECATED_DOMAIN_BC.",
           "additionalProperties": { "$ref": "#/$defs/ModelBoundaryCondition" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+, RFC v2). References via apply_expression_template are expanded at parse time.",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -798,6 +829,11 @@ const schema = {
         "examples": {
           "type": "array",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+, RFC v2). References via apply_expression_template are expanded at parse time.",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -2305,6 +2341,21 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   // points (esm-spec §9 / closed function registry RFC). Mirrors the
   // Julia ref `parse.jl` rejection so cross-binding behavior is uniform.
   rejectRemovedV02Blocks(validationView)
+
+  // Step 2b: parse-time expansion of `expression_templates` (RFC v2 §4
+  // Option A always-expanded). Mutates both views in place. Version-gated:
+  // files declaring esm: < 0.4.0 that use templates are rejected.
+  try {
+    expandExpressionTemplates(data)
+    if (validationView !== data) {
+      expandExpressionTemplates(validationView)
+    }
+  } catch (e) {
+    if (e instanceof Error && e.name === 'SchemaValidationError') {
+      throw new SchemaValidationError(e.message, [])
+    }
+    throw e
+  }
 
   // Step 3: Schema validation with version compatibility
   const schemaErrors = validateSchemaWithVersionCompatibility(validationView)

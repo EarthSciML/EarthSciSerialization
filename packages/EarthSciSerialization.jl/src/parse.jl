@@ -1541,8 +1541,17 @@ function load(io::IO)::EsmFile
         # gt-2fvs mayor decision). A follow-up bead flips this to a hard error.
         _warn_deprecated_domain_bc(raw_data)
 
-        # Coerce types and return
-        return coerce_esm_file(raw_data)
+        # Expand `expression_templates` (RFC v2 §4 Option A always-expanded).
+        # JSON3 produces immutable views; convert to a native Dict tree,
+        # mutate, then re-parse via JSON3 so `coerce_esm_file` continues to
+        # see the property-access shape it expects.
+        native_data = _to_native_json(raw_data)::Dict{String,Any}
+        expand_expression_templates!(native_data)
+
+        # Coerce types and return — DictView gives `coerce_esm_file` the
+        # property-access shape it expects without JSON3 round-trip
+        # (which would widen deeply-nested integer literals to Float64).
+        return coerce_esm_file(DictView(native_data))
 
     catch e
         if isa(e, Exception) && hasfield(typeof(e), :msg)
@@ -1755,5 +1764,7 @@ function _load_remote_ref(ref::String)::EsmFile
         throw(SubsystemRefError("Schema validation failed for remote ref '$(ref)'"))
     end
 
-    return coerce_esm_file(raw_data)
+    native_data = _to_native_json(raw_data)::Dict{String,Any}
+    expand_expression_templates!(native_data)
+    return coerce_esm_file(DictView(native_data))
 end

@@ -42,6 +42,7 @@ pub mod display;
 pub mod edit;
 pub mod error;
 pub mod expression;
+pub mod expression_templates;
 pub mod flatten;
 pub mod graph;
 pub mod grid_accessor;

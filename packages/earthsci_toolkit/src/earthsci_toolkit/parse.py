@@ -81,10 +81,11 @@ class SubsystemRefError(Exception):
     pass
 
 
-# Current library version for compatibility checking. Bumped to 0.3.0 with the
-# closed function registry (esm-spec.md §9.2 / §9.3 / esm-tzp / esm-4ia):
-# the `fn`/`enum`/`const` AST ops and the top-level `enums` block.
-_CURRENT_VERSION = (0, 3, 0)
+# Current library version for compatibility checking. Bumped to 0.4.0 with the
+# in-file AST templates mechanism (RFC docs/content/rfcs/ast-expression-templates.md,
+# esm-giy): `expression_templates` block on Model / ReactionSystem and the
+# `apply_expression_template` AST op.
+_CURRENT_VERSION = (0, 4, 0)
 
 
 def _check_version_compatibility(version_string: str) -> None:
@@ -115,6 +116,146 @@ def _check_version_compatibility(version_string: str) -> None:
             UserWarning,
             stacklevel=3
         )
+
+
+def _esm_version_tuple(version_string: str) -> Optional[tuple]:
+    """Parse 'X.Y.Z' to (X, Y, Z) tuple; return None if unparsable."""
+    import re
+    m = re.match(r'^(\d+)\.(\d+)\.(\d+)$', version_string or "")
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def _scan_for_apply_template(node: Any) -> bool:
+    """Walk node looking for any apply_expression_template op-dict."""
+    if isinstance(node, dict):
+        if node.get("op") == "apply_expression_template":
+            return True
+        for v in node.values():
+            if _scan_for_apply_template(v):
+                return True
+        return False
+    if isinstance(node, list):
+        for v in node:
+            if _scan_for_apply_template(v):
+                return True
+    return False
+
+
+def _substitute_template_body(body: Any, bindings: Dict[str, Any]) -> Any:
+    """Substitute `bindings` into a template `body` Expression.
+
+    Walks Expression-positioned fields only (args / expr / values); other
+    op-dict fields (op, name, fn, kind, etc.) are passed through untouched
+    so a parameter name that happens to equal an op name does not collide.
+    Bare string equal to a parameter name is replaced by a deep copy of the
+    bound argument's AST. Numbers and unbound strings pass through.
+    """
+    if isinstance(body, str):
+        if body in bindings:
+            return copy.deepcopy(bindings[body])
+        return body
+    if isinstance(body, dict):
+        out: Dict[str, Any] = {}
+        for k, v in body.items():
+            if k in ("args", "values"):
+                out[k] = [_substitute_template_body(x, bindings) for x in (v or [])]
+            elif k == "expr":
+                out[k] = _substitute_template_body(v, bindings)
+            else:
+                out[k] = v
+        return out
+    if isinstance(body, list):
+        return [_substitute_template_body(v, bindings) for v in body]
+    return body
+
+
+def _expand_apply_template(node: Dict[str, Any], templates: Dict[str, Any]) -> Any:
+    """Replace one apply_expression_template node with its expanded body."""
+    name = node.get("name")
+    if not isinstance(name, str) or name not in templates:
+        raise SchemaValidationError(
+            f"apply_expression_template references unknown template '{name}'"
+        )
+    template = templates[name]
+    params = list(template.get("params", []))
+    bindings = node.get("bindings") or {}
+    missing = [p for p in params if p not in bindings]
+    if missing:
+        raise SchemaValidationError(
+            f"apply_expression_template '{name}' missing bindings: {missing}"
+        )
+    extras = [k for k in bindings if k not in params]
+    if extras:
+        raise SchemaValidationError(
+            f"apply_expression_template '{name}' has unknown bindings: {extras}"
+        )
+    body = copy.deepcopy(template["body"])
+    return _substitute_template_body(body, bindings)
+
+
+def _expand_templates_walk(node: Any, templates: Dict[str, Any]) -> Any:
+    """Recursively expand apply_expression_template nodes inside `node`."""
+    if isinstance(node, dict):
+        if node.get("op") == "apply_expression_template":
+            return _expand_apply_template(node, templates)
+        return {k: _expand_templates_walk(v, templates) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_expand_templates_walk(v, templates) for v in node]
+    return node
+
+
+def _expand_in_component(component: Dict[str, Any]) -> None:
+    """Expand templates declared inside one model/reaction_system, in place.
+
+    Templates are component-local: the `expression_templates` block is
+    removed after expansion. Subsystems are recursed into independently
+    (templates do not cross subsystem boundaries).
+    """
+    if not isinstance(component, dict):
+        return
+    templates = component.pop("expression_templates", None) or {}
+    if templates:
+        for key in list(component.keys()):
+            if key == "subsystems":
+                continue
+            component[key] = _expand_templates_walk(component[key], templates)
+    subs = component.get("subsystems") or {}
+    if isinstance(subs, dict):
+        for sub_def in subs.values():
+            if isinstance(sub_def, dict) and "ref" not in sub_def:
+                _expand_in_component(sub_def)
+
+
+def _expand_expression_templates(data: Dict[str, Any]) -> None:
+    """Parse-time expansion of expression_templates (RFC v2 §4, Option A).
+
+    Mutates `data` in place: every component's `expression_templates` block
+    is removed and every `apply_expression_template` reference is replaced
+    by the expanded body. Files declaring esm: < 0.4.0 that use
+    apply_expression_template are rejected.
+    """
+    if not isinstance(data, dict):
+        return
+    has_use = _scan_for_apply_template(data)
+    has_block = False
+    for section in ("models", "reaction_systems"):
+        for component in (data.get(section) or {}).values():
+            if isinstance(component, dict) and component.get("expression_templates"):
+                has_block = True
+                break
+    if has_use or has_block:
+        v = _esm_version_tuple(data.get("esm", ""))
+        if v is None or v < (0, 4, 0):
+            raise SchemaValidationError(
+                "expression_templates / apply_expression_template require "
+                "esm: 0.4.0 or later (file declares esm: "
+                f"'{data.get('esm', '')}')"
+            )
+    for section in ("models", "reaction_systems"):
+        for component in (data.get(section) or {}).values():
+            _expand_in_component(component)
 
 
 def _get_schema() -> Dict[str, Any]:
@@ -2976,6 +3117,12 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
 
     # Check version compatibility
     _check_version_compatibility(data.get("esm", ""))
+
+    # Expand `expression_templates` in place (RFC v2 §4 Option A: always-expanded
+    # round-trip). Must run before structural validation and parsing so downstream
+    # code never sees `apply_expression_template` nodes. Version-gated: files
+    # declaring esm: < 0.4.0 that use templates are rejected here.
+    _expand_expression_templates(data)
 
     # Structural validation
     _validate_structural(data, file_path=file_path)

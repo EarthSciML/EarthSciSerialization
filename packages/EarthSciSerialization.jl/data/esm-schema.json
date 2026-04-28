@@ -154,7 +154,8 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "fn", "enum", "const", "bc"
+            "fn", "enum", "const", "bc",
+            "apply_expression_template"
           ]
         },
         "args": {
@@ -260,6 +261,11 @@
         "side": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
+        },
+        "bindings": {
+          "type": "object",
+          "description": "For the 'apply_expression_template' op: map of template parameter name → bound Expression (number, variable reference string, or ExpressionNode). Every parameter declared in the template's `params` array MUST have a value here, and no extras are permitted. Bindings are substituted positionally-by-name into the template body at parse time (RFC v2 §5.2 / §4 rule 3). The `apply_expression_template` op has no positional arguments: authors set `args` to an empty array (matching the `makearray` empty-args convention). See docs/content/rfcs/ast-expression-templates.md.",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
         }
       },
       "additionalProperties": false,
@@ -308,8 +314,31 @@
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
           "then": { "required": ["kind", "side"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "apply_expression_template" } }, "required": ["op"] },
+          "then": { "required": ["name", "bindings"] }
         }
       ]
+    },
+
+    "ExpressionTemplate": {
+      "type": "object",
+      "description": "A named factoring of a recurring Expression AST shape, declared inside a single Model or ReactionSystem (RFC v2 §5.1). At parse time, every `apply_expression_template` reference to this template is replaced by the body with `params` substituted from the reference's `bindings`. Bodies are fixed AST trees: no recursion, no template-calls-template, no metaprogramming — see RFC v2 §5.3.",
+      "required": ["params", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "array",
+          "description": "Ordered list of parameter names. Each name must be unique within the template. Occurrences of the bare name string in `body` are placeholders that get substituted with the bound argument's AST in source order.",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "body": {
+          "$ref": "#/$defs/Expression",
+          "description": "The Expression AST that gets substituted in. Parameter occurrences are written as the bare parameter name string in any position where a variable reference would appear."
+        }
+      }
     },
 
     "Equation": {
@@ -643,6 +672,11 @@
           "type": "object",
           "description": "Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).",
           "additionalProperties": { "$ref": "#/$defs/BoundaryCondition" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this Model. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -823,6 +857,11 @@
           "type": "array",
           "description": "Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this ReactionSystem. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -2320,6 +2359,17 @@
             "additionalProperties": true
           }
         },
+        "boundary_policy": {
+          "$ref": "#/$defs/BoundaryPolicy"
+        },
+        "ghost_width": {
+          "$ref": "#/$defs/GhostWidth"
+        },
+        "bindings": {
+          "type": "object",
+          "description": "Declares the symbolic identifiers (other than pattern variables and canonical grid indices i/j/k/...) that the rule's replacement AST may reference, together with the rate at which each binding's value changes at runtime (RFC §5.2.8). This is metadata: loaders preserve it across roundtrips but the rule engine does not consult it during pattern matching or expansion. Time-varying bindings (per_step, per_cell) document a contract between the rule author and the host runtime that supplies values during simulation. Static bindings are equivalent to model parameters and may be evaluated at load time. Keys are bare identifier names (e.g. 'dt', 'dx', 'velocity', 'cos_lat'); '$'-prefixed pattern-variable names are NOT permitted here (declare those via the pattern itself).",
+          "additionalProperties": { "$ref": "#/$defs/RuleBinding" }
+        },
         "description": { "type": "string" }
       },
       "oneOf": [
@@ -2327,6 +2377,115 @@
         { "required": ["use"] },
         { "required": ["produces"] }
       ]
+    },
+
+    "BoundaryPolicy": {
+      "description": "Behavior of a rule at the domain edges of any grid the pattern resolves on (RFC §5.2.8 / §7). Omission is equivalent to 'periodic' for backwards compatibility with v0.2/v0.3 rules that implicitly assumed wrap-around indexing. Two authorial forms are accepted: (1) a STRING from the closed set ['periodic','ghosted','neumann_zero','extrapolate','reflecting','one_sided_extrapolation','prescribed'] — a uniform policy across all axes whose ghost values, when needed, are governed by the rule's 'ghost_width'; (2) an OBJECT with a 'by_axis' map declaring per-axis policy entries (each entry is a BoundaryPolicySpec — a {kind, ...} object). The per-axis form is required for cubed-sphere 'panel_dispatch' and for rules that need different policies on different axes (e.g. periodic in latitude, reflecting in vertical). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement (ghost-cell synthesis, panel metric selection, edge fall-through) is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["periodic", "ghosted", "neumann_zero", "extrapolate", "reflecting", "one_sided_extrapolation", "prescribed"]
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis policy. Keys are axis names from the rule's grid (e.g. 'xi','eta','x','y','z','lat','lon','lev'); values are BoundaryPolicySpec objects.",
+              "additionalProperties": { "$ref": "#/$defs/BoundaryPolicySpec" }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "BoundaryPolicySpec": {
+      "type": "object",
+      "description": "A single per-axis boundary policy (RFC §5.2.8 / §7). The 'kind' tag selects from the closed set described in BoundaryPolicy; per-kind sibling fields carry the policy's parameters.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["periodic", "reflecting", "one_sided_extrapolation", "prescribed", "panel_dispatch", "ghosted", "neumann_zero", "extrapolate"],
+          "description": "Closed-set tag. 'periodic' wraps around. 'reflecting' mirrors across the edge. 'one_sided_extrapolation' fills ghost values from interior using the 'degree' parameter. 'prescribed' declares the caller supplies ghost values; the runtime treats the input as already-extended. 'panel_dispatch' (cubed-sphere only) selects between two metric/distance fields based on whether a face lies at a panel boundary; takes 'interior' and 'boundary' field names. 'ghosted' is retained as a v0.3.x alias for 'prescribed' (caller-supplied ghost cells via an upstream BC pass). 'neumann_zero' is retained as a v0.3.x alias for 'reflecting' (mirror BC, zero flux). 'extrapolate' is retained as a v0.3.x alias for 'one_sided_extrapolation' (defaulting to linear when 'degree' is omitted)."
+        },
+        "degree": {
+          "description": "one_sided_extrapolation / extrapolate: extrapolation order. 0 = constant (zeroth-order), 1 = linear (default if omitted), 2 = quadratic, 3 = cubic. Higher orders are rejected by the schema.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "interior": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for interior (non-panel-boundary) faces of this axis. The field must be addressable on the rule's grid (e.g. 'dist_xi' on a cubed-sphere grid)."
+        },
+        "boundary": {
+          "type": "string",
+          "description": "panel_dispatch: name of the metric/distance field used for panel-boundary faces of this axis (e.g. 'dist_xi_bnd')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note explaining the policy choice."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "panel_dispatch" } } },
+          "then": { "required": ["interior", "boundary"] }
+        }
+      ]
+    },
+
+    "GhostWidth": {
+      "description": "Required ghost-cell padding per axis for a rule (RFC §5.2.8 / §7). The runtime preparing inputs to a rule SHALL extend each axis's input array by at least 'ghost_width[axis]' cells on each side, using the rule's declared 'boundary_policy' for that axis to fill the extension. Two authorial forms are accepted: (1) a non-negative INTEGER — uniform width applied to every axis the rule's stencil reaches; (2) an OBJECT with 'by_axis' giving per-axis non-negative integers. Omission is equivalent to 0 (rule reads only in-bounds indices). Bindings preserve this field across parse/serialize roundtrips; semantic enforcement is per-binding and may be a no-op while the rest of the discretization pipeline matures.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "required": ["by_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "by_axis": {
+              "type": "object",
+              "description": "Per-axis ghost width. Keys are axis names from the rule's grid; values are non-negative integers.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "RuleBinding": {
+      "type": "object",
+      "description": "A single binding declaration for a rule (RFC §5.2.8). Carries the binding's update cadence ('static', 'per_step', 'per_cell') and an optional default-value expression. The schema does not require 'default' — a binding with no default declares a runtime-supplied value with no compile-time fallback.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["static", "per_step", "per_cell"],
+          "description": "Update cadence. 'static' = constant for the whole simulation (e.g. Earth radius R, fixed grid spacing dlon). 'per_step' = may change once per time-step (e.g. an adaptive dt, an externally-driven max wind speed). 'per_cell' = varies across the grid at runtime (e.g. cell-centered velocity, latitudinally-varying cos_lat); the value is indexed by the canonical grid indices in scope."
+        },
+        "default": {
+          "$ref": "#/$defs/ExpressionNode",
+          "description": "Optional default value as an §4 expression. For 'static' bindings this is the value used when the runtime supplies no override. For 'per_step' and 'per_cell' bindings it is an authorial fallback — bindings MAY ignore it if the runtime always supplies a live value."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-form authorial note about what this binding represents (e.g. 'Courant number, set per-step from max|u|·dt/dx')."
+        }
+      }
     },
 
     "NeighborSelector": {

@@ -154,7 +154,8 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "fn", "enum", "const", "bc"
+            "fn", "enum", "const", "bc",
+            "apply_expression_template"
           ]
         },
         "args": {
@@ -260,6 +261,11 @@
         "side": {
           "type": "string",
           "description": "For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2."
+        },
+        "bindings": {
+          "type": "object",
+          "description": "For the 'apply_expression_template' op: map of template parameter name → bound Expression (number, variable reference string, or ExpressionNode). Every parameter declared in the template's `params` array MUST have a value here, and no extras are permitted. Bindings are substituted positionally-by-name into the template body at parse time (RFC v2 §5.2 / §4 rule 3). The `apply_expression_template` op has no positional arguments: authors set `args` to an empty array (matching the `makearray` empty-args convention). See docs/content/rfcs/ast-expression-templates.md.",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
         }
       },
       "additionalProperties": false,
@@ -308,8 +314,31 @@
         {
           "if": { "properties": { "op": { "const": "bc" } }, "required": ["op"] },
           "then": { "required": ["kind", "side"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "apply_expression_template" } }, "required": ["op"] },
+          "then": { "required": ["name", "bindings"] }
         }
       ]
+    },
+
+    "ExpressionTemplate": {
+      "type": "object",
+      "description": "A named factoring of a recurring Expression AST shape, declared inside a single Model or ReactionSystem (RFC v2 §5.1). At parse time, every `apply_expression_template` reference to this template is replaced by the body with `params` substituted from the reference's `bindings`. Bodies are fixed AST trees: no recursion, no template-calls-template, no metaprogramming — see RFC v2 §5.3.",
+      "required": ["params", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "array",
+          "description": "Ordered list of parameter names. Each name must be unique within the template. Occurrences of the bare name string in `body` are placeholders that get substituted with the bound argument's AST in source order.",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "body": {
+          "$ref": "#/$defs/Expression",
+          "description": "The Expression AST that gets substituted in. Parameter occurrences are written as the bare parameter name string in any position where a variable reference would appear."
+        }
+      }
     },
 
     "Equation": {
@@ -643,6 +672,11 @@
           "type": "object",
           "description": "Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).",
           "additionalProperties": { "$ref": "#/$defs/BoundaryCondition" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this Model. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -823,6 +857,11 @@
           "type": "array",
           "description": "Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this ReactionSystem. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },

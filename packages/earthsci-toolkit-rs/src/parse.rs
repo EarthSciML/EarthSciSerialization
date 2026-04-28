@@ -108,6 +108,12 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // Validate against schema
     validate_schema(&json_value)?;
 
+    // Expand `expression_templates` (RFC v2 §4 Option A always-expanded).
+    // Runs after schema validation so the schema sees the source form;
+    // downstream deserialization sees only the expanded AST. Version-gated
+    // for esm: 0.4.0+.
+    crate::expression_templates::expand_expression_templates(&mut json_value)?;
+
     // Post-schema structural + semantic checks (version compatibility,
     // cross-field format rules, reference integrity, cyclic coupling) — the
     // things JSON Schema cannot express. Mirrors Python / Julia so that
@@ -165,6 +171,7 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
         .map_err(EsmError::SchemaValidation)?;
 
     validate_schema(&json_value)?;
+    crate::expression_templates::expand_expression_templates(&mut json_value)?;
     validate_structural_json(&json_value)?;
 
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;

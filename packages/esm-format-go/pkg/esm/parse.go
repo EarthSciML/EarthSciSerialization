@@ -71,12 +71,22 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		return nil, fmt.Errorf("JSON schema validation failed: %v", errorStrs)
 	}
 
+	// Expand `expression_templates` (RFC v2 §4 Option A always-expanded).
+	// Mutates the JSON: every component's expression_templates block is
+	// dropped and apply_expression_template references are replaced with
+	// the substituted body. Version-gated for esm: 0.4.0+.
+	expandedBytes, err := expandExpressionTemplates(jsonStr)
+	if err != nil {
+		return nil, err
+	}
+	jsonStr = string(expandedBytes)
+
 	// Parse JSON into our struct. Use UseNumber so that JSON numbers in
 	// Expression (interface{}) slots retain their wire form — otherwise
 	// json.Unmarshal coerces every number to float64, destroying the
 	// integer/float node distinction required by discretization RFC §5.4.1.
 	var esmFile EsmFile
-	dec := json.NewDecoder(bytes.NewReader([]byte(jsonStr)))
+	dec := json.NewDecoder(bytes.NewReader(expandedBytes))
 	dec.UseNumber()
 	if err := dec.Decode(&esmFile); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)

@@ -106,7 +106,8 @@ export type ExpressionNode = ExpressionNode1 & {
     | "fn"
     | "enum"
     | "const"
-    | "bc";
+    | "bc"
+    | "apply_expression_template";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -187,6 +188,12 @@ export type ExpressionNode = ExpressionNode1 & {
    * For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2.
    */
   side?: string;
+  /**
+   * For the 'apply_expression_template' op: map of template parameter name → bound Expression (number, variable reference string, or ExpressionNode). Every parameter declared in the template's `params` array MUST have a value here, and no extras are permitted. Bindings are substituted positionally-by-name into the template body at parse time (RFC v2 §5.2 / §4 rule 3). The `apply_expression_template` op has no positional arguments: authors set `args` to an empty array (matching the `makearray` empty-args convention). See docs/content/rfcs/ast-expression-templates.md.
+   */
+  bindings?: {
+    [k: string]: Expression;
+  };
 };
 export type ExpressionNode1 = {
   [k: string]: unknown;
@@ -1126,6 +1133,12 @@ export interface Model {
   boundary_conditions?: {
     [k: string]: BoundaryCondition;
   };
+  /**
+   * Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this Model. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).
+   */
+  expression_templates?: {
+    [k: string]: ExpressionTemplate;
+  };
 }
 /**
  * An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
@@ -1465,6 +1478,19 @@ export interface BoundaryCondition {
   description?: string;
 }
 /**
+ * A named factoring of a recurring Expression AST shape, declared inside a single Model or ReactionSystem (RFC v2 §5.1). At parse time, every `apply_expression_template` reference to this template is replaced by the body with `params` substituted from the reference's `bindings`. Bodies are fixed AST trees: no recursion, no template-calls-template, no metaprogramming — see RFC v2 §5.3.
+ */
+export interface ExpressionTemplate {
+  /**
+   * Ordered list of parameter names. Each name must be unique within the template. Occurrences of the bare name string in `body` are placeholders that get substituted with the bound argument's AST in source order.
+   */
+  params: string[];
+  /**
+   * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
+   */
+  body: number | string | ExpressionNode1;
+}
+/**
  * A reaction network — declarative representation of chemical or biological reactions.
  */
 export interface ReactionSystem {
@@ -1516,6 +1542,12 @@ export interface ReactionSystem {
    * Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.
    */
   examples?: Example[];
+  /**
+   * Component-local AST factoring (esm: 0.4.0+). Each entry names a fixed Expression body parameterised by `params`; references via the `apply_expression_template` op are expanded at parse time. Visibility is limited to expression positions inside this ReactionSystem. Top-level / cross-component templates are deferred to a follow-up RFC. See docs/content/rfcs/ast-expression-templates.md (RFC v2).
+   */
+  expression_templates?: {
+    [k: string]: ExpressionTemplate;
+  };
 }
 /**
  * A reactive species in a reaction system.
