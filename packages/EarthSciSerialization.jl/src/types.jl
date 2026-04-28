@@ -448,14 +448,15 @@ struct Model
     system_kind::Union{String,Nothing}
 
     # Primary constructor with separate event arrays
-    Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation},
+    Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
-          subsystems::Dict{String,Model};
+          subsystems::AbstractDict{String,Model};
           domain=nothing, tolerance=nothing, tests=Test[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
           system_kind=nothing) =
-        new(variables, equations, discrete_events, continuous_events, subsystems,
+        new(Dict{String,ModelVariable}(variables), equations,
+            discrete_events, continuous_events, Dict{String,Model}(subsystems),
             domain, tolerance, tests,
             initialization_equations, guesses, system_kind)
 
@@ -463,7 +464,7 @@ struct Model
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
     # it into discrete/continuous. `events` takes precedence over the typed
     # `discrete_events`/`continuous_events` kwargs if both are supplied.
-    function Model(variables::Dict{String,ModelVariable}, equations::Vector{Equation};
+    function Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation};
                    discrete_events=DiscreteEvent[],
                    continuous_events=ContinuousEvent[],
                    events=nothing,
@@ -487,7 +488,8 @@ struct Model
                 end
             end
         end
-        return new(variables, equations, discrete_events, continuous_events, subsystems,
+        return new(Dict{String,ModelVariable}(variables), equations,
+                   discrete_events, continuous_events, Dict{String,Model}(subsystems),
                    domain, tolerance, tests,
                    initialization_equations, guesses, system_kind)
     end
