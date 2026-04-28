@@ -47,6 +47,7 @@ use crate::{EsmFile, error::EsmError};
 ///     grids: None,
 ///     staggering_rules: None,
 ///     discretizations: None,
+///     function_tables: None,
 /// };
 ///
 /// let json = save(&esm_file).expect("Failed to serialize ESM file");
@@ -109,6 +110,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = save(&esm_file);
@@ -190,6 +192,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = save(&esm_file);
@@ -231,6 +234,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = save_compact(&esm_file);

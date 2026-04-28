@@ -79,6 +79,7 @@ fn test_undefined_variable_in_model() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -189,6 +190,7 @@ fn test_equation_count_mismatch() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -283,6 +285,7 @@ fn test_undefined_species_in_reaction() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -402,6 +405,7 @@ fn test_valid_file_passes() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let validation_result = validate(&esm_file);

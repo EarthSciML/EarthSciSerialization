@@ -74,6 +74,9 @@ fn canon_op(node: &ExpressionNode) -> Result<Expr, CanonicalizeError> {
         broadcast_fn: node.broadcast_fn.clone(),
         name: node.name.clone(),
         value: node.value.clone(),
+        table: node.table.clone(),
+        axes: node.axes.clone(),
+        output: node.output.clone(),
     };
     match work.op.as_str() {
         "+" => canon_add(&mut work),

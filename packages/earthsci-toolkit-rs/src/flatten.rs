@@ -397,6 +397,7 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     flatten(&file)
@@ -996,6 +997,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         }
     }
 

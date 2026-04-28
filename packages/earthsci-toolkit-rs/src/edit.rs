@@ -629,6 +629,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         }
     }
 

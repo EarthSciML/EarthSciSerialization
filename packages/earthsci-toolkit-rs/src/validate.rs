@@ -1756,6 +1756,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -1841,6 +1842,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -1953,6 +1955,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2001,6 +2004,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2082,6 +2086,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2219,6 +2224,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2395,6 +2401,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2509,6 +2516,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2622,6 +2630,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2724,6 +2733,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let result = validate(&esm_file);
@@ -2778,6 +2788,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         // JSON that should fail schema validation (has invalid variable type)

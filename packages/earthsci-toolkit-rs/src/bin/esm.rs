@@ -2070,6 +2070,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 grids: esm_file.grids.clone(),
                 staggering_rules: esm_file.staggering_rules.clone(),
                 discretizations: None,
+                function_tables: esm_file.function_tables.clone(),
             };
 
             // Extract the specific component

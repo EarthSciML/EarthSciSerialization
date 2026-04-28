@@ -853,6 +853,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -937,6 +938,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -1024,6 +1026,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);
@@ -1125,6 +1128,7 @@ mod tests {
             grids: None,
             staggering_rules: None,
             discretizations: None,
+            function_tables: None,
         };
 
         let context = ScopedContext::from_esm_file(&esm_file);

@@ -67,6 +67,73 @@ pub struct EsmFile {
     /// both pass through unchanged, preserving round-trip fidelity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discretizations: Option<HashMap<String, serde_json::Value>>,
+
+    /// Component-scoped sampled function tables (esm-spec §9.5, v0.4.0).
+    /// Keys are table ids; values are `FunctionTable` entries referenced by
+    /// `table_lookup` AST nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function_tables: Option<HashMap<String, FunctionTable>>,
+}
+
+/// A single named axis inside a [`FunctionTable`] (esm-spec §9.5).
+///
+/// `values` MUST be strictly-increasing finite floats with at least 2 entries
+/// (mirrors the §9.2 interp.linear / interp.bilinear axis contract). `units`
+/// is advisory only in v0.4.0 — recorded for documentation, not used for
+/// load-time unit-checking.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FunctionTableAxis {
+    /// Axis identifier; used as the key in `table_lookup.axes`.
+    pub name: String,
+
+    /// Strictly-increasing finite floats, ≥ 2 entries.
+    pub values: Vec<f64>,
+
+    /// Optional advisory units string.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+}
+
+/// A sampled function table referenced by `table_lookup` AST op nodes
+/// (esm-spec §9.5, v0.4.0).
+///
+/// Tables are syntactic sugar over §9.2's `interp.linear` / `interp.bilinear`
+/// / `index` — a `table_lookup` query MUST be bit-equivalent to the
+/// equivalent inline-`const` lookup. Shape of `data` is
+/// `[len(outputs), len(axes[0].values), len(axes[1].values), ...]` when
+/// `outputs` is `Some`; `[len(axes[0].values), ...]` otherwise.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FunctionTable {
+    /// Ordered list of named axes (1 or 2 in v0.4.0, matching the
+    /// `interp.linear` / `interp.bilinear` arity).
+    pub axes: Vec<FunctionTableAxis>,
+
+    /// Nested-array literal of finite numbers.
+    pub data: serde_json::Value,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// `"linear"` | `"bilinear"` | `"nearest"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpolation: Option<String>,
+
+    /// `"clamp"` | `"error"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out_of_bounds: Option<String>,
+
+    /// Optional ordered output names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outputs: Option<Vec<String>>,
+
+    /// Optional redundant shape assertion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<Vec<u64>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<String>,
 }
 
 /// A named staggering convention that declares where quantities live on a
@@ -297,6 +364,27 @@ pub struct ExpressionNode {
     /// or nested array thereof). `args` MUST be empty when this is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<serde_json::Value>,
+
+    /// For the `table_lookup` op (esm-spec §9.5, v0.4.0): the
+    /// `function_tables` entry id this node references. ``args`` MUST be
+    /// empty for a `table_lookup` node — the per-axis input expressions live
+    /// in `axes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<String>,
+
+    /// For the `table_lookup` op: per-axis input-coordinate expression map.
+    /// Keys MUST match the axis names declared on the referenced
+    /// `FunctionTable`; values are arbitrary scalar `Expr`s. Stored under
+    /// the JSON key `axes` on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub axes: Option<HashMap<String, Expr>>,
+
+    /// For the `table_lookup` op: which output of a multi-output table to
+    /// return. Either a non-negative integer index (0-based) or a string
+    /// (entry of the table's `outputs` list). Single-output tables MAY omit
+    /// this (defaults to 0 at lowering time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<serde_json::Value>,
 }
 
 /// Numerical comparison tolerance used by inline model tests.

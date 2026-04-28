@@ -168,6 +168,7 @@ fn test_analysis_features_integration() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     // Test component graph

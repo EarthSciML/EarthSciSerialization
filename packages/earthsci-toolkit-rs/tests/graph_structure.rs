@@ -106,6 +106,7 @@ fn test_component_graph_generation() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     // Generate component graph
@@ -188,6 +189,7 @@ fn test_component_graph_exports() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let comp_graph = component_graph(&esm_file);
@@ -453,6 +455,7 @@ fn test_component_existence() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     // Test component existence

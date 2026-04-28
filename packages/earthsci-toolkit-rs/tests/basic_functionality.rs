@@ -131,6 +131,7 @@ fn test_structural_validation() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let validation_result = validate(&esm_file);
@@ -287,6 +288,7 @@ fn test_component_graph() {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     };
 
     let graph = component_graph(&esm_file);

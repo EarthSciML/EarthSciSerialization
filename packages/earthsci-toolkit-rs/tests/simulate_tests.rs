@@ -59,6 +59,7 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     }
 }
 

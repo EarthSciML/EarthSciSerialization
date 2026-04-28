@@ -46,6 +46,7 @@ fn empty_file() -> EsmFile {
         grids: None,
         staggering_rules: None,
         discretizations: None,
+        function_tables: None,
     }
 }
 
