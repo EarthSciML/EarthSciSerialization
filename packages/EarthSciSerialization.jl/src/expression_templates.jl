@@ -199,72 +199,40 @@ function _esm_version_at_least(v::AbstractString, ma::Int, mi::Int, pa::Int)
     return c >= pa
 end
 
-"""
-    DictView(d::Dict)
 
-Tiny wrapper that gives a `Dict{String,Any}` JSON3-style property access
-(`view.foo` ≡ `d["foo"]`). Used by `load()` after
-`expand_expression_templates!` to feed `coerce_esm_file` without
-round-tripping through JSON3 (which otherwise widens deeply-nested
-integer literals to Float64). Recursive: nested Dicts are wrapped
-on demand and Vectors get their Dict elements wrapped element-wise.
 """
-struct DictView
-    inner::Dict{String,Any}
-end
+    _has_any_template_block(data) -> Bool
 
-function _wrap_for_view(v)
-    if isa(v, Dict)
-        return DictView(Dict{String,Any}(string(k) => val for (k, val) in v))
-    elseif isa(v, AbstractVector)
-        return Any[_wrap_for_view(x) for x in v]
-    else
-        return v
+Walk a JSON3-decoded or native dict tree looking for any
+`expression_templates` block under a model or reaction_system. Used by
+`load()` to skip the expansion / JSON3 round-trip on files that do not
+use the mechanism.
+"""
+function _has_any_template_block(data)
+    if !isa(data, Dict) && !(data isa JSON3.Object)
+        return false
     end
-end
-
-function Base.getproperty(view::DictView, k::Symbol)
-    k === :inner && return getfield(view, :inner)
-    inner = getfield(view, :inner)
-    haskey(inner, string(k)) || throw(KeyError(k))
-    return _wrap_for_view(inner[string(k)])
-end
-
-function Base.haskey(view::DictView, k::Symbol)
-    return haskey(getfield(view, :inner), string(k))
-end
-
-function Base.haskey(view::DictView, k::AbstractString)
-    return haskey(getfield(view, :inner), String(k))
-end
-
-function Base.getindex(view::DictView, k)
-    return _wrap_for_view(getfield(view, :inner)[string(k)])
-end
-
-function Base.pairs(view::DictView)
-    return Iterators.map(p -> (Symbol(p.first) => _wrap_for_view(p.second)),
-                         pairs(getfield(view, :inner)))
-end
-
-function Base.keys(view::DictView)
-    return Iterators.map(Symbol, keys(getfield(view, :inner)))
-end
-
-function Base.length(view::DictView)
-    return length(getfield(view, :inner))
-end
-
-function Base.iterate(view::DictView, state...)
-    return iterate(pairs(view), state...)
-end
-
-function Base.get(view::DictView, k::Symbol, default)
-    inner = getfield(view, :inner)
-    haskey(inner, string(k)) ? _wrap_for_view(inner[string(k)]) : default
-end
-
-function Base.get(view::DictView, k::AbstractString, default)
-    inner = getfield(view, :inner)
-    haskey(inner, String(k)) ? _wrap_for_view(inner[String(k)]) : default
+    for section in (:models, :reaction_systems)
+        comps = nothing
+        if isa(data, Dict)
+            comps = get(data, string(section), nothing)
+        elseif data isa JSON3.Object && hasproperty(data, section)
+            comps = getproperty(data, section)
+        end
+        comps === nothing && continue
+        if isa(comps, Dict) || comps isa JSON3.Object
+            for (_, c) in pairs(comps)
+                if isa(c, Dict)
+                    t = get(c, "expression_templates", nothing)
+                    isa(t, Dict) && !isempty(t) && return true
+                elseif c isa JSON3.Object && hasproperty(c, :expression_templates)
+                    t = c.expression_templates
+                    if t isa JSON3.Object && length(t) > 0
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
 end

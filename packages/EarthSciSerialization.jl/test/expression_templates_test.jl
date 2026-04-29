@@ -36,7 +36,7 @@ function _arrhenius_inline(a_pre::Real, ea::Real)
                     "/",
                     [EarthSciSerialization.OpExpr(
                         "-",
-                        [EarthSciSerialization.IntExpr(Int64(ea))],
+                        [EarthSciSerialization.NumExpr(Float64(ea))],
                     ),
                      EarthSciSerialization.VarExpr("T")],
                 )],
