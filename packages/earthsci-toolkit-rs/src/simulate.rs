@@ -226,8 +226,26 @@ pub struct Compiled {
     /// Defining expressions for observed variables, parallel to
     /// `observed_names`.
     observed_exprs: Vec<ResolvedExpr>,
-    /// Right-hand sides of state derivatives, indexed by state position.
-    state_rhs_exprs: Vec<ResolvedExpr>,
+    /// Per-state classification + defining expression. A `Differential` entry
+    /// carries the RHS for `D(state, t) = ...`; an `Algebraic` entry carries
+    /// the value expression for `state = ...` (treated as the scalar
+    /// equivalent of MTK's `structural_simplify` — esm-0kt).
+    state_kinds: Vec<StateKind>,
+    /// State indices that are algebraic, in dependency-respecting order. Each
+    /// algebraic state's expression may reference differential states,
+    /// parameters, time, observed variables, or *earlier-listed* algebraic
+    /// states. Cycles are rejected at compile time.
+    algebraic_topo: Vec<usize>,
+}
+
+/// Internal classification of how a state variable is defined.
+#[derive(Debug, Clone)]
+enum StateKind {
+    /// `D(state, t) = rhs` — advanced by the integrator.
+    Differential(ResolvedExpr),
+    /// `state = rhs` — value reconstructed from `rhs` at every evaluation;
+    /// the integrator's derivative for this slot is held at zero.
+    Algebraic(ResolvedExpr),
 }
 
 impl Compiled {
@@ -284,9 +302,10 @@ impl Compiled {
             .map(|(i, n)| (n.clone(), i))
             .collect();
 
-        // (4) Walk equations: classify each as state derivative or observed
-        // assignment.
-        let mut state_rhs_raw: Vec<Option<Expr>> = vec![None; state_names.len()];
+        // (4) Walk equations: classify each as differential state derivative,
+        // algebraic state definition, or observed assignment.
+        let mut state_diff_raw: Vec<Option<Expr>> = vec![None; state_names.len()];
+        let mut state_alg_raw: Vec<Option<Expr>> = vec![None; state_names.len()];
         let mut observed_rhs_raw: Vec<Option<Expr>> = vec![None; observed_names_raw.len()];
 
         // Pull observed defining expressions out of the variable struct as a
@@ -308,20 +327,35 @@ impl Compiled {
                         ),
                     }
                 })?;
-                state_rhs_raw[*idx] = Some(eq.rhs.clone());
-            } else if let Some(name) = observed_lhs_name(&eq.lhs)
-                && let Some(idx) = observed_index_raw.get(&name)
-            {
-                observed_rhs_raw[*idx] = Some(eq.rhs.clone());
+                state_diff_raw[*idx] = Some(eq.rhs.clone());
+            } else if let Some(name) = observed_lhs_name(&eq.lhs) {
+                if let Some(idx) = state_index.get(&name) {
+                    // Bare-LHS equation whose target is a *state* variable
+                    // — algebraic-elimination case (esm-0kt). The integrator
+                    // does not advance this slot; its value is reconstructed
+                    // from the body whenever the RHS or output is evaluated.
+                    state_alg_raw[*idx] = Some(eq.rhs.clone());
+                } else if let Some(idx) = observed_index_raw.get(&name) {
+                    observed_rhs_raw[*idx] = Some(eq.rhs.clone());
+                }
+                // Bare-LHS equations whose target is neither a state nor an
+                // observed variable are ignored — they'd be true DAE
+                // constraints (out of v1 scope).
             }
-            // Equations whose LHS is neither D(state, t) nor a Variable
-            // matching an observed variable are ignored at v1. They'd be
-            // algebraic constraints (DAE territory), which is out of scope.
+            // Other LHS shapes (array ops, etc.) are handled elsewhere or
+            // ignored.
         }
 
-        // (5) Every state must have a defining derivative.
+        // (5) Every state must have a defining equation — either a
+        // differential D(state, t) RHS or a bare-LHS algebraic body. If both
+        // are present the differential equation wins (matches the Python
+        // simulation runner's overdetermined-system rule, esm-y3n).
         for (idx, name) in state_names.iter().enumerate() {
-            if state_rhs_raw[idx].is_none() {
+            if state_diff_raw[idx].is_some() {
+                state_alg_raw[idx] = None;
+                continue;
+            }
+            if state_alg_raw[idx].is_none() {
                 return Err(CompileError::InterpreterBuildError {
                     details: format!(
                         "State variable '{name}' has no D({name}, t) = ... equation in \
@@ -375,13 +409,54 @@ impl Compiled {
             })
             .collect::<Result<_, _>>()?;
 
-        let state_rhs_exprs: Vec<ResolvedExpr> = state_rhs_raw
-            .into_iter()
-            .map(|raw| {
-                let expr = raw.expect("checked above that every state has an equation");
-                resolve_expr(&expr, &state_index, &param_index, &observed_index, None)
-            })
-            .collect::<Result<_, _>>()?;
+        // (8) Topologically sort algebraic states (esm-0kt). An algebraic
+        // state's defining body may reference parameters, time, observed
+        // variables, differential states, or *other* algebraic states. The
+        // scalar equivalent of MTK's structural_simplify is a single pass
+        // that resolves each algebraic body in dependency order, so by the
+        // time we evaluate it every algebraic dependency already has a
+        // current value in the working state buffer. Cycles among algebraic
+        // states are rejected — the integrator has no way to break them.
+        let algebraic_indices: Vec<usize> = (0..state_names.len())
+            .filter(|i| state_alg_raw[*i].is_some())
+            .collect();
+        let alg_membership: HashSet<usize> = algebraic_indices.iter().copied().collect();
+
+        let mut alg_deps_dense: Vec<HashSet<usize>> = vec![HashSet::new(); state_names.len()];
+        for &i in &algebraic_indices {
+            if let Some(expr) = state_alg_raw[i].as_ref() {
+                collect_state_refs(expr, &state_index, &alg_membership, &mut alg_deps_dense[i]);
+            }
+        }
+        let algebraic_topo = topo_sort_subset(&algebraic_indices, &alg_deps_dense).map_err(
+            |cycle| CompileError::InterpreterBuildError {
+                details: format!(
+                    "Cyclic algebraic equations detected: {}",
+                    cycle
+                        .into_iter()
+                        .map(|i| state_names[i].clone())
+                        .collect::<Vec<_>>()
+                        .join(" -> ")
+                ),
+            },
+        )?;
+
+        // (9) Build per-state classification + resolved expression.
+        let mut state_kinds: Vec<StateKind> = Vec::with_capacity(state_names.len());
+        for i in 0..state_names.len() {
+            if let Some(rhs) = state_diff_raw[i].as_ref() {
+                let resolved =
+                    resolve_expr(rhs, &state_index, &param_index, &observed_index, None)?;
+                state_kinds.push(StateKind::Differential(resolved));
+            } else {
+                let body = state_alg_raw[i]
+                    .as_ref()
+                    .expect("algebraic-only states checked above");
+                let resolved =
+                    resolve_expr(body, &state_index, &param_index, &observed_index, None)?;
+                state_kinds.push(StateKind::Algebraic(resolved));
+            }
+        }
 
         Ok(Self {
             state_names,
@@ -392,7 +467,8 @@ impl Compiled {
             param_defaults,
             observed_names,
             observed_exprs,
-            state_rhs_exprs,
+            state_kinds,
+            algebraic_topo,
         })
     }
 
@@ -475,33 +551,74 @@ impl Compiled {
             }
         }
 
+        // Apply algebraic constraints to the initial-condition vector so that
+        // y0[i] for an algebraic state is consistent with its defining body
+        // — otherwise users must hand-tune defaults to satisfy the algebraic
+        // equations at t = t0 (esm-0kt).
+        {
+            let n_obs0 = self.observed_exprs.len();
+            let mut obs_buf = vec![0.0f64; n_obs0];
+            for (i, e) in self.observed_exprs.iter().enumerate() {
+                obs_buf[i] = interpret(e, &ic_vec, &param_vec, &obs_buf, t0);
+            }
+            for &idx in &self.algebraic_topo {
+                if let StateKind::Algebraic(expr) = &self.state_kinds[idx] {
+                    ic_vec[idx] = interpret(expr, &ic_vec, &param_vec, &obs_buf, t0);
+                }
+            }
+        }
+
         // Capture-friendly clones for the closures.
-        let state_rhs_exprs = self.state_rhs_exprs.clone();
+        let state_kinds = self.state_kinds.clone();
         let observed_exprs = self.observed_exprs.clone();
-        let state_rhs_exprs_jac = state_rhs_exprs.clone();
+        let algebraic_topo = self.algebraic_topo.clone();
+        let state_kinds_jac = state_kinds.clone();
         let observed_exprs_jac = observed_exprs.clone();
+        let algebraic_topo_jac = algebraic_topo.clone();
 
         let n_obs = observed_exprs.len();
 
         // RHS closure: y is current state, p is param vector, t is time, dy
         // is the derivative output.
+        //
+        // For models with algebraic states (esm-0kt), the integrator is not
+        // free to wander the algebraic-state slots: dy[idx] must be zero AND
+        // y[idx] must be reconstructed from the algebraic body before the
+        // differential RHS reads it. We work in a local copy of y so the
+        // integrator's own state vector is untouched.
         let rhs_closure = move |y: &diffsol::FaerVec<f64>,
                                 p: &diffsol::FaerVec<f64>,
                                 t: f64,
                                 dy: &mut diffsol::FaerVec<f64>| {
-            let y_s = y.as_slice();
+            let mut y_eff: Vec<f64> = y.as_slice().to_vec();
             let p_s = p.as_slice();
             let mut obs_buf = vec![0.0f64; n_obs];
             for (i, e) in observed_exprs.iter().enumerate() {
-                obs_buf[i] = interpret(e, y_s, p_s, &obs_buf, t);
+                obs_buf[i] = interpret(e, &y_eff, p_s, &obs_buf, t);
+            }
+            for &idx in &algebraic_topo {
+                if let StateKind::Algebraic(expr) = &state_kinds[idx] {
+                    y_eff[idx] = interpret(expr, &y_eff, p_s, &obs_buf, t);
+                }
             }
             let dy_s = dy.as_mut_slice();
-            for (i, e) in state_rhs_exprs.iter().enumerate() {
-                dy_s[i] = interpret(e, y_s, p_s, &obs_buf, t);
+            for (i, kind) in state_kinds.iter().enumerate() {
+                match kind {
+                    StateKind::Differential(expr) => {
+                        dy_s[i] = interpret(expr, &y_eff, p_s, &obs_buf, t);
+                    }
+                    StateKind::Algebraic(_) => {
+                        dy_s[i] = 0.0;
+                    }
+                }
             }
         };
 
-        // Jacobian-vector product closure (finite differences).
+        // Jacobian-vector product closure (finite differences). Algebraic
+        // slots in `y` are reconstructed from the algebraic body before the
+        // differential RHS is evaluated, on both the unperturbed and
+        // perturbed states, so the resulting Jacobian column reflects the
+        // total derivative through any chained algebraic substitutions.
         let jac_closure = move |y: &diffsol::FaerVec<f64>,
                                 p: &diffsol::FaerVec<f64>,
                                 t: f64,
@@ -521,25 +638,38 @@ impl Compiled {
             let y_norm = y_norm.sqrt().max(1.0);
             let eps = (f64::EPSILON.sqrt()) * y_norm;
 
-            // Allocate scratch.
-            let mut y_perturbed = vec![0.0f64; n];
+            let mut y_a: Vec<f64> = y_s.to_vec();
+            let mut y_b: Vec<f64> = vec![0.0f64; n];
             for i in 0..n {
-                y_perturbed[i] = y_s[i] + eps * v_s[i];
+                y_b[i] = y_s[i] + eps * v_s[i];
             }
 
             let mut obs_a = vec![0.0f64; n_obs];
             let mut obs_b = vec![0.0f64; n_obs];
             for (i, e) in observed_exprs_jac.iter().enumerate() {
-                obs_a[i] = interpret(e, y_s, p_s, &obs_a, t);
+                obs_a[i] = interpret(e, &y_a, p_s, &obs_a, t);
             }
             for (i, e) in observed_exprs_jac.iter().enumerate() {
-                obs_b[i] = interpret(e, &y_perturbed, p_s, &obs_b, t);
+                obs_b[i] = interpret(e, &y_b, p_s, &obs_b, t);
+            }
+            for &idx in &algebraic_topo_jac {
+                if let StateKind::Algebraic(expr) = &state_kinds_jac[idx] {
+                    y_a[idx] = interpret(expr, &y_a, p_s, &obs_a, t);
+                    y_b[idx] = interpret(expr, &y_b, p_s, &obs_b, t);
+                }
             }
             let jv_s = jv.as_mut_slice();
-            for (i, e) in state_rhs_exprs_jac.iter().enumerate() {
-                let f_y = interpret(e, y_s, p_s, &obs_a, t);
-                let f_yp = interpret(e, &y_perturbed, p_s, &obs_b, t);
-                jv_s[i] = (f_yp - f_y) / eps;
+            for (i, kind) in state_kinds_jac.iter().enumerate() {
+                match kind {
+                    StateKind::Differential(expr) => {
+                        let f_y = interpret(expr, &y_a, p_s, &obs_a, t);
+                        let f_yp = interpret(expr, &y_b, p_s, &obs_b, t);
+                        jv_s[i] = (f_yp - f_y) / eps;
+                    }
+                    StateKind::Algebraic(_) => {
+                        jv_s[i] = 0.0;
+                    }
+                }
             }
         };
 
@@ -575,7 +705,7 @@ impl Compiled {
             SolverChoice::Erk => "Erk",
         };
 
-        let (time, state) = match opts.solver {
+        let (time, mut state) = match opts.solver {
             SolverChoice::Bdf => {
                 let mut solver: Bdf<'_, _, NewtonNonlinearSolver<_, FaerLU<f64>, _>> = problem
                     .bdf::<FaerLU<f64>>()
@@ -599,6 +729,35 @@ impl Compiled {
                 run_solver(&mut solver, t_end, opts)?
             }
         };
+
+        // Reconstruct algebraic-state values along the output trajectory
+        // (esm-0kt). The integrator carries the algebraic slots forward
+        // without advancing them, so the natural state matrix shows the
+        // algebraic IC at every sample. Recompute from the differential
+        // states + parameters at each output time.
+        if !self.algebraic_topo.is_empty() && !time.is_empty() {
+            let n_obs0 = self.observed_exprs.len();
+            let n_states = self.state_names.len();
+            let n_samples = time.len();
+            let mut y_eff = vec![0.0f64; n_states];
+            let mut obs_buf = vec![0.0f64; n_obs0];
+            for k in 0..n_samples {
+                for i in 0..n_states {
+                    y_eff[i] = state[i][k];
+                }
+                let t = time[k];
+                for (i, e) in self.observed_exprs.iter().enumerate() {
+                    obs_buf[i] = interpret(e, &y_eff, &param_vec, &obs_buf, t);
+                }
+                for &idx in &self.algebraic_topo {
+                    if let StateKind::Algebraic(expr) = &self.state_kinds[idx] {
+                        let v = interpret(expr, &y_eff, &param_vec, &obs_buf, t);
+                        y_eff[idx] = v;
+                        state[idx][k] = v;
+                    }
+                }
+            }
+        }
 
         Ok(Solution {
             time,
@@ -868,6 +1027,93 @@ fn collect_observed_refs(
             }
         }
     }
+}
+
+/// Walk an expression and collect the indices of any *state* variables it
+/// references whose state index is also a member of `members`. Used to build
+/// the algebraic-state dependency graph for topo-sorting (esm-0kt).
+fn collect_state_refs(
+    expr: &Expr,
+    state_index: &HashMap<String, usize>,
+    members: &HashSet<usize>,
+    out: &mut HashSet<usize>,
+) {
+    match expr {
+        Expr::Number(_) | Expr::Integer(_) => {}
+        Expr::Variable(name) => {
+            if let Some(&i) = state_index.get(name)
+                && members.contains(&i)
+            {
+                out.insert(i);
+            }
+        }
+        Expr::Operator(node) => {
+            for a in &node.args {
+                collect_state_refs(a, state_index, members, out);
+            }
+        }
+    }
+}
+
+/// Topologically sort a subset of node ids whose dependency edges live in a
+/// dense `deps[id] -> set of dependency ids` array. Returns the subset in
+/// dependency-respecting order. On a cycle, returns Err with the cycle path
+/// for diagnostic naming.
+fn topo_sort_subset(
+    members: &[usize],
+    deps_dense: &[HashSet<usize>],
+) -> Result<Vec<usize>, Vec<usize>> {
+    let member_set: HashSet<usize> = members.iter().copied().collect();
+    let mut order: Vec<usize> = Vec::with_capacity(members.len());
+    let mut visited: HashSet<usize> = HashSet::new();
+    let mut on_stack: HashSet<usize> = HashSet::new();
+    let mut path: Vec<usize> = Vec::new();
+
+    fn visit(
+        i: usize,
+        deps_dense: &[HashSet<usize>],
+        member_set: &HashSet<usize>,
+        visited: &mut HashSet<usize>,
+        on_stack: &mut HashSet<usize>,
+        path: &mut Vec<usize>,
+        order: &mut Vec<usize>,
+    ) -> Result<(), Vec<usize>> {
+        if visited.contains(&i) {
+            return Ok(());
+        }
+        if on_stack.contains(&i) {
+            // Trim path back to the start of the cycle.
+            let start = path.iter().position(|&x| x == i).unwrap_or(0);
+            let mut cycle: Vec<usize> = path[start..].to_vec();
+            cycle.push(i);
+            return Err(cycle);
+        }
+        on_stack.insert(i);
+        path.push(i);
+        for &d in &deps_dense[i] {
+            if member_set.contains(&d) {
+                visit(d, deps_dense, member_set, visited, on_stack, path, order)?;
+            }
+        }
+        path.pop();
+        on_stack.remove(&i);
+        visited.insert(i);
+        order.push(i);
+        Ok(())
+    }
+
+    for &i in members {
+        visit(
+            i,
+            deps_dense,
+            &member_set,
+            &mut visited,
+            &mut on_stack,
+            &mut path,
+            &mut order,
+        )?;
+    }
+    Ok(order)
 }
 
 /// Topological sort over a per-node dependency set. Returns nodes in
@@ -1208,5 +1454,123 @@ mod tests {
         s1.insert(0);
         let deps = vec![s0, s1];
         assert!(topo_sort(&deps).is_err());
+    }
+
+    /// Cyclic algebraic-state systems must be rejected at compile time
+    /// (esm-0kt). `from_flattened` should return an `InterpreterBuildError`
+    /// whose message names the offending variables.
+    #[test]
+    fn algebraic_cycle_rejected() {
+        // Two algebraic states a, b form a cycle: a = b + 1, b = a * 2.
+        // dx/dt = a is a non-cyclic ODE that anchors the system.
+        let json = r#"{
+            "esm": "0.4.0",
+            "metadata": {"name": "TestFixture"},
+            "models": {
+                "M": {
+                    "variables": {
+                        "x": {"type": "state", "default": 0.0},
+                        "a": {"type": "state", "default": 1.0},
+                        "b": {"type": "state", "default": 1.0}
+                    },
+                    "equations": [
+                        {
+                            "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+                            "rhs": "a"
+                        },
+                        {
+                            "lhs": "a",
+                            "rhs": {"op": "+", "args": ["b", 1.0]}
+                        },
+                        {
+                            "lhs": "b",
+                            "rhs": {"op": "*", "args": ["a", 2.0]}
+                        }
+                    ]
+                }
+            }
+        }"#;
+        let file = crate::parse::load(json).expect("parse fixture");
+        let err = Compiled::from_file(&file).expect_err("cycle must be rejected");
+        let msg = err.to_string();
+        assert!(msg.contains("Cyclic"), "expected cycle error, got: {msg}");
+        assert!(
+            msg.contains("a") && msg.contains("b"),
+            "cycle error should name both vars: {msg}"
+        );
+    }
+
+    /// Algebraic states whose `default` does not satisfy the constraint at
+    /// t=0 must be reconciled before integration starts (esm-0kt).
+    #[test]
+    fn algebraic_ic_reconciled_to_constraint() {
+        // dD/dt = -k*G,  G = D  (so D evolves as exp(-k*t), G tracks D).
+        // G's default is deliberately wrong (99.0) to prove the IC pass
+        // overrides it from the algebraic body.
+        let json = r#"{
+            "esm": "0.4.0",
+            "metadata": {"name": "TestFixture"},
+            "models": {
+                "M": {
+                    "variables": {
+                        "D": {"type": "state", "default": 1.0},
+                        "G": {"type": "state", "default": 99.0},
+                        "k": {"type": "parameter", "default": 1.0}
+                    },
+                    "equations": [
+                        {
+                            "lhs": {"op": "D", "args": ["D"], "wrt": "t"},
+                            "rhs": {"op": "*", "args": [{"op": "-", "args": ["k"]}, "G"]}
+                        },
+                        {
+                            "lhs": "G",
+                            "rhs": "D"
+                        }
+                    ]
+                }
+            }
+        }"#;
+        let file = crate::parse::load(json).expect("parse fixture");
+        let compiled = Compiled::from_file(&file).expect("compile succeeds");
+        let opts = SimulateOptions {
+            output_times: Some(vec![0.0, 1.0]),
+            ..Default::default()
+        };
+        let sol = compiled
+            .simulate((0.0, 1.0), &HashMap::new(), &HashMap::new(), &opts)
+            .expect("simulate succeeds");
+
+        let d_idx = sol
+            .state_variable_names
+            .iter()
+            .position(|n| n.ends_with("D"))
+            .expect("D in solution");
+        let g_idx = sol
+            .state_variable_names
+            .iter()
+            .position(|n| n.ends_with("G"))
+            .expect("G in solution");
+
+        assert!(
+            (sol.state[d_idx][0] - 1.0).abs() < 1e-12,
+            "D(0) should be 1.0, got {}",
+            sol.state[d_idx][0]
+        );
+        // The bogus G default (99.0) must be reconciled to D(0)=1.0.
+        assert!(
+            (sol.state[g_idx][0] - 1.0).abs() < 1e-12,
+            "G(0) should be reconciled to D(0)=1.0, got {}",
+            sol.state[g_idx][0]
+        );
+        let expected = (-1.0_f64).exp();
+        assert!(
+            (sol.state[d_idx][1] - expected).abs() < 1e-6,
+            "D(1) ≈ exp(-1), got {}",
+            sol.state[d_idx][1]
+        );
+        assert!(
+            (sol.state[g_idx][1] - sol.state[d_idx][1]).abs() < 1e-12,
+            "G(1) must equal D(1) by algebraic constraint"
+        );
     }
 }

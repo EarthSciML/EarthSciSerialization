@@ -43,14 +43,6 @@ fn simulation_skip(name: &str) -> Option<&'static str> {
         "bouncing_ball.esm" => Some("gt-2ta2"),
         // Discrete events similarly rejected.
         "periodic_dosing.esm" => Some("gt-2ta2"),
-        // esm-sph: cross-binding algebraic-elimination fixture. Rust's
-        // simulate aborts compile with "State variable 'G' has no D(G,t)"
-        // because it does not eliminate authored algebraic equations
-        // (lhs is a bare variable name) before compile. The failure mode
-        // is structured (no silent garbage), but a working algebraic-
-        // elimination path would let the fixture pass — tracked as a
-        // follow-up Rust gap.
-        "algebraic_diameter_growth.esm" => Some("esm-0kt"),
         _ => None,
     }
 }
