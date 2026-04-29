@@ -16,7 +16,7 @@ This enables atmospheric chemistry simulation in Python.
 
 import numpy as np
 import sympy as sp
-from typing import Dict, List, Tuple, Optional, Union, Any, Callable
+from typing import Dict, List, Set, Tuple, Optional, Union, Any, Callable
 from dataclasses import dataclass
 
 # Optional scipy import - only needed for actual simulation
@@ -296,8 +296,24 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
 def _flat_to_sympy_rhs(
     flat: FlattenedSystem,
     parameter_overrides: Dict[str, float],
-) -> Tuple[List[str], List[sp.Expr], Dict[str, sp.Symbol]]:
+) -> Tuple[
+    List[str],
+    List[sp.Expr],
+    Dict[str, sp.Symbol],
+    List[str],
+    Dict[str, sp.Expr],
+]:
     """Build the SymPy ODE RHS expressions from a FlattenedSystem.
+
+    Performs scalar algebraic-equation elimination as part of construction:
+    equations of the form ``v = <body>`` (where ``v`` is a state variable
+    that has no corresponding ``D(v, t) = …`` differential equation) are
+    treated as observed/algebraic. Each algebraic body is symbolically
+    substituted into every other algebraic body and into every differential
+    RHS, so the integrator's RHS depends only on differential states and
+    parameters. This is the scalar equivalent of MTK's ``structural_simplify``
+    and is required for models like ``diameter_growth`` where ``A`` and
+    ``I_D`` are algebraically defined alongside an ODE for ``D_p``.
 
     Returns
     -------
@@ -305,11 +321,25 @@ def _flat_to_sympy_rhs(
         Dot-namespaced state variable names in the order they appear in the
         result vector.
     rhs_exprs:
-        Per-state SymPy expression for ``dy_i/dt``. State variables without an
-        equation default to ``0``.
+        Per-state SymPy expression for ``dy_i/dt``. Differential states get
+        their (algebraic-substituted) derivative; algebraic-only states get
+        ``0`` — the integrator does not advance them, and their values are
+        recovered at output time by evaluating ``algebraic_value_exprs``.
     symbol_map:
-        Mapping from namespaced variable name to SymPy symbol (for use by event
-        functions and parameter substitution).
+        Mapping from namespaced variable name to SymPy symbol (for use by
+        event functions and parameter substitution).
+    algebraic_state_names:
+        Subset of ``state_names`` whose values are determined algebraically
+        rather than by integration.
+    algebraic_value_exprs:
+        Per-algebraic-state SymPy expression for the variable's value
+        (already substituted so it depends only on differential states and
+        parameters, with parameter values inlined).
+
+    Raises
+    ------
+    SimulationError
+        If the algebraic equations form a cycle (including self-reference).
     """
     state_names = list(flat.state_variables.keys())
     parameter_names = list(flat.parameters.keys())
@@ -318,21 +348,80 @@ def _flat_to_sympy_rhs(
     for name in state_names + parameter_names:
         symbol_map[name] = sp.Symbol(name)
 
-    state_to_rhs: Dict[str, sp.Expr] = {}
+    # Classify equations: differential (D(var, t) = …) vs algebraic (var = …).
+    diff_rhs: Dict[str, sp.Expr] = {}
+    alg_rhs: Dict[str, sp.Expr] = {}
     for eq in flat.equations:
-        dep = _lhs_dependent_var(eq.lhs)
-        if dep is None:
+        lhs = eq.lhs
+        if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
+            inner = lhs.args[0]
+            if isinstance(inner, str) and inner in flat.state_variables:
+                diff_rhs[inner] = _expr_to_sympy(eq.rhs, dict(symbol_map))
+                continue
+        if isinstance(lhs, str) and lhs in flat.state_variables:
+            alg_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(symbol_map))
             continue
-        if dep in flat.state_variables:
-            state_to_rhs[dep] = _expr_to_sympy(eq.rhs, dict(symbol_map))
+        # Other LHS shapes (e.g. array ops) are handled by the NumPy path.
 
-    rhs_exprs: List[sp.Expr] = []
-    for name in state_names:
-        rhs_exprs.append(state_to_rhs.get(name, sp.Float(0)))
+    # If a state has both an ODE and an algebraic equation, the ODE wins — the
+    # system is overdetermined and we must pick one consistent interpretation.
+    for name in list(alg_rhs.keys()):
+        if name in diff_rhs:
+            del alg_rhs[name]
+
+    algebraic_state_names = [n for n in state_names if n in alg_rhs]
+
+    # Topologically sort algebraic vars by their direct dependence on each
+    # other. Detect cycles (including self-reference) and raise with the
+    # offending chain so authors can fix the model.
+    alg_deps: Dict[str, List[str]] = {}
+    alg_set = set(algebraic_state_names)
+    for n in algebraic_state_names:
+        free = getattr(alg_rhs[n], "free_symbols", set()) or set()
+        alg_deps[n] = [str(s) for s in free if str(s) in alg_set]
+
+    sorted_alg: List[str] = []
+    visited: Set[str] = set()
+    in_progress: Set[str] = set()
+
+    def _topo_visit(name: str, path: List[str]) -> None:
+        if name in visited:
+            return
+        if name in in_progress:
+            cycle = path[path.index(name):] + [name]
+            raise SimulationError(
+                "Cyclic algebraic equations detected: "
+                + " -> ".join(cycle)
+            )
+        in_progress.add(name)
+        for dep in alg_deps[name]:
+            _topo_visit(dep, path + [name])
+        in_progress.discard(name)
+        visited.add(name)
+        sorted_alg.append(name)
+
+    for n in algebraic_state_names:
+        _topo_visit(n, [])
+
+    # Substitute earlier-sorted algebraic bodies into later ones, so each
+    # alg_rhs[n] ends up expressed only in terms of differential states and
+    # parameters.
+    for n in sorted_alg:
+        deps_subs = {symbol_map[d]: alg_rhs[d] for d in alg_deps[n]}
+        if deps_subs:
+            alg_rhs[n] = alg_rhs[n].subs(deps_subs, simultaneous=False)
+
+    # Substitute the (now fully-resolved) algebraic bodies into every
+    # differential RHS. The integrator's RHS no longer references any
+    # algebraic state symbol.
+    full_alg_subs = {symbol_map[k]: alg_rhs[k] for k in algebraic_state_names}
+    if full_alg_subs:
+        for k in list(diff_rhs.keys()):
+            diff_rhs[k] = diff_rhs[k].subs(full_alg_subs, simultaneous=False)
 
     # Resolve parameter values: caller overrides win, then defaults from the
     # flattened parameter metadata, then 0.
-    param_subs: Dict[sp.Symbol, float] = {}
+    param_subs: Dict[sp.Symbol, sp.Expr] = {}
     for pname in parameter_names:
         bare = pname.rsplit(".", 1)[-1]
         if pname in parameter_overrides:
@@ -345,12 +434,23 @@ def _flat_to_sympy_rhs(
         param_subs[symbol_map[pname]] = sp.Float(value)
 
     if param_subs:
-        rhs_exprs = [
-            (expr.subs(param_subs) if hasattr(expr, "subs") else expr)
-            for expr in rhs_exprs
-        ]
+        for k in list(diff_rhs.keys()):
+            if hasattr(diff_rhs[k], "subs"):
+                diff_rhs[k] = diff_rhs[k].subs(param_subs)
+        for k in list(alg_rhs.keys()):
+            if hasattr(alg_rhs[k], "subs"):
+                alg_rhs[k] = alg_rhs[k].subs(param_subs)
 
-    return state_names, rhs_exprs, symbol_map
+    rhs_exprs: List[sp.Expr] = []
+    for name in state_names:
+        if name in diff_rhs:
+            rhs_exprs.append(diff_rhs[name])
+        else:
+            # Algebraic states and unassigned states get a zero derivative.
+            # Algebraic states are recovered at output time from alg_rhs.
+            rhs_exprs.append(sp.Float(0))
+
+    return state_names, rhs_exprs, symbol_map, algebraic_state_names, alg_rhs
 
 
 def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[str], List[sp.Expr]]:
@@ -700,7 +800,13 @@ def simulate(
         )
 
     try:
-        state_names, rhs_exprs, symbol_map = _flat_to_sympy_rhs(flat, parameters)
+        (
+            state_names,
+            rhs_exprs,
+            symbol_map,
+            algebraic_state_names,
+            algebraic_value_exprs,
+        ) = _flat_to_sympy_rhs(flat, parameters)
 
         if not state_names:
             raise SimulationError(
@@ -708,6 +814,9 @@ def simulate(
             )
 
         # Initial conditions: dot-namespaced wins, then bare name, then default.
+        # Algebraic-only states get their consistent value computed below from
+        # the algebraic body so the t=0 output is faithful regardless of
+        # whether the caller supplied a (possibly stale) initial guess.
         y0_list: List[float] = []
         for name in state_names:
             bare = name.rsplit(".", 1)[-1]
@@ -722,6 +831,24 @@ def simulate(
 
         state_symbols = [symbol_map[name] for name in state_names]
         rhs_funcs = [sp.lambdify(state_symbols, expr, "numpy") for expr in rhs_exprs]
+
+        # Lambdify each algebraic value so we can recover algebraic-only state
+        # values at every output time from the (advancing) differential states.
+        algebraic_funcs: Dict[str, Callable] = {
+            name: sp.lambdify(state_symbols, algebraic_value_exprs[name], "numpy")
+            for name in algebraic_state_names
+        }
+
+        # Override y0 for algebraic states so the t=0 sample is consistent.
+        for name in algebraic_state_names:
+            idx = state_names.index(name)
+            try:
+                y0[idx] = float(algebraic_funcs[name](*y0))
+            except Exception:
+                # If the algebraic body can't be evaluated at the supplied IC
+                # (e.g. division by zero from a missing differential IC), keep
+                # the user-supplied / default value rather than crashing.
+                pass
 
         # Clip only chemical species to non-negative before RHS evaluation;
         # generic state variables (position, velocity, etc.) may legitimately
@@ -758,6 +885,20 @@ def simulate(
         sol = solve_ivp(fun=rhs_function, t_span=tspan, y0=y0, **solver_options)
 
         t_out, y_out = _densify_solution(sol, tspan)
+
+        # Recover algebraic-only state values along the entire output trajectory.
+        # The integrator does not advance them (their derivative is 0), so the
+        # only faithful values are the ones computed from the algebraic body
+        # with the differential states at each output time.
+        if algebraic_state_names and y_out.size:
+            y_out = y_out.copy()
+            for name in algebraic_state_names:
+                idx = state_names.index(name)
+                f = algebraic_funcs[name]
+                vals = np.empty(y_out.shape[1], dtype=float)
+                for k in range(y_out.shape[1]):
+                    vals[k] = float(f(*y_out[:, k]))
+                y_out[idx, :] = vals
 
         return SimulationResult(
             t=t_out,
