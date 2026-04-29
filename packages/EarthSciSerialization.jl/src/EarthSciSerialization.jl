@@ -43,7 +43,6 @@ include("grid_assembly.jl")
 include("ghost_cells.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
-include("mms_evaluator.jl")
 
 export
     # Expression types
@@ -146,42 +145,12 @@ export
     n_cells, n_dims, axis_names,
     metric_g, metric_ginv, metric_jacobian, metric_dgij_dxk,
     coord_jacobian, coord_jacobian_second,
-    # FV grid-metric assembly (esm-xom; ported from ESD src/fv_stencil.jl)
-    FVLaplacianStencil, FVGradientStencil,
-    precompute_laplacian_stencil, precompute_gradient_stencil,
-    apply_laplacian!, apply_gradient!,
     # Trait-generic ghost-cell gathering (esm-dlz; ported from ESD src/ghost_cells.jl)
     extend_with_ghosts, fill_ghost_cells!, extend_with_ghosts_vector,
     # Symbolic ArrayOp assembly (esm-tet; ported from ESD src/discretization.jl)
     # — concrete methods live in ext/grid_assembly_symbolic.jl, loaded with MTK.
     fv_laplacian_extended, fv_gradient_extended,
     laplacian_neighbor_table, gradient_neighbor_table,
-    const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop,
-    # MMS convergence harness (esm-ivo; ESD walker Layer B driver)
-    # PPM reconstruction extensions (esm-k1d): sub-stencil targeting,
-    # output-kind selector, parabola pass.
-    # MPAS-style unstructured MMS support (esm-0sy).
-    # 2D structured + per-cell metric bindings + sphere MMS registry (esm-5ur).
-    MMSEvaluatorError, ManufacturedSolution, ManufacturedSolution2D,
-    ReconstructionManufacturedSolution2D,
-    MMSConvergenceResult, CellBindings, bindings_at,
-    parse_accuracy_order, lookup_manufactured_solution,
-    lookup_manufactured_solution_2d,
-    lookup_manufactured_solution_2d_reconstruction,
-    register_manufactured_solution!, eval_coeff, OUTPUT_KINDS,
-    apply_stencil_periodic_1d, apply_stencil_2d_latlon,
-    apply_stencil_2d_arakawa, apply_stencil_1d_vertical,
-    # Ghost-cell synthesis for non-periodic 1D walker (esm-37k)
-    apply_stencil_ghosted_1d, BOUNDARY_POLICY_KINDS,
-    parabola_reconstruct_periodic_1d,
-    mms_convergence, verify_mms_convergence,
-    # WENO5 nonlinear reconstruction (esm-rq3)
-    apply_weno5_reconstruction_periodic_1d, mms_weno5_convergence,
-    # MPAS-style unstructured MMS support (esm-0sy)
-    VectorManufacturedSolution, MPASLikeMesh, MPASCoeffContext,
-    register_vector_manufactured_solution!, lookup_vector_manufactured_solution,
-    make_periodic_quad_mesh, apply_mpas_cell_stencil,
-    sample_edge_normal_flux, sample_cell_divergence,
-    mms_convergence_mpas, verify_mms_convergence_mpas
+    const_wrap, get_idx_vars, make_arrayop, evaluate_arrayop
 
 end # module EarthSciSerialization

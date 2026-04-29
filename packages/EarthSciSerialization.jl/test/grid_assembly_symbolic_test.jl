@@ -11,11 +11,28 @@ using EarthSciSerialization: AbstractCurvilinearGrid, cell_centers, cell_volume,
     cell_widths, neighbor_indices, boundary_mask, n_cells, n_dims, axis_names,
     metric_g, metric_ginv, metric_jacobian, metric_dgij_dxk,
     coord_jacobian, coord_jacobian_second,
-    precompute_laplacian_stencil, apply_laplacian!,
-    precompute_gradient_stencil, apply_gradient!,
+    precompute_laplacian_stencil, precompute_gradient_stencil,
     fv_laplacian_extended, fv_gradient_extended,
     laplacian_neighbor_table, gradient_neighbor_table,
     const_wrap, evaluate_arrayop
+
+# Local weighted-sum helpers used to derive the numeric reference for the
+# symbolic ArrayOp. These intentionally live in the test file rather than as a
+# library function — there is no production "apply numeric stencil to a flat
+# field" path; the production path is fv_*_extended → evaluate_arrayop.
+function _apply_stencil(weights::AbstractMatrix, neighbors::AbstractMatrix,
+                       u::AbstractVector)
+    du = similar(u)
+    K = size(neighbors, 2)
+    @inbounds for c in eachindex(u)
+        v = zero(eltype(du))
+        for k in 1:K
+            v += weights[c, k] * u[neighbors[c, k]]
+        end
+        du[c] = v
+    end
+    return du
+end
 using ModelingToolkit
 using Symbolics
 
@@ -131,15 +148,15 @@ EarthSciSerialization.coord_jacobian_second(g::SymTestCartesianGrid, ::Symbol) =
     @test nb_grad == s_grad.neighbors
 end
 
-@testset "grid_assembly_symbolic: fv_laplacian_extended matches numeric apply_laplacian!" begin
+@testset "grid_assembly_symbolic: fv_laplacian_extended matches numeric stencil weights" begin
     g = SymTestCartesianGrid(16, 16, 2π, 2π)
     xs = cell_centers(g, :x); ys = cell_centers(g, :y)
     u = @. sin(xs) * cos(ys)
 
-    # Numeric reference: precompute + apply.
+    # Numeric reference: precompute + weighted sum (used only to verify the
+    # symbolic ArrayOp matches the geometric weights).
     s = precompute_laplacian_stencil(g; xi_axis = :x, eta_axis = :y)
-    du_num = similar(u)
-    apply_laplacian!(du_num, u, s)
+    du_num = _apply_stencil(s.weights, s.neighbors, u)
 
     # Symbolic ArrayOp evaluated on the same numeric field. Wrapping the
     # numeric vector as the field array lets `evaluate_arrayop` extract the
@@ -152,14 +169,14 @@ end
     @test isapprox(du_sym, du_num; rtol = 1e-12, atol = 1e-12)
 end
 
-@testset "grid_assembly_symbolic: fv_gradient_extended matches numeric apply_gradient!" begin
+@testset "grid_assembly_symbolic: fv_gradient_extended matches numeric stencil weights" begin
     g = SymTestCartesianGrid(32, 32, 2π, 2π)
     xs = cell_centers(g, :x); ys = cell_centers(g, :y)
     u = @. sin(xs) * cos(ys)
 
     s = precompute_gradient_stencil(g, :xy; xi_axis = :x, eta_axis = :y)
-    dux_num = similar(u); duy_num = similar(u)
-    apply_gradient!(dux_num, duy_num, u, s)
+    dux_num = _apply_stencil(s.weights_t1, s.neighbors, u)
+    duy_num = _apply_stencil(s.weights_t2, s.neighbors, u)
 
     (ao_x, ao_y) = fv_gradient_extended(u, g, :xy; xi_axis = :x, eta_axis = :y)
     dux_sym = evaluate_arrayop(ao_x)
@@ -190,7 +207,7 @@ end
     du_sym = [Float64(Symbolics.value(Symbolics.substitute(s, subs))) for s in scalars]
 
     s_num = precompute_laplacian_stencil(g; xi_axis = :x, eta_axis = :y)
-    du_num = similar(u_vals); apply_laplacian!(du_num, u_vals, s_num)
+    du_num = _apply_stencil(s_num.weights, s_num.neighbors, u_vals)
 
     @test isapprox(du_sym, du_num; rtol = 1e-12, atol = 1e-12)
 end

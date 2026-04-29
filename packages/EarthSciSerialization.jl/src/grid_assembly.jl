@@ -106,8 +106,8 @@ correction terms are computed by centered finite-differencing the
 The two computational axes default to `(:xi, :eta)`; pass explicit axis
 symbols for grids that use other names (`:x`/`:y`, `:lon`/`:lat`).
 
-Returns an [`FVLaplacianStencil`](@ref) ready to be applied with
-[`apply_laplacian!`](@ref).
+Returns an [`FVLaplacianStencil`](@ref) for use as private weight assembly
+inside the MTK-ext `fv_laplacian_extended` ArrayOp builder.
 """
 function precompute_laplacian_stencil(
         grid::AbstractCurvilinearGrid;
@@ -202,29 +202,6 @@ function precompute_laplacian_stencil(
     return FVLaplacianStencil(weights, neighbors)
 end
 
-"""
-    apply_laplacian!(du, u, stencil::FVLaplacianStencil) -> du
-
-Apply the precomputed covariant Laplacian stencil to the flat field `u`,
-writing `∇²u` into `du`. Both arrays have length `n_cells(grid)`.
-
-No ghost cells are needed — boundary-crossing connectivity was baked into
-`stencil.neighbors` at precompute time.
-"""
-function apply_laplacian!(du::AbstractVector, u::AbstractVector, stencil::FVLaplacianStencil)
-    length(du) == length(u) == size(stencil.weights, 1) ||
-        throw(DimensionMismatch("apply_laplacian!: du/u/stencil length mismatch"))
-    w = stencil.weights; nb = stencil.neighbors
-    @inbounds for c in eachindex(du)
-        val = zero(eltype(du))
-        for k in 1:9
-            val += w[c, k] * u[nb[c, k]]
-        end
-        du[c] = val
-    end
-    return du
-end
-
 # ---------------------------------------------------------------------------
 # FV Gradient stencil (5-point, 2D curvilinear, chain-rule physical targets)
 # ---------------------------------------------------------------------------
@@ -316,33 +293,6 @@ function precompute_gradient_stencil(
     nbs[:, 5] .= Sp
 
     return FVGradientStencil(w1, w2, nbs)
-end
-
-"""
-    apply_gradient!(du_t1, du_t2, u, stencil::FVGradientStencil)
-        -> (du_t1, du_t2)
-
-Apply the precomputed gradient stencil to the flat field `u`, writing
-`∂u/∂(target_axis_1)` into `du_t1` and `∂u/∂(target_axis_2)` into `du_t2`.
-"""
-function apply_gradient!(
-        du_t1::AbstractVector, du_t2::AbstractVector,
-        u::AbstractVector, stencil::FVGradientStencil,
-    )
-    length(du_t1) == length(du_t2) == length(u) == size(stencil.neighbors, 1) ||
-        throw(DimensionMismatch("apply_gradient!: output/input/stencil length mismatch"))
-    w1 = stencil.weights_t1; w2 = stencil.weights_t2; nb = stencil.neighbors
-    @inbounds for c in eachindex(u)
-        v1 = zero(eltype(du_t1)); v2 = zero(eltype(du_t2))
-        for k in 1:5
-            uk = u[nb[c, k]]
-            v1 += w1[c, k] * uk
-            v2 += w2[c, k] * uk
-        end
-        du_t1[c] = v1
-        du_t2[c] = v2
-    end
-    return (du_t1, du_t2)
 end
 
 # ---------------------------------------------------------------------------
