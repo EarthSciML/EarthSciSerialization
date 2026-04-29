@@ -175,7 +175,7 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             if len(sympy_args) != 2:
                 raise SimulationError(f"Division requires exactly 2 arguments, got {len(sympy_args)}")
             return sympy_args[0] / sympy_args[1]
-        elif expr.op == '^' or expr.op == '**':
+        elif expr.op in ('^', '**', 'pow'):
             if len(sympy_args) != 2:
                 raise SimulationError(f"Power requires exactly 2 arguments, got {len(sympy_args)}")
             return sympy_args[0] ** sympy_args[1]
@@ -187,6 +187,38 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             if len(sympy_args) != 1:
                 raise SimulationError(f"Logarithm requires exactly 1 argument, got {len(sympy_args)}")
             return sp.log(sympy_args[0])
+        elif expr.op == 'log10':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"log10 requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.log(sympy_args[0], 10)
+        elif expr.op == 'sqrt':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"sqrt requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sqrt(sympy_args[0])
+        elif expr.op == 'abs':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"abs requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Abs(sympy_args[0])
+        elif expr.op == 'sign':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"sign requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sign(sympy_args[0])
+        elif expr.op == 'floor':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"floor requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.floor(sympy_args[0])
+        elif expr.op == 'ceil':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"ceil requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.ceiling(sympy_args[0])
+        elif expr.op == 'min':
+            if not sympy_args:
+                raise SimulationError("min requires at least 1 argument")
+            return sp.Min(*sympy_args)
+        elif expr.op == 'max':
+            if not sympy_args:
+                raise SimulationError("max requires at least 1 argument")
+            return sp.Max(*sympy_args)
         elif expr.op == 'sin':
             if len(sympy_args) != 1:
                 raise SimulationError(f"Sine requires exactly 1 argument, got {len(sympy_args)}")
@@ -195,6 +227,42 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             if len(sympy_args) != 1:
                 raise SimulationError(f"Cosine requires exactly 1 argument, got {len(sympy_args)}")
             return sp.cos(sympy_args[0])
+        elif expr.op == 'tan':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"tan requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.tan(sympy_args[0])
+        elif expr.op == 'asin':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"asin requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.asin(sympy_args[0])
+        elif expr.op == 'acos':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"acos requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.acos(sympy_args[0])
+        elif expr.op == 'atan':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"atan requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.atan(sympy_args[0])
+        elif expr.op == 'atan2':
+            if len(sympy_args) != 2:
+                raise SimulationError(f"atan2 requires exactly 2 arguments, got {len(sympy_args)}")
+            return sp.atan2(sympy_args[0], sympy_args[1])
+        elif expr.op == 'ifelse':
+            if len(sympy_args) != 3:
+                raise SimulationError(f"ifelse requires exactly 3 arguments, got {len(sympy_args)}")
+            return sp.Piecewise((sympy_args[1], sympy_args[0]), (sympy_args[2], True))
+        elif expr.op == 'and':
+            if len(sympy_args) < 2:
+                raise SimulationError(f"and requires at least 2 arguments, got {len(sympy_args)}")
+            return sp.And(*sympy_args)
+        elif expr.op == 'or':
+            if len(sympy_args) < 2:
+                raise SimulationError(f"or requires at least 2 arguments, got {len(sympy_args)}")
+            return sp.Or(*sympy_args)
+        elif expr.op == 'not':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"not requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.Not(sympy_args[0])
         elif expr.op == '>':
             if len(sympy_args) != 2:
                 raise SimulationError(f"Greater than requires exactly 2 arguments, got {len(sympy_args)}")

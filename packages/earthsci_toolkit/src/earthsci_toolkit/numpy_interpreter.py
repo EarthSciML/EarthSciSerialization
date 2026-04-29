@@ -203,12 +203,36 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
         a = eval_expr(expr.args[0], ctx)
         b = eval_expr(expr.args[1], ctx)
         return a / b
-    if op in ("^", "**"):
+    if op in ("^", "**", "pow"):
         if len(expr.args) != 2:
-            raise NumpyInterpreterError("^ expects 2 args")
+            raise NumpyInterpreterError(f"{op} expects 2 args")
         a = eval_expr(expr.args[0], ctx)
         b = eval_expr(expr.args[1], ctx)
         return a ** b
+    if op == "atan2":
+        if len(expr.args) != 2:
+            raise NumpyInterpreterError("atan2 expects 2 args")
+        a = eval_expr(expr.args[0], ctx)
+        b = eval_expr(expr.args[1], ctx)
+        return np.arctan2(a, b)
+    if op in ("and", "or"):
+        if len(expr.args) < 2:
+            raise NumpyInterpreterError(f"{op} expects at least 2 args")
+        vals = [eval_expr(a, ctx) for a in expr.args]
+        if op == "and":
+            r = vals[0]
+            for v in vals[1:]:
+                r = np.logical_and(r, v)
+        else:
+            r = vals[0]
+            for v in vals[1:]:
+                r = np.logical_or(r, v)
+        return r.astype(float)
+    if op == "not":
+        if len(expr.args) != 1:
+            raise NumpyInterpreterError("not expects 1 arg")
+        v = eval_expr(expr.args[0], ctx)
+        return np.logical_not(v).astype(float)
     if op in _SCALAR_FUNCS:
         if len(expr.args) != 1:
             raise NumpyInterpreterError(f"{op} expects 1 arg")
