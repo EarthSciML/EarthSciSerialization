@@ -46,6 +46,7 @@ pub mod flatten;
 pub mod graph;
 pub mod grid_accessor;
 pub mod migration;
+pub mod mms_evaluator;
 pub mod parse;
 pub mod reactions;
 pub mod ref_loading;
@@ -131,6 +132,10 @@ pub use edit::{
 };
 pub use error::EsmError;
 pub use migration::{MigrationError, can_migrate, get_supported_migration_targets, migrate};
+pub use mms_evaluator::{
+    MmsEvaluatorError, Side, apply_stencil_ghosted_1d, apply_stencil_periodic_1d,
+    canonicalize_boundary_policy_kind,
+};
 
 pub use performance::{CompactExpr, PerformanceError};
 #[cfg(feature = "simd")]
