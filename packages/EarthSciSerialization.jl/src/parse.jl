@@ -487,7 +487,7 @@ function coerce_function_tables(data)::Dict{String,FunctionTable}
         if isempty(table_name)
             throw(ParseError("function_tables: table name must be non-empty"))
         end
-        if !(entry_raw isa AbstractDict || entry_raw isa JSON3.Object)
+        if !(entry_raw isa AbstractDict || entry_raw isa JSON3.Object || entry_raw isa JSONLikeDict)
             throw(ParseError("function_tables.$(table_name): entry must be a JSON object"))
         end
         axes_raw = get(entry_raw, :axes, nothing)
