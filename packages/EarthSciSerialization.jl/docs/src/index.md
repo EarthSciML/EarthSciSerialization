@@ -55,6 +55,21 @@ else
 end
 ```
 
+## Simulation runners
+
+EarthSciSerialization.jl ships two official ESS Julia simulation runners that
+consume the canonical-form AST emitted by [`discretize`](@ref):
+
+- **ModelingToolkit (MTK)** — the default. Production runtime via the
+  `EarthSciSerializationMTKExt` package extension.
+- **`tree_walk`** — alternate runtime ([`build_evaluator`](@ref)) for very
+  large discretized PDE systems whose scalar count exceeds MTK's
+  `structural_simplify` / tearing / codegen ceiling. Compile time is
+  independent of system size.
+
+See [Simulation Runners](@ref) for when to choose each, performance
+characteristics, supported ops, and the public API.
+
 ## ModelingToolkit / Catalyst integration
 
 ModelingToolkit and Catalyst are **weak dependencies**. They are loaded only

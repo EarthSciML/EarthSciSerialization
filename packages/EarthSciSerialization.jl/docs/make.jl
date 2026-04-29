@@ -15,6 +15,7 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Getting Started" => "getting-started.md",
+        "Simulation Runners" => "simulation-runners.md",
         "API Reference" => [
             "Types" => "api/types.md",
             "Parsing & Serialization" => "api/io.md",

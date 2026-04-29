@@ -429,6 +429,12 @@ function _eval_node_op(n::_Node, u, p, t)
             return _eval_node(c[1], u, p, t) - _eval_node(c[2], u, p, t)
         end
         throw(TreeWalkError("E_TREEWALK_ARITY", "- expects 1 or 2 args"))
+    elseif op === :neg
+        # Canonical-form unary negation. `canonicalize` rewrites unary
+        # `-x` to `neg(x)`, so any AST that has been through `discretize`
+        # may carry `neg` ops where the source had `-x`.
+        _expect_arity_n(op, c, 1)
+        return -_eval_node(c[1], u, p, t)
     elseif op === :/
         _expect_arity_n(op, c, 2)
         return _eval_node(c[1], u, p, t) / _eval_node(c[2], u, p, t)

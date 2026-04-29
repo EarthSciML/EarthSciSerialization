@@ -68,6 +68,9 @@ end
         @test _eval1(_op("+", _n(1.0), _n(2.0), _n(3.0))) == 6.0
         @test _eval1(_op("-", _n(5.0), _n(2.0))) == 3.0
         @test _eval1(_op("-", _n(4.0))) == -4.0
+        # `neg` is the canonical-form unary negation emitted by
+        # `canonicalize` (esm-qrj). `discretize` rewrites `-x` to `neg(x)`.
+        @test _eval1(_op("neg", _n(4.0))) == -4.0
         @test _eval1(_op("*", _n(2.0), _n(3.0), _n(4.0))) == 24.0
         @test _eval1(_op("/", _n(10.0), _n(4.0))) == 2.5
         @test _eval1(_op("^", _n(2.0), _n(3.0))) == 8.0

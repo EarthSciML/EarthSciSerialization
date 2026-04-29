@@ -44,6 +44,7 @@ using JSON3
     include("grid_assembly_symbolic_test.jl")
     include("mtk_export_test.jl")
     include("tree_walk_test.jl")
+    include("tree_walk_e2e_discretize_test.jl")
     include("mms_evaluator_test.jl")
     include("closed_functions_test.jl")
     include("closed_functions_mtk_test.jl")
