@@ -1,0 +1,16 @@
+{
+  "category": "simulate_cycles",
+  "version": "1.0",
+  "description": "Cross-binding fail-fast contract (esm-sph): models containing cycles in their algebraic equations must be REJECTED by every binding, not silently solved with default-valued intermediates. Each fixture's `expect.kind` is `error` and `expect.message_must_contain_one_of` lists the substrings (case-insensitive) that the binding's emitted error message MUST include at least one of.",
+  "fixtures": [
+    {
+      "id": "cyclic_algebraic",
+      "path": "cyclic_algebraic.json",
+      "tags": ["esm-sph", "cycle", "algebraic-loop", "fail-fast"],
+      "description": "Two algebraic equations form a cycle: A depends on B, B depends on A. Binding MUST detect the cycle (Julia: structural_simplify; Python/Rust/TS/Go: discretize or its language equivalent) and emit a structured error rather than producing default-valued garbage."
+    }
+  ],
+  "bindings_required": [],
+  "bindings_optional": ["julia", "python", "rust", "typescript", "go"],
+  "note": "Filed under bindings_optional in the initial landing. Each binding picks this category up by adding a runner that loads the fixture, invokes the binding's discretize/simulate equivalent, and asserts the call raises an error containing one of the listed substrings. Follow-up beads (one per binding) will land the runner integrations as the per-binding audit determines current behavior — silent-success behavior found during that audit is the bug, not the fixture."
+}

@@ -1,0 +1,70 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "ClampViaAbs",
+    "description": "Cross-binding conformance fixture (esm-sph): tests the max-clamp idiom (a + |a|)/2 ≡ max(a, 0). Equivalent to D(X) = max(k - X, 0) - 0.1*X. Catches the abs-op silent gap surfaced by polecat nux's audit (escalation hq-wisp-ywi).",
+    "authors": ["esm-sph conformance"],
+    "tags": ["conformance", "abs", "max-clamp", "esm-sph"]
+  },
+  "models": {
+    "ClampedSource": {
+      "reference": {
+        "notes": "When X<k, (k-X+|k-X|)/2 = k-X, so dX/dt = k - 1.1*X. Closed form starting from X(0)=0 is X(t) = (k/1.1)*(1 - exp(-1.1*t)); X stays below k for all finite t so the closed form holds throughout."
+      },
+      "variables": {
+        "X": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Clamped state — grows toward steady-state k/1.1."
+        },
+        "k": {
+          "type": "parameter",
+          "units": "1/s",
+          "default": 1.0,
+          "description": "Source-rate parameter."
+        }
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["X"], "wrt": "t"},
+          "rhs": {
+            "op": "-",
+            "args": [
+              {
+                "op": "/",
+                "args": [
+                  {
+                    "op": "+",
+                    "args": [
+                      {"op": "-", "args": ["k", "X"]},
+                      {"op": "abs", "args": [{"op": "-", "args": ["k", "X"]}]}
+                    ]
+                  },
+                  2.0
+                ]
+              },
+              {"op": "*", "args": [0.1, "X"]}
+            ]
+          }
+        }
+      ],
+      "tolerance": {"rel": 1.0e-6, "abs": 1.0e-10},
+      "tests": [
+        {
+          "id": "clamp_via_abs_analytical",
+          "description": "Analytical reference X(t) = (1/1.1)*(1 - exp(-1.1*t)). Sampled at t=0, 1, 5, 10 s.",
+          "initial_conditions": {"X": 0.0},
+          "parameter_overrides": {"k": 1.0},
+          "time_span": {"start": 0.0, "end": 10.0},
+          "assertions": [
+            {"variable": "X", "time": 0.0,  "expected": 0.0},
+            {"variable": "X", "time": 1.0,  "expected": 0.6064808330017459},
+            {"variable": "X", "time": 5.0,  "expected": 0.9053756623286691},
+            {"variable": "X", "time": 10.0, "expected": 0.9090757257265543}
+          ]
+        }
+      ]
+    }
+  }
+}

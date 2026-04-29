@@ -60,6 +60,21 @@ SIMULATION_SKIP: Dict[str, str] = {
     # into the SciPy backend's state-reset step; the ball never actually
     # bounces. Tracked alongside Julia's SymbolicContinuousCallback skip.
     "bouncing_ball.esm": "gt-i7e1",
+    # esm-mvc: Python simulate() returns 'Unsupported operation: abs' / 'min' /
+    # 'max' / 'pow' on AST RHSes that use these op aliases. The clamp-via-abs,
+    # n-ary-min/max, and pow-Bernoulli fixtures (esm-sph) cannot run until the
+    # op-alias gap closes. Julia/MTK handles these correctly; the fixtures
+    # remain consumed by the Julia and (TBD) Rust runners.
+    "clamp_via_abs.esm": "esm-mvc",
+    "nary_min_max.esm": "esm-mvc",
+    "pow_logistic.esm": "esm-mvc",
+    # esm-y3n: Python flatten/simulate silently drops authored algebraic
+    # equations (lhs is a bare variable name), leaving the algebraic
+    # intermediates pinned at their default values and corrupting the
+    # downstream ODE — the diameter-growth-shaped fixture (esm-sph) reproduces
+    # nux's audit at 1000x error magnitudes. Closes once esm-y3n lands proper
+    # algebraic-elimination support.
+    "algebraic_diameter_growth.esm": "esm-y3n",
 }
 
 

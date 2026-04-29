@@ -1,0 +1,68 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "AlgebraicDiameterGrowth",
+    "description": "Cross-binding conformance fixture (esm-sph): a single ODE coupled to TWO algebraic equations defining intermediate variables. Mirrors the diameter-growth shape that polecat nux's audit caught silently producing 1000x-wrong answers in earthsci_toolkit.simulation.simulate (escalation hq-wisp-ywi). A binding that silently drops the algebraic equations and leaves the intermediates at their default value 0 will compute dD_p/dt = 0 and produce D_p(t) ≡ D_p(0), failing every t > 0 assertion.",
+    "authors": ["esm-sph conformance"],
+    "tags": ["conformance", "algebraic-elimination", "dae", "esm-sph"]
+  },
+  "models": {
+    "DiameterGrowth": {
+      "reference": {
+        "notes": "After algebraic elimination: G = mu*D_p = alpha*D_p, so dD_p/dt = -k*alpha*D_p (exponential decay). With k=0.1, alpha=1.0, D_p(0)=1.0 → D_p(t) = exp(-0.1*t). The mu, G defaults (1.0) satisfy the algebraic constraints at t=0, so a binding that drops the algebraic equations leaves them frozen at 1.0 and integrates dD_p/dt = -0.1 (linear decay) instead — the resulting D_p(t) = 1 - 0.1*t diverges sharply from the exponential at every t > 0."
+      },
+      "variables": {
+        "D_p": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0,
+          "description": "Particle-diameter-shaped state variable."
+        },
+        "mu": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0,
+          "description": "Algebraic intermediate (= alpha). Default chosen to satisfy the algebraic constraint at t=0; bindings that drop the algebraic equations leave it pinned at 1.0 and make D_p decay linearly instead of exponentially."
+        },
+        "G": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0,
+          "description": "Algebraic intermediate (= mu * D_p). Same rationale as mu."
+        },
+        "k": {"type": "parameter", "default": 0.1},
+        "alpha": {"type": "parameter", "default": 1.0}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["D_p"], "wrt": "t"},
+          "rhs": {"op": "*", "args": [{"op": "-", "args": ["k"]}, "G"]}
+        },
+        {
+          "lhs": "G",
+          "rhs": {"op": "*", "args": ["mu", "D_p"]}
+        },
+        {
+          "lhs": "mu",
+          "rhs": "alpha"
+        }
+      ],
+      "tolerance": {"rel": 1.0e-6, "abs": 1.0e-10},
+      "tests": [
+        {
+          "id": "diameter_growth_algebraic_elimination",
+          "description": "D_p(t) = exp(-0.1*t); mu(t) = 1.0; G(t) = exp(-0.1*t). Assertions on all three catch silent algebraic-elimination failures whether the runner reads states only or also probes algebraic intermediates.",
+          "initial_conditions": {"D_p": 1.0},
+          "parameter_overrides": {"k": 0.1, "alpha": 1.0},
+          "time_span": {"start": 0.0, "end": 10.0},
+          "assertions": [
+            {"variable": "D_p", "time": 0.0,  "expected": 1.0},
+            {"variable": "D_p", "time": 1.0,  "expected": 0.9048374180359595},
+            {"variable": "D_p", "time": 5.0,  "expected": 0.6065306597126334},
+            {"variable": "D_p", "time": 10.0, "expected": 0.36787944117144233}
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "NaryMinMax",
+    "description": "Cross-binding conformance fixture (esm-sph): exercises n-ary min(...) and max(...) ops. Catches binding gaps where these are aliased only as binary or rejected outright (companion to clamp_via_abs.esm; escalation hq-wisp-ywi).",
+    "authors": ["esm-sph conformance"],
+    "tags": ["conformance", "min", "max", "n-ary", "esm-sph"]
+  },
+  "models": {
+    "MinMaxRate": {
+      "reference": {
+        "notes": "max(a,b,c) = max(1,2,3) = 3; min(d,e,f) = min(0.5,0.7,0.6) = 0.5. dY/dt = 3 - 0.5 = 2.5 (constant); Y(0)=0 → Y(t) = 2.5*t."
+      },
+      "variables": {
+        "Y": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0,
+          "description": "Linear-growing state driven by max - min of constants."
+        },
+        "a": {"type": "parameter", "default": 1.0},
+        "b": {"type": "parameter", "default": 2.0},
+        "c": {"type": "parameter", "default": 3.0},
+        "d": {"type": "parameter", "default": 0.5},
+        "e": {"type": "parameter", "default": 0.7},
+        "f": {"type": "parameter", "default": 0.6}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["Y"], "wrt": "t"},
+          "rhs": {
+            "op": "-",
+            "args": [
+              {"op": "max", "args": ["a", "b", "c"]},
+              {"op": "min", "args": ["d", "e", "f"]}
+            ]
+          }
+        }
+      ],
+      "tolerance": {"rel": 1.0e-6, "abs": 1.0e-10},
+      "tests": [
+        {
+          "id": "nary_min_max_constant_rate",
+          "description": "Constant-rate growth Y(t) = 2.5*t. Sampled at t=0, 1, 5, 10 s.",
+          "initial_conditions": {"Y": 0.0},
+          "parameter_overrides": {
+            "a": 1.0, "b": 2.0, "c": 3.0,
+            "d": 0.5, "e": 0.7, "f": 0.6
+          },
+          "time_span": {"start": 0.0, "end": 10.0},
+          "assertions": [
+            {"variable": "Y", "time": 0.0,  "expected": 0.0},
+            {"variable": "Y", "time": 1.0,  "expected": 2.5},
+            {"variable": "Y", "time": 5.0,  "expected": 12.5},
+            {"variable": "Y", "time": 10.0, "expected": 25.0}
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "PowLogistic",
+    "description": "Cross-binding conformance fixture (esm-sph): exercises the pow / `^` op with a non-integer-shaped Bernoulli ODE dZ/dt = k*Z^n - decay*Z. Catches the pow-op silent gap surfaced by polecat nux's audit (escalation hq-wisp-ywi).",
+    "authors": ["esm-sph conformance"],
+    "tags": ["conformance", "pow", "esm-sph"]
+  },
+  "models": {
+    "PowDecay": {
+      "reference": {
+        "notes": "n=2 Bernoulli reduction. With u = 1/Z: u'(t) = decay*u - k. With k=0.1, decay=0.5, Z(0)=1 → u(0)=1 → u(t) = 0.2 + 0.8*exp(0.5*t); Z(t) = 1/u(t)."
+      },
+      "variables": {
+        "Z": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0,
+          "description": "Bernoulli state."
+        },
+        "k": {"type": "parameter", "default": 0.1},
+        "n": {"type": "parameter", "default": 2.0},
+        "decay": {"type": "parameter", "default": 0.5}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["Z"], "wrt": "t"},
+          "rhs": {
+            "op": "-",
+            "args": [
+              {
+                "op": "*",
+                "args": [
+                  "k",
+                  {"op": "^", "args": ["Z", "n"]}
+                ]
+              },
+              {"op": "*", "args": ["decay", "Z"]}
+            ]
+          }
+        }
+      ],
+      "tolerance": {"rel": 1.0e-6, "abs": 1.0e-10},
+      "tests": [
+        {
+          "id": "pow_logistic_bernoulli",
+          "description": "Z(t) = 1/(0.2 + 0.8*exp(0.5*t)) for k=0.1, n=2, decay=0.5, Z(0)=1. Sampled at t=0, 1, 5, 10 s.",
+          "initial_conditions": {"Z": 1.0},
+          "parameter_overrides": {"k": 0.1, "n": 2.0, "decay": 0.5},
+          "time_span": {"start": 0.0, "end": 10.0},
+          "assertions": [
+            {"variable": "Z", "time": 0.0,  "expected": 1.0},
+            {"variable": "Z", "time": 1.0,  "expected": 0.6583378083393352},
+            {"variable": "Z", "time": 5.0,  "expected": 0.10054298067234056},
+            {"variable": "Z", "time": 10.0, "expected": 0.008408270129235637}
+          ]
+        }
+      ]
+    }
+  }
+}
