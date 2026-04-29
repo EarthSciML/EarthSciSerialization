@@ -126,6 +126,20 @@ export type {
   RuleBinding,
 } from './rule-engine.js'
 
+// Walker ghost-fill kernel (RFC §5.2.8, esm-37k cross-binding parity).
+export {
+  applyStencilGhosted1d,
+  StencilEvaluatorError,
+  E_GHOST_FILL_UNSUPPORTED,
+  E_GHOST_WIDTH_TOO_SMALL,
+  E_STENCIL_BAD_INPUT,
+} from './stencil-evaluator.js'
+export type {
+  StencilEntryLike,
+  PrescribeFn,
+  GhostedOptions,
+} from './stencil-evaluator.js'
+
 // Discretization pipeline (RFC §11, gt-gbs2) + DAE binding contract (RFC §12, gt-q7sh).
 export {
   discretize,
