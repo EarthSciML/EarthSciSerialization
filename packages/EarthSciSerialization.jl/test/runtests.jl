@@ -50,6 +50,7 @@ using JSON3
     include("closed_functions_mtk_test.jl")
     include("function_tables_test.jl")
     include("function_tables_lowering_test.jl")
+    include("expression_templates_test.jl")
 
     # Comprehensive test suite for full verification
     @testset "Comprehensive Test Suite" begin

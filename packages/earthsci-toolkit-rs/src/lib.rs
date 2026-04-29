@@ -47,6 +47,7 @@ pub mod graph;
 pub mod grid_accessor;
 pub mod migration;
 pub mod mms_evaluator;
+pub mod lower_expression_templates;
 pub mod parse;
 pub mod reactions;
 pub mod ref_loading;

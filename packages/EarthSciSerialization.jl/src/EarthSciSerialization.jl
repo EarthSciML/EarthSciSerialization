@@ -26,6 +26,7 @@ include("reactions.jl")
 include("flatten.jl")
 include("mock_systems.jl")
 include("registered_functions.jl")
+include("lower_expression_templates.jl")
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -134,6 +135,9 @@ export
     # Closed function registry (esm-tzp / esm-4aw; esm-spec §9.2)
     evaluate_closed_function, closed_function_names, ClosedFunctionError,
     lower_enums!,
+    # Expression-template expansion (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md)
+    lower_expression_templates, reject_expression_templates_pre_v04,
+    ExpressionTemplateError,
     # GridAccessor interface (gt-hvl4; concrete impls live in ESD)
     GridAccessor, GridAccessorError,
     cell_centers, neighbors, metric_eval,

@@ -164,6 +164,14 @@ export type { ClosedFunctionErrorCode } from './registered_functions.js'
 // Load-time enum lowering (esm-spec §9.3).
 export { lowerEnums, EnumLoweringError } from './lower_enums.js'
 
+// Load-time expression-template expansion (esm-spec §9.6,
+// docs/rfcs/ast-expression-templates.md).
+export {
+  lowerExpressionTemplates,
+  rejectExpressionTemplatesPreV04,
+  ExpressionTemplateError,
+} from './lower_expression_templates.js'
+
 // Grid accessor contract (gt-j2b8, 2026-04-22 grid-inversion decision).
 // ESS owns the interface and registry; ESD ships concrete families and
 // registers them at runtime.

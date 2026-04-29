@@ -11,6 +11,10 @@ import type { EsmFile, Expression, CouplingEntry } from './types.js'
 import { validateUnits } from './units.js'
 import { isNumericLiteral, losslessJsonParse } from './numeric-literal.js'
 import { lowerEnums } from './lower_enums.js'
+import {
+  lowerExpressionTemplates,
+  rejectExpressionTemplatesPreV04,
+} from './lower_expression_templates.js'
 
 /**
  * Schema validation error with JSON Pointer path
@@ -327,7 +331,8 @@ const schema = {
             "enum",
             "const",
             "bc",
-            "table_lookup"
+            "table_lookup",
+            "apply_expression_template"
           ]
         },
         "args": {
@@ -489,6 +494,13 @@ const schema = {
               "type": "string"
             }
           ]
+        },
+        "bindings": {
+          "type": "object",
+          "description": "For apply_expression_template: a map from each parameter name declared by the referenced template to the Expression bound to that parameter. Every entry of the template's `params` MUST appear as a key; extra keys are rejected at load time with diagnostic 'apply_expression_template_bindings_mismatch'. Values may be numeric literals, variable name references (strings), or arbitrary Expression ASTs (full subtrees). `args` MUST be empty for an apply_expression_template node — the parameter values live here.",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         }
       },
       "additionalProperties": false,
@@ -671,6 +683,30 @@ const schema = {
             "required": [
               "table",
               "axes"
+            ],
+            "properties": {
+              "args": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "apply_expression_template"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "name",
+              "bindings"
             ],
             "properties": {
               "args": {
@@ -1178,6 +1214,13 @@ const schema = {
           "additionalProperties": {
             "$ref": "#/$defs/BoundaryCondition"
           }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this model's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.",
+          "additionalProperties": {
+            "$ref": "#/$defs/ExpressionTemplate"
+          }
         }
       }
     },
@@ -1422,6 +1465,40 @@ const schema = {
           "items": {
             "$ref": "#/$defs/Example"
           }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component (typically inside `reactions[*].rate`) reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this reaction system's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.",
+          "additionalProperties": {
+            "$ref": "#/$defs/ExpressionTemplate"
+          }
+        }
+      }
+    },
+    "ExpressionTemplate": {
+      "type": "object",
+      "description": "A single in-file Expression-AST template (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md). The `body` is a normal Expression AST in which parameter occurrences are written as bare parameter-name strings in any position where a variable reference would appear. At load time `apply_expression_template` nodes are expanded by structural substitution: every parameter occurrence in `body` is replaced by the bound argument's AST in source order. Pure syntactic substitution — no evaluation, no metaprogramming. Bodies MUST NOT contain `apply_expression_template` nodes themselves (no template-calls-template); bindings reject this with diagnostic 'apply_expression_template_recursive_body'.",
+      "required": [
+        "params",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "array",
+          "description": "Ordered list of parameter names. MUST be unique within this template. Each name occurs zero or more times inside `body`; every name MUST also appear as a key in every `apply_expression_template.bindings` referencing this template.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "body": {
+          "$ref": "#/$defs/Expression",
+          "description": "The template's Expression AST body. Parameter names appear as bare strings in variable-reference positions and are replaced structurally at expansion time."
+        },
+        "description": {
+          "type": "string"
         }
       }
     },
@@ -5707,6 +5784,12 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   // Julia ref `parse.jl` rejection so cross-binding behavior is uniform.
   rejectRemovedV02Blocks(validationView)
 
+  // Step 2b: v0.4.0 expression_templates / apply_expression_template are
+  // rejected when the file declares esm < 0.4.0 (RFC §5.4 spec-version gate).
+  // Surfaced with a stable diagnostic before schema validation so the user
+  // sees the version hint instead of a generic "extra property" error.
+  rejectExpressionTemplatesPreV04(validationView)
+
   // Step 3: Schema validation with version compatibility
   const schemaErrors = validateSchemaWithVersionCompatibility(validationView)
   if (schemaErrors.length > 0) {
@@ -5715,6 +5798,13 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
       schemaErrors
     )
   }
+
+  // Step 3a: Expand all `apply_expression_template` ops at load time
+  // (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md). After this
+  // pass, the file's expression trees contain no apply_expression_template
+  // nodes and no `expression_templates` blocks — downstream consumers see
+  // only normal Expression ASTs (Option A round-trip).
+  data = lowerExpressionTemplates(data as object)
 
   // Step 4: Clean up unknown fields for forward compatibility and type coercion
   const cleanedData = removeUnknownFields(data)

@@ -1,0 +1,72 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "expression_templates_arrhenius_smoke",
+    "description": "Single Arrhenius expression_template applied across three reactions with different scalar bindings (esm-spec §9.6, esm-giy).",
+    "authors": ["esm-giy conformance"]
+  },
+  "reaction_systems": {
+    "chem": {
+      "species": {
+        "A": {"default": 1.0},
+        "B": {"default": 0.5},
+        "C": {"default": 0.0},
+        "D": {"default": 0.0}
+      },
+      "parameters": {
+        "T": {"default": 298.15},
+        "num_density": {"default": 2.5e19}
+      },
+      "expression_templates": {
+        "arrhenius": {
+          "params": ["A_pre", "Ea"],
+          "body": {
+            "op": "*",
+            "args": [
+              "A_pre",
+              {"op": "exp", "args": [
+                {"op": "/", "args": [{"op": "-", "args": ["Ea"]}, "T"]}
+              ]},
+              "num_density"
+            ]
+          }
+        }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "B", "stoichiometry": 1}],
+          "rate": {
+            "op": "apply_expression_template",
+            "args": [],
+            "name": "arrhenius",
+            "bindings": {"A_pre": 1.8e-12, "Ea": 1500}
+          }
+        },
+        {
+          "id": "R2",
+          "substrates": [{"species": "B", "stoichiometry": 1}],
+          "products": [{"species": "C", "stoichiometry": 1}],
+          "rate": {
+            "op": "apply_expression_template",
+            "args": [],
+            "name": "arrhenius",
+            "bindings": {"A_pre": 3.4e-13, "Ea": 800}
+          }
+        },
+        {
+          "id": "R3",
+          "substrates": [{"species": "C", "stoichiometry": 1}],
+          "products": [{"species": "D", "stoichiometry": 1}],
+          "rate": {
+            "op": "apply_expression_template",
+            "args": [],
+            "name": "arrhenius",
+            "bindings": {"A_pre": 6.1e-14, "Ea": 200}
+          }
+        }
+      ]
+    }
+  }
+}

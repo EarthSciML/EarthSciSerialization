@@ -84,6 +84,16 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
         # ops or `fn` invocations of closed registry entries.
         throw(ParseError("`call` op is not valid in v0.3.0+ (removed by esm-spec §9 closure). " *
                          "Migrate to AST ops or `fn` invocations of the closed function registry."))
+    elseif op == "apply_expression_template"
+        # `apply_expression_template` should have been expanded by
+        # `lower_expression_templates` before any tree reached
+        # `parse_expression` (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md).
+        # Reaching this branch means a binding caller fed unexpanded JSON
+        # directly to parse_expression — surface that as an error rather
+        # than silently producing an `OpExpr` with the template op.
+        throw(ParseError("`apply_expression_template` op encountered during " *
+                         "parse_expression; expected `lower_expression_templates` to " *
+                         "have expanded it (esm-spec §9.6)."))
     end
     args_data = get(data, kargs, [])
     args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
@@ -1630,6 +1640,12 @@ function load(io::IO)::EsmFile
         json_string = read(io, String)
         raw_data = JSON3.read(json_string)
 
+        # v0.4.0 expression_templates / apply_expression_template are
+        # rejected when the file declares esm < 0.4.0 (RFC §5.4 spec-version
+        # gate). Surfaced before schema validation so the user sees the
+        # version hint instead of a generic "extra property" error.
+        reject_expression_templates_pre_v04(raw_data)
+
         # Validate schema
         schema_errors = validate_schema(raw_data)
         if !isempty(schema_errors)
@@ -1645,8 +1661,15 @@ function load(io::IO)::EsmFile
         # gt-2fvs mayor decision). A follow-up bead flips this to a hard error.
         _warn_deprecated_domain_bc(raw_data)
 
+        # Expand `apply_expression_template` ops at load time (esm-spec
+        # §9.6 / docs/rfcs/ast-expression-templates.md). After this pass,
+        # the typed tree carries no apply_expression_template nodes and no
+        # `expression_templates` blocks — downstream consumers see only
+        # normal Expression ASTs (Option A round-trip).
+        expanded = lower_expression_templates(raw_data)
+
         # Coerce types and return
-        return coerce_esm_file(raw_data)
+        return coerce_esm_file(expanded)
 
     catch e
         if isa(e, Exception) && hasfield(typeof(e), :msg)
@@ -1854,10 +1877,13 @@ function _load_remote_ref(ref::String)::EsmFile
 
     raw_data = JSON3.read(content)
 
+    reject_expression_templates_pre_v04(raw_data)
+
     schema_errors = validate_schema(raw_data)
     if !isempty(schema_errors)
         throw(SubsystemRefError("Schema validation failed for remote ref '$(ref)'"))
     end
 
-    return coerce_esm_file(raw_data)
+    expanded = lower_expression_templates(raw_data)
+    return coerce_esm_file(expanded)
 end

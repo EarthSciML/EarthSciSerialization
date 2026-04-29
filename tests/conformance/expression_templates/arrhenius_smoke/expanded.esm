@@ -1,0 +1,69 @@
+{
+  "esm": "0.4.0",
+  "metadata": {
+    "name": "expression_templates_arrhenius_smoke",
+    "description": "Single Arrhenius expression_template applied across three reactions with different scalar bindings (esm-spec §9.6, esm-giy).",
+    "authors": ["esm-giy conformance"]
+  },
+  "reaction_systems": {
+    "chem": {
+      "species": {
+        "A": {"default": 1.0},
+        "B": {"default": 0.5},
+        "C": {"default": 0.0},
+        "D": {"default": 0.0}
+      },
+      "parameters": {
+        "T": {"default": 298.15},
+        "num_density": {"default": 2.5e19}
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "substrates": [{"species": "A", "stoichiometry": 1}],
+          "products": [{"species": "B", "stoichiometry": 1}],
+          "rate": {
+            "op": "*",
+            "args": [
+              1.8e-12,
+              {"op": "exp", "args": [
+                {"op": "/", "args": [{"op": "-", "args": [1500]}, "T"]}
+              ]},
+              "num_density"
+            ]
+          }
+        },
+        {
+          "id": "R2",
+          "substrates": [{"species": "B", "stoichiometry": 1}],
+          "products": [{"species": "C", "stoichiometry": 1}],
+          "rate": {
+            "op": "*",
+            "args": [
+              3.4e-13,
+              {"op": "exp", "args": [
+                {"op": "/", "args": [{"op": "-", "args": [800]}, "T"]}
+              ]},
+              "num_density"
+            ]
+          }
+        },
+        {
+          "id": "R3",
+          "substrates": [{"species": "C", "stoichiometry": 1}],
+          "products": [{"species": "D", "stoichiometry": 1}],
+          "rate": {
+            "op": "*",
+            "args": [
+              6.1e-14,
+              {"op": "exp", "args": [
+                {"op": "/", "args": [{"op": "-", "args": [200]}, "T"]}
+              ]},
+              "num_density"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

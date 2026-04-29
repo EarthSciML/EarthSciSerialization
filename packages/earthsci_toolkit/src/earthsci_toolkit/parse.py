@@ -3030,6 +3030,16 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
     top_continuous_events = data.pop("continuous_events", None) if isinstance(data, dict) else None
     top_discrete_events = data.pop("discrete_events", None) if isinstance(data, dict) else None
 
+    # v0.4.0 expression_templates / apply_expression_template are rejected
+    # when the file declares esm < 0.4.0 (RFC §5.4 spec-version gate).
+    # Surfaced before schema validation so the user sees the version hint
+    # instead of a generic schema error.
+    from .lower_expression_templates import (
+        reject_expression_templates_pre_v04,
+        lower_expression_templates,
+    )
+    reject_expression_templates_pre_v04(data)
+
     # Load and validate against schema
     schema = _get_schema()
     try:
@@ -3042,6 +3052,13 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
 
     # Structural validation
     _validate_structural(data, file_path=file_path)
+
+    # Expand `apply_expression_template` ops at load time (esm-spec §9.6 /
+    # docs/rfcs/ast-expression-templates.md). After this pass, the data dict
+    # carries no apply_expression_template nodes and no expression_templates
+    # blocks — _parse_esm_data sees only normal Expression ASTs (Option A
+    # round-trip).
+    data = lower_expression_templates(data)
 
     # Parse into ESM objects
     esm_file = _parse_esm_data(data)

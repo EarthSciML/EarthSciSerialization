@@ -14,11 +14,21 @@ ESM is **language-agnostic**. Every model must be fully self-describing: all equ
 
 The single exception to full specification is **data loaders**, which are inherently runtime-specific (file I/O, format adapters, regridding, large external grids) and are therefore referenced by type/name rather than fully defined. There is no in-file registry of arbitrary user-defined functions or operators: every callable invoked from an expression is drawn from the **closed function registry** (Section 9), whose entries are spec-defined with fixed names, signatures, and tolerances. See `docs/rfcs/closed-function-registry.md` for the rationale.
 
-### 1.1 Authoring Policy: AST first, registry second
+### 1.1 Authoring Policy: AST first, registry second, factoring third
 
 Authors and reviewers MUST prefer the built-in expression AST (Section 4) over the closed function registry (Section 9). A `{"op": "fn", ...}` node is justified **only** when the desired primitive cannot be written as a finite closed-form composition of the AST ops in §4.2 — typically because it requires non-AST ingredients (calendar arithmetic, table search). Anything expressible in finite closed form (powers, polynomials, transcendentals, conditionals, piecewise, clip/clamp) belongs in the AST. Reviewers MUST reject `fn` nodes whose body can be written using existing AST ops; `^`, `min`, `max`, `ifelse`, `sign` and the trig / exp / log family already cover ordinary scalar math.
 
 The closed function registry is **closed**: bindings MUST reject any `fn` node whose `name` is not in the spec-defined set for the file's declared `esm` version. There is no per-file declaration of new functions, no `handler_id` lookup, and no out-of-band runtime registry. Adding a primitive requires a spec rev (see `docs/rfcs/closed-function-registry.md` §7).
+
+The full authoring stance, normatively:
+
+> **AST first, registry second, factoring third.**
+>
+> 1. *AST first.* The closed AST op set in §4 is the primary authoring surface. New mathematics SHOULD be expressible as a finite tree of existing ops.
+> 2. *Registry second.* Operations that genuinely cannot be written as AST trees (tabulated lookups, iterative solves, platform adapters) use the closed `fn`-op registry per §9.1; addition is normative spec work, not authoring.
+> 3. *Factoring third.* Within a single component, an author MAY name a fixed Expression AST tree as an `expression_templates` entry (§9.6) and reference it elsewhere by name with parameter substitution. Factoring is **not** programming: bodies are fixed AST trees, parameters are pure-syntactic substitution slots, no recursion, no cross-template calls, no metaprogramming.
+>
+> Mechanisms that require any capability beyond fixed-tree parameter substitution (conditional includes, generated definitions, computed bindings) are out of scope and require a separate RFC that revisits §1.1.
 
 **File extension:** `.esm`  
 **MIME type:** `application/vnd.earthsciml+json`  
@@ -2255,6 +2265,94 @@ Conformance fixtures under `tests/conformance/function_tables/` exercise:
 3. A roundtrip-preservation case (load + save reproduces the authored byte sequence modulo whitespace, with NO promotion or demotion across the inline-const ↔ table_lookup boundary) — `roundtrip/`.
 
 Each fixture pairs an `.esm` file with a small numeric harness that asserts the lowered evaluation matches the equivalent inline-const lookup at the §9.2 tolerance contract (`abs: 0, rel: 0` non-FMA, `abs: 0, rel: 4e-16` mixed-FMA cross-binding). All five bindings MUST pass.
+
+### 9.6 Expression templates (v0.4.0)
+
+v0.4.0 adds **component-scoped in-file Expression-AST templates** for factoring repeated kinetic / rate forms. The mechanism is purely structural: a template names a fixed Expression body with parameter substitution slots, and `apply_expression_template` AST nodes elsewhere in the same component reference the template by name with per-parameter bindings. See `docs/content/rfcs/ast-expression-templates.md` for the full RFC and motivation; this section pins the normative load-time behavior.
+
+#### 9.6.1 The `expression_templates` block
+
+`expression_templates` is declared **inside a single `model` or `reaction_system`** (top-level templates and cross-component sharing are deferred to a follow-up RFC). It is a JSON object whose keys are template names and whose values are template definitions:
+
+```json
+"expression_templates": {
+  "arrhenius": {
+    "params": ["A_pre", "Ea"],
+    "body": {
+      "op": "*",
+      "args": [
+        "A_pre",
+        {"op": "exp", "args": [{"op": "/", "args": [{"op": "-", "args": ["Ea"]}, "T"]}]},
+        "num_density"
+      ]
+    }
+  }
+}
+```
+
+Required fields:
+
+- `params`: ordered array of unique non-empty parameter names (strings).
+- `body`: a normal Expression AST. Parameter occurrences appear as bare parameter-name strings in any variable-reference position.
+
+#### 9.6.2 The `apply_expression_template` op
+
+Reactions and any other expression positions within the same component reference templates via:
+
+```json
+"rate": {
+  "op": "apply_expression_template",
+  "args": [],
+  "name": "arrhenius",
+  "bindings": {"A_pre": 1.8e-12, "Ea": 1500}
+}
+```
+
+Required fields:
+
+- `name`: id of an `expression_templates` entry declared in the same component.
+- `bindings`: object mapping each parameter in the referenced template's `params` to a value. Values MAY be numeric literals, variable name references, or arbitrary Expression ASTs (full subtrees).
+- `args`: MUST be an empty array.
+
+#### 9.6.3 Constraints (normative)
+
+1. **AST → AST only.** Templates take Expression args and produce an Expression. No string interpolation, no schema-level substitution, no metaprogramming.
+2. **No template-calls-template, no recursion.** A template `body` MUST NOT contain `apply_expression_template` nodes itself.
+3. **Typed signatures (positional-by-name).** Bindings MUST cover every entry of the template's `params` exactly — no missing keys, no extras.
+4. **Component-local scope.** Templates declared inside one `model` / `reaction_system` are visible only within that component's expression positions.
+5. **Pure syntactic substitution.** Every parameter occurrence in `body` is replaced by the bound argument's AST in source order. Expansion MUST NOT depend on argument evaluation.
+
+#### 9.6.4 Round-trip — Option A (always-expanded)
+
+The v1 round-trip model is **Option A: parse-time expansion**. There is no Option B in v1.
+
+1. **Expansion happens at load.** Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST before any validator, evaluator, doc generator, or `esm-write` sees the tree. After load, downstream code operates on a normal Expression AST and MUST NOT branch on whether a node was produced by template expansion.
+2. **Round-trip emits the expanded form.** The canonical AST stored on disk after `parse → emit` is the expanded form. Source `.esm` files that author with `expression_templates` and `apply_expression_template` are the **source of truth**; the emitter does not re-derive template references from an expanded AST.
+3. **Determinism.** Two fresh expansions of the same `(template, bindings)` pair MUST produce structurally identical ASTs (same op tree, bit-equal constants). Bindings MAY cache expanded ASTs but caching MUST NOT be observable.
+4. **Validators run on the expanded form.** Schema validation, type checks, and domain checks (every check defined in §4 / §9 of the spec) run on the post-expansion AST.
+
+#### 9.6.5 Spec-version gate
+
+`expression_templates` and `apply_expression_template` arrive at `esm: 0.4.0`. Files declaring `esm: 0.3.x` or earlier MUST be rejected by all five bindings if they carry either construct, with diagnostic `apply_expression_template_version_too_old`.
+
+#### 9.6.6 Diagnostics
+
+Bindings MUST emit the following stable diagnostic codes (cross-language uniform; see RFC §1).
+
+| Code | Meaning |
+|---|---|
+| `apply_expression_template_version_too_old` | File declares `esm` < 0.4.0 but uses `expression_templates` or `apply_expression_template`. |
+| `apply_expression_template_unknown_template` | `apply_expression_template.name` references a template not declared in the enclosing component. |
+| `apply_expression_template_bindings_mismatch` | `bindings` does not exactly match the template's `params` (missing or extra keys). |
+| `apply_expression_template_recursive_body` | A template `body` contains an `apply_expression_template` node (template-calls-template forbidden). |
+| `apply_expression_template_invalid_declaration` | `params` is missing/empty/duplicates entries, `body` is missing, or other structural defects. |
+
+#### 9.6.7 Conformance fixtures
+
+Conformance fixtures live under `tests/conformance/expression_templates/`. The v1 set:
+
+- `arrhenius_smoke/fixture.esm` — a 2-parameter `arrhenius` template applied across three reactions with different scalar bindings.
+- `arrhenius_smoke/expanded.esm` — the canonical post-expansion form. All five bindings (Julia, Python, Rust, TypeScript, Go) MUST produce a structurally-equal `reactions` array on load.
 
 ---
 

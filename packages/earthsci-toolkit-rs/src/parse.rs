@@ -105,6 +105,11 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     crate::ref_loading::resolve_subsystem_refs(&mut json_value, &base)
         .map_err(EsmError::SchemaValidation)?;
 
+    // v0.4.0 expression_templates / apply_expression_template are rejected
+    // when the file declares esm < 0.4.0 (RFC §5.4 spec-version gate).
+    crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
     // Validate against schema
     validate_schema(&json_value)?;
 
@@ -113,6 +118,13 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     // things JSON Schema cannot express. Mirrors Python / Julia so that
     // cross-language conformance agrees.
     validate_structural_json(&json_value)?;
+
+    // Expand `apply_expression_template` ops at load time (esm-spec §9.6 /
+    // docs/rfcs/ast-expression-templates.md). After this pass the JSON tree
+    // has no apply_expression_template nodes and no expression_templates
+    // blocks — typed structs see only normal Expression ASTs.
+    crate::lower_expression_templates::lower_expression_templates(&mut json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
     // Emit deprecation warnings for any domain-level boundary_conditions
     // (v0.2.0 transitional shim per RFC §10.1 + gt-2fvs mayor decision).
@@ -164,8 +176,14 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
     crate::ref_loading::resolve_subsystem_refs(&mut json_value, &base)
         .map_err(EsmError::SchemaValidation)?;
 
+    crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
     validate_schema(&json_value)?;
     validate_structural_json(&json_value)?;
+
+    crate::lower_expression_templates::lower_expression_templates(&mut json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;
 

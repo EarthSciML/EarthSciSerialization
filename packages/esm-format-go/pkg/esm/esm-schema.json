@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://earthsciml.org/schemas/esm/0.4.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
+  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.4.0 also adds component-scoped in-file `expression_templates` blocks (declared inside a single model or reaction_system) plus a new `apply_expression_template` AST op that references a template by name with per-parameter bindings. Templates are pure syntactic substitution — no recursion, no template-calls-template, no metaprogramming — and are expanded at load time so downstream consumers see only normal Expression ASTs (see docs/rfcs/ast-expression-templates.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
   "required": ["esm", "metadata"],
   "additionalProperties": false,
@@ -159,7 +159,7 @@
             "Pre",
             "sign",
             "arrayop", "makearray", "index", "broadcast", "reshape", "transpose", "concat",
-            "fn", "enum", "const", "bc", "table_lookup"
+            "fn", "enum", "const", "bc", "table_lookup", "apply_expression_template"
           ]
         },
         "args": {
@@ -252,7 +252,7 @@
         },
         "name": {
           "type": "string",
-          "description": "For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear."
+          "description": "For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear. For apply_expression_template: the id of an `expression_templates` entry declared in the same component (esm-spec.md §9.6 / docs/rfcs/ast-expression-templates.md). Bindings MUST reject references to undeclared template names at file-load time with diagnostic 'apply_expression_template_unknown_template'."
         },
         "value": {
           "description": "For const: the inline literal value carried by this expression node. Any JSON number, integer, or nested array thereof. `args` MUST be empty for a const node."
@@ -281,6 +281,11 @@
             { "type": "integer", "minimum": 0 },
             { "type": "string" }
           ]
+        },
+        "bindings": {
+          "type": "object",
+          "description": "For apply_expression_template: a map from each parameter name declared by the referenced template to the Expression bound to that parameter. Every entry of the template's `params` MUST appear as a key; extra keys are rejected at load time with diagnostic 'apply_expression_template_bindings_mismatch'. Values may be numeric literals, variable name references (strings), or arbitrary Expression ASTs (full subtrees). `args` MUST be empty for an apply_expression_template node — the parameter values live here.",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
         }
       },
       "additionalProperties": false,
@@ -334,6 +339,15 @@
           "if": { "properties": { "op": { "const": "table_lookup" } }, "required": ["op"] },
           "then": {
             "required": ["table", "axes"],
+            "properties": {
+              "args": { "type": "array", "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "apply_expression_template" } }, "required": ["op"] },
+          "then": {
+            "required": ["name", "bindings"],
             "properties": {
               "args": { "type": "array", "maxItems": 0 }
             }
@@ -673,6 +687,11 @@
           "type": "object",
           "description": "Model-level boundary conditions, keyed by user-supplied id (see docs/rfcs/discretization.md §9). v0.2.0 breaking change: domains.<d>.boundary_conditions was removed in favor of this field; files from v0.1.0 carrying the old field must be migrated via spec.migrate_0_1_to_0_2 (RFC §16.1).",
           "additionalProperties": { "$ref": "#/$defs/BoundaryCondition" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this model's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
       }
     },
@@ -853,7 +872,32 @@
           "type": "array",
           "description": "Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.",
           "items": { "$ref": "#/$defs/Example" }
+        },
+        "expression_templates": {
+          "type": "object",
+          "description": "Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component (typically inside `reactions[*].rate`) reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this reaction system's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.",
+          "additionalProperties": { "$ref": "#/$defs/ExpressionTemplate" }
         }
+      }
+    },
+
+    "ExpressionTemplate": {
+      "type": "object",
+      "description": "A single in-file Expression-AST template (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md). The `body` is a normal Expression AST in which parameter occurrences are written as bare parameter-name strings in any position where a variable reference would appear. At load time `apply_expression_template` nodes are expanded by structural substitution: every parameter occurrence in `body` is replaced by the bound argument's AST in source order. Pure syntactic substitution — no evaluation, no metaprogramming. Bodies MUST NOT contain `apply_expression_template` nodes themselves (no template-calls-template); bindings reject this with diagnostic 'apply_expression_template_recursive_body'.",
+      "required": ["params", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "array",
+          "description": "Ordered list of parameter names. MUST be unique within this template. Each name occurs zero or more times inside `body`; every name MUST also appear as a key in every `apply_expression_template.bindings` referencing this template.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "body": {
+          "$ref": "#/$defs/Expression",
+          "description": "The template's Expression AST body. Parameter names appear as bare strings in variable-reference positions and are replaced structurally at expansion time."
+        },
+        "description": { "type": "string" }
       }
     },
 

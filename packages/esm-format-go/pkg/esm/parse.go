@@ -57,6 +57,22 @@ func Load(path string) (*EsmFile, error) {
 
 // LoadString parses an ESM file from JSON string and validates it against the JSON schema
 func LoadString(jsonStr string) (*EsmFile, error) {
+	// v0.4.0 expression_templates / apply_expression_template are rejected
+	// when the file declares esm < 0.4.0 (RFC §5.4 spec-version gate).
+	// Surfaced before schema validation so the user sees the version hint
+	// instead of a generic "extra property" schema error. Operates on a
+	// generic map view of the JSON (UseNumber to preserve int/float).
+	{
+		var preCheck map[string]interface{}
+		predec := json.NewDecoder(bytes.NewReader([]byte(jsonStr)))
+		predec.UseNumber()
+		if err := predec.Decode(&preCheck); err == nil {
+			if err := RejectExpressionTemplatesPreV04(preCheck); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// First, validate against JSON schema
 	result, err := validateJSONSchema(jsonStr)
 	if err != nil {
@@ -70,6 +86,16 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		}
 		return nil, fmt.Errorf("JSON schema validation failed: %v", errorStrs)
 	}
+
+	// Expand `apply_expression_template` ops at load time (esm-spec §9.6 /
+	// docs/rfcs/ast-expression-templates.md). After this rewrite, the JSON
+	// has no apply_expression_template nodes and no expression_templates
+	// blocks — the typed struct sees only normal Expression ASTs.
+	expanded, err := applyExpressionTemplatesToJSON(jsonStr)
+	if err != nil {
+		return nil, err
+	}
+	jsonStr = expanded
 
 	// Parse JSON into our struct. Use UseNumber so that JSON numbers in
 	// Expression (interface{}) slots retain their wire form — otherwise
