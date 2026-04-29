@@ -25,6 +25,7 @@ JULIA_DIR="$PROJECT_ROOT/packages/EarthSciSerialization.jl"
 TYPESCRIPT_DIR="$PROJECT_ROOT/packages/earthsci-toolkit"
 PYTHON_DIR="$PROJECT_ROOT/packages/earthsci_toolkit"
 RUST_DIR="$PROJECT_ROOT/packages/earthsci-toolkit-rs"
+GO_DIR="$PROJECT_ROOT/packages/esm-format-go"
 
 # Test categories
 VALID_TESTS_DIR="$TESTS_DIR/valid"
@@ -109,8 +110,41 @@ check_language_availability() {
                 fi
             fi
             ;;
+        "go")
+            if [ -d "$dir" ] && [ -f "$dir/go.mod" ]; then
+                if command -v go &> /dev/null; then
+                    return 0
+                else
+                    warning "go command not found, skipping Go tests"
+                    return 1
+                fi
+            fi
+            ;;
     esac
     return 1
+}
+
+# Run Go tests. The Go binding has no separate conformance-output runner;
+# this exercises the binding's `go test ./...` suite, which includes the
+# function_tables lowering harness (esm-spec §9.5.6, esm-lhm).
+run_go_tests() {
+    log "Running Go conformance tests..."
+
+    if ! check_language_availability "go" "$GO_DIR"; then
+        warning "Go implementation not available, skipping"
+        return 1
+    fi
+
+    cd "$GO_DIR"
+
+    log "Running Go test suite..."
+    if go test ./...; then
+        success "Go tests passed"
+    else
+        error "Go tests failed"
+        return 1
+    fi
+    return 0
 }
 
 # Run Julia tests and generate conformance outputs
@@ -322,6 +356,12 @@ main() {
         successful_languages+=("rust")
     else
         failed_languages+=("rust")
+    fi
+
+    if run_go_tests; then
+        successful_languages+=("go")
+    else
+        failed_languages+=("go")
     fi
 
     # Report summary
