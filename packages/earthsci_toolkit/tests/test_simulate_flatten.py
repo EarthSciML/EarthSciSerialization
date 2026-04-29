@@ -26,7 +26,7 @@ from earthsci_toolkit.flatten import (
     UnsupportedDimensionalityError,
     flatten,
 )
-from earthsci_toolkit.simulation import simulate
+from earthsci_toolkit.simulation import simulate, _compile_flat_rhs
 
 
 def _metadata() -> Metadata:
@@ -148,3 +148,76 @@ def test_simulate_works_for_pure_ode_model():
     idx = result.vars.index("Decay.x")
     # Analytical solution: x(t) = 2*exp(-0.3*t); at t=5 → 2*exp(-1.5) ≈ 0.4463.
     assert abs(result.y[idx, -1] - 2.0 * np.exp(-1.5)) < 1e-3
+
+
+# ----------------------------------------------------------------------------
+# Compile cache: repeated simulate() on the same FlattenedSystem reuses the
+# lambdified RHS instead of recompiling. Different parameter overrides hit
+# the cache because parameters are runtime args, not inlined into expressions.
+# ----------------------------------------------------------------------------
+
+
+def test_simulate_caches_compiled_rhs_across_calls():
+    flat = flatten(_decay_file())
+
+    # First call populates the cache.
+    assert getattr(flat, "_simulate_compile_cache", None) is None
+    r1 = simulate(flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0})
+    assert r1.success
+    cache_after_first = flat._simulate_compile_cache
+    assert cache_after_first is not None
+
+    # Second call must reuse the same compiled functions (identity check).
+    r2 = simulate(flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0})
+    assert r2.success
+    assert flat._simulate_compile_cache is cache_after_first
+    assert flat._simulate_compile_cache.rhs_vector_func is cache_after_first.rhs_vector_func
+
+
+def test_simulate_cache_survives_parameter_overrides():
+    # Pure-ODE model where k is referenced symbolically in the equation,
+    # so a parameter override observably changes the trajectory.
+    var_x = ModelVariable(type="state", default=1.0)
+    var_k = ModelVariable(type="parameter", default=0.3)
+    eq = Equation(
+        lhs=ExprNode(op="D", args=["x"], wrt="t"),
+        rhs=ExprNode(op="*", args=[ExprNode(op="-", args=["k"]), "x"]),
+    )
+    model = Model(name="Decay", variables={"x": var_x, "k": var_k}, equations=[eq])
+    file = EsmFile(version="0.1.0", metadata=_metadata(), models={"Decay": model})
+    flat = flatten(file)
+
+    # Prime the cache with one set of parameters.
+    r1 = simulate(flat, tspan=(0.0, 1.0), parameters={"k": 0.5},
+                  initial_conditions={"x": 1.0})
+    compile1 = flat._simulate_compile_cache
+    assert r1.success and compile1 is not None
+
+    # A different parameter override must not invalidate the compiled RHS:
+    # parameter values are passed as runtime arguments, not inlined.
+    r2 = simulate(flat, tspan=(0.0, 1.0), parameters={"k": 2.0},
+                  initial_conditions={"x": 1.0})
+    assert r2.success
+    assert flat._simulate_compile_cache is compile1
+
+    # And the parameter change must actually affect the trajectory.
+    x_idx = r1.vars.index("Decay.x")
+    # Larger k means faster decay, so r2's x should fall further.
+    assert r2.y[x_idx, -1] < r1.y[x_idx, -1] - 1e-3
+
+
+def test_compile_flat_rhs_returns_parametric_form():
+    """_compile_flat_rhs returns vector functions taking states + parameters."""
+    flat = flatten(_decay_file())
+    compiled = _compile_flat_rhs(flat)
+
+    assert "Decay.A" in compiled.state_names
+    assert "Decay.B" in compiled.state_names
+    assert "Decay.k" in compiled.parameter_names
+
+    # rhs_vector_func signature: state args followed by parameter args.
+    n_states = len(compiled.state_names)
+    n_params = len(compiled.parameter_names)
+    args = [1.0] * n_states + [0.5] * n_params
+    out = compiled.rhs_vector_func(*args)
+    assert len(out) == n_states

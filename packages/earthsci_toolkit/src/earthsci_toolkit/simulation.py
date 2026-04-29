@@ -295,11 +295,11 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
 
 def _flat_to_sympy_rhs(
     flat: FlattenedSystem,
-    parameter_overrides: Dict[str, float],
 ) -> Tuple[
     List[str],
-    List[sp.Expr],
+    List[str],
     Dict[str, sp.Symbol],
+    List[sp.Expr],
     List[str],
     Dict[str, sp.Expr],
 ]:
@@ -315,26 +315,36 @@ def _flat_to_sympy_rhs(
     and is required for models like ``diameter_growth`` where ``A`` and
     ``I_D`` are algebraically defined alongside an ODE for ``D_p``.
 
+    Parameter values are NOT inlined — parameter symbols remain free in
+    ``rhs_exprs`` and ``algebraic_value_exprs`` so the symbolic form (and
+    its lambdified counterpart) can be cached and reused across multiple
+    simulate() calls with different parameter overrides. The caller passes
+    parameter values to the lambdified function as runtime arguments
+    (see :func:`_compile_flat_rhs`).
+
     Returns
     -------
     state_names:
         Dot-namespaced state variable names in the order they appear in the
         result vector.
+    parameter_names:
+        Dot-namespaced parameter names in the order their symbols appear in
+        the lambdified function's parameter argument slots.
+    symbol_map:
+        Mapping from namespaced variable name to SymPy symbol (for use by
+        event functions and parameter binding).
     rhs_exprs:
         Per-state SymPy expression for ``dy_i/dt``. Differential states get
         their (algebraic-substituted) derivative; algebraic-only states get
         ``0`` — the integrator does not advance them, and their values are
         recovered at output time by evaluating ``algebraic_value_exprs``.
-    symbol_map:
-        Mapping from namespaced variable name to SymPy symbol (for use by
-        event functions and parameter substitution).
     algebraic_state_names:
         Subset of ``state_names`` whose values are determined algebraically
         rather than by integration.
     algebraic_value_exprs:
         Per-algebraic-state SymPy expression for the variable's value
         (already substituted so it depends only on differential states and
-        parameters, with parameter values inlined).
+        free parameter symbols).
 
     Raises
     ------
@@ -419,28 +429,6 @@ def _flat_to_sympy_rhs(
         for k in list(diff_rhs.keys()):
             diff_rhs[k] = diff_rhs[k].subs(full_alg_subs, simultaneous=False)
 
-    # Resolve parameter values: caller overrides win, then defaults from the
-    # flattened parameter metadata, then 0.
-    param_subs: Dict[sp.Symbol, sp.Expr] = {}
-    for pname in parameter_names:
-        bare = pname.rsplit(".", 1)[-1]
-        if pname in parameter_overrides:
-            value = parameter_overrides[pname]
-        elif bare in parameter_overrides:
-            value = parameter_overrides[bare]
-        else:
-            default = flat.parameters[pname].default
-            value = float(default) if isinstance(default, (int, float)) else 0.0
-        param_subs[symbol_map[pname]] = sp.Float(value)
-
-    if param_subs:
-        for k in list(diff_rhs.keys()):
-            if hasattr(diff_rhs[k], "subs"):
-                diff_rhs[k] = diff_rhs[k].subs(param_subs)
-        for k in list(alg_rhs.keys()):
-            if hasattr(alg_rhs[k], "subs"):
-                alg_rhs[k] = alg_rhs[k].subs(param_subs)
-
     rhs_exprs: List[sp.Expr] = []
     for name in state_names:
         if name in diff_rhs:
@@ -450,7 +438,127 @@ def _flat_to_sympy_rhs(
             # Algebraic states are recovered at output time from alg_rhs.
             rhs_exprs.append(sp.Float(0))
 
-    return state_names, rhs_exprs, symbol_map, algebraic_state_names, alg_rhs
+    return (
+        state_names,
+        parameter_names,
+        symbol_map,
+        rhs_exprs,
+        algebraic_state_names,
+        alg_rhs,
+    )
+
+
+@dataclass
+class _CompiledRhs:
+    """Cached, parametric RHS for a FlattenedSystem.
+
+    Both ``rhs_vector_func`` and ``algebraic_vector_func`` are produced by
+    :func:`sympy.lambdify` with ``cse=True``, sharing CSE across the full
+    state vector instead of one lambdify-per-expression. Each function takes
+    state symbols followed by parameter symbols (in the orders given by
+    ``state_names`` / ``parameter_names``) so a single compile is reusable
+    across simulate() calls with different parameter overrides.
+    """
+
+    state_names: List[str]
+    parameter_names: List[str]
+    symbol_map: Dict[str, sp.Symbol]
+    algebraic_state_names: List[str]
+    rhs_vector_func: Callable
+    algebraic_vector_func: Optional[Callable]
+
+
+def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
+    """Compile (and cache) the RHS of a FlattenedSystem to numpy callables.
+
+    The compile step (`_flat_to_sympy_rhs` + vector ``sp.lambdify`` with
+    ``cse=True``) dominates simulate()'s wall time on large mechanisms
+    (geoschem_fullchem: ~395 s flatten-to-sympy + ~99 s lambdify). The
+    result depends only on the symbolic structure of ``flat`` — parameter
+    values are runtime arguments — so we cache it as an attribute on the
+    FlattenedSystem object. Repeat simulate() calls on the same ``flat``
+    (e.g. an 8-plot scenario sharing one parsed model) hit the cache and
+    pay near-zero compile cost.
+
+    Raises
+    ------
+    SimulationError
+        If the system has no state variables to integrate.
+    """
+    cached = getattr(flat, "_simulate_compile_cache", None)
+    if cached is not None:
+        return cached
+
+    (
+        state_names,
+        parameter_names,
+        symbol_map,
+        rhs_exprs,
+        algebraic_state_names,
+        algebraic_value_exprs,
+    ) = _flat_to_sympy_rhs(flat)
+
+    if not state_names:
+        raise SimulationError(
+            "Flattened system has no state variables to integrate"
+        )
+
+    state_symbols = [symbol_map[name] for name in state_names]
+    param_symbols = [symbol_map[name] for name in parameter_names]
+    all_args = state_symbols + param_symbols
+
+    rhs_vector_func = sp.lambdify(all_args, rhs_exprs, "numpy", cse=True)
+
+    if algebraic_state_names:
+        alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
+        algebraic_vector_func = sp.lambdify(
+            all_args, alg_value_list, "numpy", cse=True
+        )
+    else:
+        algebraic_vector_func = None
+
+    compiled = _CompiledRhs(
+        state_names=state_names,
+        parameter_names=parameter_names,
+        symbol_map=symbol_map,
+        algebraic_state_names=algebraic_state_names,
+        rhs_vector_func=rhs_vector_func,
+        algebraic_vector_func=algebraic_vector_func,
+    )
+    try:
+        flat._simulate_compile_cache = compiled
+    except (AttributeError, TypeError):
+        # FlattenedSystem instances are dataclasses without __slots__, so
+        # attribute assignment normally succeeds. Fall back to no-cache if
+        # a future variant disables it (e.g. frozen=True).
+        pass
+    return compiled
+
+
+def _resolve_parameter_values(
+    flat: FlattenedSystem,
+    parameter_names: List[str],
+    parameter_overrides: Dict[str, float],
+) -> List[float]:
+    """Resolve parameter values for a simulate() call.
+
+    Caller overrides win (dot-namespaced first, then bare name), then the
+    flattened parameter metadata default, then 0. The returned list is
+    aligned with ``parameter_names`` so it can be spliced into the
+    lambdified function's argument tuple.
+    """
+    values: List[float] = []
+    for pname in parameter_names:
+        bare = pname.rsplit(".", 1)[-1]
+        if pname in parameter_overrides:
+            value = parameter_overrides[pname]
+        elif bare in parameter_overrides:
+            value = parameter_overrides[bare]
+        else:
+            default = flat.parameters[pname].default
+            value = float(default) if isinstance(default, (int, float)) else 0.0
+        values.append(float(value))
+    return values
 
 
 def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[str], List[sp.Expr]]:
@@ -800,18 +908,15 @@ def simulate(
         )
 
     try:
-        (
-            state_names,
-            rhs_exprs,
-            symbol_map,
-            algebraic_state_names,
-            algebraic_value_exprs,
-        ) = _flat_to_sympy_rhs(flat, parameters)
+        compiled = _compile_flat_rhs(flat)
+        state_names = compiled.state_names
+        parameter_names = compiled.parameter_names
+        symbol_map = compiled.symbol_map
+        algebraic_state_names = compiled.algebraic_state_names
+        rhs_vector_func = compiled.rhs_vector_func
+        algebraic_vector_func = compiled.algebraic_vector_func
 
-        if not state_names:
-            raise SimulationError(
-                "Flattened system has no state variables to integrate"
-            )
+        param_values = _resolve_parameter_values(flat, parameter_names, parameters)
 
         # Initial conditions: dot-namespaced wins, then bare name, then default.
         # Algebraic-only states get their consistent value computed below from
@@ -829,21 +934,15 @@ def simulate(
                 y0_list.append(float(default) if isinstance(default, (int, float)) else 0.0)
         y0 = np.array(y0_list)
 
-        state_symbols = [symbol_map[name] for name in state_names]
-        rhs_funcs = [sp.lambdify(state_symbols, expr, "numpy") for expr in rhs_exprs]
-
-        # Lambdify each algebraic value so we can recover algebraic-only state
-        # values at every output time from the (advancing) differential states.
-        algebraic_funcs: Dict[str, Callable] = {
-            name: sp.lambdify(state_symbols, algebraic_value_exprs[name], "numpy")
-            for name in algebraic_state_names
-        }
-
         # Override y0 for algebraic states so the t=0 sample is consistent.
-        for name in algebraic_state_names:
-            idx = state_names.index(name)
+        if algebraic_vector_func is not None:
             try:
-                y0[idx] = float(algebraic_funcs[name](*y0))
+                alg_vals_at_0 = np.asarray(
+                    algebraic_vector_func(*y0, *param_values), dtype=float
+                )
+                for i, name in enumerate(algebraic_state_names):
+                    idx = state_names.index(name)
+                    y0[idx] = float(alg_vals_at_0[i])
             except Exception:
                 # If the algebraic body can't be evaluated at the supplied IC
                 # (e.g. division by zero from a missing differential IC), keep
@@ -864,7 +963,9 @@ def simulate(
                 y_eval[species_mask] = np.maximum(y_eval[species_mask], 0.0)
             else:
                 y_eval = y
-            dydt = np.array([func(*y_eval) for func in rhs_funcs])
+            dydt = np.asarray(
+                rhs_vector_func(*y_eval, *param_values), dtype=float
+            )
             if not np.all(np.isfinite(dydt)):
                 raise SimulationError("Non-finite derivatives encountered")
             return dydt
@@ -890,15 +991,17 @@ def simulate(
         # The integrator does not advance them (their derivative is 0), so the
         # only faithful values are the ones computed from the algebraic body
         # with the differential states at each output time.
-        if algebraic_state_names and y_out.size:
+        if algebraic_state_names and y_out.size and algebraic_vector_func is not None:
             y_out = y_out.copy()
-            for name in algebraic_state_names:
+            state_arrays = [y_out[i, :] for i in range(len(state_names))]
+            alg_results = algebraic_vector_func(*state_arrays, *param_values)
+            for i, name in enumerate(algebraic_state_names):
                 idx = state_names.index(name)
-                f = algebraic_funcs[name]
-                vals = np.empty(y_out.shape[1], dtype=float)
-                for k in range(y_out.shape[1]):
-                    vals[k] = float(f(*y_out[:, k]))
-                y_out[idx, :] = vals
+                val = alg_results[i]
+                if np.isscalar(val):
+                    y_out[idx, :] = float(val)
+                else:
+                    y_out[idx, :] = np.asarray(val, dtype=float)
 
         return SimulationResult(
             t=t_out,
