@@ -128,6 +128,32 @@ class SimulationError(Exception):
     pass
 
 
+_CLOSED_FN_OPS = {"fn", "const", "enum", "table_lookup", "apply_expression_template"}
+
+
+def _has_closed_fn_op(expr: Expr) -> bool:
+    """True if `expr` contains a closed-function-registry op (esm-spec §9.2/§9.5)."""
+    if expr is None or isinstance(expr, (int, float, str)):
+        return False
+    if isinstance(expr, ExprNode):
+        if expr.op in _CLOSED_FN_OPS:
+            return True
+        for a in expr.args or []:
+            if _has_closed_fn_op(a):
+                return True
+        if expr.expr is not None and _has_closed_fn_op(expr.expr):
+            return True
+        if expr.values:
+            for v in expr.values:
+                if _has_closed_fn_op(v):
+                    return True
+        if expr.table_axes:
+            for v in expr.table_axes.values():
+                if _has_closed_fn_op(v):
+                    return True
+    return False
+
+
 def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
     """
     Convert ESM Expr to SymPy expression.
@@ -343,12 +369,16 @@ def _flat_to_sympy_rhs(
     """
     state_names = list(flat.state_variables.keys())
     parameter_names = list(flat.parameters.keys())
+    observed_names = list(flat.observed_variables.keys())
 
     symbol_map: Dict[str, sp.Symbol] = {}
-    for name in state_names + parameter_names:
+    for name in state_names + parameter_names + observed_names:
         symbol_map[name] = sp.Symbol(name)
 
     # Classify equations: differential (D(var, t) = …) vs algebraic (var = …).
+    # Algebraic equations may bind either a state variable (with no ODE) or an
+    # observed variable. Both are inlined so the integrator's RHS depends only
+    # on differential states and parameters.
     diff_rhs: Dict[str, sp.Expr] = {}
     alg_rhs: Dict[str, sp.Expr] = {}
     for eq in flat.equations:
@@ -358,7 +388,9 @@ def _flat_to_sympy_rhs(
             if isinstance(inner, str) and inner in flat.state_variables:
                 diff_rhs[inner] = _expr_to_sympy(eq.rhs, dict(symbol_map))
                 continue
-        if isinstance(lhs, str) and lhs in flat.state_variables:
+        if isinstance(lhs, str) and (
+            lhs in flat.state_variables or lhs in flat.observed_variables
+        ):
             alg_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(symbol_map))
             continue
         # Other LHS shapes (e.g. array ops) are handled by the NumPy path.
@@ -370,13 +402,15 @@ def _flat_to_sympy_rhs(
             del alg_rhs[name]
 
     algebraic_state_names = [n for n in state_names if n in alg_rhs]
+    algebraic_observed_names = [n for n in observed_names if n in alg_rhs]
+    all_algebraic_names = algebraic_state_names + algebraic_observed_names
 
     # Topologically sort algebraic vars by their direct dependence on each
     # other. Detect cycles (including self-reference) and raise with the
     # offending chain so authors can fix the model.
     alg_deps: Dict[str, List[str]] = {}
-    alg_set = set(algebraic_state_names)
-    for n in algebraic_state_names:
+    alg_set = set(all_algebraic_names)
+    for n in all_algebraic_names:
         free = getattr(alg_rhs[n], "free_symbols", set()) or set()
         alg_deps[n] = [str(s) for s in free if str(s) in alg_set]
 
@@ -400,7 +434,7 @@ def _flat_to_sympy_rhs(
         visited.add(name)
         sorted_alg.append(name)
 
-    for n in algebraic_state_names:
+    for n in all_algebraic_names:
         _topo_visit(n, [])
 
     # Substitute earlier-sorted algebraic bodies into later ones, so each
@@ -413,8 +447,8 @@ def _flat_to_sympy_rhs(
 
     # Substitute the (now fully-resolved) algebraic bodies into every
     # differential RHS. The integrator's RHS no longer references any
-    # algebraic state symbol.
-    full_alg_subs = {symbol_map[k]: alg_rhs[k] for k in algebraic_state_names}
+    # algebraic state or observed-variable symbol.
+    full_alg_subs = {symbol_map[k]: alg_rhs[k] for k in all_algebraic_names}
     if full_alg_subs:
         for k in list(diff_rhs.keys()):
             diff_rhs[k] = diff_rhs[k].subs(full_alg_subs, simultaneous=False)
@@ -786,14 +820,23 @@ def simulate(
             nfev=0, njev=0, nlu=0,
         )
 
-    # Array-op detection: if any equation contains an array op, route through
-    # the NumPy AST interpreter path. The legacy SymPy path handles scalar-only
-    # models and is left untouched.
+    # Numpy-path detection: route through the NumPy AST interpreter when any
+    # equation contains an array op or a closed-function op (`fn`, `const`,
+    # `enum`, `table_lookup`). The SymPy `lambdify` path cannot evaluate these
+    # — `const` literals and `fn` calls (e.g. `interp.bilinear`) require the
+    # numerical AST walker. Models that mix scalar SymPy-friendly ops with
+    # closed-function lookups (e.g. `gaschem/fastjx.esm`) are still scalar
+    # systems but must use the numpy backend so observed-variable bodies that
+    # depend on `fn`/`const` evaluate correctly.
     has_array = any(
         _has_array_op(eq.lhs) or _has_array_op(eq.rhs)
         for eq in flat.equations
     )
-    if has_array:
+    has_closed_fn = any(
+        _has_closed_fn_op(eq.lhs) or _has_closed_fn_op(eq.rhs)
+        for eq in flat.equations
+    )
+    if has_array or has_closed_fn:
         return _simulate_with_numpy(
             flat, tspan, parameters, initial_conditions, method,
             rtol=rtol, atol=atol,
@@ -1272,6 +1315,76 @@ def _apply_equation_to_dy(
     return
 
 
+def _expr_free_names(expr: Expr) -> Set[str]:
+    """Return all bare-name string references inside an Expr tree."""
+    out: Set[str] = set()
+
+    def _walk(e: Expr) -> None:
+        if e is None or isinstance(e, (int, float, bool)):
+            return
+        if isinstance(e, str):
+            out.add(e)
+            return
+        if isinstance(e, ExprNode):
+            for a in e.args or []:
+                _walk(a)
+            if e.expr is not None:
+                _walk(e.expr)
+            if e.values:
+                for v in e.values:
+                    _walk(v)
+            if e.table_axes:
+                for v in e.table_axes.values():
+                    _walk(v)
+
+    _walk(expr)
+    return out
+
+
+def _topo_sort_observed(
+    observed_eqs: List[Tuple[str, Expr]],
+) -> List[str]:
+    """Topologically sort scalar algebraic equations by mutual dependence.
+
+    ``observed_eqs`` maps each algebraic LHS name to its body. The returned
+    order ensures every name's dependencies (other algebraic names) appear
+    earlier so values can be cached forward into ``observed_values``.
+
+    Cycles (including self-reference) raise :class:`SimulationError` with the
+    offending chain, mirroring the SymPy-path topological check.
+    """
+    bodies = dict(observed_eqs)
+    names = list(bodies.keys())
+    name_set = set(names)
+    deps: Dict[str, List[str]] = {
+        n: [d for d in _expr_free_names(bodies[n]) if d in name_set]
+        for n in names
+    }
+
+    order: List[str] = []
+    visited: Set[str] = set()
+    in_progress: Set[str] = set()
+
+    def _visit(n: str, path: List[str]) -> None:
+        if n in visited:
+            return
+        if n in in_progress:
+            cycle = path[path.index(n):] + [n]
+            raise SimulationError(
+                "Cyclic algebraic equations detected: " + " -> ".join(cycle)
+            )
+        in_progress.add(n)
+        for d in deps[n]:
+            _visit(d, path + [n])
+        in_progress.discard(n)
+        visited.add(n)
+        order.append(n)
+
+    for n in names:
+        _visit(n, [])
+    return order
+
+
 def _simulate_with_numpy(
     flat: FlattenedSystem,
     tspan: Tuple[float, float],
@@ -1315,6 +1428,36 @@ def _simulate_with_numpy(
                 for eq in working_equations
             ]
 
+        # Pull aside scalar algebraic equations binding an observed variable
+        # (or a state variable with no ODE) so they can be evaluated each RHS
+        # call, populating ``observed_values`` for downstream lookups. This is
+        # the numpy-path counterpart of the SymPy path's algebraic-elimination
+        # — needed for models like fastjx where the differential RHS pulls in
+        # an observed body (e.g. ``j_NO2``) defined by a closed-function
+        # interpolation that SymPy can't represent.
+        observed_eqs: List[Tuple[str, Expr]] = []
+        diff_eqs: List[FlattenedEquation] = []
+        states_with_ode: set = set()
+        for eq in working_equations:
+            lhs = eq.lhs
+            if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
+                inner = lhs.args[0]
+                if isinstance(inner, str):
+                    states_with_ode.add(inner)
+        for eq in working_equations:
+            lhs = eq.lhs
+            if (
+                isinstance(lhs, str)
+                and (
+                    lhs in flat.observed_variables
+                    or (lhs in flat.state_variables and lhs not in states_with_ode)
+                )
+            ):
+                observed_eqs.append((lhs, eq.rhs))
+            else:
+                diff_eqs.append(eq)
+        observed_order = _topo_sort_observed(observed_eqs)
+
         # Parameter resolution: overrides win over defaults.
         param_values: Dict[str, float] = {}
         for pname, pvar in flat.parameters.items():
@@ -1340,6 +1483,8 @@ def _simulate_with_numpy(
             y0, state_layout, shapes, state_names, initial_conditions
         )
 
+        observed_bodies: Dict[str, Expr] = dict(observed_eqs)
+
         def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
             ctx = EvalContext(
                 state_layout=state_layout,
@@ -1349,8 +1494,14 @@ def _simulate_with_numpy(
                 y=y,
                 t=t,
             )
+            for name in observed_order:
+                try:
+                    val = eval_expr(observed_bodies[name], ctx)
+                except NumpyInterpreterError as exc:
+                    raise SimulationError(str(exc)) from exc
+                ctx.observed_values[name] = float(val)
             dy = np.zeros(total_size, dtype=float)
-            for eq in working_equations:
+            for eq in diff_eqs:
                 try:
                     _apply_equation_to_dy(eq, ctx, shapes, state_layout, dy)
                 except NumpyInterpreterError as exc:

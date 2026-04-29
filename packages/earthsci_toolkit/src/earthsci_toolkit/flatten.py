@@ -305,6 +305,10 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             [_namespace_expr(v, prefix, local_leave) for v in expr.values]
             if expr.values is not None else None
         )
+        new_table_axes = (
+            {k: _namespace_expr(v, prefix, local_leave) for k, v in expr.table_axes.items()}
+            if expr.table_axes is not None else None
+        )
         return ExprNode(
             op=expr.op,
             args=new_args,
@@ -320,6 +324,12 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             perm=expr.perm,
             axis=expr.axis,
             fn=expr.fn,
+            handler_id=expr.handler_id,
+            name=expr.name,
+            value=expr.value,
+            table=expr.table,
+            table_axes=new_table_axes,
+            output=expr.output,
         )
     return expr
 
@@ -491,6 +501,23 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
 
     # _var is a placeholder used by operator_compose; never namespace it.
     leave_alone = {"t", "_var"}
+    # Observed variables that carry an explicit `expression` define an
+    # algebraic relation `name = expression`. Emit them as namespaced
+    # equations so downstream consumers (simulation, codegen) can inline
+    # them and the integrator's RHS depends only on differential states
+    # and parameters. Without this step, the variable's body is dropped
+    # at flatten time and any state RHS that references it ends up with
+    # an unbound free symbol (e.g. `FastJX.j_NO2`), which then crashes
+    # SymPy's `lambdify` because the dotted name is parsed as Python
+    # attribute access.
+    for var_name, var in model.variables.items():
+        if var.type != "observed" or var.expression is None:
+            continue
+        namespaced = f"{full_prefix}.{var_name}"
+        ns_rhs = _namespace_expr(var.expression, full_prefix, leave_alone=leave_alone)
+        component.equations.append(FlattenedEquation(
+            lhs=namespaced, rhs=ns_rhs, source_system=full_prefix,
+        ))
     for eq in model.equations:
         ns_lhs = _namespace_expr(eq.lhs, full_prefix, leave_alone=leave_alone)
         ns_rhs = _namespace_expr(eq.rhs, full_prefix, leave_alone=leave_alone)
