@@ -121,3 +121,4 @@ docs/.hugo_build.lock
 .dolt/
 *.db
 .beads-credential-key
+.claude/
