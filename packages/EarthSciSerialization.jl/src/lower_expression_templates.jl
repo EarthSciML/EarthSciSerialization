@@ -372,14 +372,24 @@ Throws [`ExpressionTemplateError`](@ref) on any of:
 """
 function lower_expression_templates(raw_data)
     reject_expression_templates_pre_v04(raw_data)
+
+    # Fast path: files that neither declare `expression_templates` blocks
+    # nor use any `apply_expression_template` op need no expansion at all.
+    # Return raw_data unchanged so downstream `coerce_esm_file` sees the
+    # original JSON3.Object / Dict shape — no `JSONLikeDict` wrapping. This
+    # keeps non-template files on the legacy code path, including those
+    # that exercise downstream coercers (`coerce_function_tables`,
+    # `coerce_grids`, etc.) whose type-gates predate JSONLikeDict.
+    if !_has_template_machinery(raw_data)
+        return raw_data
+    end
+
     root = _to_dict(raw_data)::Dict{String,Any}
 
-    # Quick scan: if there are no apply_expression_template ops anywhere,
-    # we still need to strip any present expression_templates blocks for
-    # canonical-form invariance.
     apply_paths = String[]
     _find_apply_paths!(apply_paths, root, "")
     if isempty(apply_paths)
+        # No apply ops, but there ARE template blocks → strip and wrap.
         return JSONLikeDict(_strip_expression_templates(root))
     end
 
