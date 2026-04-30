@@ -149,8 +149,10 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             try:
                 return sp.Float(float(expr))
             except ValueError:
-                # Create a new symbol if not found
-                symbol_map[expr] = sp.Symbol(expr)
+                # Create a new symbol if not found. ``positive=True`` matches
+                # the assumption used in ``_flat_to_sympy_rhs`` so symbols
+                # with the same name compare equal across pipeline stages.
+                symbol_map[expr] = sp.Symbol(expr, positive=True)
                 return symbol_map[expr]
     elif isinstance(expr, ExprNode):
         # Convert arguments recursively
@@ -178,7 +180,23 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
         elif expr.op in ('^', '**', 'pow'):
             if len(sympy_args) != 2:
                 raise SimulationError(f"Power requires exactly 2 arguments, got {len(sympy_args)}")
-            return sympy_args[0] ** sympy_args[1]
+            base, exp_arg = sympy_args
+            # SymPy treats ``x**Float(2.0)`` as a non-integer rational power
+            # (``exp(2.0*log(x))``) which forces the lambdified RHS into
+            # complex-domain code paths (``re(...)``, ``im(...)``,
+            # ``angle(...)``) under cse=False — even when ``x`` is provably
+            # real. Integer-valued Float exponents from ESM JSON (``"2.0"``,
+            # ``"3.0"``) are by author intent integer powers, so canonicalize
+            # them to ``sp.Integer`` and keep sympy on its real-domain
+            # simplification path. See esm-5gk for the geoschem_fullchem
+            # non-finite-derivative failure this prevents.
+            if (
+                isinstance(exp_arg, sp.Float)
+                and exp_arg.is_finite
+                and float(exp_arg) == int(exp_arg)
+            ):
+                exp_arg = sp.Integer(int(exp_arg))
+            return base ** exp_arg
         elif expr.op == 'exp':
             if len(sympy_args) != 1:
                 raise SimulationError(f"Exponential requires exactly 1 argument, got {len(sympy_args)}")
@@ -354,9 +372,39 @@ def _flat_to_sympy_rhs(
     state_names = list(flat.state_variables.keys())
     parameter_names = list(flat.parameters.keys())
 
+    # ``positive=True`` is required for sympy to keep the lambdified RHS in
+    # pure-real form under ``cse=False`` on chemistry-scale mechanisms.
+    #
+    # Without a positivity assumption, three layers of complex-domain
+    # decomposition leak into the lambdified output and produce
+    # non-finite-derivative failures (esm-5gk on geoschem_fullchem):
+    #
+    # 1. ``Abs(exp(z) * w)`` → ``exp(re(z)) * Abs(w)``
+    #    With ``re(1300/T) = 1300*re(T)/(re(T)**2 + im(T)**2)``, this yields
+    #    a divide that is mathematically ``1/T`` for real T but emits the
+    #    complex form. Fixed by ``real=True`` alone.
+    # 2. ``Abs(0.41**((log(N*T**(-8)) - C)**2 + 1))`` →
+    #    ``0.41**((log|N*T**(-8)|**2 - arg(N*T**(-8))**2)/log(10)**2 + 1)``
+    #    The ``log|x|**2`` and ``arg(x)**2`` terms produce ``inf*0 = NaN``
+    #    when any species concentration touches 0, killing the integrator on
+    #    the very first RHS evaluation. Requires ``positive=True`` so sympy
+    #    can prove ``log(N*T**(-8))`` is real and skip the decomposition.
+    # 3. ``x**Float(2.0)`` is treated as a non-integer rational power, which
+    #    sympy still routes through ``re``/``im`` even when ``x`` is real.
+    #    Fixed in ``_expr_to_sympy`` by canonicalizing integer-valued Float
+    #    exponents to ``sp.Integer``.
+    #
+    # Physical correctness for ESS chemistry: concentrations are
+    # non-negative, temperatures / number densities / pressures are strictly
+    # positive, so ``positive=True`` is true on the relevant domain even at
+    # the runtime boundary (concentrations can be exactly 0 — sympy uses the
+    # assumption only for symbolic simplification, never for runtime
+    # validation). For non-chemistry models whose state can legitimately
+    # be negative, callers should bypass this path by pre-populating
+    # ``flat._simulate_compile_cache`` with their own ``_CompiledRhs``.
     symbol_map: Dict[str, sp.Symbol] = {}
     for name in state_names + parameter_names:
-        symbol_map[name] = sp.Symbol(name)
+        symbol_map[name] = sp.Symbol(name, positive=True)
 
     # Classify equations: differential (D(var, t) = …) vs algebraic (var = …).
     diff_rhs: Dict[str, sp.Expr] = {}
@@ -577,7 +625,7 @@ def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[st
     expression so the returned list stays aligned with ``species_names``.
     """
     species_names = [species.name for species in reaction_system.species]
-    symbol_map = {name: sp.Symbol(name) for name in species_names}
+    symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
     species_rates: Dict[str, sp.Expr] = {name: sp.Float(0) for name in species_names}
 
     if species_names and reaction_system.reactions:
@@ -1541,7 +1589,7 @@ def simulate_reaction_system(
             raise SimulationError("No species found in reaction system")
 
         # Create symbol map
-        symbol_map = {name: sp.Symbol(name) for name in species_names}
+        symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
 
         # Create initial condition vector
         y0 = np.array([initial_conditions.get(name, 0.0) for name in species_names])
@@ -1683,7 +1731,7 @@ def simulate_with_discrete_events(
             raise SimulationError("No species found in reaction system")
 
         # Create symbol map and initial conditions
-        symbol_map = {name: sp.Symbol(name) for name in species_names}
+        symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
         y_current = np.array([initial_conditions.get(name, 0.0) for name in species_names])
 
         # Lambdify ODEs for fast evaluation
