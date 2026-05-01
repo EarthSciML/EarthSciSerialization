@@ -44,7 +44,7 @@ export { substitute, substituteInModel, substituteInReactionSystem } from './sub
 export * from './edit.js'
 
 // Export expression structural operations
-export { freeVariables, freeParameters, contains, evaluate, simplify } from './expression.js'
+export { freeVariables, freeParameters, contains, simplify } from './expression.js'
 
 // Export reaction system ODE derivation and stoichiometric matrix computation
 export { deriveODEs, stoichiometricMatrix, substrateMatrix, productMatrix } from './reactions.js'
@@ -57,8 +57,10 @@ export type { UnitResult, UnitWarning } from './units.js'
 export { convertUnits, parseUnitForConversion, unitsCompatible, UnitConversionError } from './unit-conversion.js'
 export type { CanonicalDims, ParsedUnit } from './unit-conversion.js'
 
-// Export code generation utilities
-export { toJuliaCode, toPythonCode } from './codegen.js'
+// Export code generation utilities and the official TypeScript runner
+// (AST → JS lowering / scalar evaluator) per AGENTS.md.
+export { toJuliaCode, toPythonCode, compileExpression, evaluateExpression } from './codegen.js'
+export type { CompiledExpression } from './codegen.js'
 
 // Export migration functionality
 export { migrate, canMigrate, getSupportedMigrationTargets, MigrationError } from './migration.js'

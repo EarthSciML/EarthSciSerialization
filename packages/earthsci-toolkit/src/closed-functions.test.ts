@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { load } from './parse.js'
-import { evaluate } from './expression.js'
+import { evaluateExpression } from './codegen.js'
 import {
   ClosedFunctionError,
   validateSearchsortedTable,
@@ -167,7 +167,7 @@ describe('Closed function registry — cross-binding conformance', () => {
           if (mod === 'datetime') {
             const bindings = new Map<string, number>()
             bindings.set(paramName, decoded[0] as number)
-            const got = evaluate(rhsTemplate, bindings)
+            const got = evaluateExpression(rhsTemplate, bindings)
             expect(
               withinTolerance(got, exp, tol),
               `${scenario.name}: got ${got}, expected ${exp} (tol abs=${tol.abs}, rel=${tol.rel})`,

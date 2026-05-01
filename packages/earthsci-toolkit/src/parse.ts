@@ -5834,9 +5834,9 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   }
 
   // Step 4b: Lower `enum` ops to `const` integer nodes against the
-  // file-local `enums` block (esm-spec §9.3). After this pass, downstream
-  // evaluators see only `const` — `evaluate()` rejects any leftover
-  // `enum` op as an unlowered file.
+  // file-local `enums` block (esm-spec §9.3). After this pass, the
+  // codegen runner sees only `const` — `evaluateExpression()` rejects
+  // any leftover `enum` op as an unlowered file.
   const loweredData = lowerEnums(typedData)
 
   // Step 4c: Grid generator validation (RFC §6).

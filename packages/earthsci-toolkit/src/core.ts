@@ -42,7 +42,7 @@ export { substitute, substituteInModel, substituteInReactionSystem } from './sub
 
 export * from './edit.js'
 
-export { freeVariables, freeParameters, contains, evaluate, simplify } from './expression.js'
+export { freeVariables, freeParameters, contains, simplify } from './expression.js'
 
 export {
   deriveODEs,
@@ -54,7 +54,8 @@ export {
 export { parseUnit, checkDimensions, validateUnits } from './units.js'
 export type { UnitResult, UnitWarning } from './units.js'
 
-export { toJuliaCode, toPythonCode } from './codegen.js'
+export { toJuliaCode, toPythonCode, compileExpression, evaluateExpression } from './codegen.js'
+export type { CompiledExpression } from './codegen.js'
 
 export {
   migrate,

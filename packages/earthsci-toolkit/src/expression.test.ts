@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { freeVariables, freeParameters, contains, evaluate, simplify } from './expression.js'
+import { freeVariables, freeParameters, contains, simplify } from './expression.js'
 import type { Model, Expr } from './types.js'
 
 describe('Expression structural operations', () => {
@@ -106,159 +106,11 @@ describe('Expression structural operations', () => {
     })
   })
 
-  describe('evaluate', () => {
-    const bindings = new Map([
-      ['x', 2],
-      ['y', 3],
-      ['pi', Math.PI]
-    ])
-
-    it('should return numbers as-is', () => {
-      expect(evaluate(42, bindings)).toBe(42)
-    })
-
-    it('should resolve bound variables', () => {
-      expect(evaluate('x', bindings)).toBe(2)
-      expect(evaluate('y', bindings)).toBe(3)
-    })
-
-    it('should throw for unbound variables', () => {
-      expect(() => evaluate('z', bindings)).toThrow('Unbound variable: z')
-    })
-
-    describe('arithmetic operations', () => {
-      it('should evaluate addition', () => {
-        const expr: Expr = { op: '+', args: ['x', 'y', 5] }
-        expect(evaluate(expr, bindings)).toBe(10) // 2 + 3 + 5
-      })
-
-      it('should evaluate subtraction', () => {
-        const expr: Expr = { op: '-', args: [10, 'x'] }
-        expect(evaluate(expr, bindings)).toBe(8) // 10 - 2
-      })
-
-      it('should evaluate unary minus', () => {
-        const expr: Expr = { op: '-', args: ['x'] }
-        expect(evaluate(expr, bindings)).toBe(-2)
-      })
-
-      it('should evaluate multiplication', () => {
-        const expr: Expr = { op: '*', args: ['x', 'y'] }
-        expect(evaluate(expr, bindings)).toBe(6) // 2 * 3
-      })
-
-      it('should evaluate division', () => {
-        const expr: Expr = { op: '/', args: [6, 'x'] }
-        expect(evaluate(expr, bindings)).toBe(3) // 6 / 2
-      })
-
-      it('should evaluate exponentiation', () => {
-        const expr: Expr = { op: '^', args: ['x', 'y'] }
-        expect(evaluate(expr, bindings)).toBe(8) // 2^3
-      })
-    })
-
-    describe('mathematical functions', () => {
-      it('should evaluate exp', () => {
-        const expr: Expr = { op: 'exp', args: [0] }
-        expect(evaluate(expr, bindings)).toBe(1)
-      })
-
-      it('should evaluate log', () => {
-        const expr: Expr = { op: 'log', args: [Math.E] }
-        expect(evaluate(expr, bindings)).toBeCloseTo(1)
-      })
-
-      it('should evaluate sqrt', () => {
-        const expr: Expr = { op: 'sqrt', args: [4] }
-        expect(evaluate(expr, bindings)).toBe(2)
-      })
-
-      it('should evaluate trigonometric functions', () => {
-        const expr1: Expr = { op: 'sin', args: [0] }
-        expect(evaluate(expr1, bindings)).toBe(0)
-
-        const expr2: Expr = { op: 'cos', args: [0] }
-        expect(evaluate(expr2, bindings)).toBe(1)
-      })
-
-      it('should evaluate min and max', () => {
-        const expr1: Expr = { op: 'min', args: ['x', 'y', 1] }
-        expect(evaluate(expr1, bindings)).toBe(1) // min(2, 3, 1)
-
-        const expr2: Expr = { op: 'max', args: ['x', 'y', 1] }
-        expect(evaluate(expr2, bindings)).toBe(3) // max(2, 3, 1)
-      })
-
-      it('should reject min/max with fewer than 2 args (esm-spec §4.2)', () => {
-        // esm-2is — n-ary arity ≥ 2
-        const minOne: Expr = { op: 'min', args: ['x'] }
-        expect(() => evaluate(minOne, bindings)).toThrow('min requires at least 2 arguments')
-
-        const maxOne: Expr = { op: 'max', args: ['x'] }
-        expect(() => evaluate(maxOne, bindings)).toThrow('max requires at least 2 arguments')
-      })
-    })
-
-    describe('comparison operations', () => {
-      it('should evaluate comparisons', () => {
-        const expr1: Expr = { op: '>', args: ['y', 'x'] }
-        expect(evaluate(expr1, bindings)).toBe(1) // 3 > 2
-
-        const expr2: Expr = { op: '<', args: ['y', 'x'] }
-        expect(evaluate(expr2, bindings)).toBe(0) // 3 < 2
-
-        const expr3: Expr = { op: '==', args: ['x', 2] }
-        expect(evaluate(expr3, bindings)).toBe(1) // 2 == 2
-      })
-    })
-
-    describe('logical operations', () => {
-      it('should evaluate logical operations', () => {
-        const expr1: Expr = { op: 'and', args: [1, 1] }
-        expect(evaluate(expr1, bindings)).toBe(1)
-
-        const expr2: Expr = { op: 'and', args: [1, 0] }
-        expect(evaluate(expr2, bindings)).toBe(0)
-
-        const expr3: Expr = { op: 'or', args: [0, 1] }
-        expect(evaluate(expr3, bindings)).toBe(1)
-
-        const expr4: Expr = { op: 'not', args: [0] }
-        expect(evaluate(expr4, bindings)).toBe(1)
-      })
-
-      it('should evaluate ifelse', () => {
-        const expr: Expr = { op: 'ifelse', args: [1, 'x', 'y'] }
-        expect(evaluate(expr, bindings)).toBe(2)
-
-        const expr2: Expr = { op: 'ifelse', args: [0, 'x', 'y'] }
-        expect(evaluate(expr2, bindings)).toBe(3)
-      })
-    })
-
-    describe('error handling', () => {
-      it('should throw for division by zero', () => {
-        const expr: Expr = { op: '/', args: [1, 0] }
-        expect(() => evaluate(expr, bindings)).toThrow('Division by zero')
-      })
-
-      it('should throw for invalid log argument', () => {
-        const expr: Expr = { op: 'log', args: [-1] }
-        expect(() => evaluate(expr, bindings)).toThrow('log argument must be positive')
-      })
-
-      it('should throw for invalid sqrt argument', () => {
-        const expr: Expr = { op: 'sqrt', args: [-1] }
-        expect(() => evaluate(expr, bindings)).toThrow('sqrt argument must be non-negative')
-      })
-
-      it('should throw for unsupported operator', () => {
-        const expr: any = { op: 'unsupported', args: [1] }
-        expect(() => evaluate(expr, bindings)).toThrow('Unsupported operator: unsupported')
-      })
-    })
-  })
+  // Per-op `evaluate` testset retired with esm-3r4: the in-process
+  // scalar evaluator now lives in `codegen.ts` (`compileExpression` /
+  // `evaluateExpression`), and its op-dispatch contract is covered by
+  // `codegen.test.ts`. `simplify` (below) exercises that path through
+  // its constant-folding default branch.
 
   describe('simplify', () => {
     it('should return numbers and variables as-is', () => {
