@@ -367,3 +367,52 @@ def test_simulate_state_plus_observed_emits_observed_alongside_states():
     # Time dependence in the observed body is honored: end value equals
     # the closed-form exp(-k * t_end).
     assert np.isclose(result.y[a_idx, -1], np.exp(-0.5 * 2.0), rtol=1e-12)
+
+
+def test_simulate_observed_referenced_in_diff_rhs_no_namespace_leak():
+    """Regression for esm-4id: a differential RHS that references an observed
+    variable by its dot-namespaced name (e.g. ``D(NO2) = -j_NO2 * NO2`` where
+    ``j_NO2`` is observed) must not leak the observed symbol into the
+    lambdified RHS. ``sympy.lambdify`` prints free symbols literally, so a
+    leaked ``Decay.j_NO2`` symbol becomes Python attribute access on a
+    nonexistent ``Decay`` module — exactly the ``NameError: name 'FastJX' is
+    not defined`` reported in fastjx.esm. The fix substitutes (already
+    fully-resolved) observed bodies into the differential RHS before lambdify
+    so no observed symbol survives as a free reference."""
+    variables = {
+        "k0": ModelVariable(type="parameter", default=2.0),
+        "T": ModelVariable(type="parameter", default=300.0),
+        "NO2": ModelVariable(type="state", default=1.0),
+        # Observed photolysis rate j_NO2 = k0 / T (depends only on parameters).
+        "j_NO2": ModelVariable(
+            type="observed",
+            expression=ExprNode(op="/", args=["k0", "T"]),
+        ),
+    }
+    eq_dNO2 = Equation(
+        lhs=ExprNode(op="D", args=["NO2"], wrt="t"),
+        rhs=ExprNode(op="*", args=[-1, "j_NO2", "NO2"]),
+    )
+    model = Model(name="Decay", variables=variables, equations=[eq_dNO2])
+    file = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="namespaced-observed-in-diff-rhs"),
+        models={"Decay": model},
+    )
+
+    result = simulate(
+        file,
+        tspan=(0.0, 1.0),
+        parameters={"k0": 2.0, "T": 300.0},
+        initial_conditions={"NO2": 1.0},
+    )
+    assert result.success, f"simulate() failed: {result.message}"
+
+    no2_idx = result.vars.index("Decay.NO2")
+    j_idx = result.vars.index("Decay.j_NO2")
+    # Analytical: NO2(t) = exp(-j*t) with j = k0/T = 2/300 ≈ 0.006667.
+    j_expected = 2.0 / 300.0
+    assert np.isclose(result.y[j_idx, 0], j_expected, rtol=1e-12)
+    assert np.isclose(
+        result.y[no2_idx, -1], np.exp(-j_expected * 1.0), rtol=1e-6,
+    )

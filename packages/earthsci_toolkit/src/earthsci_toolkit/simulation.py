@@ -735,6 +735,33 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
         algebraic_value_exprs,
     )
 
+    # Differential and algebraic RHS expressions may reference observed
+    # variables by their dot-namespaced name (e.g. ``D(FastJX.NO2) = ... *
+    # FastJX.j_NO2`` where ``FastJX.j_NO2`` is observed). ``_expr_to_sympy``
+    # creates such references as on-the-fly ``sp.Symbol`` instances because
+    # observed names are not in ``symbol_map``; if we hand those expressions
+    # straight to ``sp.lambdify`` the dotted names are printed literally
+    # (``FastJX.j_NO2``) and Python parses them as attribute access on a
+    # nonexistent ``FastJX`` module — the ``NameError: name 'FastJX' is not
+    # defined`` reported in esm-4id. Substitute the (already fully-resolved)
+    # observed bodies in so the lambdified RHS depends only on differential
+    # state and parameter symbols, all of which appear in ``all_args`` and
+    # are dummy-renamed by ``lambdify`` for safe code emission.
+    if observed_names:
+        observed_subs = {
+            sp.Symbol(name): observed_value_exprs[name]
+            for name in observed_names
+        }
+        rhs_exprs = [
+            expr.subs(observed_subs, simultaneous=False)
+            for expr in rhs_exprs
+        ]
+        if algebraic_state_names:
+            algebraic_value_exprs = {
+                k: v.subs(observed_subs, simultaneous=False)
+                for k, v in algebraic_value_exprs.items()
+            }
+
     state_symbols = [symbol_map[name] for name in state_names]
     param_symbols = [symbol_map[name] for name in parameter_names]
     all_args = state_symbols + param_symbols
