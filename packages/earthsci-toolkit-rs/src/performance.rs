@@ -84,7 +84,7 @@ impl ParallelEvaluator {
             expressions
                 .par_iter()
                 .map(|expr| {
-                    crate::expression::evaluate(expr, variables)
+                    crate::simulate::fold_constant_expr(expr, variables)
                         .map_err(|e| PerformanceError::ParallelError(format!("{e:?}")))
                 })
                 .collect()

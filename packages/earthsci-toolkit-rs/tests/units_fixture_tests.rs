@@ -12,7 +12,9 @@
 //! Corrupting an expected value in any fixture — or reverting the
 //! `pressure_drop` fix from gt-p3v — must cause this suite to fail.
 
-use earthsci_toolkit::{EsmFile, Expr, Model, ModelTest, Tolerance, VariableType, evaluate, load};
+use earthsci_toolkit::{
+    EsmFile, Expr, Model, ModelTest, Tolerance, VariableType, fold_constant_expr, load,
+};
 use std::collections::HashMap;
 
 const UNITS_FIXTURES: &[(&str, &str)] = &[
@@ -30,11 +32,12 @@ const UNITS_FIXTURES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Evaluate an expression using the crate's shared [`evaluate`].
-/// Returns `None` when any variable reference is unbound; the caller
-/// uses that signal to defer observed resolution.
+/// Evaluate an expression through the canonical scalar runner
+/// ([`fold_constant_expr`], which reuses `simulate.rs`'s `interpret` /
+/// `eval_op` primitives). Returns `None` when any variable reference is
+/// unbound; the caller uses that signal to defer observed resolution.
 fn eval_expr(expr: &Expr, bindings: &HashMap<String, f64>) -> Option<f64> {
-    evaluate(expr, bindings).ok()
+    fold_constant_expr(expr, bindings).ok()
 }
 
 fn resolve_tol(

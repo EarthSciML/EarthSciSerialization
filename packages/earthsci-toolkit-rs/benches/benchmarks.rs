@@ -287,14 +287,14 @@ fn benchmark_expression_evaluation(c: &mut Criterion) {
 
     group.bench_function("simple_standard", |b| {
         b.iter(|| {
-            earthsci_toolkit::expression::evaluate(black_box(&simple_expr), black_box(&variables))
+            earthsci_toolkit::fold_constant_expr(black_box(&simple_expr), black_box(&variables))
                 .unwrap()
         })
     });
 
     group.bench_function("complex_standard", |b| {
         b.iter(|| {
-            earthsci_toolkit::expression::evaluate(black_box(&complex_expr), black_box(&variables))
+            earthsci_toolkit::fold_constant_expr(black_box(&complex_expr), black_box(&variables))
                 .unwrap()
         })
     });

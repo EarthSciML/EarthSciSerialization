@@ -74,7 +74,7 @@ pub mod simulate_array;
 pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
 pub use dae::{DaeError, DiscretizeOptions, apply_dae_contract, default_dae_support, discretize};
 pub use display::{to_ascii, to_latex, to_unicode};
-pub use expression::{contains, evaluate, free_parameters, free_variables, simplify};
+pub use expression::{contains, free_parameters, free_variables, simplify};
 pub use flatten::{
     DimensionPromotionRecord, FlattenError, FlattenMetadata, FlattenedSystem, flatten,
     flatten_model,
@@ -143,7 +143,7 @@ pub use reactions::stoichiometric_matrix_parallel;
 #[cfg(not(target_arch = "wasm32"))]
 pub use simulate::{
     CompileError, Compiled, ResolvedExpr, SimulateError, SimulateOptions, Solution,
-    SolutionMetadata, SolverChoice, interpret, simulate,
+    SolutionMetadata, SolverChoice, fold_constant_expr, interpret, simulate,
 };
 pub use units::{
     Dimension, Unit, UnitError, build_unit_env, check_dimensional_consistency, convert_units,

@@ -282,32 +282,6 @@ fn run_fixture(fixture_dir: &Path, total_scenarios: &mut usize, total_errors: &m
     }
 }
 
-// Belt-and-suspenders: the AST evaluator must dispatch `fn` ops through the
-// closed registry. This drives the integration path (parse a canonical.esm,
-// pull out the RHS, evaluate it with bindings) for one scenario per fixture
-// family — the conformance test above already pins per-function correctness;
-// this one pins that the wiring through `expression::evaluate` survived.
-#[test]
-fn ast_evaluator_dispatches_fn_op() {
-    use earthsci_toolkit::evaluate;
-    use std::collections::HashMap;
-
-    let root = fixtures_root();
-    let datetime_year = root.join("datetime").join("year").join("canonical.esm");
-    let json_str = fs::read_to_string(&datetime_year).expect("read fixture");
-    let file = load(&json_str).expect("load fixture");
-    let model = file
-        .models
-        .as_ref()
-        .and_then(|m| m.get("Probe"))
-        .expect("Probe model");
-    let rhs = &model.equations[0].rhs;
-    let mut bindings = HashMap::new();
-    bindings.insert("t_utc".to_string(), 0.0);
-    let v = evaluate(rhs, &bindings).expect("evaluate rhs");
-    assert_eq!(v, 1970.0, "datetime.year(0.0) must equal 1970");
-}
-
 // Pin the dispatch arm for unknown closed-function names — this is the
 // `unknown_closed_function` diagnostic that callers (incl. validators that
 // want to bypass schema and ask the registry directly) MUST surface.

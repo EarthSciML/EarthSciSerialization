@@ -428,18 +428,19 @@ impl Compiled {
                 collect_state_refs(expr, &state_index, &alg_membership, &mut alg_deps_dense[i]);
             }
         }
-        let algebraic_topo = topo_sort_subset(&algebraic_indices, &alg_deps_dense).map_err(
-            |cycle| CompileError::InterpreterBuildError {
-                details: format!(
-                    "Cyclic algebraic equations detected: {}",
-                    cycle
-                        .into_iter()
-                        .map(|i| state_names[i].clone())
-                        .collect::<Vec<_>>()
-                        .join(" -> ")
-                ),
-            },
-        )?;
+        let algebraic_topo =
+            topo_sort_subset(&algebraic_indices, &alg_deps_dense).map_err(|cycle| {
+                CompileError::InterpreterBuildError {
+                    details: format!(
+                        "Cyclic algebraic equations detected: {}",
+                        cycle
+                            .into_iter()
+                            .map(|i| state_names[i].clone())
+                            .collect::<Vec<_>>()
+                            .join(" -> ")
+                    ),
+                }
+            })?;
 
         // (9) Build per-state classification + resolved expression.
         let mut state_kinds: Vec<StateKind> = Vec::with_capacity(state_names.len());
@@ -1178,6 +1179,64 @@ pub fn interpret(
     }
 }
 
+/// Fold a scalar [`Expr`] to a numeric value with the given variable bindings.
+///
+/// Canonical single-expression entry point on the scalar runner: builds a
+/// parameter table from `bindings`, runs [`resolve_expr`], then walks the
+/// result through [`interpret`] / [`eval_op`] — the same primitives the
+/// `simulate` ODE solver uses. Adding an op to `eval_op` transparently
+/// extends single-expression evaluation; there is no parallel dispatch table.
+///
+/// State and observed buffers are empty. The independent-variable `t` reads
+/// from `bindings.get("t")` if present (caller-supplied "current time"),
+/// otherwise defaults to `0.0`.
+///
+/// On success returns `Ok(value)`. If `expr` references variable names that
+/// are not in `bindings` (and that aren't `t`), returns `Err(names)` listing
+/// each missing reference in encounter order. Math errors (division by zero,
+/// log of a non-positive number, unknown ops) propagate as `f64::NAN` or
+/// `±inf` in the `Ok` branch — that is the canonical runner's convention.
+pub fn fold_constant_expr(
+    expr: &Expr,
+    bindings: &HashMap<String, f64>,
+) -> Result<f64, Vec<String>> {
+    let mut unbound: Vec<String> = Vec::new();
+    collect_unbound(expr, bindings, &mut unbound);
+    if !unbound.is_empty() {
+        return Err(unbound);
+    }
+    let mut names: Vec<String> = bindings.keys().cloned().collect();
+    names.sort();
+    let mut param_index: HashMap<String, usize> = HashMap::with_capacity(names.len());
+    let mut params: Vec<f64> = Vec::with_capacity(names.len());
+    for (i, n) in names.iter().enumerate() {
+        param_index.insert(n.clone(), i);
+        params.push(bindings[n]);
+    }
+    let resolved = resolve_expr(expr, &HashMap::new(), &param_index, &HashMap::new(), None)
+        .map_err(|e| vec![format!("{e:?}")])?;
+    let t_value = bindings.get("t").copied().unwrap_or(0.0);
+    Ok(interpret(&resolved, &[], &params, &[], t_value))
+}
+
+fn collect_unbound(expr: &Expr, bindings: &HashMap<String, f64>, out: &mut Vec<String>) {
+    match expr {
+        Expr::Number(_) | Expr::Integer(_) => {}
+        Expr::Variable(name) => {
+            // `t` is supplied by the caller (or defaults to 0.0); never report
+            // it as unbound even if the user did not put it in `bindings`.
+            if name != "t" && !bindings.contains_key(name) {
+                out.push(name.clone());
+            }
+        }
+        Expr::Operator(node) => {
+            for arg in &node.args {
+                collect_unbound(arg, bindings, out);
+            }
+        }
+    }
+}
+
 fn eval_op(
     op: &str,
     args: &[ResolvedExpr],
@@ -1212,9 +1271,9 @@ fn eval_op(
         "sqrt" => v(0).sqrt(),
         "abs" => v(0).abs(),
         "sign" => {
-            // Mathematical sign convention (sign(0) = 0), matching the
-            // existing `crate::expression::evaluate` implementation. This
-            // differs from `f64::signum`, which returns ±1 for ±0.
+            // Mathematical sign convention (sign(0) = 0), matching the spec
+            // and the cross-binding contract. This differs from `f64::signum`,
+            // which returns ±1 for ±0.
             let x = v(0);
             if x > 0.0 {
                 1.0
@@ -1302,10 +1361,9 @@ fn eval_op(
         }
 
         // Differential operators: D appears on the LHS of state equations
-        // (rewritten elsewhere). On the RHS we treat them as 0 — matching
-        // the existing convention in `crate::expression::evaluate`. Spatial
-        // operators are filtered out by flatten() before reaching this
-        // module.
+        // (rewritten elsewhere). On the RHS we treat them as 0 (parity
+        // with the array runner). Spatial operators are filtered out by
+        // flatten() before reaching this module.
         "D" | "grad" | "div" | "laplacian" => 0.0,
 
         // Pre is the previous-value operator (used by event handling). With

@@ -161,7 +161,7 @@ fn test_expression_operations() {
     let mut context = HashMap::new();
     context.insert("x".to_string(), 10.0);
 
-    let result = evaluate(&expr, &context).expect("Failed to evaluate expression");
+    let result = fold_constant_expr(&expr, &context).expect("Failed to evaluate expression");
     assert_eq!(result, 15.0);
 
     // Test substitution
