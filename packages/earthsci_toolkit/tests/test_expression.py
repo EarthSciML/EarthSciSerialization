@@ -1,11 +1,19 @@
-"""Test expression manipulation and SymPy bridge functions."""
+"""Test expression manipulation and SymPy bridge functions.
+
+End-to-end coverage of the canonical AST evaluator (``numpy_interpreter``)
+lives in ``test_numpy_interpreter.py``; the few evaluator-call sites kept here
+(``test_evaluate_*``) drive ``fold_constant_expr`` because ``simplify`` folds
+through that helper and we want a regression hook adjacent to the simplifier
+tests.
+"""
 
 import pytest
 import sympy as sp
 from earthsci_toolkit.expression import (
-    free_variables, free_parameters, contains, evaluate, simplify,
+    free_variables, free_parameters, contains, simplify,
     to_sympy, from_sympy, symbolic_jacobian
 )
+from earthsci_toolkit.numpy_interpreter import fold_constant_expr
 from earthsci_toolkit.esm_types import ExprNode, Model, ModelVariable, Equation
 
 
@@ -95,49 +103,17 @@ class TestBasicExpressionFunctions:
         assert parameters == {"k"}
 
     def test_evaluate_simple(self):
-        """Test evaluate with simple expressions."""
-        assert evaluate(5, {}) == 5.0
-        assert evaluate("x", {"x": 10}) == 10.0
-
-    def test_evaluate_unbound_variable(self):
-        """Test evaluate with unbound variable raises error."""
-        with pytest.raises(ValueError, match="Unbound variable: x"):
-            evaluate("x", {})
-
-    def test_evaluate_multiple_unbound_variables(self):
-        """Test evaluate with multiple unbound variables reports all of them."""
-        # Test with two unbound variables
-        expr = ExprNode(op="+", args=["x", "y"])
-        with pytest.raises(ValueError, match="Unbound variables: x, y"):
-            evaluate(expr, {})
-
-        # Test with three unbound variables in complex expression
-        expr = ExprNode(op="+", args=[
-            "x",
-            ExprNode(op="*", args=["y", "z"])
-        ])
-        with pytest.raises(ValueError, match="Unbound variables: x, y, z"):
-            evaluate(expr, {})
-
-        # Test mixed bound and unbound variables
-        expr = ExprNode(op="+", args=["a", "b", "c"])
-        with pytest.raises(ValueError, match="Unbound variables: a, c"):
-            evaluate(expr, {"b": 5})
-
-        # Test duplicate unbound variables (should only report unique ones)
-        expr = ExprNode(op="+", args=["x", "x", "y"])
-        with pytest.raises(ValueError, match="Unbound variables: x, y"):
-            evaluate(expr, {})
+        """Smoke-test the canonical evaluator wrapper used by ``simplify``."""
+        assert fold_constant_expr(5, {}) == 5.0
+        assert fold_constant_expr("x", {"x": 10}) == 10.0
 
     def test_evaluate_arithmetic(self):
-        """Test evaluate with arithmetic operations."""
+        """Smoke-test fold_constant_expr arithmetic path used by simplify."""
         expr = ExprNode(op="+", args=[2, "x"])
-        result = evaluate(expr, {"x": 3})
-        assert result == 5.0
+        assert fold_constant_expr(expr, {"x": 3}) == 5.0
 
         expr = ExprNode(op="*", args=["x", "y"])
-        result = evaluate(expr, {"x": 2, "y": 3})
-        assert result == 6.0
+        assert fold_constant_expr(expr, {"x": 2, "y": 3}) == 6.0
 
     def test_simplify_constant_folding(self):
         """Test simplify with constant folding."""
@@ -398,24 +374,6 @@ class TestSymbolicJacobian:
 class TestErrorHandling:
     """Test error handling in expression functions."""
 
-    def test_evaluate_division_by_zero(self):
-        """Test evaluate handles division by zero."""
-        expr = ExprNode(op="/", args=[1, 0])
-        with pytest.raises(ValueError, match="Division by zero"):
-            evaluate(expr, {})
-
-    def test_evaluate_invalid_subtraction_args(self):
-        """Test evaluate handles invalid subtraction arguments."""
-        expr = ExprNode(op="-", args=[1, 2, 3])  # Too many args
-        with pytest.raises(TypeError, match="Invalid number of arguments for subtraction"):
-            evaluate(expr, {})
-
-    def test_evaluate_unsupported_operation(self):
-        """Test evaluate handles unsupported operations."""
-        expr = ExprNode(op="unknown_op", args=[1])
-        with pytest.raises(TypeError, match="Unsupported operation"):
-            evaluate(expr, {})
-
     def test_to_sympy_invalid_arg_count(self):
         """Test to_sympy handles invalid argument counts."""
         expr = ExprNode(op="exp", args=["x", "y"])  # exp takes 1 arg
@@ -428,31 +386,12 @@ class TestErrorHandling:
 
 
 class TestNAryMinMax:
-    """n-ary min/max scalar ops (esm-spec §4.2 — arity ≥ 2; esm-2is)."""
+    """n-ary min/max scalar ops (esm-spec §4.2 — arity ≥ 2; esm-2is).
 
-    def test_evaluate_nary_min(self):
-        expr = ExprNode(op="min", args=[3.0, 1.0, 2.0])
-        assert evaluate(expr, {}) == 1.0
-
-    def test_evaluate_nary_max(self):
-        expr = ExprNode(op="max", args=[3.0, 1.0, 2.0])
-        assert evaluate(expr, {}) == 3.0
-
-    def test_evaluate_binary_min_max(self):
-        assert evaluate(ExprNode(op="min", args=[7.0, 4.0]), {}) == 4.0
-        assert evaluate(ExprNode(op="max", args=[7.0, 4.0]), {}) == 7.0
-
-    def test_evaluate_min_with_bindings(self):
-        expr = ExprNode(op="max", args=["x", "y", "z"])
-        assert evaluate(expr, {"x": 5.0, "y": 2.0, "z": 8.0}) == 8.0
-
-    def test_evaluate_min_single_arg_rejected(self):
-        with pytest.raises(TypeError, match="Min requires at least 2 arguments"):
-            evaluate(ExprNode(op="min", args=[3.0]), {})
-
-    def test_evaluate_max_single_arg_rejected(self):
-        with pytest.raises(TypeError, match="Max requires at least 2 arguments"):
-            evaluate(ExprNode(op="max", args=[3.0]), {})
+    Evaluator-side coverage of n-ary min/max lives in
+    ``test_numpy_interpreter.py``; the SymPy-bridge coverage stays here
+    because ``to_sympy``/``from_sympy`` are this module's surface.
+    """
 
     def test_to_sympy_min_max(self):
         import sympy as sp

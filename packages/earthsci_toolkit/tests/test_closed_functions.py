@@ -19,7 +19,7 @@ from typing import Any, List
 import pytest
 
 from earthsci_toolkit import load
-from earthsci_toolkit.expression import evaluate
+from earthsci_toolkit.numpy_interpreter import fold_constant_expr
 from earthsci_toolkit.registered_functions import (
     ClosedFunctionError,
     closed_function_names,
@@ -204,12 +204,12 @@ def test_searchsorted_empty_table():
 
 
 def test_evaluate_through_ast():
-    """End-to-end: load a fixture, evaluate via the AST evaluator."""
+    """End-to-end: load a fixture, evaluate via the canonical AST evaluator."""
     fixture = FIXTURES_ROOT / "datetime" / "year" / "canonical.esm"
     file = load(fixture)
     eq = file.models["Probe"].equations[0]
-    assert evaluate(eq.rhs, {"t_utc": 0.0}) == 1970.0
-    assert evaluate(eq.rhs, {"t_utc": 951825600.0}) == 2000.0
+    assert fold_constant_expr(eq.rhs, {"t_utc": 0.0}) == 1970.0
+    assert fold_constant_expr(eq.rhs, {"t_utc": 951825600.0}) == 2000.0
 
 
 def test_searchsorted_through_ast():
@@ -219,9 +219,9 @@ def test_searchsorted_through_ast():
     fixture = FIXTURES_ROOT / "interp" / "searchsorted" / "canonical.esm"
     file = load(fixture)
     eq = file.models["Probe"].equations[0]
-    assert evaluate(eq.rhs, {"x": 2.5}) == 3.0
-    assert evaluate(eq.rhs, {"x": 10.0}) == 6.0
-    assert evaluate(eq.rhs, {"x": 1.0}) == 1.0
+    assert fold_constant_expr(eq.rhs, {"x": 2.5}) == 3.0
+    assert fold_constant_expr(eq.rhs, {"x": 10.0}) == 6.0
+    assert fold_constant_expr(eq.rhs, {"x": 1.0}) == 1.0
 
 
 def test_enums_lowered_to_const():

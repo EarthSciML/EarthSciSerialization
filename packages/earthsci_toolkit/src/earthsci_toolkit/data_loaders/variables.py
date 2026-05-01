@@ -13,7 +13,8 @@ from numbers import Real
 from typing import Any, Dict, Mapping, Optional
 
 from ..esm_types import DataLoaderVariable, ExprNode
-from ..expression import evaluate, free_variables
+from ..expression import free_variables
+from ..numpy_interpreter import fold_constant_expr
 
 
 class UnitConversionError(ValueError):
@@ -32,7 +33,7 @@ def _scale_factor(
         free = free_variables(conversion)
         if not free:
             try:
-                return float(evaluate(conversion, {}))
+                return float(fold_constant_expr(conversion))
             except Exception as exc:
                 raise UnitConversionError(
                     f"variable {variable_name!r} unit_conversion "
@@ -79,7 +80,7 @@ def apply_unit_conversion(
     raw_name = next(iter(free))
 
     def _eval_scalar(raw: float) -> float:
-        return float(evaluate(conversion, {raw_name: float(raw)}))
+        return float(fold_constant_expr(conversion, {raw_name: float(raw)}))
 
     try:
         import numpy as _np

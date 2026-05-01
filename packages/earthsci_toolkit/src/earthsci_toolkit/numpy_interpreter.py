@@ -38,6 +38,13 @@ from .esm_types import Expr, ExprNode
 Shape = Tuple[int, ...]
 
 
+_INTERP_CONST_ARG_POSITIONS: Dict[str, tuple] = {
+    "interp.searchsorted": (1,),
+    "interp.linear": (0, 1),
+    "interp.bilinear": (0, 1, 2),
+}
+
+
 @dataclass
 class EvalContext:
     """Runtime data passed to each recursive evaluation step."""
@@ -150,7 +157,6 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
             f"`const` op value must be a number or nested array, got {type(v).__name__}"
         )
     if op == "fn":
-        from .expression import _INTERP_CONST_ARG_POSITIONS
         from .registered_functions import evaluate_closed_function, extract_const_array
         if expr.name is None:
             raise NumpyInterpreterError("`fn` op requires a `name` field")
@@ -494,6 +500,39 @@ def _eval_concat(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
     arrs = [np.atleast_1d(_as_array(eval_expr(a, ctx))) for a in expr.args]
     axis = expr.axis if expr.axis is not None else 0
     return np.concatenate(arrs, axis=axis)
+
+
+def fold_constant_expr(
+    expr: Expr, bindings: Optional[Dict[str, float]] = None
+) -> float:
+    """Evaluate a scalar AST expression with optional named scalar bindings.
+
+    Wraps :func:`eval_expr` with an empty-state ``EvalContext`` so callers can
+    fold a closed AST (e.g. a unit-conversion constant) or evaluate a scalar
+    AST against a tiny binding dict (e.g. one raw-value sample for a
+    one-variable conversion expression). Bindings are exposed through the
+    interpreter's symbol-resolution path; ``state_layout``/``state_shapes`` are
+    empty so any array op or unbound symbol surfaces as
+    :class:`NumpyInterpreterError`.
+
+    The expression must reduce to a scalar; an array result raises.
+    """
+    ctx = EvalContext(
+        state_layout={},
+        state_shapes={},
+        param_values=dict(bindings) if bindings else {},
+        observed_values={},
+        y=np.empty((0,), dtype=float),
+        t=0.0,
+    )
+    result = eval_expr(expr, ctx)
+    if isinstance(result, np.ndarray):
+        if result.shape == ():
+            return float(result)
+        raise NumpyInterpreterError(
+            f"fold_constant_expr expected a scalar result, got array of shape {result.shape}"
+        )
+    return float(result)
 
 
 def expr_contains_array_op(expr: Expr) -> bool:
