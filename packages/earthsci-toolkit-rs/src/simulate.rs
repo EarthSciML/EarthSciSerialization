@@ -73,6 +73,23 @@ pub enum CompileError {
         details: String,
     },
 
+    /// A spatial differential operator (`grad`, `div`, `laplacian`, ...) was
+    /// found in an equation reaching the simulator. Per the canonical
+    /// pipeline contract, ESD discretization rules MUST rewrite these into
+    /// `arrayop` AST before any binding's simulator evaluates the equations.
+    /// Encountering one here means `discretize` was skipped or did not
+    /// rewrite this node — silently producing zeros (the previous behavior)
+    /// would mask a broken pipeline. (esm-i7b)
+    #[error(
+        "UnreachableSpatialOperatorError: encountered '{op}' node in simulation evaluation. \
+         Spatial operators must be rewritten by ESD discretization rules before reaching the \
+         simulator. Pipeline contract violated."
+    )]
+    UnreachableSpatialOperatorError {
+        /// The offending operator name (e.g. `"grad"`).
+        op: String,
+    },
+
     /// The convenience constructors flattened the input first; that step
     /// failed.
     #[error("Flatten failed: {0}")]
@@ -995,6 +1012,15 @@ fn resolve_expr(
             }
         }
         Expr::Operator(node) => {
+            // Reject spatial differential operators at compile time. Per the
+            // canonical pipeline contract, `grad`/`div`/`laplacian` MUST be
+            // rewritten by ESD discretization rules into `arrayop` AST before
+            // reaching any binding's simulator. (esm-i7b)
+            if matches!(node.op.as_str(), "grad" | "div" | "laplacian") {
+                return Err(CompileError::UnreachableSpatialOperatorError {
+                    op: node.op.clone(),
+                });
+            }
             let args = node
                 .args
                 .iter()
@@ -1360,11 +1386,21 @@ fn eval_op(
             }
         }
 
-        // Differential operators: D appears on the LHS of state equations
-        // (rewritten elsewhere). On the RHS we treat them as 0 (parity
-        // with the array runner). Spatial operators are filtered out by
-        // flatten() before reaching this module.
-        "D" | "grad" | "div" | "laplacian" => 0.0,
+        // Differential operator on RHS. `D` is a programming-form-only
+        // marker on the LHS of state equations and is rewritten elsewhere;
+        // if it shows up on the RHS we treat it as 0 (legacy parity).
+        "D" => 0.0,
+
+        // Spatial differential operators must be rewritten by ESD
+        // discretization rules before reaching the simulator. The
+        // compile-time check in `resolve_expr` catches these (esm-i7b);
+        // panicking here is defense-in-depth in case the resolver is
+        // bypassed by a programmatically-constructed `ResolvedExpr`.
+        "grad" | "div" | "laplacian" => panic!(
+            "UnreachableSpatialOperatorError: encountered '{op}' node in simulation evaluation. \
+             Spatial operators must be rewritten by ESD discretization rules before reaching \
+             the simulator. Pipeline contract violated."
+        ),
 
         // Pre is the previous-value operator (used by event handling). With
         // events disallowed in v1 it should never appear, but if it does we

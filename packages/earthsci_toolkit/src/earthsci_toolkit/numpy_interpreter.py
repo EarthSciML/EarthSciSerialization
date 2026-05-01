@@ -62,6 +62,27 @@ class NumpyInterpreterError(Exception):
     """Raised when an expression cannot be evaluated by the NumPy interpreter."""
 
 
+class UnreachableSpatialOperatorError(NumpyInterpreterError):
+    """Raised when a spatial differential operator (`grad`, `div`,
+    `laplacian`) reaches the simulator's RHS evaluator.
+
+    Per the canonical pipeline contract, ESD discretization rules MUST
+    rewrite these into ``arrayop`` AST before any binding's simulator
+    evaluates the equations. Encountering one here means ``discretize``
+    was skipped or did not rewrite the node — silently substituting zero
+    (the previous behaviour) would mask the broken pipeline. (esm-i7b)
+    """
+
+    def __init__(self, op: str) -> None:
+        self.op = op
+        super().__init__(
+            f"UnreachableSpatialOperatorError: encountered '{op}' node in "
+            f"simulation evaluation. Spatial operators must be rewritten by "
+            f"ESD discretization rules before reaching the simulator. "
+            f"Pipeline contract violated."
+        )
+
+
 def _as_array(x: Any) -> np.ndarray:
     if isinstance(x, np.ndarray):
         return x
@@ -279,6 +300,12 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
         if expr.args:
             return eval_expr(expr.args[0], ctx)
         return 0.0
+    if op in ("grad", "div", "laplacian"):
+        # Spatial differential operators must be rewritten by ESD
+        # discretization rules into `arrayop` AST before reaching the
+        # simulator. Encountering one here means the canonical pipeline
+        # broke; silently substituting zero would mask that. (esm-i7b)
+        raise UnreachableSpatialOperatorError(op)
 
     # --- array ops ---
     if op == "index":

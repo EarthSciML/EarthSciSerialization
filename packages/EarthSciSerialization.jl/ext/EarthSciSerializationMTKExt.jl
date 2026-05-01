@@ -327,6 +327,34 @@ function _range_bounds_int(r::Vector{Int})
     error("range must have 2 or 3 entries, got $(length(r))")
 end
 
+# Walk an ESM expression tree looking for any spatial differential operator
+# (`grad`/`div`/`laplacian`). Returns the offending op name on the first
+# match, or `nothing` if none is present. Used by the ODE-path
+# `ModelingToolkit.System` constructor to enforce the canonical pipeline
+# contract (esm-i7b).
+function _find_spatial_op(expr::EsmExpr)::Union{String,Nothing}
+    if expr isa OpExpr
+        if expr.op == "grad" || expr.op == "div" || expr.op == "laplacian"
+            return expr.op
+        end
+        for a in expr.args
+            hit = _find_spatial_op(a)
+            hit === nothing || return hit
+        end
+        if expr.expr_body !== nothing
+            hit = _find_spatial_op(expr.expr_body)
+            hit === nothing || return hit
+        end
+        if expr.values !== nothing
+            for v in expr.values
+                hit = _find_spatial_op(v)
+                hit === nothing || return hit
+            end
+        end
+    end
+    return nothing
+end
+
 # Walk an ESM expression tree collecting variable names in order of first
 # occurrence. Used to build eval-time bindings for `_build_arrayop`.
 function _collect_var_refs(expr::EsmExpr, acc::Vector{String}=String[])
@@ -980,6 +1008,26 @@ function ModelingToolkit.System(flat::FlattenedSystem;
             "which indicates a PDE. Use ModelingToolkit.PDESystem(...) instead of " *
             "ModelingToolkit.System(...)."
         ))
+    end
+
+    # esm-i7b: ODE path. Spatial differential operators (`grad`/`div`/
+    # `laplacian`) MUST be rewritten by ESD discretization rules into
+    # `arrayop` AST before reaching the simulator. Encountering one in an
+    # ODE-only system means the canonical pipeline broke; surface this
+    # rather than letting the operator slip into MTK's symbolic engine
+    # (where it would either error obscurely or — worse, if the operator
+    # has been mapped to a `Differential` symbol — silently produce a
+    # spatial derivative the ODE solver cannot integrate).
+    for eq in flat.equations
+        for side in (eq.lhs, eq.rhs)
+            spatial_op = _find_spatial_op(side)
+            spatial_op === nothing || throw(ArgumentError(
+                "UnreachableSpatialOperatorError: encountered '$(spatial_op)' " *
+                "node in simulation evaluation. Spatial operators must be " *
+                "rewritten by ESD discretization rules before reaching the " *
+                "simulator. Pipeline contract violated."
+            ))
+        end
     end
 
     var_dict, t_sym, dim_dict, states, parameters, observed, _ =

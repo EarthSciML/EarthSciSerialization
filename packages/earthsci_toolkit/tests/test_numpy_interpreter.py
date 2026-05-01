@@ -19,6 +19,7 @@ from earthsci_toolkit.esm_types import ExprNode
 from earthsci_toolkit.numpy_interpreter import (
     EvalContext,
     NumpyInterpreterError,
+    UnreachableSpatialOperatorError,
     eval_expr,
     expr_contains_array_op,
 )
@@ -185,6 +186,23 @@ def test_broadcast_julia_left_alignment() -> None:
 def test_unsupported_op_raises() -> None:
     with pytest.raises(NumpyInterpreterError):
         eval_expr(ExprNode(op="bogus_op", args=[1.0]), _ctx({}))
+
+
+@pytest.mark.parametrize("spatial_op", ["grad", "div", "laplacian"])
+def test_spatial_operator_in_simulator_rejected(spatial_op: str) -> None:
+    """esm-i7b: a non-discretized AST containing `grad`/`div`/`laplacian`
+    fed to the simulator's RHS evaluator must raise the canonical
+    pipeline-violation error rather than silently returning zero (the
+    historical stub-to-zero behaviour)."""
+    ctx = _ctx({"u": np.asarray(1.0)})
+    expr = ExprNode(op=spatial_op, args=["u"])
+    with pytest.raises(UnreachableSpatialOperatorError) as excinfo:
+        eval_expr(expr, ctx)
+    msg = str(excinfo.value)
+    assert "UnreachableSpatialOperatorError" in msg
+    assert spatial_op in msg
+    assert "Pipeline contract violated" in msg
+    assert excinfo.value.op == spatial_op
 
 
 def test_expr_contains_array_op_recursion() -> None:

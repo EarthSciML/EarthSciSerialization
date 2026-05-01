@@ -235,6 +235,38 @@ fn expr_has_array_op(expr: &Expr) -> bool {
     }
 }
 
+/// Walk an expression and reject any spatial differential operator
+/// (`grad`/`div`/`laplacian`). Per the canonical pipeline contract, ESD
+/// discretization rules MUST rewrite these into `arrayop` AST before
+/// reaching any binding's simulator. Encountering one here means
+/// `discretize` was skipped or did not rewrite the node — silently
+/// substituting zeros (the previous behaviour) would mask the broken
+/// pipeline. (esm-i7b)
+fn check_no_spatial_ops(expr: &Expr) -> Result<(), CompileError> {
+    match expr {
+        Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => Ok(()),
+        Expr::Operator(node) => {
+            if matches!(node.op.as_str(), "grad" | "div" | "laplacian") {
+                return Err(CompileError::UnreachableSpatialOperatorError {
+                    op: node.op.clone(),
+                });
+            }
+            if let Some(inner) = &node.expr {
+                check_no_spatial_ops(inner)?;
+            }
+            if let Some(vals) = &node.values {
+                for v in vals {
+                    check_no_spatial_ops(v)?;
+                }
+            }
+            for a in &node.args {
+                check_no_spatial_ops(a)?;
+            }
+            Ok(())
+        }
+    }
+}
+
 // ============================================================================
 // Compile path: model → ArrayCompiled.
 // ============================================================================
@@ -257,6 +289,21 @@ impl ArrayCompiled {
     }
 
     pub fn from_model(model: &Model) -> Result<Self, CompileError> {
+        // (0) Reject spatial differential operators anywhere in the model's
+        // equations or observed-variable expressions — the canonical
+        // pipeline contract requires `grad`/`div`/`laplacian` to be
+        // rewritten by ESD discretization before reaching the simulator
+        // (esm-i7b).
+        for eq in &model.equations {
+            check_no_spatial_ops(&eq.lhs)?;
+            check_no_spatial_ops(&eq.rhs)?;
+        }
+        for var in model.variables.values() {
+            if let Some(expr) = &var.expression {
+                check_no_spatial_ops(expr)?;
+            }
+        }
+
         // (1) Collect state / parameter / observed variables.
         let mut state_vars: Vec<&String> = Vec::new();
         let mut param_vars: Vec<&String> = Vec::new();
@@ -967,7 +1014,19 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
 
         // Derivative operator: only meaningful on LHS. On RHS we treat
         // D(anything) = 0 for parity with the scalar interpreter.
-        "D" | "grad" | "div" | "laplacian" => Value::Scalar(0.0),
+        "D" => Value::Scalar(0.0),
+
+        // Spatial differential operators must be rewritten by ESD
+        // discretization rules before reaching the simulator (esm-i7b).
+        // The compile-time `check_no_spatial_ops` walk in `from_model`
+        // catches these; panicking here is defense-in-depth in case the
+        // build path is bypassed.
+        "grad" | "div" | "laplacian" => panic!(
+            "UnreachableSpatialOperatorError: encountered '{}' node in simulation evaluation. \
+             Spatial operators must be rewritten by ESD discretization rules before reaching \
+             the simulator. Pipeline contract violated.",
+            node.op
+        ),
 
         "Pre" => eval(&node.args[0], ctx),
 

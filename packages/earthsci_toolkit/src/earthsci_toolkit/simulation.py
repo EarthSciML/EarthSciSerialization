@@ -44,7 +44,12 @@ from .flatten import (
     flatten,
     infer_variable_shapes,
 )
-from .numpy_interpreter import EvalContext, eval_expr, NumpyInterpreterError
+from .numpy_interpreter import (
+    EvalContext,
+    NumpyInterpreterError,
+    UnreachableSpatialOperatorError,
+    eval_expr,
+)
 from .reactions import lower_reactions_to_equations
 
 
@@ -219,6 +224,14 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
                 symbol_map[expr] = sp.Symbol(expr)
                 return symbol_map[expr]
     elif isinstance(expr, ExprNode):
+        # Spatial differential operators must be rewritten by ESD
+        # discretization rules into `arrayop` AST before reaching the
+        # SymPy/lambdify simulator path. Encountering one here means the
+        # canonical pipeline broke; surface it instead of letting SymPy
+        # invent a symbolic placeholder. (esm-i7b)
+        if expr.op in ('grad', 'div', 'laplacian'):
+            raise UnreachableSpatialOperatorError(expr.op)
+
         # Convert arguments recursively
         sympy_args = [_expr_to_sympy(arg, symbol_map) for arg in expr.args]
 

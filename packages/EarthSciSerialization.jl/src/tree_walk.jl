@@ -413,8 +413,16 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
         throw(TreeWalkError("E_TREEWALK_D_IN_RHS",
                             "D(...) only allowed in equation LHS"))
     elseif op_sym === :grad || op_sym === :div || op_sym === :laplacian
-        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
-                            "$(expr.op) (must be discretized before tree-walk)"))
+        # esm-i7b: spatial differential operators MUST be rewritten by ESD
+        # discretization rules into `arrayop` AST before reaching the
+        # simulator. Encountering one here means the canonical pipeline
+        # broke; surface the violation rather than substituting zero (the
+        # historical stub behaviour in other bindings).
+        throw(TreeWalkError("E_TREEWALK_UNREACHABLE_SPATIAL_OP",
+            "UnreachableSpatialOperatorError: encountered '$(expr.op)' node " *
+            "in simulation evaluation. Spatial operators must be rewritten " *
+            "by ESD discretization rules before reaching the simulator. " *
+            "Pipeline contract violated."))
     elseif op_sym === :arrayop || op_sym === :makearray ||
            op_sym === :broadcast || op_sym === :reshape ||
            op_sym === :transpose || op_sym === :concat ||

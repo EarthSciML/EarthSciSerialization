@@ -160,6 +160,28 @@ end
                                               u_vals=Dict("x" => 1.0))
     end
 
+    @testset "esm-i7b: spatial-op pipeline-violation framing" begin
+        # The simulator's tree-walk runtime must surface the canonical
+        # pipeline-violation message when a non-discretized AST containing
+        # `grad`/`div`/`laplacian` reaches it. Silently returning zero
+        # (the historical stub-to-zero pattern in other bindings) would
+        # mask a broken `discretize` step.
+        for opname in ("grad", "div", "laplacian")
+            err = try
+                _eval1(_op(opname, _v("x"); dim="x");
+                       u_vals=Dict("x" => 1.0))
+                nothing
+            catch e
+                e
+            end
+            @test err isa ESM.TreeWalkError
+            @test err.code == "E_TREEWALK_UNREACHABLE_SPATIAL_OP"
+            @test occursin("UnreachableSpatialOperatorError", err.detail)
+            @test occursin(opname, err.detail)
+            @test occursin("Pipeline contract violated", err.detail)
+        end
+    end
+
     # ========================================================
     # Observed variable inlining
     # ========================================================

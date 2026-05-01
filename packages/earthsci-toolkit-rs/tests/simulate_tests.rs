@@ -15,8 +15,8 @@ use earthsci_toolkit::types::{
     Metadata, Model, ModelVariable, VariableType,
 };
 use earthsci_toolkit::{
-    Compiled, Expr, FlattenedSystem, SimulateError, SimulateOptions, SolverChoice, simulate,
-    types::EsmFile,
+    CompileError, Compiled, Expr, FlattenedSystem, SimulateError, SimulateOptions, SolverChoice,
+    simulate, types::EsmFile,
 };
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -805,6 +805,146 @@ fn test_error_missing_initial_condition() {
         }
         other => panic!("expected InvalidInitialCondition, got {other:?}"),
     }
+}
+
+// ============================================================================
+// esm-i7b: spatial differential operators must error at compile time, not
+// be silently substituted to zero by the simulator interpreter.
+// ============================================================================
+
+/// Build a minimal FlattenedSystem with a single state `u` whose
+/// derivative RHS is the supplied expression. Used to feed a non-
+/// discretized AST containing a spatial-op node directly to the
+/// simulator, bypassing the flatten step (which has its own spatial-op
+/// guard).
+fn flat_with_one_state_rhs(rhs: Expr) -> FlattenedSystem {
+    let mut state_variables = IndexMap::new();
+    state_variables.insert(
+        "u".to_string(),
+        ModelVariable {
+            var_type: VariableType::State,
+            units: None,
+            default: Some(1.0),
+            description: None,
+            expression: None,
+            shape: None,
+            location: None,
+            noise_kind: None,
+            correlation_group: None,
+        },
+    );
+    FlattenedSystem {
+        independent_variables: vec!["t".to_string()],
+        state_variables,
+        parameters: IndexMap::new(),
+        observed_variables: IndexMap::new(),
+        brownian_variables: IndexMap::new(),
+        equations: vec![Equation {
+            lhs: Expr::Operator(ExpressionNode {
+                op: "D".to_string(),
+                args: vec![var("u")],
+                wrt: Some("t".to_string()),
+                ..Default::default()
+            }),
+            rhs,
+        }],
+        continuous_events: Vec::new(),
+        discrete_events: Vec::new(),
+        domains: None,
+        metadata: Default::default(),
+    }
+}
+
+#[test]
+fn test_error_grad_in_simulator_rejected() {
+    // Feed a non-discretized AST with a `grad` node directly to the
+    // simulator's RHS evaluator. Per the canonical pipeline contract,
+    // ESD discretization rules MUST rewrite `grad`/`div`/`laplacian` into
+    // `arrayop` AST before reaching the simulator; encountering one here
+    // means the canonical pipeline broke. The simulator must surface
+    // this rather than silently substitute zero (the historical stub).
+    let flat = flat_with_one_state_rhs(op("grad", vec![var("u")]));
+    let err = Compiled::from_flattened(&flat).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        matches!(err, CompileError::UnreachableSpatialOperatorError { ref op } if op == "grad"),
+        "expected UnreachableSpatialOperatorError(grad), got: {msg}"
+    );
+    assert!(
+        msg.contains("UnreachableSpatialOperatorError")
+            && msg.contains("grad")
+            && msg.contains("Pipeline contract violated"),
+        "expected canonical pipeline-violation message, got: {msg}"
+    );
+}
+
+#[test]
+fn test_error_div_in_simulator_rejected() {
+    let flat = flat_with_one_state_rhs(op("div", vec![var("u")]));
+    let err = Compiled::from_flattened(&flat).unwrap_err();
+    assert!(
+        matches!(err, CompileError::UnreachableSpatialOperatorError { ref op } if op == "div"),
+        "expected UnreachableSpatialOperatorError(div), got: {err}"
+    );
+}
+
+#[test]
+fn test_error_laplacian_in_simulator_rejected() {
+    let flat = flat_with_one_state_rhs(op("laplacian", vec![var("u")]));
+    let err = Compiled::from_flattened(&flat).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CompileError::UnreachableSpatialOperatorError { ref op } if op == "laplacian"
+        ),
+        "expected UnreachableSpatialOperatorError(laplacian), got: {err}"
+    );
+}
+
+#[test]
+fn test_error_grad_in_array_simulator_rejected() {
+    // The array-op simulator (`ArrayCompiled::from_model`) must also reject
+    // spatial differential operators with the same canonical
+    // pipeline-violation error. Sneak a `grad` into an arrayop body so the
+    // dispatcher routes the model to the array path.
+    use earthsci_toolkit::simulate_array::ArrayCompiled;
+
+    let mut ranges = HashMap::new();
+    ranges.insert("i".to_string(), [1i64, 2i64]);
+    let arrayop_body = Expr::Operator(ExpressionNode {
+        op: "arrayop".to_string(),
+        args: vec![],
+        expr: Some(Box::new(op("grad", vec![var("u")]))),
+        output_idx: Some(vec!["i".to_string()]),
+        ranges: Some(ranges),
+        wrt: None,
+        dim: None,
+        ..Default::default()
+    });
+    let lhs = Expr::Operator(ExpressionNode {
+        op: "D".to_string(),
+        args: vec![var("u")],
+        wrt: Some("t".to_string()),
+        dim: None,
+        ..Default::default()
+    });
+    let model = make_model(
+        "ArrSpatial",
+        vec![state("u", 0.0)],
+        vec![],
+        vec![Equation {
+            lhs,
+            rhs: arrayop_body,
+        }],
+    );
+    let err = match ArrayCompiled::from_model(&model) {
+        Ok(_) => panic!("expected error, got Ok"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(err, CompileError::UnreachableSpatialOperatorError { ref op } if op == "grad"),
+        "expected UnreachableSpatialOperatorError(grad) from array path, got: {err}"
+    );
 }
 
 // ============================================================================
