@@ -23,6 +23,7 @@ export * from './types.js'
 export { load, validateSchema, ParseError, SchemaValidationError, GridValidationError } from './parse.js'
 export type { SchemaError, LoadOptions } from './parse.js'
 export { save } from './serialize.js'
+export type { SaveOptions } from './serialize.js'
 export { validate } from './validate.js'
 export type { ValidationError, ValidationResult } from './validate.js'
 
