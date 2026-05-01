@@ -85,7 +85,7 @@ export
     StructuralError, ValidationResult, validate_structural, validate,
     validate_reaction_rate_units, validate_model_gradient_units,
     # Expression operations
-    substitute, free_variables, contains, evaluate, simplify, UnboundVariableError,
+    substitute, free_variables, contains, simplify, UnboundVariableError,
     # Qualified reference resolution
     resolve_qualified_reference, QualifiedReferenceError, ReferenceResolution,
     validate_reference_syntax, is_valid_identifier,
@@ -130,7 +130,7 @@ export
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
-    build_evaluator, TreeWalkError,
+    build_evaluator, evaluate_expr, TreeWalkError,
     # Closed function registry (esm-tzp / esm-4aw; esm-spec §9.2)
     evaluate_closed_function, closed_function_names, ClosedFunctionError,
     lower_enums!,

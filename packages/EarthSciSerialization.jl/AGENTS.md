@@ -13,7 +13,7 @@ each meets the workspace criteria.
 | Runner | Public API | Source | Use when |
 |---|---|---|---|
 | ModelingToolkit (MTK) | `ModelingToolkit.System(model::Model)` (`EarthSciSerializationMTKExt`) | `ext/EarthSciSerializationMTKExt/` | **Default.** Production runtime — full structural simplification, observed-variable handling, full SciML solver / sensitivity / event ecosystem. |
-| `tree_walk` | `build_evaluator(model_or_dict)` | `src/tree_walk.jl` | Very large discretized PDE systems whose scalar count exceeds MTK's `structural_simplify` / tearing / codegen ceiling. Build time is independent of system size; no symbolic simplification pass. |
+| `tree_walk` | `build_evaluator(model_or_dict)` for ODE RHS, `evaluate_expr(expr, bindings)` for a single AST expression | `src/tree_walk.jl` | Very large discretized PDE systems whose scalar count exceeds MTK's `structural_simplify` / tearing / codegen ceiling. Build time is independent of system size; no symbolic simplification pass. `evaluate_expr` shares the runner's compile + walker pipeline, so per-expression callers (units fixture consumption, `simplify` constant folding) live on the same dispatch table — no shadow evaluator. |
 
 The user-facing description (when to choose, performance characteristics,
 supported ops, error codes, public API surface) lives in

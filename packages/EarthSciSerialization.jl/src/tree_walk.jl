@@ -215,6 +215,47 @@ function build_evaluator(esm::AbstractDict;
     return build_evaluator(file; model_name=model_name, kwargs...)
 end
 
+"""
+    evaluate_expr(expr::Expr, bindings::AbstractDict;
+                  registered_functions::AbstractDict=Dict{String,Function}())::Float64
+
+Evaluate a single AST expression at the supplied numeric `bindings` by
+running it through the same compile + walker pipeline as
+[`build_evaluator`](@ref). All keys of `bindings` are exposed as readable
+state variables; the special name `"t"` (if present) is bound to the
+walker's time argument as well. Adding an op to the tree-walk evaluator
+transparently extends this entry point — there is no separate dispatch
+table.
+
+Throws `UnboundVariableError` when `expr` references a name that is not
+in `bindings` and is not the time variable; other failures surface as
+[`TreeWalkError`](@ref).
+"""
+function evaluate_expr(expr::Expr, bindings::AbstractDict;
+                       registered_functions::AbstractDict=Dict{String,Function}())::Float64
+    var_map = Dict{String,Int}()
+    u = Vector{Float64}(undef, length(bindings))
+    i = 0
+    for (name, _) in bindings
+        i += 1
+        sname = String(name)
+        var_map[sname] = i
+        u[i] = Float64(bindings[name])
+    end
+    reg_funcs = Dict{String,Any}(String(k) => v for (k, v) in registered_functions)
+    node = try
+        _compile(expr, var_map, Set{Symbol}(), reg_funcs)
+    catch e
+        if e isa TreeWalkError && e.code == "E_TREEWALK_UNBOUND_VARIABLE"
+            throw(UnboundVariableError(e.detail,
+                  "Variable '$(e.detail)' not found in bindings"))
+        end
+        rethrow(e)
+    end
+    t = haskey(bindings, "t") ? Float64(bindings["t"]) : 0.0
+    return _eval_node(node, u, NamedTuple(), t)
+end
+
 # ============================================================
 # 3. Compiled-IR — one-shot compilation to a compact, type-stable tree
 # ============================================================

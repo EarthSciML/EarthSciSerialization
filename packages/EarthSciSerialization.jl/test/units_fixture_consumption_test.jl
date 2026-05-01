@@ -31,7 +31,10 @@ end
 # evaluate any observed whose expression no longer has unbound leaves.
 # `UnboundVariableError` is the signal "dependencies not yet resolved" and
 # is swallowed; any other error propagates. Cycle-free fixtures converge
-# in at most one pass per observed variable.
+# in at most one pass per observed variable. Evaluation is routed through
+# the official tree-walk evaluator (`evaluate_expr`), so this fixture
+# consumer shares the production runner's dispatch table and lives on the
+# `.esm → AST → official runner` simulation pathway.
 function _resolve_observed!(model, bindings::Dict{String,Float64})
     for _ in 1:(length(model.variables) + 1)
         progress = false
@@ -40,7 +43,7 @@ function _resolve_observed!(model, bindings::Dict{String,Float64})
             haskey(bindings, vname) && continue
             var.expression === nothing && continue
             try
-                bindings[vname] = _ESM_UF.evaluate(var.expression, bindings)
+                bindings[vname] = _ESM_UF.evaluate_expr(var.expression, bindings)
                 progress = true
             catch err
                 err isa _ESM_UF.UnboundVariableError || rethrow(err)

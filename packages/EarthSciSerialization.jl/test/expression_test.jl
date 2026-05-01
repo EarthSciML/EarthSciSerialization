@@ -113,55 +113,10 @@ using JSON3
         @test !EarthSciSerialization.contains(diff_expr, "y")
     end
 
-    @testset "evaluate function" begin
-        # Test NumExpr
-        num = NumExpr(3.14)
-        @test evaluate(num, Dict{String,Float64}()) == 3.14
-
-        # Test VarExpr with binding
-        var_x = VarExpr("x")
-        bindings = Dict("x" => 2.5)
-        @test evaluate(var_x, bindings) == 2.5
-
-        # Test VarExpr without binding (should throw)
-        @test_throws UnboundVariableError evaluate(var_x, Dict{String,Float64}())
-
-        # Test arithmetic operations
-        @test evaluate(OpExpr("+", EarthSciSerialization.Expr[NumExpr(2.0), NumExpr(3.0)]), Dict{String,Float64}()) == 5.0
-        @test evaluate(OpExpr("-", EarthSciSerialization.Expr[NumExpr(5.0), NumExpr(3.0)]), Dict{String,Float64}()) == 2.0
-        @test evaluate(OpExpr("*", EarthSciSerialization.Expr[NumExpr(2.0), NumExpr(3.0)]), Dict{String,Float64}()) == 6.0
-        @test evaluate(OpExpr("/", EarthSciSerialization.Expr[NumExpr(6.0), NumExpr(3.0)]), Dict{String,Float64}()) == 2.0
-        @test evaluate(OpExpr("^", EarthSciSerialization.Expr[NumExpr(2.0), NumExpr(3.0)]), Dict{String,Float64}()) == 8.0
-
-        # Test unary operations
-        @test evaluate(OpExpr("+", EarthSciSerialization.Expr[NumExpr(5.0)]), Dict{String,Float64}()) == 5.0
-        @test evaluate(OpExpr("-", EarthSciSerialization.Expr[NumExpr(5.0)]), Dict{String,Float64}()) == -5.0
-
-        # Test mathematical functions
-        @test evaluate(OpExpr("sin", EarthSciSerialization.Expr[NumExpr(0.0)]), Dict{String,Float64}()) == 0.0
-        @test evaluate(OpExpr("cos", EarthSciSerialization.Expr[NumExpr(0.0)]), Dict{String,Float64}()) == 1.0
-        @test evaluate(OpExpr("exp", EarthSciSerialization.Expr[NumExpr(0.0)]), Dict{String,Float64}()) == 1.0
-        @test evaluate(OpExpr("log", EarthSciSerialization.Expr[NumExpr(1.0)]), Dict{String,Float64}()) == 0.0
-        @test evaluate(OpExpr("sqrt", EarthSciSerialization.Expr[NumExpr(4.0)]), Dict{String,Float64}()) == 2.0
-        @test evaluate(OpExpr("abs", EarthSciSerialization.Expr[NumExpr(-5.0)]), Dict{String,Float64}()) == 5.0
-
-        # Test constants
-        π_result = evaluate(OpExpr("π", EarthSciSerialization.Expr[]), Dict{String,Float64}())
-        @test π_result ≈ π
-        e_result = evaluate(OpExpr("e", EarthSciSerialization.Expr[]), Dict{String,Float64}())
-        @test e_result ≈ ℯ
-
-        # Test complex expression with variables
-        expr = OpExpr("+", EarthSciSerialization.Expr[OpExpr("*", EarthSciSerialization.Expr[VarExpr("x"), VarExpr("y")]), NumExpr(1.0)])
-        bindings = Dict("x" => 2.0, "y" => 3.0)
-        @test evaluate(expr, bindings) == 7.0
-
-        # Test error conditions
-        @test_throws DivideError evaluate(OpExpr("/", EarthSciSerialization.Expr[NumExpr(1.0), NumExpr(0.0)]), Dict{String,Float64}())
-        @test_throws DomainError evaluate(OpExpr("log", EarthSciSerialization.Expr[NumExpr(-1.0)]), Dict{String,Float64}())
-        @test_throws DomainError evaluate(OpExpr("sqrt", EarthSciSerialization.Expr[NumExpr(-1.0)]), Dict{String,Float64}())
-        @test_throws ArgumentError evaluate(OpExpr("unknown_op", EarthSciSerialization.Expr[NumExpr(1.0)]), Dict{String,Float64}())
-    end
+    # Numerical evaluation lives in `tree_walk.jl` (the official ESS Julia
+    # runner). Op-by-op evaluator coverage is in `tree_walk_test.jl`; this
+    # file only exercises the structural operations that remain in
+    # `expression.jl` (substitute / free_variables / contains / simplify).
 
     @testset "simplify function" begin
         # Test NumExpr and VarExpr (already simplified)
@@ -333,18 +288,17 @@ using JSON3
         simplified = simplify(substituted)
         @test simplified === VarExpr("x")
 
-        # Test free_variables + evaluate
+        # Free-variable analysis composes with the official tree-walk
+        # evaluator: every free variable must be in `bindings` for
+        # `evaluate_expr` to succeed.
         expr = OpExpr("+", EarthSciSerialization.Expr[OpExpr("*", EarthSciSerialization.Expr[VarExpr("x"), VarExpr("y")]), NumExpr(1.0)])
         vars = free_variables(expr)
         @test vars == Set(["x", "y"])
 
-        # Ensure we can evaluate with all free variables
         eval_bindings = Dict("x" => 2.0, "y" => 3.0)
-        result = evaluate(expr, eval_bindings)
-        @test result == 7.0
+        @test EarthSciSerialization.evaluate_expr(expr, eval_bindings) == 7.0
 
-        # Test error when missing a variable
         partial_bindings = Dict("x" => 2.0)  # missing "y"
-        @test_throws UnboundVariableError evaluate(expr, partial_bindings)
+        @test_throws UnboundVariableError EarthSciSerialization.evaluate_expr(expr, partial_bindings)
     end
 end

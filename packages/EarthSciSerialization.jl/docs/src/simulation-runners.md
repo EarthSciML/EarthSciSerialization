@@ -59,6 +59,21 @@ x_final = sol.u[end][var_map["x"]]
 The returned `var_map` is the state-name → index lookup so callers can probe
 the solution at specific variables.
 
+### Single-expression entry point — `evaluate_expr`
+
+For callers that need to evaluate one AST expression at a given set of
+numeric bindings (e.g. units fixture consumption tests, or `simplify`'s
+constant-folding step), [`evaluate_expr`](@ref) reuses the same compile
++ walker pipeline as `build_evaluator`:
+
+```julia
+val = evaluate_expr(expr, Dict("x" => 2.0, "y" => 3.0))
+```
+
+Adding an op to the walker transparently extends `evaluate_expr` — there
+is no parallel dispatch table. Unbound variables raise
+`UnboundVariableError`; everything else surfaces as `TreeWalkError`.
+
 ### Performance characteristics
 
 - **Build time independent of system size.** `build_evaluator` walks each
