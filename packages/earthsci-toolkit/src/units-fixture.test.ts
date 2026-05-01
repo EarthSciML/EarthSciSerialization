@@ -18,7 +18,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { evaluate } from './expression.js'
+import { evaluateExpression } from './codegen.js'
 import type { EsmFile, Expr, Model, ModelVariable, Test, Tolerance } from './types.js'
 
 const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'tests', 'valid')
@@ -44,7 +44,7 @@ function resolveTol(
 
 /**
  * Resolve every observed variable in `model` into `bindings` by iterated
- * substitution. The shared `evaluate` throws on the first unbound
+ * substitution. The codegen runner throws on the first unbound
  * variable; we swallow that as "dependencies not yet resolved" and
  * retry. Cycle-free fixtures converge in at most one pass per observed
  * variable.
@@ -60,7 +60,7 @@ function resolveObserved(model: Model, bindings: Map<string, number>): void {
       if (bindings.has(vname)) continue
       if (variable.expression === undefined) continue
       try {
-        bindings.set(vname, evaluate(variable.expression as Expr, bindings))
+        bindings.set(vname, evaluateExpression(variable.expression as Expr, bindings))
         progress = true
       } catch (err) {
         if (err instanceof Error && err.message.startsWith('Unbound variable')) {

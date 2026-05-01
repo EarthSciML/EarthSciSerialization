@@ -7,9 +7,9 @@
  * file-local `enums` block to resolve the symbol.
  *
  * The pass is a no-op when no `enums` block is present. After lowering,
- * the file's expression trees contain no `enum` ops; downstream
- * evaluators see only `const`. This keeps `evaluate()` simple and
- * mirrors the Julia `lower_enums!` pass.
+ * the file's expression trees contain no `enum` ops; the codegen
+ * runner (`compileExpression` / `evaluateExpression`) sees only
+ * `const`. Mirrors the Julia `lower_enums!` pass.
  *
  * Errors:
  *   - Reference to an undeclared enum name → ClosedFunctionError with a
