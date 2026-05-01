@@ -37,8 +37,9 @@ pub enum DeriveError {
 /// [`crate::flatten::flatten`] so the reaction-to-equation core lives in one place.
 ///
 /// Each reaction's base rate is enhanced with mass-action concentration factors
-/// (unless the rate expression already references substrate names). Net
-/// stoichiometry combines substrate and product contributions for each species.
+/// per spec §7.4 (the `rate` field is the coefficient; the runner always
+/// multiplies by the substrate product). Net stoichiometry combines substrate
+/// and product contributions for each species.
 pub fn lower_reactions_to_equations(
     reactions: &[crate::Reaction],
     species: &HashMap<String, Species>,
@@ -223,9 +224,10 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
 
 /// Enhance base rate law with mass action kinetics
 ///
-/// For mass action kinetics: rate_law = k * product(substrates^stoichiometry)
-/// If the rate already contains substrate concentrations, we use it as-is.
-/// If it's just a constant (rate coefficient), we multiply by substrate concentrations.
+/// Per `esm-spec.md` §7.4 the `rate` field is the rate COEFFICIENT.
+/// The full rate law is always `k * product(substrates^stoichiometry)` — the
+/// runner unconditionally multiplies the coefficient by the substrate product.
+/// Source reactions (no substrates) return the coefficient unchanged.
 fn enhance_rate_with_mass_action(
     rate: &Expr,
     substrates: &[crate::StoichiometricEntry],
@@ -235,17 +237,7 @@ fn enhance_rate_with_mass_action(
         return Ok(rate.clone());
     }
 
-    // Check if rate expression already contains substrate variables
-    let rate_contains_substrates = substrates
-        .iter()
-        .any(|s| contains_variable(rate, &s.species));
-
-    // If rate already contains substrate concentrations, use as-is
-    if rate_contains_substrates {
-        return Ok(rate.clone());
-    }
-
-    // Otherwise, enhance with mass action kinetics.
+    // Enhance with mass action kinetics (spec §7.4).
     // Stoichiometric coefficients are positive finite numbers — integer coefficients
     // unroll into repeated multiplication (`[A]·[A]·…`), fractional coefficients
     // (e.g. 1.5) lower to a `^` power expression.
@@ -295,15 +287,6 @@ fn enhance_rate_with_mass_action(
             dim: None,
             ..Default::default()
         }))
-    }
-}
-
-/// Check if an expression contains a specific variable
-fn contains_variable(expr: &Expr, var_name: &str) -> bool {
-    match expr {
-        Expr::Variable(name) => name == var_name,
-        Expr::Number(_) | Expr::Integer(_) => false,
-        Expr::Operator(node) => node.args.iter().any(|arg| contains_variable(arg, var_name)),
     }
 }
 
@@ -1447,31 +1430,6 @@ mod tests {
             });
             assert!(found, "Should have equation for species {species_name}");
         }
-    }
-
-    #[test]
-    fn test_contains_variable_helper() {
-        // Test the helper function directly
-        let expr1 = Expr::Variable("A".to_string());
-        assert!(contains_variable(&expr1, "A"));
-        assert!(!contains_variable(&expr1, "B"));
-
-        let expr2 = Expr::Number(42.0);
-        assert!(!contains_variable(&expr2, "A"));
-
-        let expr3 = Expr::Operator(ExpressionNode {
-            op: "*".to_string(),
-            args: vec![
-                Expr::Variable("k".to_string()),
-                Expr::Variable("A".to_string()),
-            ],
-            wrt: None,
-            dim: None,
-            ..Default::default()
-        });
-        assert!(contains_variable(&expr3, "A"));
-        assert!(contains_variable(&expr3, "k"));
-        assert!(!contains_variable(&expr3, "B"));
     }
 
     #[test]

@@ -57,25 +57,16 @@ def lower_reactions_to_equations(
             if reactant not in species_names:
                 raise ValueError(f"Reactant {reactant} not found in species list")
 
-        # The schema's ``rate`` field is a full rate expression, not a bare
-        # coefficient. If the user already wrote ``k*A*B`` we must NOT multiply
-        # by substrates again (that yields ``k*A^2*B^2``). Mirror Julia's
-        # ``mass_action_rate`` and Rust's ``enhance_rate_with_mass_action``:
-        # detect whether the rate already references any substrate and, if so,
-        # treat it as the full rate law; otherwise apply mass-action expansion.
+        # Per esm-spec.md §7.4 the ``rate`` field is the rate COEFFICIENT.
+        # The full mass-action rate law is always ``k · ∏ Sᵢ^nᵢ`` — the
+        # runner is responsible for the substrate product. No heuristic.
         rate_expr: Expr = reaction.rate_constant
-        substrate_names = list(reaction.reactants.keys())
-        rate_has_substrate = any(
-            _expr_contains_var(rate_expr, name) for name in substrate_names
-        )
-
-        if not rate_has_substrate:
-            for reactant, coeff in reaction.reactants.items():
-                if coeff == 1:
-                    rate_expr = _multiply_expressions(rate_expr, reactant)
-                else:
-                    power_expr = _power_expression(reactant, coeff)
-                    rate_expr = _multiply_expressions(rate_expr, power_expr)
+        for reactant, coeff in reaction.reactants.items():
+            if coeff == 1:
+                rate_expr = _multiply_expressions(rate_expr, reactant)
+            else:
+                power_expr = _power_expression(reactant, coeff)
+                rate_expr = _multiply_expressions(rate_expr, power_expr)
 
         # Apply net stoichiometry (product_coeff - reactant_coeff) to species rates.
         for species_name in species_names:
@@ -297,14 +288,3 @@ def _power_expression(base: Expr, exponent: float) -> Expr:
         return 1
 
     return ExprNode(op="^", args=[base, exponent])
-
-
-def _expr_contains_var(expr: Expr, name: str) -> bool:
-    """Return True if the Expr tree references a bare variable ``name``."""
-    if isinstance(expr, str):
-        return expr == name
-    if isinstance(expr, ExprNode):
-        for arg in expr.args:
-            if _expr_contains_var(arg, name):
-                return True
-    return False

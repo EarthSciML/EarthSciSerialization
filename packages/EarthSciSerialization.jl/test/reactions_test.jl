@@ -125,28 +125,11 @@ using EarthSciSerialization
         @test single_rate.op == "*"
         @test length(single_rate.args) == 2  # k_single * A
 
-        # gt-p60 regression: if the user-supplied rate already references
-        # substrate concentrations (i.e. they gave us a full rate law, not
-        # a rate coefficient), mass_action_rate MUST return it unchanged
-        # rather than double-applying the substrate multiplication and
-        # producing `k*A²*B²` for a `rate=k*A*B` bimolecular reaction.
-        full_rate = OpExpr("*",
-            EarthSciSerialization.Expr[VarExpr("k_full"),
-                                       VarExpr("A"), VarExpr("B")])
-        full_reaction = Reaction(
-            Dict("A" => 1, "B" => 1),
-            Dict("C" => 1),
-            full_rate,
-        )
-        full_result = mass_action_rate(full_reaction, species)
-        # Result is exactly the user's rate expression, unwrapped.
-        @test full_result === full_rate
-        @test full_result isa OpExpr
-        @test full_result.op == "*"
-        @test length(full_result.args) == 3
-        # Each substrate variable appears EXACTLY once in the rate law.
-        _uses_full(expr, name) = expr isa VarExpr ? expr.name == name :
-            (expr isa OpExpr && any(a -> _uses_full(a, name), expr.args))
+        # esm-06a: spec §7.4 makes `reaction.rate` the COEFFICIENT and the
+        # runner ALWAYS multiplies by the substrate product. There is no
+        # detect-and-skip heuristic: even rates that reference substrates
+        # (e.g. cancellation form `k/A`) still get the full mass-action
+        # multiplication, leaving simplification to the downstream solver.
         _count_full(expr, name) = if expr isa VarExpr
             expr.name == name ? 1 : 0
         elseif expr isa OpExpr
@@ -154,24 +137,23 @@ using EarthSciSerialization
         else
             0
         end
-        @test _count_full(full_result, "A") == 1
-        @test _count_full(full_result, "B") == 1
-        @test _count_full(full_result, "k_full") == 1
 
-        # Detection is per-substrate: a rate that references ONE substrate
-        # but not the other still opts out of mass-action multiplication
-        # (assumes the user knows what they're doing).
-        partial_rate = OpExpr("*",
-            EarthSciSerialization.Expr[VarExpr("k_partial"), VarExpr("A")])
-        partial_reaction = Reaction(
+        # Cancellation form: rate = k / A, substrates A + B.
+        # Result: (k/A) * A * B — substrate A appears twice (denominator + multiplier).
+        cancellation_rate = OpExpr("/",
+            EarthSciSerialization.Expr[VarExpr("k_cld"), VarExpr("A")])
+        cancellation_reaction = Reaction(
             Dict("A" => 1, "B" => 1),
             Dict("C" => 1),
-            partial_rate,
+            cancellation_rate,
         )
-        partial_result = mass_action_rate(partial_reaction, species)
-        @test partial_result === partial_rate
-        @test _count_full(partial_result, "A") == 1
-        @test _count_full(partial_result, "B") == 0
+        cancellation_result = mass_action_rate(cancellation_reaction, species)
+        @test cancellation_result isa OpExpr
+        @test cancellation_result.op == "*"
+        @test length(cancellation_result.args) == 3  # (k/A) * A * B
+        @test _count_full(cancellation_result, "A") == 2
+        @test _count_full(cancellation_result, "B") == 1
+        @test _count_full(cancellation_result, "k_cld") == 1
 
         # A rate that does NOT reference any substrate still gets the full
         # mass-action multiplication (the coefficient-only path is the

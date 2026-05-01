@@ -149,18 +149,11 @@ Compute the mass action rate expression for a reaction.
 
 Uses standard mass action kinetics: `rate = k * ∏[reactants]^stoichiometry`.
 
-`reaction.rate` is treated as the **rate coefficient** (e.g. `k` or a
-temperature-dependent Arrhenius expression). If it already references any
-substrate concentration, this function assumes the user supplied a full rate
-law and returns it unchanged — otherwise it multiplies the coefficient by
-`∏[substrate]^stoich` to form the full rate law. This detect-and-skip behavior
-matches `enhance_rate_with_mass_action` in `earthsci-toolkit-rs` for
-cross-language parity.
-
-Handles special cases:
-- Source reactions (no substrates): `rate = k` (no multiplication).
-- Rate already contains substrate variables: returned as-is to avoid
-  double-applying mass action (would produce `k*A²*B²` instead of `k*A*B`).
+Per `esm-spec.md` §7.4 the `reaction.rate` field is the rate **coefficient**
+(`k`, possibly a temperature-dependent expression). The full rate law is
+always `k · ∏ Sᵢ^nᵢ` — the runner unconditionally multiplies the coefficient
+by the substrate product. Source reactions (no substrates) return the
+coefficient unchanged.
 
 # Arguments
 - `reaction::Reaction`: The reaction to compute the rate for
@@ -175,9 +168,6 @@ Handles special cases:
 # For reaction A + B -> C with rate="k":
 # Returns: k * A * B
 #
-# For reaction A + B -> C with rate="k*A*B" (already a full rate law):
-# Returns: k * A * B  (unchanged — detected that A and B are already present)
-#
 # For source reaction -> A with rate="k":
 # Returns: k
 ```
@@ -190,15 +180,7 @@ function mass_action_rate(reaction::Reaction, species::Vector{Species})::EarthSc
         return rate_expr
     end
 
-    # Detect whether the user-supplied rate already references any substrate
-    # concentration. If it does, they gave us a full rate law — do not
-    # double-apply mass action (would yield `k*A²*B²` for `rate=k*A*B`).
-    if any(entry -> _expr_contains_var(rate_expr, entry.species),
-           reaction.substrates)
-        return rate_expr
-    end
-
-    # Otherwise multiply the rate coefficient by ∏[substrate]^stoich.
+    # Always multiply the rate coefficient by ∏[substrate]^stoich (spec §7.4).
     mass_action_terms = EarthSciSerialization.Expr[rate_expr]
     for entry in reaction.substrates
         species_expr = VarExpr(entry.species)
@@ -215,19 +197,4 @@ function mass_action_rate(reaction::Reaction, species::Vector{Species})::EarthSc
 
     return length(mass_action_terms) == 1 ? mass_action_terms[1] :
            OpExpr("*", mass_action_terms)
-end
-
-"""
-    _expr_contains_var(expr, name) -> Bool
-
-True if the Expr tree `expr` contains a `VarExpr` whose `name` matches.
-Recurses through `OpExpr` args; `NumExpr` always returns `false`.
-"""
-function _expr_contains_var(expr::EarthSciSerialization.Expr, name::String)::Bool
-    if expr isa VarExpr
-        return expr.name == name
-    elseif expr isa OpExpr
-        return any(a -> _expr_contains_var(a, name), expr.args)
-    end
-    return false
 end

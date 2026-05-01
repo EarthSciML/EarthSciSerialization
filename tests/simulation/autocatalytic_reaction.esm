@@ -67,14 +67,7 @@
               "stoichiometry": 2
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k1",
-              "A",
-              "B"
-            ]
-          }
+          "rate": "k1"
         },
         {
           "id": "R2",
@@ -91,18 +84,12 @@
               "stoichiometry": 1
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k2",
-              "B"
-            ]
-          }
+          "rate": "k2"
         }
       ],
       "tolerance": {
-        "rel": 1.0e-4,
-        "abs": 1.0e-8
+        "rel": 0.0001,
+        "abs": 1e-08
       },
       "tests": [
         {
@@ -119,12 +106,33 @@
           },
           "time_span": {
             "start": 0.0,
-            "end": 1.0e-6
+            "end": 1e-06
           },
           "assertions": [
-            { "variable": "A", "time": 0.0, "expected": 100.0, "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "B", "time": 0.0, "expected": 1.0,   "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "C", "time": 0.0, "expected": 0.0,   "tolerance": { "abs": 1.0e-12 } }
+            {
+              "variable": "A",
+              "time": 0.0,
+              "expected": 100.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "B",
+              "time": 0.0,
+              "expected": 1.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "C",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-12
+              }
+            }
           ]
         }
       ]

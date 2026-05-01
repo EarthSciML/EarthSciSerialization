@@ -66,19 +66,12 @@
               "stoichiometry": 1
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k",
-              "A",
-              "B"
-            ]
-          }
+          "rate": "k"
         }
       ],
       "tolerance": {
-        "rel": 1.0e-6,
-        "abs": 1.0e-10
+        "rel": 1e-06,
+        "abs": 1e-10
       },
       "tests": [
         {
@@ -98,18 +91,72 @@
             "end": 10.0
           },
           "assertions": [
-            { "variable": "A", "time": 0.0,  "expected": 1.0 },
-            { "variable": "B", "time": 0.0,  "expected": 1.0 },
-            { "variable": "C", "time": 0.0,  "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "D", "time": 0.0,  "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "A", "time": 5.0,  "expected": 0.6666666666666666 },
-            { "variable": "B", "time": 5.0,  "expected": 0.6666666666666666 },
-            { "variable": "C", "time": 5.0,  "expected": 0.3333333333333333 },
-            { "variable": "D", "time": 5.0,  "expected": 0.3333333333333333 },
-            { "variable": "A", "time": 10.0, "expected": 0.5 },
-            { "variable": "B", "time": 10.0, "expected": 0.5 },
-            { "variable": "C", "time": 10.0, "expected": 0.5 },
-            { "variable": "D", "time": 10.0, "expected": 0.5 }
+            {
+              "variable": "A",
+              "time": 0.0,
+              "expected": 1.0
+            },
+            {
+              "variable": "B",
+              "time": 0.0,
+              "expected": 1.0
+            },
+            {
+              "variable": "C",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "D",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "A",
+              "time": 5.0,
+              "expected": 0.6666666666666666
+            },
+            {
+              "variable": "B",
+              "time": 5.0,
+              "expected": 0.6666666666666666
+            },
+            {
+              "variable": "C",
+              "time": 5.0,
+              "expected": 0.3333333333333333
+            },
+            {
+              "variable": "D",
+              "time": 5.0,
+              "expected": 0.3333333333333333
+            },
+            {
+              "variable": "A",
+              "time": 10.0,
+              "expected": 0.5
+            },
+            {
+              "variable": "B",
+              "time": 10.0,
+              "expected": 0.5
+            },
+            {
+              "variable": "C",
+              "time": 10.0,
+              "expected": 0.5
+            },
+            {
+              "variable": "D",
+              "time": 10.0,
+              "expected": 0.5
+            }
           ]
         }
       ]
@@ -163,13 +210,7 @@
               "stoichiometry": 1
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k1",
-              "A"
-            ]
-          }
+          "rate": "k1"
         },
         {
           "id": "R2",
@@ -186,18 +227,12 @@
               "stoichiometry": 1
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k2",
-              "B"
-            ]
-          }
+          "rate": "k2"
         }
       ],
       "tolerance": {
-        "rel": 1.0e-6,
-        "abs": 1.0e-10
+        "rel": 1e-06,
+        "abs": 1e-10
       },
       "tests": [
         {
@@ -217,18 +252,72 @@
             "end": 5.0
           },
           "assertions": [
-            { "variable": "A", "time": 0.0, "expected": 1.0 },
-            { "variable": "B", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "C", "time": 0.0, "expected": 0.0, "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "A", "time": 1.0, "expected": 0.6065306597126334 },
-            { "variable": "B", "time": 1.0, "expected": 0.33571890242271123 },
-            { "variable": "C", "time": 1.0, "expected": 0.05775043786465538 },
-            { "variable": "A", "time": 2.0, "expected": 0.36787944117144233 },
-            { "variable": "B", "time": 2.0, "expected": 0.4523304873064602 },
-            { "variable": "C", "time": 2.0, "expected": 0.17979007152209747 },
-            { "variable": "A", "time": 5.0, "expected": 0.0820849986238988 },
-            { "variable": "B", "time": 5.0, "expected": 0.35261290381132754 },
-            { "variable": "C", "time": 5.0, "expected": 0.5653020975647737 }
+            {
+              "variable": "A",
+              "time": 0.0,
+              "expected": 1.0
+            },
+            {
+              "variable": "B",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "C",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "A",
+              "time": 1.0,
+              "expected": 0.6065306597126334
+            },
+            {
+              "variable": "B",
+              "time": 1.0,
+              "expected": 0.33571890242271124
+            },
+            {
+              "variable": "C",
+              "time": 1.0,
+              "expected": 0.05775043786465538
+            },
+            {
+              "variable": "A",
+              "time": 2.0,
+              "expected": 0.36787944117144233
+            },
+            {
+              "variable": "B",
+              "time": 2.0,
+              "expected": 0.4523304873064602
+            },
+            {
+              "variable": "C",
+              "time": 2.0,
+              "expected": 0.17979007152209747
+            },
+            {
+              "variable": "A",
+              "time": 5.0,
+              "expected": 0.0820849986238988
+            },
+            {
+              "variable": "B",
+              "time": 5.0,
+              "expected": 0.35261290381132754
+            },
+            {
+              "variable": "C",
+              "time": 5.0,
+              "expected": 0.5653020975647737
+            }
           ]
         }
       ]
@@ -290,26 +379,7 @@
               "stoichiometry": 4
             }
           ],
-          "rate": {
-            "op": "*",
-            "args": [
-              "k",
-              {
-                "op": "^",
-                "args": [
-                  "A",
-                  2
-                ]
-              },
-              {
-                "op": "^",
-                "args": [
-                  "B",
-                  3
-                ]
-              }
-            ]
-          }
+          "rate": "k"
         }
       ]
     }
@@ -422,8 +492,8 @@
         }
       ],
       "tolerance": {
-        "rel": 1.0e-6,
-        "abs": 1.0e-10
+        "rel": 1e-06,
+        "abs": 1e-10
       },
       "tests": [
         {
@@ -441,15 +511,63 @@
             "end": 6.283185307179586
           },
           "assertions": [
-            { "variable": "x", "time": 0.0,                "expected": 1.0 },
-            { "variable": "x", "time": 1.5707963267948966, "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
-            { "variable": "x", "time": 3.141592653589793,  "expected": -1.0 },
-            { "variable": "x", "time": 4.71238898038469,   "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
-            { "variable": "x", "time": 6.283185307179586,  "expected": 1.0 },
-            { "variable": "v", "time": 0.0,                "expected": 0.0,  "tolerance": { "abs": 1.0e-10 } },
-            { "variable": "v", "time": 1.5707963267948966, "expected": -1.0 },
-            { "variable": "v", "time": 3.141592653589793,  "expected": 0.0,  "tolerance": { "abs": 1.0e-6 } },
-            { "variable": "v", "time": 4.71238898038469,   "expected": 1.0 }
+            {
+              "variable": "x",
+              "time": 0.0,
+              "expected": 1.0
+            },
+            {
+              "variable": "x",
+              "time": 1.5707963267948966,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            },
+            {
+              "variable": "x",
+              "time": 3.141592653589793,
+              "expected": -1.0
+            },
+            {
+              "variable": "x",
+              "time": 4.71238898038469,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            },
+            {
+              "variable": "x",
+              "time": 6.283185307179586,
+              "expected": 1.0
+            },
+            {
+              "variable": "v",
+              "time": 0.0,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-10
+              }
+            },
+            {
+              "variable": "v",
+              "time": 1.5707963267948966,
+              "expected": -1.0
+            },
+            {
+              "variable": "v",
+              "time": 3.141592653589793,
+              "expected": 0.0,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            },
+            {
+              "variable": "v",
+              "time": 4.71238898038469,
+              "expected": 1.0
+            }
           ]
         }
       ]
