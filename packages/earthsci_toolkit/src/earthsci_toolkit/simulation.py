@@ -17,7 +17,7 @@ This enables atmospheric chemistry simulation in Python.
 import numpy as np
 import sympy as sp
 from typing import Dict, List, Set, Tuple, Optional, Union, Any, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Optional scipy import - only needed for actual simulation
 try:
@@ -431,6 +431,10 @@ def _flat_to_sympy_rhs(
         (already substituted so it depends only on differential states and
         free parameter symbols).
 
+    Observed variables (``flat.observed_variables``) are not handled here
+    — see :func:`_observed_to_sympy_value_exprs` for the parallel pass that
+    builds their value expressions from the same equation list.
+
     Raises
     ------
     SimulationError
@@ -570,6 +574,101 @@ def _flat_to_sympy_rhs(
     )
 
 
+def _observed_to_sympy_value_exprs(
+    flat: FlattenedSystem,
+    state_names: List[str],
+    parameter_names: List[str],
+    symbol_map: Dict[str, sp.Symbol],
+    algebraic_state_names: List[str],
+    algebraic_value_exprs: Dict[str, sp.Expr],
+) -> Tuple[List[str], Dict[str, sp.Expr]]:
+    """Build SymPy value expressions for ``flat.observed_variables``.
+
+    Mirrors the algebraic-state pass in :func:`_flat_to_sympy_rhs`: equations
+    whose LHS is an observed variable are collected, topologically sorted by
+    their dependence on each other, and folded so each body depends only on
+    differential states and parameters. Algebraic-state bodies (already
+    substituted to the same closed form) are folded in too.
+
+    This is a separate function from :func:`_flat_to_sympy_rhs` to keep the
+    latter's tuple-return shape stable for external callers (the EarthSciModels
+    inline-test runner pre-populates ``flat._simulate_compile_cache`` by
+    unpacking the original 6-tuple — adding observed there would break that
+    contract).
+
+    Returns
+    -------
+    observed_names:
+        Observed variables that have an algebraic body, in input order.
+    observed_value_exprs:
+        Per-observed SymPy expression for the variable's value, depending only
+        on differential-state symbols and free parameter symbols.
+    """
+    observed_names_all = list(flat.observed_variables.keys())
+    if not observed_names_all:
+        return [], {}
+
+    # Extend the symbol map with observed-variable symbols so substitution
+    # between observed bodies works without name collisions.
+    sym_map = dict(symbol_map)
+    for name in observed_names_all:
+        if name not in sym_map:
+            sym_map[name] = sp.Symbol(name)
+
+    obs_rhs: Dict[str, sp.Expr] = {}
+    for eq in flat.equations:
+        lhs = eq.lhs
+        if isinstance(lhs, str) and lhs in flat.observed_variables:
+            obs_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(sym_map))
+
+    observed_with_eq = [n for n in observed_names_all if n in obs_rhs]
+    if not observed_with_eq:
+        return [], {}
+
+    # Topologically sort observed vars by their direct dependence on each
+    # other; detect cycles (including self-reference).
+    obs_deps: Dict[str, List[str]] = {}
+    obs_set = set(observed_with_eq)
+    for n in observed_with_eq:
+        free = getattr(obs_rhs[n], "free_symbols", set()) or set()
+        obs_deps[n] = [str(s) for s in free if str(s) in obs_set]
+
+    sorted_obs: List[str] = []
+    obs_visited: Set[str] = set()
+    obs_in_progress: Set[str] = set()
+
+    def _obs_topo_visit(name: str, path: List[str]) -> None:
+        if name in obs_visited:
+            return
+        if name in obs_in_progress:
+            cycle = path[path.index(name):] + [name]
+            raise SimulationError(
+                "Cyclic observed equations detected: "
+                + " -> ".join(cycle)
+            )
+        obs_in_progress.add(name)
+        for dep in obs_deps[name]:
+            _obs_topo_visit(dep, path + [name])
+        obs_in_progress.discard(name)
+        obs_visited.add(name)
+        sorted_obs.append(name)
+
+    for n in observed_with_eq:
+        _obs_topo_visit(n, [])
+
+    full_alg_subs = {
+        sym_map[k]: algebraic_value_exprs[k] for k in algebraic_state_names
+    }
+    for n in sorted_obs:
+        if full_alg_subs:
+            obs_rhs[n] = obs_rhs[n].subs(full_alg_subs, simultaneous=False)
+        deps_subs = {sym_map[d]: obs_rhs[d] for d in obs_deps[n]}
+        if deps_subs:
+            obs_rhs[n] = obs_rhs[n].subs(deps_subs, simultaneous=False)
+
+    return observed_with_eq, obs_rhs
+
+
 @dataclass
 class _CompiledRhs:
     """Cached, parametric RHS for a FlattenedSystem.
@@ -586,8 +685,10 @@ class _CompiledRhs:
     parameter_names: List[str]
     symbol_map: Dict[str, sp.Symbol]
     algebraic_state_names: List[str]
-    rhs_vector_func: Callable
+    rhs_vector_func: Optional[Callable]
     algebraic_vector_func: Optional[Callable]
+    observed_names: List[str] = field(default_factory=list)
+    observed_vector_func: Optional[Callable] = None
 
 
 def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
@@ -602,10 +703,15 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     (e.g. an 8-plot scenario sharing one parsed model) hit the cache and
     pay near-zero compile cost.
 
-    Raises
-    ------
-    SimulationError
-        If the system has no state variables to integrate.
+    Notes
+    -----
+    Systems with zero state variables are supported when at least one
+    observed variable has an algebraic body — ``rhs_vector_func`` is then
+    ``None`` and only ``observed_vector_func`` is populated. simulate()
+    handles this case by skipping the integrator and sampling the observed
+    bodies on a synthetic time grid (cloud_albedo.esm and friends, where
+    every variable lands as an observed binding after MTK-style scalar
+    elimination).
     """
     cached = getattr(flat, "_simulate_compile_cache", None)
     if cached is not None:
@@ -620,18 +726,25 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
         algebraic_value_exprs,
     ) = _flat_to_sympy_rhs(flat)
 
-    if not state_names:
-        raise SimulationError(
-            "Flattened system has no state variables to integrate"
-        )
+    observed_names, observed_value_exprs = _observed_to_sympy_value_exprs(
+        flat,
+        state_names,
+        parameter_names,
+        symbol_map,
+        algebraic_state_names,
+        algebraic_value_exprs,
+    )
 
     state_symbols = [symbol_map[name] for name in state_names]
     param_symbols = [symbol_map[name] for name in parameter_names]
     all_args = state_symbols + param_symbols
 
-    rhs_vector_func = sp.lambdify(
-        all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=True
-    )
+    if state_names:
+        rhs_vector_func = sp.lambdify(
+            all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=True
+        )
+    else:
+        rhs_vector_func = None
 
     if algebraic_state_names:
         alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
@@ -641,6 +754,25 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     else:
         algebraic_vector_func = None
 
+    if observed_names:
+        obs_value_list = [observed_value_exprs[n] for n in observed_names]
+        # Observed bodies may legitimately reference the independent
+        # variable ``t`` (e.g. an analytical-solution observed in
+        # python_scipy_integration.esm: ``c0 * exp(-k*t)``). State and
+        # parameter symbols stay anonymous in ``rhs_vector_func`` /
+        # ``algebraic_vector_func`` because the integrator never feeds
+        # ``t`` into their bodies, but observed evaluation happens at the
+        # output time grid where ``t`` is a real value the caller must be
+        # able to bind. Plumbing ``t`` here keeps the runner generic
+        # without per-equation dispatch.
+        t_symbol = sp.Symbol("t")
+        observed_vector_func = sp.lambdify(
+            [t_symbol, *all_args], obs_value_list,
+            modules=_LAMBDIFY_MODULES, cse=True,
+        )
+    else:
+        observed_vector_func = None
+
     compiled = _CompiledRhs(
         state_names=state_names,
         parameter_names=parameter_names,
@@ -648,6 +780,8 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
         algebraic_state_names=algebraic_state_names,
         rhs_vector_func=rhs_vector_func,
         algebraic_vector_func=algebraic_vector_func,
+        observed_names=observed_names,
+        observed_vector_func=observed_vector_func,
     )
     try:
         flat._simulate_compile_cache = compiled
@@ -1041,8 +1175,45 @@ def simulate(
         algebraic_state_names = compiled.algebraic_state_names
         rhs_vector_func = compiled.rhs_vector_func
         algebraic_vector_func = compiled.algebraic_vector_func
+        observed_names = compiled.observed_names
+        observed_vector_func = compiled.observed_vector_func
 
         param_values = _resolve_parameter_values(flat, parameter_names, parameters)
+
+        # Observed-only path: no state variables to integrate, but the model
+        # has observed bindings whose values we still need to expose to the
+        # caller (e.g. tests that assert against algebraic-only quantities
+        # like cloud_albedo's R_c and γ). Sample observed bodies on a
+        # synthetic uniform grid over tspan.
+        if not state_names:
+            t0_, t1_ = float(tspan[0]), float(tspan[1])
+            t_out = np.linspace(t0_, t1_, 1001)
+            if observed_names and observed_vector_func is not None:
+                obs_vals = observed_vector_func(t_out, *param_values)
+                y_out = np.empty((len(observed_names), t_out.size), dtype=float)
+                for i, val in enumerate(obs_vals):
+                    if np.ndim(val) == 0:
+                        y_out[i, :] = float(val)
+                    else:
+                        arr = np.asarray(val, dtype=float)
+                        if arr.size == 1:
+                            y_out[i, :] = float(arr.reshape(-1)[0])
+                        elif arr.size == t_out.size:
+                            y_out[i, :] = arr
+                        else:
+                            y_out[i, :] = float(arr.reshape(-1)[0])
+            else:
+                y_out = np.empty((0, t_out.size), dtype=float)
+            return SimulationResult(
+                t=t_out,
+                y=y_out,
+                vars=list(observed_names),
+                success=True,
+                message="The solver successfully reached the end of the integration interval.",
+                nfev=0,
+                njev=0,
+                nlu=0,
+            )
 
         # Initial conditions: dot-namespaced wins, then bare name, then default.
         # Algebraic-only states get their consistent value computed below from
@@ -1129,10 +1300,33 @@ def simulate(
                 else:
                     y_out[idx, :] = np.asarray(val, dtype=float)
 
+        # Compute observed-variable trajectories from the (now algebraic-state-
+        # corrected) state trajectory and append them to the result so callers
+        # can query observed quantities (e.g. cloud_albedo's R_c and γ) on the
+        # same time grid as the states.
+        out_vars: List[str] = list(state_names)
+        if observed_names and y_out.size and observed_vector_func is not None:
+            state_arrays = [y_out[i, :] for i in range(len(state_names))]
+            obs_results = observed_vector_func(t_out, *state_arrays, *param_values)
+            obs_block = np.empty((len(observed_names), t_out.size), dtype=float)
+            for i, val in enumerate(obs_results):
+                if np.ndim(val) == 0:
+                    obs_block[i, :] = float(val)
+                else:
+                    arr = np.asarray(val, dtype=float)
+                    if arr.size == 1:
+                        obs_block[i, :] = float(arr.reshape(-1)[0])
+                    elif arr.size == t_out.size:
+                        obs_block[i, :] = arr
+                    else:
+                        obs_block[i, :] = float(arr.reshape(-1)[0])
+            y_out = np.vstack([y_out, obs_block])
+            out_vars.extend(observed_names)
+
         return SimulationResult(
             t=t_out,
             y=y_out,
-            vars=state_names,
+            vars=out_vars,
             success=sol.success,
             message=sol.message,
             nfev=sol.nfev,

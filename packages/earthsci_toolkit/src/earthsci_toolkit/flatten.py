@@ -491,6 +491,19 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
 
     # _var is a placeholder used by operator_compose; never namespace it.
     leave_alone = {"t", "_var"}
+    # Observed variables that carry an explicit `expression` define an
+    # algebraic relation `name = expression`. Emit them as namespaced
+    # equations so simulate() and codegen can inline them. Without this
+    # step the body is dropped at flatten time, leaving any reference to
+    # the observed name as an unbound free symbol downstream.
+    for var_name, var in model.variables.items():
+        if var.type != "observed" or var.expression is None:
+            continue
+        namespaced = f"{full_prefix}.{var_name}"
+        ns_rhs = _namespace_expr(var.expression, full_prefix, leave_alone=leave_alone)
+        component.equations.append(FlattenedEquation(
+            lhs=namespaced, rhs=ns_rhs, source_system=full_prefix,
+        ))
     for eq in model.equations:
         ns_lhs = _namespace_expr(eq.lhs, full_prefix, leave_alone=leave_alone)
         ns_rhs = _namespace_expr(eq.rhs, full_prefix, leave_alone=leave_alone)

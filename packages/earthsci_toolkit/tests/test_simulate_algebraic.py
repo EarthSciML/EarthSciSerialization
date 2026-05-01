@@ -254,3 +254,116 @@ def test_simulate_pure_ode_model_unaffected_by_algebraic_pass():
     assert np.allclose(total, 1.0, atol=1e-5)
     # Closed-form decay: A(t) = exp(-k t).
     assert np.isclose(result.y[a_idx, -1], np.exp(-0.5 * 5.0), rtol=1e-3)
+
+
+def test_simulate_observed_only_model_emits_observed_trajectories():
+    """A model with zero state variables but observed bindings (e.g. the
+    cloud_albedo two-stream scaffold) must still simulate cleanly: the
+    runner samples the observed bodies on a synthetic time grid so inline
+    tests can assert against R_c / γ (esm-97q)."""
+    variables = {
+        "tau_c": ModelVariable(type="parameter", default=10.0),
+        "g": ModelVariable(type="parameter", default=0.85),
+        "gamma": ModelVariable(
+            type="observed",
+            expression=ExprNode(
+                op="/",
+                args=[
+                    2,
+                    ExprNode(
+                        op="*",
+                        args=[
+                            1.7320508075688772,
+                            ExprNode(
+                                op="+",
+                                args=[
+                                    1,
+                                    ExprNode(op="*", args=[-1, "g"]),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+        "R_c": ModelVariable(
+            type="observed",
+            expression=ExprNode(
+                op="/",
+                args=[
+                    "tau_c",
+                    ExprNode(op="+", args=["tau_c", "gamma"]),
+                ],
+            ),
+        ),
+    }
+    model = Model(name="CloudAlbedo", variables=variables, equations=[])
+    file = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="cloud_albedo"),
+        models={"CloudAlbedo": model},
+    )
+
+    result = simulate(
+        file,
+        tspan=(0.0, 1.0),
+        parameters={"tau_c": 10.0, "g": 0.85},
+        initial_conditions={},
+    )
+    assert result.success, f"simulate() failed: {result.message}"
+
+    assert "CloudAlbedo.gamma" in result.vars
+    assert "CloudAlbedo.R_c" in result.vars
+
+    g_idx = result.vars.index("CloudAlbedo.gamma")
+    rc_idx = result.vars.index("CloudAlbedo.R_c")
+    # γ ≈ 7.698 and R_c(τ=10) ≈ 0.5650 are the upstream Aerosol.jl
+    # Figure 24.16 reference values.
+    assert np.isclose(result.y[g_idx, 0], 7.698003589195009, rtol=1e-12)
+    assert np.isclose(result.y[rc_idx, 0], 0.5650354826521339, rtol=1e-12)
+    # Constant-in-time: end-of-tspan sample matches t=0 sample.
+    assert np.isclose(result.y[g_idx, -1], result.y[g_idx, 0])
+    assert np.isclose(result.y[rc_idx, -1], result.y[rc_idx, 0])
+
+
+def test_simulate_state_plus_observed_emits_observed_alongside_states():
+    """A model with both differential states and observed bindings must
+    expose both in the result vector. The observed expression may legally
+    reference the independent variable ``t``."""
+    variables = {
+        "k": ModelVariable(type="parameter", default=0.5),
+        "C": ModelVariable(type="state", default=1.0),
+        "C_analytical": ModelVariable(
+            type="observed",
+            expression=ExprNode(
+                op="exp",
+                args=[ExprNode(op="*", args=[-1, "k", "t"])],
+            ),
+        ),
+    }
+    eq_dC = Equation(
+        lhs=ExprNode(op="D", args=["C"], wrt="t"),
+        rhs=ExprNode(op="*", args=[-1, "k", "C"]),
+    )
+    model = Model(name="Decay", variables=variables, equations=[eq_dC])
+    file = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="decay"),
+        models={"Decay": model},
+    )
+
+    result = simulate(
+        file,
+        tspan=(0.0, 2.0),
+        parameters={"k": 0.5},
+        initial_conditions={"C": 1.0},
+    )
+    assert result.success, f"simulate() failed: {result.message}"
+
+    c_idx = result.vars.index("Decay.C")
+    a_idx = result.vars.index("Decay.C_analytical")
+    # Numerical state and analytical observed agree at every output time.
+    assert np.allclose(result.y[c_idx, :], result.y[a_idx, :], rtol=1e-3)
+    # Time dependence in the observed body is honored: end value equals
+    # the closed-form exp(-k * t_end).
+    assert np.isclose(result.y[a_idx, -1], np.exp(-0.5 * 2.0), rtol=1e-12)
