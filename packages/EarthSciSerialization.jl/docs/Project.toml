@@ -4,3 +4,4 @@ EarthSciSerialization = "c7bf5e87-b31b-4281-bdce-ffb8a46ec87c"
 
 [compat]
 Documenter = "1"
+EarthSciSerialization = "0.0.3"
