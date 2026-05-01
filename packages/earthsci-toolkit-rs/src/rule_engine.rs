@@ -1053,17 +1053,12 @@ fn parse_rule_binding(
             format!("rule `{rule_name}`: bindings.{binding_name} must be an object"),
         )
     })?;
-    let kind_raw = obj
-        .get("kind")
-        .and_then(|s| s.as_str())
-        .ok_or_else(|| {
-            RuleEngineError::new(
-                "E_RULE_PARSE",
-                format!(
-                    "rule `{rule_name}`: bindings.{binding_name} missing required string `kind`"
-                ),
-            )
-        })?;
+    let kind_raw = obj.get("kind").and_then(|s| s.as_str()).ok_or_else(|| {
+        RuleEngineError::new(
+            "E_RULE_PARSE",
+            format!("rule `{rule_name}`: bindings.{binding_name} missing required string `kind`"),
+        )
+    })?;
     let kind = RuleBindingKind::from_str(kind_raw).ok_or_else(|| {
         RuleEngineError::new(
             "E_RULE_PARSE",
@@ -1083,9 +1078,7 @@ fn parse_rule_binding(
         Some(_) => {
             return Err(RuleEngineError::new(
                 "E_RULE_PARSE",
-                format!(
-                    "rule `{rule_name}`: bindings.{binding_name}.description must be a string"
-                ),
+                format!("rule `{rule_name}`: bindings.{binding_name}.description must be a string"),
             ));
         }
     };

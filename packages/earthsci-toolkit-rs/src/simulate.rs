@@ -428,18 +428,19 @@ impl Compiled {
                 collect_state_refs(expr, &state_index, &alg_membership, &mut alg_deps_dense[i]);
             }
         }
-        let algebraic_topo = topo_sort_subset(&algebraic_indices, &alg_deps_dense).map_err(
-            |cycle| CompileError::InterpreterBuildError {
-                details: format!(
-                    "Cyclic algebraic equations detected: {}",
-                    cycle
-                        .into_iter()
-                        .map(|i| state_names[i].clone())
-                        .collect::<Vec<_>>()
-                        .join(" -> ")
-                ),
-            },
-        )?;
+        let algebraic_topo =
+            topo_sort_subset(&algebraic_indices, &alg_deps_dense).map_err(|cycle| {
+                CompileError::InterpreterBuildError {
+                    details: format!(
+                        "Cyclic algebraic equations detected: {}",
+                        cycle
+                            .into_iter()
+                            .map(|i| state_names[i].clone())
+                            .collect::<Vec<_>>()
+                            .join(" -> ")
+                    ),
+                }
+            })?;
 
         // (9) Build per-state classification + resolved expression.
         let mut state_kinds: Vec<StateKind> = Vec::with_capacity(state_names.len());

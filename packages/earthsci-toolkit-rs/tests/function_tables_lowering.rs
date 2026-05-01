@@ -63,7 +63,10 @@ fn resolve_output_index(node: &ExpressionNode, outputs: Option<&[String]>) -> us
 /// Resolve a per-axis input expression to a scalar value, given the model's
 /// variables map (parameter / state defaults). Numeric literals pass through;
 /// variable references look up `default`.
-fn resolve_axis_value(expr: &Expr, vars: &std::collections::HashMap<String, earthsci_toolkit::ModelVariable>) -> f64 {
+fn resolve_axis_value(
+    expr: &Expr,
+    vars: &std::collections::HashMap<String, earthsci_toolkit::ModelVariable>,
+) -> f64 {
     match expr {
         Expr::Number(n) => *n,
         Expr::Integer(i) => *i as f64,
@@ -72,7 +75,9 @@ fn resolve_axis_value(expr: &Expr, vars: &std::collections::HashMap<String, eart
             .unwrap_or_else(|| panic!("axis input variable {name:?} not in model"))
             .default
             .expect("variable has default"),
-        Expr::Operator(_) => panic!("complex axis input expression not exercised by these fixtures"),
+        Expr::Operator(_) => {
+            panic!("complex axis input expression not exercised by these fixtures")
+        }
     }
 }
 
@@ -101,10 +106,7 @@ fn lower_and_evaluate(
     let table = tables
         .get(table_id)
         .unwrap_or_else(|| panic!("unknown table {table_id:?}"));
-    let axes_map = node
-        .axes
-        .as_ref()
-        .expect("table_lookup.axes required");
+    let axes_map = node.axes.as_ref().expect("table_lookup.axes required");
 
     let kind = table.interpolation.as_deref().unwrap_or("linear");
     let out_idx = resolve_output_index(node, table.outputs.as_deref());
@@ -240,8 +242,14 @@ fn linear_fixture_lowering_is_bit_equivalent() {
 
     let node = first_table_lookup(&file, "M", 0);
     let lowered = lower_and_evaluate(node, &file, vars);
-    let reference =
-        reference_inline_const("sigma_O3_298", None, None, &[("lambda_idx", "lambda")], &file, vars);
+    let reference = reference_inline_const(
+        "sigma_O3_298",
+        None,
+        None,
+        &[("lambda_idx", "lambda")],
+        &file,
+        vars,
+    );
 
     // abs: 0, rel: 0 — both arms feed the same evaluator, so the lowering
     // is bit-equivalent to the inline-const reference by construction.
