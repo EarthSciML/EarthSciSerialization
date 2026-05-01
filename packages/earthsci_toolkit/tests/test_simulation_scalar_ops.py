@@ -17,7 +17,8 @@ import pytest
 import sympy as sp
 
 from earthsci_toolkit.esm_types import ExprNode
-from earthsci_toolkit.simulation import _expr_to_sympy, SimulationError
+from earthsci_toolkit.simulation import SimulationError
+from earthsci_toolkit.sympy_bridge import _expr_to_sympy
 
 
 def _node(op: str, *args) -> ExprNode:
@@ -42,12 +43,12 @@ def symbol_map(x_sym, y_sym):
 class TestAbs:
     def test_abs_positive(self, symbol_map, x_sym):
         # ``_expr_to_sympy`` returns the placeholder
-        # ``simulation._ess_numeric_abs`` rather than ``sp.Abs`` so
+        # ``sympy_bridge._ess_numeric_abs`` rather than ``sp.Abs`` so
         # SymPy's construction-time canonical rewrites for absolute
         # value cannot fire (esm-5gk). The placeholder evaluates
         # numerically on literal numbers, so substitution-based checks
         # behave identically to ``sp.Abs``.
-        from earthsci_toolkit.simulation import _ess_numeric_abs
+        from earthsci_toolkit.sympy_bridge import _ess_numeric_abs
         result = _expr_to_sympy(_node("abs", "x"), symbol_map)
         assert result.func is _ess_numeric_abs
         assert result.args == (x_sym,)
