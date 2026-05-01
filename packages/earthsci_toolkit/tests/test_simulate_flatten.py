@@ -221,3 +221,56 @@ def test_compile_flat_rhs_returns_parametric_form():
     args = [1.0] * n_states + [0.5] * n_params
     out = compiled.rhs_vector_func(*args)
     assert len(out) == n_states
+
+
+# ----------------------------------------------------------------------------
+# Public ``cse`` kwarg (esm-7tw): downstream consumers (e.g. ESM's inline-test
+# runner) need to drive simulate() with cse=False without hand-building
+# _CompiledRhs to flip the lambdify flag.
+# ----------------------------------------------------------------------------
+
+
+def test_simulate_accepts_cse_kwarg_and_matches_default():
+    """simulate(..., cse=False) produces the same trajectory as the default."""
+    flat = flatten(_decay_file())
+    r_default = simulate(
+        flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0}
+    )
+    r_no_cse = simulate(
+        flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0},
+        cse=False,
+    )
+    assert r_default.success and r_no_cse.success
+    a_idx = r_default.vars.index("Decay.A")
+    assert abs(r_default.y[a_idx, -1] - r_no_cse.y[a_idx, -1]) < 1e-8
+
+
+def test_simulate_caches_cse_true_and_false_independently():
+    """Flipping cse must not invalidate the other compile's cache."""
+    flat = flatten(_decay_file())
+
+    simulate(flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0})
+    cse_true_cache = flat._simulate_compile_cache
+    assert cse_true_cache is not None
+    assert getattr(flat, "_simulate_compile_cache_no_cse", None) is None
+
+    simulate(
+        flat, tspan=(0.0, 1.0), initial_conditions={"A": 1.0, "B": 0.0},
+        cse=False,
+    )
+    cse_false_cache = flat._simulate_compile_cache_no_cse
+    assert cse_false_cache is not None
+    # cse=True cache untouched.
+    assert flat._simulate_compile_cache is cse_true_cache
+    # The two compiles produce different lambdified callables.
+    assert cse_false_cache.rhs_vector_func is not cse_true_cache.rhs_vector_func
+
+
+def test_compile_flat_rhs_cse_false_skips_lambdify_cse():
+    """_compile_flat_rhs(flat, cse=False) is the documented bypass for the
+    lambdify CSE pass and stores its result under a separate cache attribute."""
+    flat = flatten(_decay_file())
+    compiled = _compile_flat_rhs(flat, cse=False)
+    assert compiled is flat._simulate_compile_cache_no_cse
+    # And the legacy attribute is reserved for the cse=True compile.
+    assert getattr(flat, "_simulate_compile_cache", None) is None

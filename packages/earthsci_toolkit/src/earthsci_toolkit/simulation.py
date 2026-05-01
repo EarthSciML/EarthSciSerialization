@@ -691,7 +691,7 @@ class _CompiledRhs:
     observed_vector_func: Optional[Callable] = None
 
 
-def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
+def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     """Compile (and cache) the RHS of a FlattenedSystem to numpy callables.
 
     The compile step (`_flat_to_sympy_rhs` + vector ``sp.lambdify`` with
@@ -703,6 +703,20 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     (e.g. an 8-plot scenario sharing one parsed model) hit the cache and
     pay near-zero compile cost.
 
+    Parameters
+    ----------
+    flat:
+        The flattened system to compile.
+    cse:
+        Forwarded to :func:`sympy.lambdify` for the rhs / algebraic / observed
+        functions. ``True`` (default) shares common subexpressions across the
+        full vector, which is the production setting and dominates simulate()
+        cost-wise. ``False`` disables CSE — useful for diagnostics that need
+        to bypass SymPy's construction-time canonical rewrites (e.g. the
+        ``cse=False`` non-finite-derivative regression captured by esm-5gk).
+        Compiles for ``cse=True`` and ``cse=False`` are cached independently
+        on ``flat`` so flipping the flag does not invalidate the other.
+
     Notes
     -----
     Systems with zero state variables are supported when at least one
@@ -713,7 +727,11 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     every variable lands as an observed binding after MTK-style scalar
     elimination).
     """
-    cached = getattr(flat, "_simulate_compile_cache", None)
+    # cse=True keeps the legacy cache attribute name so external callers
+    # (notably the EarthSciModels inline-test runner pre-population path
+    # documented above _observed_to_sympy_value_exprs) continue to work.
+    cache_attr = "_simulate_compile_cache" if cse else "_simulate_compile_cache_no_cse"
+    cached = getattr(flat, cache_attr, None)
     if cached is not None:
         return cached
 
@@ -768,7 +786,7 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
 
     if state_names:
         rhs_vector_func = sp.lambdify(
-            all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=True
+            all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=cse
         )
     else:
         rhs_vector_func = None
@@ -776,7 +794,7 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     if algebraic_state_names:
         alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
         algebraic_vector_func = sp.lambdify(
-            all_args, alg_value_list, modules=_LAMBDIFY_MODULES, cse=True
+            all_args, alg_value_list, modules=_LAMBDIFY_MODULES, cse=cse
         )
     else:
         algebraic_vector_func = None
@@ -795,7 +813,7 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
         t_symbol = sp.Symbol("t")
         observed_vector_func = sp.lambdify(
             [t_symbol, *all_args], obs_value_list,
-            modules=_LAMBDIFY_MODULES, cse=True,
+            modules=_LAMBDIFY_MODULES, cse=cse,
         )
     else:
         observed_vector_func = None
@@ -811,7 +829,7 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
         observed_vector_func=observed_vector_func,
     )
     try:
-        flat._simulate_compile_cache = compiled
+        setattr(flat, cache_attr, compiled)
     except (AttributeError, TypeError):
         # FlattenedSystem instances are dataclasses without __slots__, so
         # attribute assignment normally succeeds. Fall back to no-cache if
@@ -1109,6 +1127,7 @@ def simulate(
     file: Optional[EsmFile] = None,
     rtol: float = 1e-10,
     atol: float = 1e-14,
+    cse: bool = True,
 ) -> SimulationResult:
     """Simulate an ESM model via the flattened representation (spec §4.7.5).
 
@@ -1137,6 +1156,15 @@ def simulate(
         :func:`scipy.integrate.solve_ivp`. Defaults are ``1e-10`` / ``1e-12``,
         matching Julia's ``reltol`` / ``abstol`` so fixture assertions calibrated
         against the Julia reference hold under the Python backend.
+    cse:
+        Forwarded to :func:`sympy.lambdify` when compiling the rhs / algebraic /
+        observed functions. ``True`` (default) shares common subexpressions
+        across the full vector and is the production setting. Pass ``False``
+        to bypass SymPy's CSE pass — diagnostic / regression code paths
+        (e.g. the cse=False non-finite-derivative case in esm-5gk) need this
+        to compare lambdified output against an un-CSE'd reference. Compiles
+        for ``cse=True`` and ``cse=False`` are cached separately on the
+        FlattenedSystem so flipping the flag does not invalidate the other.
 
     Raises
     ------
@@ -1195,7 +1223,7 @@ def simulate(
         )
 
     try:
-        compiled = _compile_flat_rhs(flat)
+        compiled = _compile_flat_rhs(flat, cse=cse)
         state_names = compiled.state_names
         parameter_names = compiled.parameter_names
         symbol_map = compiled.symbol_map
