@@ -312,6 +312,33 @@ def test_flatten_conflicting_derivatives_raise():
         flatten(file)
 
 
+def test_flatten_same_system_multi_lhs_passes_through():
+    """A single source system with two algebraic equations sharing an LHS is a
+    legitimate DAE (e.g. equilibrium model: K = f(T) AND K = product([H+], [OH-])).
+    flatten() must not raise — only cross-system conflicts are errors."""
+    K_var = ModelVariable(type="state")
+    OH_var = ModelVariable(type="state")
+    H_var = ModelVariable(type="parameter", default=1e-4)
+    Kref_var = ModelVariable(type="parameter", default=1e-8)
+
+    eq_K_temp = Equation(lhs="K", rhs="K_ref")
+    eq_K_prod = Equation(
+        lhs="K",
+        rhs=ExprNode(op="*", args=["H", "OH"]),
+    )
+
+    model = Model(
+        name="Eq",
+        variables={"K": K_var, "OH": OH_var, "H": H_var, "K_ref": Kref_var},
+        equations=[eq_K_temp, eq_K_prod],
+    )
+    file = _empty_file(models={"Eq": model})
+
+    flat = flatten(file)
+    eqs_for_K = [e for e in flat.equations if e.lhs_str == "Eq.K"]
+    assert len(eqs_for_K) == 2
+
+
 # ----------------------------------------------------------------------------
 # Empty input still raises
 # ----------------------------------------------------------------------------

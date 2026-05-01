@@ -897,9 +897,22 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
                 if dep in seen_lhs:
                     existing = seen_lhs[dep]
                     if _expr_to_string(existing.rhs) != _expr_to_string(eq.rhs):
-                        # Only flag conflicts when neither side uses array ops.
-                        if not (
-                            _has_array_op(existing.lhs) or _has_array_op(existing.rhs)
+                        # A single source system that authored two equations
+                        # with the same scalar LHS expressed an algebraic
+                        # constraint on purpose — e.g. an equilibrium model
+                        # where K = f(T) AND K = [H+][OH-]. The second equation
+                        # constrains a different unknown on its RHS. Pass it
+                        # through; structural simplification in the simulation
+                        # tier resolves which variable each equation defines.
+                        # Cross-system conflicts (typically introduced by
+                        # variable_map coupling that unifies two state vars
+                        # without operator_compose merging) remain errors.
+                        if (
+                            existing.source_system != eq.source_system
+                            and not (
+                                _has_array_op(existing.lhs)
+                                or _has_array_op(existing.rhs)
+                            )
                         ):
                             raise ConflictingDerivativeError(
                                 f"Two systems define non-additive equations for "

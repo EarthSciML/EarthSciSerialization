@@ -172,6 +172,50 @@ def test_simulate_rejects_cyclic_algebraic_equations():
     assert "Cyclic algebraic equations detected" in result.message
 
 
+def test_simulate_same_lhs_dae_alias_eliminates_to_unbound_state():
+    """A single source system may author two algebraic equations with the same
+    LHS — e.g. ``K = f(T)`` AND ``K = [H+] * [OH-]`` — as a legitimate DAE.
+    The simulator must rewrite the second equation into an alias for the
+    unbound state on its RHS (here ``[OH-] = K / [H+]``). Mirrors the
+    structural shape of components/aerosol/aq_eq/water.esm."""
+    variables = {
+        "T": ModelVariable(type="parameter", default=298.0),
+        "H_plus": ModelVariable(type="parameter", default=1.0e-4),
+        "K_w_298": ModelVariable(type="parameter", default=1.0e-8),
+        "K_w": ModelVariable(type="state"),
+        "OH_minus": ModelVariable(type="state"),
+    }
+    eq_K_temp = Equation(lhs="K_w", rhs="K_w_298")
+    eq_K_product = Equation(
+        lhs="K_w",
+        rhs=ExprNode(op="*", args=["H_plus", "OH_minus"]),
+    )
+    model = Model(
+        name="Eq",
+        variables=variables,
+        equations=[eq_K_temp, eq_K_product],
+    )
+    file = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="EquilibriumDAE"),
+        models={"Eq": model},
+    )
+
+    result = simulate(
+        file,
+        tspan=(0.0, 1.0),
+        parameters={"T": 298.0, "H_plus": 1.0e-4},
+        initial_conditions={},
+    )
+    assert result.success, f"simulate() failed: {result.message}"
+
+    k_idx = result.vars.index("Eq.K_w")
+    oh_idx = result.vars.index("Eq.OH_minus")
+    assert np.isclose(result.y[k_idx, 0], 1.0e-8, rtol=1e-10)
+    # OH_minus = K_w / H_plus = 1e-8 / 1e-4 = 1e-4
+    assert np.isclose(result.y[oh_idx, 0], 1.0e-4, rtol=1e-10)
+
+
 def test_simulate_pure_ode_model_unaffected_by_algebraic_pass():
     """A reaction system with no algebraic equations must integrate as before."""
     species_a = Species(name="A", default=1.0)

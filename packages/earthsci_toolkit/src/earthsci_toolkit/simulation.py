@@ -454,7 +454,44 @@ def _flat_to_sympy_rhs(
                 diff_rhs[inner] = _expr_to_sympy(eq.rhs, dict(symbol_map))
                 continue
         if isinstance(lhs, str) and lhs in flat.state_variables:
-            alg_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(symbol_map))
+            rhs_sym = _expr_to_sympy(eq.rhs, dict(symbol_map))
+            if lhs in alg_rhs:
+                # Same-system DAE: a previous equation already defines this
+                # variable. Treat ``lhs = rhs_sym`` as an algebraic constraint
+                # on a different unbound state variable that appears in the
+                # RHS. This is the scalar analogue of MTK's alias-elimination
+                # pass and is required for equilibrium models that author
+                # K = f(T) alongside K = product([H+], [OH-]).
+                free_states = []
+                seen_states: Set[str] = set()
+                for s in rhs_sym.free_symbols:
+                    nm = str(s)
+                    if (
+                        nm in flat.state_variables
+                        and nm not in alg_rhs
+                        and nm not in diff_rhs
+                        and nm != lhs
+                        and nm not in seen_states
+                    ):
+                        free_states.append(s)
+                        seen_states.add(nm)
+                if len(free_states) >= 1:
+                    target = free_states[0]
+                    target_name = str(target)
+                    try:
+                        solutions = sp.solve(
+                            sp.Eq(symbol_map[lhs], rhs_sym), target,
+                        )
+                    except Exception:
+                        solutions = []
+                    if solutions:
+                        alg_rhs[target_name] = sp.sympify(solutions[0])
+                        continue
+                # No unbound state variable on the RHS — the equation is
+                # either a redundant restatement or a genuine contradiction.
+                # Skip it; downstream output will surface any inconsistency.
+                continue
+            alg_rhs[lhs] = rhs_sym
             continue
         # Other LHS shapes (e.g. array ops) are handled by the NumPy path.
 
