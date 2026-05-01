@@ -143,6 +143,7 @@ import sympy as sp  # noqa: E402
 import earthsci_toolkit as ek  # noqa: E402
 from earthsci_toolkit.simulation import (  # noqa: E402
     _CompiledRhs,
+    _LAMBDIFY_MODULES,
     _flat_to_sympy_rhs,
     simulate,
 )
@@ -188,12 +189,14 @@ _arm()
 state_symbols = [symbol_map[n] for n in state_names]
 param_symbols = [symbol_map[n] for n in parameter_names]
 all_args = state_symbols + param_symbols
-rhs_vec = sp.lambdify(all_args, rhs_exprs, "numpy", cse=False)
+rhs_vec = sp.lambdify(
+    all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=False
+)
 if algebraic_state_names:
     alg_vec = sp.lambdify(
         all_args,
         [algebraic_value_exprs[n] for n in algebraic_state_names],
-        "numpy",
+        modules=_LAMBDIFY_MODULES,
         cse=False,
     )
 else:
@@ -210,40 +213,18 @@ _disarm()
 phase("lambdify_no_cse")
 
 # ----- 5/6/7. simulate_<test_id> ----------------------------------------
-# Three species (SALAAL, SALCAL, SO2) appear in mass-action rate-law
-# denominators in the GEOSChem mechanism (e.g. R12 has rate = k_cld6/SO2 over
-# substrates SO2+HMS+OH). When their IC is 0, the corresponding RHS terms
-# evaluate to 0/0 = NaN — independent of cse=False vs cse=True, and
-# independent of the lambdify decomposition issue this diagnostic targets
-# (esm-5gk). The inline tests do not set these species, so we inject a
-# small physically-reasonable seed to exercise the integrator.
-_DENOM_SEED_PPB = {
-    "SO2": 0.1,      # background marine boundary-layer SO2
-    "SALAAL": 1e-3,  # accumulation-mode sea-salt aerosol alkalinity
-    "SALCAL": 1e-3,  # coarse-mode sea-salt aerosol alkalinity
-}
-
 for test in rs.tests:
-    ic = dict(test.initial_conditions)
-    for short, seed in _DENOM_SEED_PPB.items():
-        ic.setdefault(short, seed)
     _arm()
     res = simulate(
         flat,
         tspan=(test.time_span.start, test.time_span.end),
         parameters=dict(test.parameter_overrides),
-        initial_conditions=ic,
+        initial_conditions=dict(test.initial_conditions),
     )
     _disarm()
     if not res.success:
         print(
             f"NOTE: simulate({test.id}) success=False message={res.message!r}",
-            flush=True,
-        )
-    else:
-        print(
-            f"OK:   simulate({test.id}) success=True "
-            f"y.shape={res.y.shape if res.y is not None else None}",
             flush=True,
         )
     phase(f"simulate_{test.id}")

@@ -128,9 +128,75 @@ class SimulationError(Exception):
     pass
 
 
+class _ess_numeric_abs(sp.Function):
+    """``|x|`` with construction-time canonical rewrites disabled (esm-5gk).
+
+    SymPy's ``sp.Abs.eval`` applies decompositions like
+    ``Abs(exp(z) * w) → exp(re(z)) * Abs(w)`` and ``Abs(0.41**((log(N*T**(-8))
+    - C)**2 + 1)) → 0.41**((log|...|**2 - arg(...)**2)/log10**2 + 1)``
+    whenever the inner expression's domain cannot be proven real. Those
+    decompositions look mathematically equivalent on the positive real
+    branch but the ``log|...|**2 * arg(...)**2`` cross term in the second
+    one evaluates to ``inf * 0 = NaN`` whenever a species concentration
+    touches 0 — exactly the cse=False non-finite-derivative failure on
+    geoschem_fullchem this whole bead targets.
+
+    A subclass of :class:`sympy.Function` with a strictly numeric
+    ``.eval`` rule sidesteps the decomposition entirely:
+
+    * Symbolic argument → returns ``None`` from ``eval``, leaving an
+      opaque ``_ess_numeric_abs(arg)`` node in the tree. SymPy never
+      reasons about modulus/phase of the inner expression, so the
+      complex-domain rewrites cannot fire.
+    * Numeric argument (``Float``/``Integer``/``Rational``) → returns
+      the literal absolute value, so substitution-based evaluation
+      (e.g. tests doing ``expr.subs(x, 3.5)``) keeps working.
+
+    At lambdify time we pass ``modules=[{"_ess_numeric_abs": numpy.abs},
+    "numpy"]``, so the opaque calls resolve to ``numpy.abs`` on real
+    floats — correct for any sign of the runtime argument. This is why
+    the fix is sign-agnostic: it makes no positivity assumption about
+    state or parameters and stays correct on models whose state goes
+    negative.
+
+    Class of risk this addresses: ``sp.Abs.eval`` is the SymPy operator
+    whose canonical rewrites produced the chemistry-fatal decomposition
+    path (``Abs(exp(z)*w)``, ``Abs(b**z)`` chains). If a future SymPy
+    version adds a new rewrite-on-eval to another operator
+    (``sign``, ``floor``, ``ceiling``, etc.) that emits ``re``/``im``/
+    ``arg`` on real-but-symbolically-unprovable inputs, the same
+    opacity treatment may need to be extended to that operator. Audit
+    by checking ``inspect.getsource`` of a lambdified RHS on a fresh
+    model that uses the suspected operator and grepping for ``real(``,
+    ``imag(``, ``angle(``.
+    """
+
+    @classmethod
+    def eval(cls, arg):
+        if arg.is_number and getattr(arg, "is_real", None):
+            return abs(arg)
+        return None
+
+# Module-mapping handed to every ``sp.lambdify`` call in this module so
+# the ``_ess_numeric_abs`` calls emitted by ``_expr_to_sympy`` resolve to
+# ``numpy.abs`` at runtime.
+_LAMBDIFY_MODULES = [{"_ess_numeric_abs": np.abs}, "numpy"]
+
+
 def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
     """
     Convert ESM Expr to SymPy expression.
+
+    The ``'abs'`` op is converted to a placeholder
+    :class:`sympy.Function` rather than :class:`sympy.Abs` so SymPy's
+    construction-time canonical rewrites for absolute value do not fire
+    (esm-5gk). See ``_ess_numeric_abs`` for the full rationale; in
+    short, ``sp.Abs`` over a product of ``exp``/``log``/rational-power
+    composites decomposes into a complex-domain form whose
+    ``log|x|**2 * arg(x)**2`` term evaluates to ``inf*0 = NaN`` at any
+    boundary value (e.g. species concentration of 0). The placeholder
+    :class:`sympy.Function` has no ``.eval``, so the decomposition cannot
+    fire and the lambdified RHS stays in pure-real form.
 
     Args:
         expr: Expression to convert
@@ -149,10 +215,8 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
             try:
                 return sp.Float(float(expr))
             except ValueError:
-                # Create a new symbol if not found. ``positive=True`` matches
-                # the assumption used in ``_flat_to_sympy_rhs`` so symbols
-                # with the same name compare equal across pipeline stages.
-                symbol_map[expr] = sp.Symbol(expr, positive=True)
+                # Create a new symbol if not found.
+                symbol_map[expr] = sp.Symbol(expr)
                 return symbol_map[expr]
     elif isinstance(expr, ExprNode):
         # Convert arguments recursively
@@ -216,7 +280,10 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
         elif expr.op == 'abs':
             if len(sympy_args) != 1:
                 raise SimulationError(f"abs requires exactly 1 argument, got {len(sympy_args)}")
-            return sp.Abs(sympy_args[0])
+            # See ``_ess_numeric_abs`` definition — using ``sp.Abs`` here
+            # would trigger the construction-time decomposition that
+            # esm-5gk fixes.
+            return _ess_numeric_abs(sympy_args[0])
         elif expr.op == 'sign':
             if len(sympy_args) != 1:
                 raise SimulationError(f"sign requires exactly 1 argument, got {len(sympy_args)}")
@@ -372,39 +439,9 @@ def _flat_to_sympy_rhs(
     state_names = list(flat.state_variables.keys())
     parameter_names = list(flat.parameters.keys())
 
-    # ``positive=True`` is required for sympy to keep the lambdified RHS in
-    # pure-real form under ``cse=False`` on chemistry-scale mechanisms.
-    #
-    # Without a positivity assumption, three layers of complex-domain
-    # decomposition leak into the lambdified output and produce
-    # non-finite-derivative failures (esm-5gk on geoschem_fullchem):
-    #
-    # 1. ``Abs(exp(z) * w)`` → ``exp(re(z)) * Abs(w)``
-    #    With ``re(1300/T) = 1300*re(T)/(re(T)**2 + im(T)**2)``, this yields
-    #    a divide that is mathematically ``1/T`` for real T but emits the
-    #    complex form. Fixed by ``real=True`` alone.
-    # 2. ``Abs(0.41**((log(N*T**(-8)) - C)**2 + 1))`` →
-    #    ``0.41**((log|N*T**(-8)|**2 - arg(N*T**(-8))**2)/log(10)**2 + 1)``
-    #    The ``log|x|**2`` and ``arg(x)**2`` terms produce ``inf*0 = NaN``
-    #    when any species concentration touches 0, killing the integrator on
-    #    the very first RHS evaluation. Requires ``positive=True`` so sympy
-    #    can prove ``log(N*T**(-8))`` is real and skip the decomposition.
-    # 3. ``x**Float(2.0)`` is treated as a non-integer rational power, which
-    #    sympy still routes through ``re``/``im`` even when ``x`` is real.
-    #    Fixed in ``_expr_to_sympy`` by canonicalizing integer-valued Float
-    #    exponents to ``sp.Integer``.
-    #
-    # Physical correctness for ESS chemistry: concentrations are
-    # non-negative, temperatures / number densities / pressures are strictly
-    # positive, so ``positive=True`` is true on the relevant domain even at
-    # the runtime boundary (concentrations can be exactly 0 — sympy uses the
-    # assumption only for symbolic simplification, never for runtime
-    # validation). For non-chemistry models whose state can legitimately
-    # be negative, callers should bypass this path by pre-populating
-    # ``flat._simulate_compile_cache`` with their own ``_CompiledRhs``.
     symbol_map: Dict[str, sp.Symbol] = {}
     for name in state_names + parameter_names:
-        symbol_map[name] = sp.Symbol(name, positive=True)
+        symbol_map[name] = sp.Symbol(name)
 
     # Classify equations: differential (D(var, t) = …) vs algebraic (var = …).
     diff_rhs: Dict[str, sp.Expr] = {}
@@ -555,12 +592,14 @@ def _compile_flat_rhs(flat: FlattenedSystem) -> _CompiledRhs:
     param_symbols = [symbol_map[name] for name in parameter_names]
     all_args = state_symbols + param_symbols
 
-    rhs_vector_func = sp.lambdify(all_args, rhs_exprs, "numpy", cse=True)
+    rhs_vector_func = sp.lambdify(
+        all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=True
+    )
 
     if algebraic_state_names:
         alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
         algebraic_vector_func = sp.lambdify(
-            all_args, alg_value_list, "numpy", cse=True
+            all_args, alg_value_list, modules=_LAMBDIFY_MODULES, cse=True
         )
     else:
         algebraic_vector_func = None
@@ -625,7 +664,7 @@ def _generate_mass_action_odes(reaction_system: ReactionSystem) -> Tuple[List[st
     expression so the returned list stays aligned with ``species_names``.
     """
     species_names = [species.name for species in reaction_system.species]
-    symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
+    symbol_map = {name: sp.Symbol(name) for name in species_names}
     species_rates: Dict[str, sp.Expr] = {name: sp.Float(0) for name in species_names}
 
     if species_names and reaction_system.reactions:
@@ -666,7 +705,9 @@ def _create_event_functions(events: List[ContinuousEvent], symbol_map: Dict[str,
             var_names = [str(var) for var in variables]
 
             # Create lambda function
-            condition_func = sp.lambdify(variables, condition_expr, 'numpy')
+            condition_func = sp.lambdify(
+                variables, condition_expr, modules=_LAMBDIFY_MODULES
+            )
 
             # Check if we have direction-dependent affects
             has_affect_neg = event.affect_neg is not None and len(event.affect_neg) > 0
@@ -841,7 +882,7 @@ def _evaluate_expression_at_state(
 
     # Lambdify and evaluate
     if variables:
-        eval_func = sp.lambdify(variables, sympy_expr, 'numpy')
+        eval_func = sp.lambdify(variables, sympy_expr, modules=_LAMBDIFY_MODULES)
         return float(eval_func(*var_values))
     else:
         # Constant expression
@@ -1589,7 +1630,7 @@ def simulate_reaction_system(
             raise SimulationError("No species found in reaction system")
 
         # Create symbol map
-        symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
+        symbol_map = {name: sp.Symbol(name) for name in species_names}
 
         # Create initial condition vector
         y0 = np.array([initial_conditions.get(name, 0.0) for name in species_names])
@@ -1599,7 +1640,10 @@ def simulate_reaction_system(
 
         # Create RHS function
         if variables and ode_exprs:
-            rhs_funcs = [sp.lambdify(variables, expr, 'numpy') for expr in ode_exprs]
+            rhs_funcs = [
+                sp.lambdify(variables, expr, modules=_LAMBDIFY_MODULES)
+                for expr in ode_exprs
+            ]
 
             def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
                 """Right-hand side function for the ODE system."""
@@ -1731,13 +1775,16 @@ def simulate_with_discrete_events(
             raise SimulationError("No species found in reaction system")
 
         # Create symbol map and initial conditions
-        symbol_map = {name: sp.Symbol(name, positive=True) for name in species_names}
+        symbol_map = {name: sp.Symbol(name) for name in species_names}
         y_current = np.array([initial_conditions.get(name, 0.0) for name in species_names])
 
         # Lambdify ODEs for fast evaluation
         variables = [symbol_map[name] for name in species_names]
         if variables and ode_exprs:
-            rhs_funcs = [sp.lambdify(variables, expr, 'numpy') for expr in ode_exprs]
+            rhs_funcs = [
+                sp.lambdify(variables, expr, modules=_LAMBDIFY_MODULES)
+                for expr in ode_exprs
+            ]
 
             def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
                 """Right-hand side function for the ODE system."""
