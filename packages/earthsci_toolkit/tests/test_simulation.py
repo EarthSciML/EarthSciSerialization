@@ -11,7 +11,8 @@ This module tests the core simulation functionality including:
 
 import pytest
 import numpy as np
-from earthsci_toolkit.simulation import simulate_reaction_system as simulate, SimulationResult, SimulationError, _expr_to_sympy
+from earthsci_toolkit.simulation import simulate_reaction_system as simulate, SimulationResult, SimulationError
+from earthsci_toolkit.sympy_bridge import _expr_to_sympy
 from earthsci_toolkit.numpy_interpreter import UnreachableSpatialOperatorError
 from earthsci_toolkit.esm_types import (
     ReactionSystem, Species, Parameter, Reaction,

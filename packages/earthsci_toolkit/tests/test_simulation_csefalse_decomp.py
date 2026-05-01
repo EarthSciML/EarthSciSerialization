@@ -46,12 +46,12 @@ from earthsci_toolkit.esm_types import (
     ModelVariable,
 )
 from earthsci_toolkit.expression import ExprNode
-from earthsci_toolkit.simulation import (
+from earthsci_toolkit.simulation import simulate
+from earthsci_toolkit.sympy_bridge import (
     _LAMBDIFY_MODULES,
     _ess_numeric_abs,
     _flat_to_sympy_rhs,
     _expr_to_sympy,
-    simulate,
 )
 import earthsci_toolkit as ek
 

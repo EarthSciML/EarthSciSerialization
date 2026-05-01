@@ -26,7 +26,8 @@ from earthsci_toolkit.flatten import (
     UnsupportedDimensionalityError,
     flatten,
 )
-from earthsci_toolkit.simulation import simulate, _compile_flat_rhs
+from earthsci_toolkit.simulation import simulate
+from earthsci_toolkit.sympy_bridge import _compile_flat_rhs
 
 
 def _metadata() -> Metadata:
