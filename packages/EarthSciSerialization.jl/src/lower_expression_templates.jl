@@ -306,6 +306,50 @@ function _find_apply_paths!(hits::Vector{String}, x, path::String)
     end
 end
 
+function _has_apply_op(x)
+    if _is_array(x)
+        for child in x
+            _has_apply_op(child) && return true
+        end
+        return false
+    end
+    if _is_object(x)
+        op = get(x, "op", get(x, :op, nothing))
+        op !== nothing && string(op) == APPLY_EXPRESSION_TEMPLATE_OP && return true
+        for (_, v) in pairs(x)
+            _has_apply_op(v) && return true
+        end
+    end
+    return false
+end
+
+"""
+    _has_template_machinery(raw_data) -> Bool
+
+True if `raw_data` either declares any non-empty `expression_templates`
+block under `models`/`reaction_systems`, or contains any
+`apply_expression_template` op anywhere in the tree. Used by
+[`lower_expression_templates`](@ref) to short-circuit on files that need
+no template expansion (and so should not be wrapped in `JSONLikeDict`).
+"""
+function _has_template_machinery(raw_data)
+    raw_data === nothing && return false
+    _is_object(raw_data) || return false
+    for compkind in ("models", "reaction_systems")
+        comps = get(raw_data, Symbol(compkind), get(raw_data, compkind, nothing))
+        comps === nothing && continue
+        _is_object(comps) || continue
+        for (_, comp) in pairs(comps)
+            _is_object(comp) || continue
+            tpl = get(comp, "expression_templates", get(comp, :expression_templates, nothing))
+            if _is_object(tpl) && length(collect(pairs(tpl))) > 0
+                return true
+            end
+        end
+    end
+    return _has_apply_op(raw_data)
+end
+
 # ---------------------------------------------------------------------------
 # Pre-version-0.4.0 rejection
 # ---------------------------------------------------------------------------
@@ -372,14 +416,24 @@ Throws [`ExpressionTemplateError`](@ref) on any of:
 """
 function lower_expression_templates(raw_data)
     reject_expression_templates_pre_v04(raw_data)
+
+    # Fast path: files that neither declare `expression_templates` blocks
+    # nor use any `apply_expression_template` op need no expansion at all.
+    # Return raw_data unchanged so downstream `coerce_esm_file` sees the
+    # original JSON3.Object / Dict shape — no `JSONLikeDict` wrapping. This
+    # keeps non-template files on the legacy code path, including those
+    # that exercise downstream coercers (`coerce_function_tables`,
+    # `coerce_grids`, etc.) whose type-gates predate JSONLikeDict.
+    if !_has_template_machinery(raw_data)
+        return raw_data
+    end
+
     root = _to_dict(raw_data)::Dict{String,Any}
 
-    # Quick scan: if there are no apply_expression_template ops anywhere,
-    # we still need to strip any present expression_templates blocks for
-    # canonical-form invariance.
     apply_paths = String[]
     _find_apply_paths!(apply_paths, root, "")
     if isempty(apply_paths)
+        # No apply ops, but there ARE template blocks → strip and wrap.
         return JSONLikeDict(_strip_expression_templates(root))
     end
 
