@@ -128,6 +128,36 @@ class SimulationError(Exception):
     pass
 
 
+# Closed-function-registry ops (esm-spec §9.2/§9.5). The SymPy `lambdify` path
+# cannot evaluate these — `const` literals and `fn` calls (e.g. `interp.bilinear`)
+# need the numerical AST walker — so any equation containing one must route
+# through the NumPy interpreter even if the system is otherwise scalar.
+_CLOSED_FN_OPS = {"fn", "const", "enum", "table_lookup", "apply_expression_template", "call"}
+
+
+def _has_closed_fn_op(expr: Expr) -> bool:
+    """True if `expr` contains a closed-function-registry op (esm-spec §9.2/§9.5)."""
+    if expr is None or isinstance(expr, (int, float, str)):
+        return False
+    if isinstance(expr, ExprNode):
+        if expr.op in _CLOSED_FN_OPS:
+            return True
+        for a in expr.args or []:
+            if _has_closed_fn_op(a):
+                return True
+        if expr.expr is not None and _has_closed_fn_op(expr.expr):
+            return True
+        if expr.values:
+            for v in expr.values:
+                if _has_closed_fn_op(v):
+                    return True
+        if expr.table_axes:
+            for v in expr.table_axes.values():
+                if _has_closed_fn_op(v):
+                    return True
+    return False
+
+
 class _ess_numeric_abs(sp.Function):
     """``|x|`` with construction-time canonical rewrites disabled (esm-5gk).
 
@@ -983,14 +1013,21 @@ def simulate(
             nfev=0, njev=0, nlu=0,
         )
 
-    # Array-op detection: if any equation contains an array op, route through
-    # the NumPy AST interpreter path. The legacy SymPy path handles scalar-only
-    # models and is left untouched.
+    # NumPy-path detection: route through the NumPy AST interpreter when any
+    # equation contains an array op or a closed-function op (`fn`, `const`,
+    # `enum`, `table_lookup`, `call`). The SymPy `lambdify` path handles
+    # scalar-only systems whose bodies are pure AST math; closed-function
+    # bodies (e.g. `gaschem/fastjx.esm`'s `interp.bilinear`) are scalar but
+    # still need the numerical AST walker.
     has_array = any(
         _has_array_op(eq.lhs) or _has_array_op(eq.rhs)
         for eq in flat.equations
     )
-    if has_array:
+    has_closed_fn = any(
+        _has_closed_fn_op(eq.lhs) or _has_closed_fn_op(eq.rhs)
+        for eq in flat.equations
+    )
+    if has_array or has_closed_fn:
         return _simulate_with_numpy(
             flat, tspan, parameters, initial_conditions, method,
             rtol=rtol, atol=atol,
@@ -1464,6 +1501,73 @@ def _apply_equation_to_dy(
     return
 
 
+def _expr_free_names(expr: Expr) -> Set[str]:
+    """Return all bare-name string references inside an Expr tree."""
+    out: Set[str] = set()
+
+    def _walk(e: Expr) -> None:
+        if e is None or isinstance(e, (int, float, bool)):
+            return
+        if isinstance(e, str):
+            out.add(e)
+            return
+        if isinstance(e, ExprNode):
+            for a in e.args or []:
+                _walk(a)
+            if e.expr is not None:
+                _walk(e.expr)
+            if e.values:
+                for v in e.values:
+                    _walk(v)
+            if e.table_axes:
+                for v in e.table_axes.values():
+                    _walk(v)
+
+    _walk(expr)
+    return out
+
+
+def _topo_sort_observed(
+    observed_eqs: List[Tuple[str, Expr]],
+) -> List[str]:
+    """Topologically sort scalar algebraic equations by mutual dependence.
+
+    Returned order ensures every name's algebraic dependencies appear earlier
+    so observed values can be cached forward into ``ctx.observed_values``.
+    Cycles raise :class:`SimulationError` mirroring the SymPy-path check.
+    """
+    bodies = dict(observed_eqs)
+    names = list(bodies.keys())
+    name_set = set(names)
+    deps: Dict[str, List[str]] = {
+        n: [d for d in _expr_free_names(bodies[n]) if d in name_set]
+        for n in names
+    }
+
+    order: List[str] = []
+    visited: Set[str] = set()
+    in_progress: Set[str] = set()
+
+    def _visit(n: str, path: List[str]) -> None:
+        if n in visited:
+            return
+        if n in in_progress:
+            cycle = path[path.index(n):] + [n]
+            raise SimulationError(
+                "Cyclic algebraic equations detected: " + " -> ".join(cycle)
+            )
+        in_progress.add(n)
+        for d in deps[n]:
+            _visit(d, path + [n])
+        in_progress.discard(n)
+        visited.add(n)
+        order.append(n)
+
+    for n in names:
+        _visit(n, [])
+    return order
+
+
 def _simulate_with_numpy(
     flat: FlattenedSystem,
     tspan: Tuple[float, float],
@@ -1507,6 +1611,37 @@ def _simulate_with_numpy(
                 for eq in working_equations
             ]
 
+        # Pull aside scalar algebraic equations binding an observed variable
+        # (or a state variable with no ODE) so they can be evaluated each RHS
+        # call, populating ``observed_values`` for downstream lookups. This is
+        # the numpy-path counterpart of the SymPy path's algebraic-elimination
+        # — needed for models like fastjx where the differential RHS pulls in
+        # an observed body (e.g. ``j_NO2``) defined by a closed-function
+        # interpolation that SymPy cannot represent.
+        observed_eqs: List[Tuple[str, Expr]] = []
+        diff_eqs: List[FlattenedEquation] = []
+        states_with_ode: Set[str] = set()
+        for eq in working_equations:
+            lhs = eq.lhs
+            if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
+                inner = lhs.args[0]
+                if isinstance(inner, str):
+                    states_with_ode.add(inner)
+        for eq in working_equations:
+            lhs = eq.lhs
+            if (
+                isinstance(lhs, str)
+                and (
+                    lhs in flat.observed_variables
+                    or (lhs in flat.state_variables and lhs not in states_with_ode)
+                )
+            ):
+                observed_eqs.append((lhs, eq.rhs))
+            else:
+                diff_eqs.append(eq)
+        observed_order = _topo_sort_observed(observed_eqs)
+        observed_bodies: Dict[str, Expr] = dict(observed_eqs)
+
         # Parameter resolution: overrides win over defaults.
         param_values: Dict[str, float] = {}
         for pname, pvar in flat.parameters.items():
@@ -1541,8 +1676,14 @@ def _simulate_with_numpy(
                 y=y,
                 t=t,
             )
+            for name in observed_order:
+                try:
+                    val = eval_expr(observed_bodies[name], ctx)
+                except NumpyInterpreterError as exc:
+                    raise SimulationError(str(exc)) from exc
+                ctx.observed_values[name] = float(val)
             dy = np.zeros(total_size, dtype=float)
-            for eq in working_equations:
+            for eq in diff_eqs:
                 try:
                     _apply_equation_to_dy(eq, ctx, shapes, state_layout, dy)
                 except NumpyInterpreterError as exc:
