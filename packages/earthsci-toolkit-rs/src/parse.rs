@@ -126,6 +126,12 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     crate::lower_expression_templates::lower_expression_templates(&mut json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
+    // Lower `enum`-op nodes to `const` integers using the file's `enums`
+    // block (esm-spec §4.5 / §9.3). Mirrors the Julia / Python load-time
+    // pass so that downstream consumers never see enum strings.
+    crate::lower_enums::lower_enums(&mut json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
     // Emit deprecation warnings for any domain-level boundary_conditions
     // (v0.2.0 transitional shim per RFC §10.1 + gt-2fvs mayor decision).
     warn_deprecated_domain_bc(&json_value);
@@ -183,6 +189,9 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
     validate_structural_json(&json_value)?;
 
     crate::lower_expression_templates::lower_expression_templates(&mut json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
+    crate::lower_enums::lower_enums(&mut json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
     let esm_file: EsmFile = serde_json::from_value(json_value).map_err(EsmError::JsonParse)?;

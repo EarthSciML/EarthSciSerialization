@@ -45,8 +45,9 @@ pub mod expression;
 pub mod flatten;
 pub mod graph;
 pub mod grid_accessor;
-pub mod migration;
+pub mod lower_enums;
 pub mod lower_expression_templates;
+pub mod migration;
 pub mod parse;
 pub mod reactions;
 pub mod ref_loading;
@@ -131,6 +132,7 @@ pub use edit::{
     update_model_metadata,
 };
 pub use error::EsmError;
+pub use lower_enums::{EnumLoweringError, lower_enums};
 pub use migration::{MigrationError, can_migrate, get_supported_migration_targets, migrate};
 
 pub use performance::{CompactExpr, PerformanceError};
