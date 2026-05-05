@@ -53,13 +53,24 @@ class ConformanceResults:
             "errors": self.errors
         }
 
+def _json_default(obj):
+    # ValidationError (and similar binding error dataclasses) carry path/message/
+    # code/details fields; downgrade to a plain dict so json.dump never trips on
+    # them. Anything else falls through to repr() — better than aborting the
+    # whole results write over one stray non-serializable field.
+    for attr in ("__dict__",):
+        d = getattr(obj, attr, None)
+        if isinstance(d, dict) and d:
+            return d
+    return repr(obj)
+
 def write_results(output_dir: Path, results: ConformanceResults):
     """Write conformance results to JSON file."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results_file = output_dir / "results.json"
     with open(results_file, 'w') as f:
-        json.dump(results.to_dict(), f, indent=2)
+        json.dump(results.to_dict(), f, indent=2, default=_json_default)
 
     print(f"Python conformance results written to: {results_file}")
 
