@@ -4,10 +4,10 @@
 > ESM specifications. It is a static reference taxonomy, not a live verification report.
 > For current test results, see CI artifacts.
 >
-> **Last manual audit**: February 2026
+> **Last manual audit**: May 2026
 
-**Version**: 0.1.0
-**Generated**: 2026-02-15
+**Version**: 0.2.0
+**Generated**: 2026-05-05
 **Sources**: esm-spec.md, esm-libraries-spec.md
 
 ## Overview
@@ -297,6 +297,38 @@ Where:
 | EXPR-02-C-004 | evaluate MUST error on unbound variables | esm-libraries-spec.md:141 | Yes | expression |
 | EXPR-02-C-005 | simplify MUST fold constant arithmetic | esm-libraries-spec.md:140 | Yes | expression |
 
+### EXPR-09-A: `expression_templates` Block (v0.4.0, esm-spec §9.6)
+| ID | Requirement | Spec Reference | Testable | Test Category |
+|---|---|---|---|---|
+| EXPR-09-A-001 | `expression_templates` MUST be declared inside a single model or reaction_system | esm-spec.md §9.6.1 | Yes | expression |
+| EXPR-09-A-002 | Each entry MUST declare non-empty `params` array (no duplicates) | esm-spec.md §9.6.1 | Yes | expression |
+| EXPR-09-A-003 | Each entry MUST declare a fixed Expression AST `body` | esm-spec.md §9.6.1 | Yes | expression |
+| EXPR-09-A-004 | Template `body` MUST NOT contain `apply_expression_template` nodes (no template-calls-template) | esm-spec.md §9.6.3 | Yes | expression |
+
+### EXPR-09-B: `apply_expression_template` Op
+| ID | Requirement | Spec Reference | Testable | Test Category |
+|---|---|---|---|---|
+| EXPR-09-B-001 | `apply_expression_template` `name` MUST reference a template in the same component | esm-spec.md §9.6.2 | Yes | expression |
+| EXPR-09-B-002 | `bindings` MUST exactly match the template's `params` (no missing or extra keys) | esm-spec.md §9.6.2 | Yes | expression |
+| EXPR-09-B-003 | Loaders MUST expand `apply_expression_template` to a fully-substituted AST at load time | esm-spec.md §9.6.4 | Yes | expression |
+| EXPR-09-B-004 | After expansion the AST MUST be structurally identical to inline-authored equivalent | esm-spec.md §9.6.4 | Yes | expression |
+| EXPR-09-B-005 | Round-trip `parse → emit` MUST emit the expanded form (Option A always-expanded) | esm-spec.md §9.6.4 | Yes | expression |
+
+### EXPR-09-C: Diagnostics
+| ID | Requirement | Spec Reference | Testable | Test Category |
+|---|---|---|---|---|
+| EXPR-09-C-001 | `apply_expression_template_version_too_old` when `esm` < 0.4.0 uses either construct | esm-spec.md §9.6.5 | Yes | validation |
+| EXPR-09-C-002 | `apply_expression_template_unknown_template` for unresolved `name` | esm-spec.md §9.6.6 | Yes | validation |
+| EXPR-09-C-003 | `apply_expression_template_bindings_mismatch` for missing/extra binding keys | esm-spec.md §9.6.6 | Yes | validation |
+| EXPR-09-C-004 | `apply_expression_template_recursive_body` when body contains `apply_expression_template` | esm-spec.md §9.6.6 | Yes | validation |
+| EXPR-09-C-005 | `apply_expression_template_invalid_declaration` for malformed `params`/`body` | esm-spec.md §9.6.6 | Yes | validation |
+
+### EXPR-09-D: Conformance Fixtures
+| ID | Requirement | Spec Reference | Test Fixture | Test Category |
+|---|---|---|---|---|
+| EXPR-09-D-001 | Load + re-serialize of arrhenius template yields canonical expanded AST | esm-spec.md §9.6.7 | `tests/conformance/expression_templates/arrhenius_smoke/fixture.esm` → `expanded.esm` | expression |
+| EXPR-09-D-002 | All five bindings MUST agree byte-for-byte after canonical serialization | esm-spec.md §9.6.7 | `tests/conformance/expression_templates/arrhenius_smoke/` | expression |
+
 ---
 
 ## 9. ROUND-TRIP AND SERIALIZATION
@@ -338,12 +370,12 @@ Where:
 | Behavioral | 10 | 10 | behavioral |
 | Format | 20 | 20 | format |
 | Algorithmic | 6 | 6 | algorithmic |
-| Validation | 16 | 16 | validation |
+| Validation | 21 | 21 | validation |
 | Display | 17 | 17 | display |
-| Expression | 14 | 14 | expression |
+| Expression | 25 | 25 | expression |
 | Serialization | 6 | 6 | serialization |
 | Versioning | 4 | 4 | versioning |
-| **TOTAL** | **118** | **118** | **10 categories** |
+| **TOTAL** | **134** | **134** | **10 categories** |
 
 ## Test Fixture Mapping
 
@@ -359,11 +391,30 @@ Each requirement can be mapped to specific test fixtures:
 - **structural**: Tests in `tests/invalid/` for reference integrity
 - **validation**: Error code validation tests
 - **algorithmic**: ODE derivation and stoichiometric matrix tests
-- **expression**: Expression manipulation tests
+- **expression**: Expression manipulation tests, plus v0.4.0 expression-template
+  conformance under `tests/conformance/expression_templates/` (e.g.
+  `arrhenius_smoke/fixture.esm` ↔ `arrhenius_smoke/expanded.esm` for
+  load-time expansion of `apply_expression_template`)
 
 ### Priority 3 (Phase 3+ Advanced)
 - **display**: Pretty-printing format tests in `tests/display/`
 - **versioning**: Version compatibility tests
+
+### v0.4.0 Conformance Fixture Inventory
+
+The cross-language `tests/conformance/` tree drives byte-equal cross-binding
+agreement for v0.4.0 features:
+
+| Directory | Feature | Notes |
+|---|---|---|
+| `tests/conformance/canonical/` | Canonical AST equality | Drives `parse → canonical-AST` agreement across bindings |
+| `tests/conformance/discretize/` + `discretization/` | `discretize` AST transforms | Owned by EarthSciDiscretizations rule application |
+| `tests/conformance/expression_templates/` | `expression_templates` + `apply_expression_template` (esm-spec §9.6) | Indexed by EXPR-09-D above |
+| `tests/conformance/function_tables/` | `function_tables` + `table_lookup` (esm-spec §9.5) | `linear/`, `bilinear/`, `roundtrip/` |
+| `tests/conformance/grids/` | Grid descriptors | |
+| `tests/conformance/migration/` | Schema-version migration | Pairs with VERSION-08-A above |
+| `tests/conformance/round_trip/` | Round-trip equality (esm-spec §9.6.4 Option A) | Pairs with SERIAL-07-A above |
+| `tests/conformance/simulate_cycles/` | End-to-end simulation cycles via official ESS runners | Per CLAUDE.md "Simulation Pathway" rule |
 
 ## Usage
 
