@@ -39,6 +39,7 @@ class ConformanceResults {
         this.display_results = {};
         this.substitution_results = {};
         this.graph_results = {};
+        this.mathematical_correctness_results = {};
         this.errors = [];
     }
 }
@@ -267,67 +268,168 @@ async function runSubstitutionTests(testsDir) {
     return substitutionResults;
 }
 
+function resolveGraphInputFile(testsDir, fixturePath, ref) {
+    const candidates = [
+        path.join(path.dirname(fixturePath), ref),
+        path.join(testsDir, 'valid', ref),
+        path.join(testsDir, ref),
+    ];
+    for (const c of candidates) {
+        if (fs.existsSync(c)) return c;
+    }
+    return null;
+}
+
+async function loadEsmSource(testsDir, fixturePath, source) {
+    if (typeof source === 'string') {
+        const resolved = resolveGraphInputFile(testsDir, fixturePath, source);
+        if (resolved === null) {
+            throw new Error(`ESM file not found: ${source}`);
+        }
+        const fileContent = fs.readFileSync(resolved, 'utf8');
+        return await esmFormat.load(fileContent);
+    }
+    return await esmFormat.load(source);
+}
+
+async function exerciseGraphFixture(esmData) {
+    const record = { loaded: true };
+
+    try {
+        const result = await esmFormat.validate(esmData);
+        record.validation = {
+            is_valid: result.is_valid,
+            schema_error_count: (result.schema_errors || []).length,
+            structural_error_count: (result.structural_errors || []).length,
+        };
+    } catch (error) {
+        record.validation = { error: error.message };
+    }
+
+    try {
+        const cg = await esmFormat.component_graph(esmData);
+        record.component_graph = {
+            nodes: cg.nodes.length,
+            edges: cg.edges.length,
+        };
+    } catch (error) {
+        record.component_graph = { error: error.message };
+    }
+
+    try {
+        const eg = await esmFormat.expressionGraph(esmData);
+        record.expression_graph = {
+            nodes: eg.nodes.length,
+            edges: eg.edges.length,
+        };
+    } catch (error) {
+        record.expression_graph = { error: error.message };
+    }
+
+    return record;
+}
+
 async function runGraphTests(testsDir) {
     console.log('Running graph tests...');
     const graphResults = {};
 
     const graphsDir = path.join(testsDir, 'graphs');
-    if (fs.existsSync(graphsDir) && fs.lstatSync(graphsDir).isDirectory()) {
-        const graphFiles = fs.readdirSync(graphsDir).filter(f => f.endsWith('.json'));
+    if (!(fs.existsSync(graphsDir) && fs.lstatSync(graphsDir).isDirectory())) {
+        return graphResults;
+    }
 
-        for (const filename of graphFiles) {
-            const filepath = path.join(graphsDir, filename);
-            try {
-                const testData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    const graphFiles = fs.readdirSync(graphsDir).filter(f => f.endsWith('.json')).sort();
 
-                if (testData.esm_file) {
-                    const esmFilePath = path.join(path.dirname(filepath), testData.esm_file);
-                    if (fs.existsSync(esmFilePath)) {
-                        try {
-                            const esmData = await esmFormat.load(esmFilePath);
+    for (const filename of graphFiles) {
+        const filepath = path.join(graphsDir, filename);
+        try {
+            const testData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
 
-                            // Generate system graph
-                            const systemGraph = await esmFormat.generateSystemGraph(esmData);
-
-                            // Export in different formats
-                            const dotOutput = await esmFormat.exportDot(systemGraph);
-                            const jsonOutput = await esmFormat.exportJson(systemGraph);
-
-                            graphResults[filename] = {
-                                esm_file: esmFilePath,
-                                system_graph: {
-                                    nodes: systemGraph.nodes.length,
-                                    edges: systemGraph.edges.length,
-                                    dot_format: dotOutput,
-                                    json_format: jsonOutput
-                                },
-                                success: true
-                            };
-                        } catch (error) {
-                            graphResults[filename] = {
-                                esm_file: esmFilePath,
-                                error: error.message,
-                                success: false
-                            };
-                        }
-                    } else {
-                        graphResults[filename] = {
-                            error: `ESM file not found: ${esmFilePath}`,
-                            success: false
-                        };
+            if (Array.isArray(testData)) {
+                const cases = {};
+                for (let i = 0; i < testData.length; i++) {
+                    const c = testData[i];
+                    const name = (c && typeof c === 'object' && c.name) ? c.name : `case_${i}`;
+                    let src = null;
+                    if (c && typeof c === 'object') {
+                        src = c.esm_file || c.input_file || null;
+                    }
+                    if (src === null) {
+                        cases[name] = { skipped: 'no esm_file/input_file' };
+                        continue;
+                    }
+                    try {
+                        const esmData = await loadEsmSource(testsDir, filepath, src);
+                        cases[name] = await exerciseGraphFixture(esmData);
+                    } catch (error) {
+                        cases[name] = { loaded: false, error: error.message };
                     }
                 }
-
-            } catch (error) {
-                graphResults[filename] = {
-                    error: error.message,
-                    success: false
-                };
+                graphResults[filename] = { test_cases: cases };
+            } else if (testData && typeof testData === 'object') {
+                const src = testData.input_file || testData.esm_file || null;
+                if (src === null) {
+                    graphResults[filename] = { skipped: 'no input_file/esm_file' };
+                    continue;
+                }
+                try {
+                    const esmData = await loadEsmSource(testsDir, filepath, src);
+                    const record = await exerciseGraphFixture(esmData);
+                    record.input_file = (typeof src === 'string') ? src : '<inline>';
+                    graphResults[filename] = record;
+                } catch (error) {
+                    graphResults[filename] = {
+                        loaded: false,
+                        error: error.message,
+                        input_file: (typeof src === 'string') ? src : '<inline>',
+                    };
+                }
             }
+        } catch (error) {
+            graphResults[filename] = { loaded: false, error: error.message };
         }
     }
 
     return graphResults;
+}
+
+async function runMathematicalCorrectnessTests(testsDir) {
+    console.log('Running mathematical-correctness tests...');
+    const results = {};
+
+    const mathDir = path.join(testsDir, 'mathematical_correctness');
+    if (!(fs.existsSync(mathDir) && fs.lstatSync(mathDir).isDirectory())) {
+        return results;
+    }
+
+    const mathFiles = fs.readdirSync(mathDir).filter(f => f.endsWith('.esm')).sort();
+
+    for (const filename of mathFiles) {
+        const filepath = path.join(mathDir, filename);
+        try {
+            const fileContent = fs.readFileSync(filepath, 'utf8');
+            const esmData = await esmFormat.load(fileContent);
+            try {
+                const result = await esmFormat.validate(esmData);
+                results[filename] = {
+                    loaded: true,
+                    is_valid: result.is_valid,
+                    schema_error_count: (result.schema_errors || []).length,
+                    structural_error_count: (result.structural_errors || []).length,
+                };
+            } catch (error) {
+                results[filename] = { loaded: true, validation_error: error.message };
+            }
+        } catch (error) {
+            results[filename] = {
+                loaded: false,
+                error: error.message,
+                error_type: error.constructor.name,
+            };
+        }
+    }
+
+    return results;
 }
 
 async function main() {
@@ -379,6 +481,15 @@ async function main() {
         results.graph_results = {};
         results.errors.push(`Graph tests failed: ${error.message}`);
         console.log(`✗ Graph tests failed: ${error.message}`);
+    }
+
+    try {
+        results.mathematical_correctness_results = await runMathematicalCorrectnessTests(testsDir);
+        console.log('✓ Mathematical-correctness tests completed');
+    } catch (error) {
+        results.mathematical_correctness_results = {};
+        results.errors.push(`Mathematical-correctness tests failed: ${error.message}`);
+        console.log(`✗ Mathematical-correctness tests failed: ${error.message}`);
     }
 
     // Write results to file

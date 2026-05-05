@@ -53,13 +53,19 @@ class ConformanceResults:
             "errors": self.errors
         }
 
+def _stringify_errors(errors) -> List[str]:
+    """ValidationError dataclasses aren't JSON-serializable; the comparator
+    only inspects counts (and occasionally text), so coerce each entry to its
+    string form."""
+    return [str(e) for e in (errors or [])]
+
 def write_results(output_dir: Path, results: ConformanceResults):
     """Write conformance results to JSON file."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results_file = output_dir / "results.json"
     with open(results_file, 'w') as f:
-        json.dump(results.to_dict(), f, indent=2)
+        json.dump(results.to_dict(), f, indent=2, default=str)
 
     print(f"Python conformance results written to: {results_file}")
 
@@ -81,8 +87,8 @@ def run_validation_tests(tests_dir: Path) -> Dict[str, Any]:
 
                 valid_results[filepath.name] = {
                     "is_valid": result.is_valid,
-                    "schema_errors": result.schema_errors,
-                    "structural_errors": result.structural_errors,
+                    "schema_errors": _stringify_errors(result.schema_errors),
+                    "structural_errors": _stringify_errors(result.structural_errors),
                     "parsed_successfully": True
                 }
             except Exception as e:
@@ -106,8 +112,8 @@ def run_validation_tests(tests_dir: Path) -> Dict[str, Any]:
 
                 invalid_results[filepath.name] = {
                     "is_valid": result.is_valid,
-                    "schema_errors": result.schema_errors,
-                    "structural_errors": result.structural_errors,
+                    "schema_errors": _stringify_errors(result.schema_errors),
+                    "structural_errors": _stringify_errors(result.structural_errors),
                     "parsed_successfully": True
                 }
             except Exception as e:

@@ -22,6 +22,7 @@ class ConformanceAnalysis:
         self.display_analysis = {}
         self.substitution_analysis = {}
         self.graph_analysis = {}
+        self.mathematical_correctness_analysis = {}
         self.divergence_summary = {}
         self.overall_status = "PASS"
 
@@ -32,6 +33,7 @@ class ConformanceAnalysis:
             "display_analysis": self.display_analysis,
             "substitution_analysis": self.substitution_analysis,
             "graph_analysis": self.graph_analysis,
+            "mathematical_correctness_analysis": self.mathematical_correctness_analysis,
             "divergence_summary": self.divergence_summary,
             "overall_status": self.overall_status
         }
@@ -286,8 +288,49 @@ def compare_substitution_results(language_results: Dict[str, Dict[str, Any]]) ->
 
     return substitution_analysis
 
+def _diff_count_field(reference_lang, ref_record, lang, lang_record, sub_key, count_key, divergences):
+    ref_sub = ref_record.get(sub_key) if isinstance(ref_record, dict) else None
+    lang_sub = lang_record.get(sub_key) if isinstance(lang_record, dict) else None
+    if not (isinstance(ref_sub, dict) and isinstance(lang_sub, dict)):
+        return
+    if "error" in ref_sub or "error" in lang_sub:
+        return
+    if ref_sub.get(count_key) != lang_sub.get(count_key):
+        divergences.append({
+            "type": f"{sub_key}_{count_key}",
+            "reference_lang": reference_lang,
+            "reference_count": ref_sub.get(count_key),
+            "divergent_lang": lang,
+            "divergent_count": lang_sub.get(count_key),
+        })
+
+def _compare_graph_record_pair(reference_lang, ref_record, lang, lang_record):
+    """Compare a single graph fixture record between two bindings.
+
+    Each binding emits {"validation": {...}, "component_graph": {...},
+    "expression_graph": {...}} (esm-rs7). Diff node/edge counts per
+    sub-record; skip sub-records where either side reported an error so a
+    single broken fixture does not fan out into noise.
+    """
+    divergences = []
+    for sub_key, count_key in (
+        ("component_graph", "nodes"),
+        ("component_graph", "edges"),
+        ("expression_graph", "nodes"),
+        ("expression_graph", "edges"),
+    ):
+        _diff_count_field(reference_lang, ref_record, lang, lang_record, sub_key, count_key, divergences)
+    return divergences
+
 def compare_graph_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """Compare graph generation results across languages."""
+    """Compare graph generation results across languages.
+
+    Each binding's adapter emits one entry per fixture file; the entry is
+    either a single record (validation + component_graph + expression_graph)
+    or a `{test_cases: {name: record}}` shape for multi-case fixtures
+    (esm-rs7). The comparator handles both, recursing into `test_cases`
+    so each named case contributes independently to the divergence count.
+    """
     print("Comparing graph results...")
 
     graph_analysis = {
@@ -305,11 +348,8 @@ def compare_graph_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[s
 
     graph_analysis["test_files"] = sorted(list(all_test_files))
 
-    # Compare each test file
-    for test_file in all_test_files:
+    for test_file in sorted(all_test_files):
         file_results = {}
-
-        # Collect results for this test file from each language
         for lang, results in language_results.items():
             if "graph_results" in results and test_file in results["graph_results"]:
                 file_results[lang] = results["graph_results"][test_file]
@@ -317,65 +357,120 @@ def compare_graph_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[s
         if len(file_results) < 2:
             continue
 
-        # Compare graph structures
-        divergences = []
-        reference_lang = list(file_results.keys())[0]
+        reference_lang = next(iter(file_results))
         reference_result = file_results[reference_lang]
 
-        if "system_graph" in reference_result:
-            ref_graph = reference_result["system_graph"]
+        # Multi-case fixture: drill into test_cases and compare per-case.
+        if isinstance(reference_result, dict) and "test_cases" in reference_result:
+            ref_cases = reference_result.get("test_cases", {}) or {}
+            per_case_divergences = {}
+            for case_name, ref_case_record in ref_cases.items():
+                pair_divergences = []
+                for lang, result in file_results.items():
+                    if lang == reference_lang:
+                        continue
+                    lang_cases = result.get("test_cases", {}) if isinstance(result, dict) else {}
+                    lang_case_record = lang_cases.get(case_name)
+                    if lang_case_record is None:
+                        continue
+                    pair_divergences.extend(
+                        _compare_graph_record_pair(reference_lang, ref_case_record, lang, lang_case_record)
+                    )
+                if pair_divergences:
+                    per_case_divergences[case_name] = pair_divergences
 
-            for lang, result in file_results.items():
-                if lang == reference_lang or "system_graph" not in result:
-                    continue
-
-                lang_graph = result["system_graph"]
-
-                # Compare node and edge counts
-                if ref_graph.get("nodes") != lang_graph.get("nodes"):
-                    divergences.append({
-                        "type": "node_count",
-                        "reference_lang": reference_lang,
-                        "reference_count": ref_graph.get("nodes"),
-                        "divergent_lang": lang,
-                        "divergent_count": lang_graph.get("nodes")
-                    })
-
-                if ref_graph.get("edges") != lang_graph.get("edges"):
-                    divergences.append({
-                        "type": "edge_count",
-                        "reference_lang": reference_lang,
-                        "reference_count": ref_graph.get("edges"),
-                        "divergent_lang": lang,
-                        "divergent_count": lang_graph.get("edges")
-                    })
-
-                # Compare DOT format output (basic structure)
-                ref_dot = ref_graph.get("dot_format", "")
-                lang_dot = lang_graph.get("dot_format", "")
-
-                if ref_dot != lang_dot and ref_dot and lang_dot:
-                    # Check for structural differences rather than exact text match
-                    ref_lines = sorted([line.strip() for line in ref_dot.split('\n') if '->' in line])
-                    lang_lines = sorted([line.strip() for line in lang_dot.split('\n') if '->' in line])
-
-                    if ref_lines != lang_lines:
-                        divergences.append({
-                            "type": "dot_structure",
-                            "reference_lang": reference_lang,
-                            "divergent_lang": lang,
-                            "diff": list(difflib.unified_diff(ref_lines, lang_lines, n=0))
-                        })
-
-        if divergences:
-            graph_analysis["divergence"][test_file] = divergences
-            graph_analysis["summary"]["divergent_tests"] += 1
+            if per_case_divergences:
+                graph_analysis["divergence"][test_file] = {"test_cases": per_case_divergences}
+                graph_analysis["summary"]["divergent_tests"] += 1
+            else:
+                graph_analysis["summary"]["consistent_tests"] += 1
         else:
-            graph_analysis["summary"]["consistent_tests"] += 1
+            divergences = []
+            for lang, result in file_results.items():
+                if lang == reference_lang:
+                    continue
+                divergences.extend(
+                    _compare_graph_record_pair(reference_lang, reference_result, lang, result)
+                )
+            if divergences:
+                graph_analysis["divergence"][test_file] = divergences
+                graph_analysis["summary"]["divergent_tests"] += 1
+            else:
+                graph_analysis["summary"]["consistent_tests"] += 1
 
         graph_analysis["summary"]["total_tests"] += 1
 
     return graph_analysis
+
+def compare_mathematical_correctness_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Compare mathematical_correctness fixture parsing across languages.
+
+    Each binding loads + validates each .esm in tests/mathematical_correctness/
+    and emits {loaded, is_valid, schema_error_count, structural_error_count}
+    (or an error key on parse failure). Divergence here means the bindings
+    disagree on whether the file loaded or validated — a structural drift
+    bug per audit esm-rv3 §3.1 / esm-rs7.
+    """
+    print("Comparing mathematical-correctness results...")
+
+    analysis = {
+        "test_files": set(),
+        "divergence": {},
+        "summary": {"total_tests": 0, "consistent_tests": 0, "divergent_tests": 0},
+    }
+
+    all_test_files = set()
+    for lang, results in language_results.items():
+        if "mathematical_correctness_results" in results:
+            all_test_files.update(results["mathematical_correctness_results"].keys())
+
+    analysis["test_files"] = sorted(list(all_test_files))
+
+    for test_file in sorted(all_test_files):
+        file_results = {}
+        for lang, results in language_results.items():
+            cat = results.get("mathematical_correctness_results", {})
+            if test_file in cat:
+                file_results[lang] = cat[test_file]
+        if len(file_results) < 2:
+            continue
+
+        reference_lang = next(iter(file_results))
+        ref_record = file_results[reference_lang]
+        ref_loaded = isinstance(ref_record, dict) and ref_record.get("loaded", False)
+        ref_valid = isinstance(ref_record, dict) and ref_record.get("is_valid")
+
+        divergences = []
+        for lang, record in file_results.items():
+            if lang == reference_lang:
+                continue
+            lang_loaded = isinstance(record, dict) and record.get("loaded", False)
+            lang_valid = isinstance(record, dict) and record.get("is_valid")
+            if ref_loaded != lang_loaded:
+                divergences.append({
+                    "type": "loaded_disagreement",
+                    "reference_lang": reference_lang,
+                    "reference_loaded": ref_loaded,
+                    "divergent_lang": lang,
+                    "divergent_loaded": lang_loaded,
+                })
+            elif ref_loaded and ref_valid != lang_valid:
+                divergences.append({
+                    "type": "validity_disagreement",
+                    "reference_lang": reference_lang,
+                    "reference_is_valid": ref_valid,
+                    "divergent_lang": lang,
+                    "divergent_is_valid": lang_valid,
+                })
+
+        if divergences:
+            analysis["divergence"][test_file] = divergences
+            analysis["summary"]["divergent_tests"] += 1
+        else:
+            analysis["summary"]["consistent_tests"] += 1
+        analysis["summary"]["total_tests"] += 1
+
+    return analysis
 
 def calculate_divergence_summary(analysis: ConformanceAnalysis) -> Dict[str, Any]:
     """Calculate overall divergence summary across all test categories."""
@@ -390,7 +485,8 @@ def calculate_divergence_summary(analysis: ConformanceAnalysis) -> Dict[str, Any
         ("validation", analysis.validation_analysis),
         ("display", analysis.display_analysis),
         ("substitution", analysis.substitution_analysis),
-        ("graph", analysis.graph_analysis)
+        ("graph", analysis.graph_analysis),
+        ("mathematical_correctness", analysis.mathematical_correctness_analysis),
     ]
 
     total_score = 0.0
@@ -469,6 +565,7 @@ def main():
     analysis.display_analysis = compare_display_results(language_results)
     analysis.substitution_analysis = compare_substitution_results(language_results)
     analysis.graph_analysis = compare_graph_results(language_results)
+    analysis.mathematical_correctness_analysis = compare_mathematical_correctness_results(language_results)
 
     # Calculate divergence summary
     analysis.divergence_summary = calculate_divergence_summary(analysis)

@@ -289,7 +289,9 @@ def format_category_results(analysis_data: Dict[str, Any]) -> str:
         ("validation", "Validation Tests", analysis_data.get("validation_analysis", {})),
         ("display", "Display Format Tests", analysis_data.get("display_analysis", {})),
         ("substitution", "Substitution Tests", analysis_data.get("substitution_analysis", {})),
-        ("graph", "Graph Generation Tests", analysis_data.get("graph_analysis", {}))
+        ("graph", "Graph Generation Tests", analysis_data.get("graph_analysis", {})),
+        ("mathematical_correctness", "Mathematical Correctness Tests",
+         analysis_data.get("mathematical_correctness_analysis", {})),
     ]
 
     for category_id, category_name, category_data in categories:
@@ -327,7 +329,9 @@ def format_divergence_details(analysis_data: Dict[str, Any]) -> str:
         ("validation", "Validation Divergences", analysis_data.get("validation_analysis", {})),
         ("display", "Display Format Divergences", analysis_data.get("display_analysis", {})),
         ("substitution", "Substitution Divergences", analysis_data.get("substitution_analysis", {})),
-        ("graph", "Graph Generation Divergences", analysis_data.get("graph_analysis", {}))
+        ("graph", "Graph Generation Divergences", analysis_data.get("graph_analysis", {})),
+        ("mathematical_correctness", "Mathematical Correctness Divergences",
+         analysis_data.get("mathematical_correctness_analysis", {})),
     ]
 
     has_divergences = False
