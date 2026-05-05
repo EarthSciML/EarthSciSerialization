@@ -18,6 +18,7 @@ Pkg.activate(".")
 using EarthSciSerialization
 using JSON3
 using Printf
+using Dates
 
 struct ConformanceResults
     language::String
@@ -26,6 +27,7 @@ struct ConformanceResults
     display_results::Dict{String, Any}
     substitution_results::Dict{String, Any}
     graph_results::Dict{String, Any}
+    mathematical_correctness_results::Dict{String, Any}
     errors::Vector{String}
 end
 
@@ -244,65 +246,188 @@ function run_substitution_tests(tests_dir::String)
     return substitution_results
 end
 
+# Resolve an `input_file` reference inside a graphs/ fixture. Per
+# tests/graphs convention these are bare filenames living in tests/valid/.
+function _resolve_graph_input_file(tests_dir::String, fixture_path::String, ref::AbstractString)
+    candidates = [
+        joinpath(dirname(fixture_path), ref),
+        joinpath(tests_dir, "valid", ref),
+        joinpath(tests_dir, ref),
+    ]
+    for c in candidates
+        isfile(c) && return c
+    end
+    return nothing
+end
+
+# Load an ESM source — either from a file path on disk or an inline JSON dict
+# (the comprehensive_graph_generation_fixtures family encodes the full ESM
+# document inline under the "esm_file" key).
+function _load_esm_source(tests_dir::String, fixture_path::String, source)
+    if source isa AbstractString
+        path = _resolve_graph_input_file(tests_dir, fixture_path, source)
+        path === nothing && throw(ErrorException("ESM file not found: $source"))
+        return EarthSciSerialization.load(path)
+    else
+        json_str = JSON3.write(source)
+        return EarthSciSerialization.load(IOBuffer(json_str))
+    end
+end
+
+# Walk an ESM file through the validation + graph-construction pipeline and
+# emit a comparison-friendly summary (validity, component/expression graph
+# sizes). Failures are caught and recorded so a single broken fixture does
+# not abort the whole run.
+function _exercise_graph_fixture(esm_data)
+    record = Dict{String, Any}("loaded" => true)
+
+    try
+        result = EarthSciSerialization.validate(esm_data)
+        record["validation"] = Dict(
+            "is_valid" => result.is_valid,
+            "schema_error_count" => length(result.schema_errors),
+            "structural_error_count" => length(result.structural_errors),
+        )
+    catch e
+        record["validation"] = Dict("error" => string(e))
+    end
+
+    try
+        cg = EarthSciSerialization.component_graph(esm_data)
+        record["component_graph"] = Dict(
+            "nodes" => length(cg.nodes),
+            "edges" => length(cg.edges),
+        )
+    catch e
+        record["component_graph"] = Dict("error" => string(e))
+    end
+
+    try
+        eg = EarthSciSerialization.expression_graph(esm_data)
+        record["expression_graph"] = Dict(
+            "nodes" => length(eg.nodes),
+            "edges" => length(eg.edges),
+        )
+    catch e
+        record["expression_graph"] = Dict("error" => string(e))
+    end
+
+    return record
+end
+
 function run_graph_tests(tests_dir::String)
-    """Test graph generation functionality."""
+    """Drive each tests/graphs fixture through the load + validate +
+    component_graph + expression_graph pipeline. Captures node/edge counts
+    so the cross-language comparator can flag size divergence.
+
+    Handles three fixture shapes:
+      1. Dict with `input_file` (bare filename in tests/valid/).
+      2. Dict with `esm_file` (legacy key, may be path or inline dict).
+      3. List of test cases each carrying its own `name` + `esm_file`.
+    Pure expression-only fixtures (no top-level ESM document) are skipped.
+    """
     graph_results = Dict{String, Any}()
 
     graphs_dir = joinpath(tests_dir, "graphs")
-    if isdir(graphs_dir)
-        for filename in filter(f -> endswith(f, ".json"), readdir(graphs_dir))
-            filepath = joinpath(graphs_dir, filename)
-            try
-                test_data = JSON3.read(read(filepath, String))
+    isdir(graphs_dir) || return graph_results
 
-                if haskey(test_data, "esm_file")
-                    esm_file_path = joinpath(dirname(filepath), test_data["esm_file"])
-                    if isfile(esm_file_path)
-                        try
-                            esm_data = EarthSciSerialization.load(esm_file_path)
+    for filename in filter(f -> endswith(f, ".json"), readdir(graphs_dir))
+        filepath = joinpath(graphs_dir, filename)
+        try
+            test_data = JSON3.read(read(filepath, String))
 
-                            # Generate system graph
-                            system_graph = EarthSciSerialization.generate_system_graph(esm_data)
-
-                            # Export in different formats
-                            dot_output = EarthSciSerialization.export_dot(system_graph)
-                            json_output = EarthSciSerialization.export_json(system_graph)
-
-                            graph_results[filename] = Dict(
-                                "esm_file" => esm_file_path,
-                                "system_graph" => Dict(
-                                    "nodes" => length(system_graph.nodes),
-                                    "edges" => length(system_graph.edges),
-                                    "dot_format" => dot_output,
-                                    "json_format" => json_output
-                                ),
-                                "success" => true
-                            )
-                        catch e
-                            graph_results[filename] = Dict(
-                                "esm_file" => esm_file_path,
-                                "error" => string(e),
-                                "success" => false
-                            )
-                        end
-                    else
-                        graph_results[filename] = Dict(
-                            "error" => "ESM file not found: $esm_file_path",
-                            "success" => false
-                        )
+            if test_data isa AbstractVector
+                cases = Dict{String, Any}()
+                for (i, case) in enumerate(test_data)
+                    name = case isa AbstractDict && haskey(case, "name") ?
+                        String(case["name"]) : "case_$i"
+                    src = nothing
+                    if case isa AbstractDict
+                        src = get(case, "esm_file", nothing)
+                        src === nothing && (src = get(case, "input_file", nothing))
+                    end
+                    if src === nothing
+                        cases[name] = Dict("skipped" => "no esm_file/input_file")
+                        continue
+                    end
+                    try
+                        esm_data = _load_esm_source(tests_dir, filepath, src)
+                        cases[name] = _exercise_graph_fixture(esm_data)
+                    catch e
+                        cases[name] = Dict("loaded" => false, "error" => string(e))
                     end
                 end
-
-            catch e
-                graph_results[filename] = Dict(
-                    "error" => string(e),
-                    "success" => false
-                )
+                graph_results[filename] = Dict("test_cases" => cases)
+            else
+                src = get(test_data, "input_file", nothing)
+                src === nothing && (src = get(test_data, "esm_file", nothing))
+                if src === nothing
+                    graph_results[filename] = Dict("skipped" => "no input_file/esm_file")
+                    continue
+                end
+                try
+                    esm_data = _load_esm_source(tests_dir, filepath, src)
+                    record = _exercise_graph_fixture(esm_data)
+                    record["input_file"] = src isa AbstractString ? String(src) : "<inline>"
+                    graph_results[filename] = record
+                catch e
+                    graph_results[filename] = Dict(
+                        "loaded" => false,
+                        "error" => string(e),
+                        "input_file" => src isa AbstractString ? String(src) : "<inline>",
+                    )
+                end
             end
+        catch e
+            graph_results[filename] = Dict(
+                "error" => string(e),
+                "loaded" => false,
+            )
         end
     end
 
     return graph_results
+end
+
+function run_mathematical_correctness_tests(tests_dir::String)
+    """Drive each .esm file under tests/mathematical_correctness/ through
+    load + validate. The fixtures encode conservation laws, dimensional
+    analysis, and numerical-correctness scenarios — parsing them in every
+    binding catches schema/structural drift that the conformance harness
+    would otherwise miss (esm-rs7 / audit esm-rv3 §3.1)."""
+    results = Dict{String, Any}()
+
+    math_dir = joinpath(tests_dir, "mathematical_correctness")
+    isdir(math_dir) || return results
+
+    for filename in filter(f -> endswith(f, ".esm"), readdir(math_dir))
+        filepath = joinpath(math_dir, filename)
+        try
+            esm_data = EarthSciSerialization.load(filepath)
+            try
+                result = EarthSciSerialization.validate(esm_data)
+                results[filename] = Dict(
+                    "loaded" => true,
+                    "is_valid" => result.is_valid,
+                    "schema_error_count" => length(result.schema_errors),
+                    "structural_error_count" => length(result.structural_errors),
+                )
+            catch e
+                results[filename] = Dict(
+                    "loaded" => true,
+                    "validation_error" => string(e),
+                )
+            end
+        catch e
+            results[filename] = Dict(
+                "loaded" => false,
+                "error" => string(e),
+                "error_type" => string(typeof(e)),
+            )
+        end
+    end
+
+    return results
 end
 
 function main()
@@ -320,6 +445,13 @@ function main()
     println("Output directory: $output_dir")
 
     errors = String[]
+    # Declare results up front so the `try`-block bindings are visible when
+    # we assemble the final ConformanceResults (Julia 1.11+ scoping).
+    validation_results = Dict{String, Any}()
+    display_results = Dict{String, Any}()
+    substitution_results = Dict{String, Any}()
+    graph_results = Dict{String, Any}()
+    math_results = Dict{String, Any}()
 
     # Run all test categories
     try
@@ -358,6 +490,15 @@ function main()
         println("✗ Graph tests failed: $e")
     end
 
+    try
+        math_results = run_mathematical_correctness_tests(tests_dir)
+        println("✓ Mathematical-correctness tests completed")
+    catch e
+        math_results = Dict{String, Any}()
+        push!(errors, "Mathematical-correctness tests failed: $(string(e))")
+        println("✗ Mathematical-correctness tests failed: $e")
+    end
+
     # Compile results
     results = ConformanceResults(
         "julia",
@@ -366,6 +507,7 @@ function main()
         display_results,
         substitution_results,
         graph_results,
+        math_results,
         errors
     )
 
