@@ -36,7 +36,9 @@ include("units.jl")
 include("edit.jl")
 include("codegen.jl")
 include("canonicalize.jl")
+include("scheme_types.jl")
 include("rule_engine.jl")
+include("scheme_expansion.jl")
 include("discretize.jl")
 include("grid_accessor.jl")
 include("abstract_grid.jl")
@@ -125,6 +127,9 @@ export
     check_guards, check_guard, check_scope,
     with_query_point,
     parse_rule, parse_rules, check_unrewritten_pde_ops,
+    # Scheme expansion (RFC §7, esm-j1u)
+    Scheme, StencilEntry, Selector, CartesianSelector,
+    parse_scheme, parse_schemes, materialize, expand_scheme,
     # Discretization pipeline (RFC §11, gt-gbs2)
     discretize,
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)

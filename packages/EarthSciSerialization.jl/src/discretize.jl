@@ -148,7 +148,9 @@ function _build_rule_context(esm::Dict{String,Any})::RuleContext
             end
         end
     end
-    return RuleContext(grids, variables)
+    schemes = parse_schemes(get(esm, "discretizations", nothing))
+    return RuleContext(grids, variables, Dict{String,Int}(), nothing,
+                       Dict{String,Vector{Dict{String,Int}}}(), schemes)
 end
 
 function _extract_grid_meta(graw)::Dict{String,Any}

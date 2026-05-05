@@ -219,12 +219,17 @@ struct Rule
     name::String
     pattern::Expr
     where::Vector{Guard}
-    replacement::Expr
+    replacement::Union{Expr,Nothing}
     region::Union{String,RuleRegion,Nothing}
     where_expr::Union{Expr,Nothing}
     boundary_policy::BoundaryPolicy
     ghost_width::GhostWidth
     bindings::Union{Dict{String,RuleBinding},Nothing}
+    # esm-j1u: when set, the rule's replacement is a §7 scheme name
+    # (`use: <scheme>` form, RFC §5.2 / §7.2.1). `replacement` is then
+    # `nothing` and the rule engine dispatches to `expand_scheme` at
+    # rewrite time.
+    replacement_scheme::Union{String,Nothing}
 end
 
 Rule(name::String, pattern::Expr, replacement::Expr;
@@ -233,20 +238,21 @@ Rule(name::String, pattern::Expr, replacement::Expr;
      where_expr::Union{Expr,Nothing}=nothing,
      boundary_policy::BoundaryPolicy=nothing,
      ghost_width::GhostWidth=nothing,
-     bindings::Union{Dict{String,RuleBinding},Nothing}=nothing) =
+     bindings::Union{Dict{String,RuleBinding},Nothing}=nothing,
+     replacement_scheme::Union{String,Nothing}=nothing) =
     Rule(name, pattern, where, replacement, region, where_expr,
-         boundary_policy, ghost_width, bindings)
+         boundary_policy, ghost_width, bindings, replacement_scheme)
 
 # Backward-compatible 5-arg positional constructor (pre-§5.2.7 callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      region::Union{String,RuleRegion,Nothing}) =
-    Rule(name, pattern, where, replacement, region, nothing, nothing, nothing, nothing)
+    Rule(name, pattern, where, replacement, region, nothing, nothing, nothing, nothing, nothing)
 
 # Backward-compatible 6-arg positional constructor (pre-§5.2.8 callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      region::Union{String,RuleRegion,Nothing},
      where_expr::Union{Expr,Nothing}) =
-    Rule(name, pattern, where, replacement, region, where_expr, nothing, nothing, nothing)
+    Rule(name, pattern, where, replacement, region, where_expr, nothing, nothing, nothing, nothing)
 
 # Backward-compatible 8-arg positional constructor (pre-esm-bet ghost_width callers).
 Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
@@ -255,7 +261,18 @@ Rule(name::String, pattern::Expr, where::Vector{Guard}, replacement::Expr,
      boundary_policy::BoundaryPolicy,
      bindings::Union{Dict{String,RuleBinding},Nothing}) =
     Rule(name, pattern, where, replacement, region, where_expr,
-         boundary_policy, nothing, bindings)
+         boundary_policy, nothing, bindings, nothing)
+
+# Backward-compatible 9-arg positional constructor (pre-esm-j1u use:-rule callers).
+Rule(name::String, pattern::Expr, where::Vector{Guard},
+     replacement::Union{Expr,Nothing},
+     region::Union{String,RuleRegion,Nothing},
+     where_expr::Union{Expr,Nothing},
+     boundary_policy::BoundaryPolicy,
+     ghost_width::GhostWidth,
+     bindings::Union{Dict{String,RuleBinding},Nothing}) =
+    Rule(name, pattern, where, replacement, region, where_expr,
+         boundary_policy, ghost_width, bindings, nothing)
 
 # ============================================================================
 # Pattern variable detection
@@ -433,17 +450,23 @@ struct RuleContext
     query_point::Dict{String,Int}
     grid_name::Union{String,Nothing}
     mask_fields::Dict{String,Vector{Dict{String,Int}}}
+    # esm-j1u: registry of `discretizations.<name>` schemes referenced by
+    # `use:` rules (RFC §5.2 / §7.2.1). Empty when no schemes are declared
+    # or when only inline-`replacement` rules are in play.
+    schemes::Dict{String,Scheme}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
                             Dict{String,Dict{String,Any}}(),
                             Dict{String,Int}(),
                             nothing,
-                            Dict{String,Vector{Dict{String,Int}}}())
+                            Dict{String,Vector{Dict{String,Int}}}(),
+                            Dict{String,Scheme}())
 
 RuleContext(grids, variables) = RuleContext(grids, variables,
                                             Dict{String,Int}(), nothing,
-                                            Dict{String,Vector{Dict{String,Int}}}())
+                                            Dict{String,Vector{Dict{String,Int}}}(),
+                                            Dict{String,Scheme}())
 
 # Backward-compatible 4-arg constructor (pre-mask_field callers).
 RuleContext(grids::Dict{String,Dict{String,Any}},
@@ -451,7 +474,17 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
             query_point::Dict{String,Int},
             grid_name::Union{String,Nothing}) =
     RuleContext(grids, variables, query_point, grid_name,
-                Dict{String,Vector{Dict{String,Int}}}())
+                Dict{String,Vector{Dict{String,Int}}}(),
+                Dict{String,Scheme}())
+
+# Backward-compatible 5-arg constructor (pre-esm-j1u schemes callers).
+RuleContext(grids::Dict{String,Dict{String,Any}},
+            variables::Dict{String,Dict{String,Any}},
+            query_point::Dict{String,Int},
+            grid_name::Union{String,Nothing},
+            mask_fields::Dict{String,Vector{Dict{String,Int}}}) =
+    RuleContext(grids, variables, query_point, grid_name, mask_fields,
+                Dict{String,Scheme}())
 
 """
     with_query_point(ctx, point; grid=nothing) -> RuleContext
@@ -466,7 +499,7 @@ with_query_point(ctx::RuleContext, point::Dict{String,Int};
                  grid::Union{String,Nothing}=nothing) =
     RuleContext(ctx.grids, ctx.variables, point,
                 grid === nothing ? ctx.grid_name : grid,
-                ctx.mask_fields)
+                ctx.mask_fields, ctx.schemes)
 
 """
     check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
@@ -657,7 +690,7 @@ function _rewrite_pass(expr::Expr, rules::Vector{Rule}, ctx::RuleContext,
         m2 = check_guards(rule.where, m, ctx)
         m2 === nothing && continue
         check_scope(rule, m2, ctx) || continue
-        new_expr = apply_bindings(rule.replacement, m2)
+        new_expr = _apply_rule_rhs(rule, m2, ctx)
         changed[] = true
         return new_expr  # sealed: do not descend
     end
@@ -678,6 +711,68 @@ function _rewrite_pass(expr::Expr, rules::Vector{Rule}, ctx::RuleContext,
     return expr
 end
 
+# Dispatch a fired rule's RHS: inline `replacement` (apply bindings) vs
+# `use: <scheme>` (look up scheme + invoke §7 expansion). RFC §5.2 / §7.2.1.
+function _apply_rule_rhs(rule::Rule, bindings::Dict{String,Expr},
+                          ctx::RuleContext)::Expr
+    if rule.replacement_scheme !== nothing
+        sname = rule.replacement_scheme
+        haskey(ctx.schemes, sname) || throw(RuleEngineError(
+            "E_SCHEME_MISMATCH",
+            "rule $(rule.name): `use: $sname` references a scheme not " *
+            "declared in `discretizations`"))
+        scheme = ctx.schemes[sname]
+        # `applies_to` guard check (RFC §7.2.1 step 3): re-match the scheme's
+        # depth-1 pattern against the rule-matched subtree's reconstruction
+        # via `bindings`. The scheme's pattern variables must already appear
+        # in the rule's bindings — name-aligned per §7.2.1 step 4. We verify
+        # that every pattern variable referenced in the scheme's `applies_to`
+        # is bound; mismatch on the operator class (op name / dim sibling)
+        # is caught by the same name-alignment check.
+        _check_applies_to(rule, scheme, bindings)
+        return expand_scheme(scheme, bindings, ctx)
+    end
+    rule.replacement === nothing && throw(RuleEngineError(
+        "E_RULE_REPLACEMENT_MISSING",
+        "rule $(rule.name): no replacement and no `use:` — should have been " *
+        "rejected at parse time"))
+    return apply_bindings(rule.replacement, bindings)
+end
+
+function _check_applies_to(rule::Rule, scheme::Scheme,
+                            bindings::Dict{String,Expr})
+    pat = scheme.applies_to
+    pat isa OpExpr || throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "scheme $(scheme.name): applies_to must be an op node"))
+    rule_pat = rule.pattern
+    rule_pat isa OpExpr || throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "rule $(rule.name): pattern must be an op node when `use:` is set"))
+    pat.op == rule_pat.op || throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "rule $(rule.name) / scheme $(scheme.name): operator mismatch " *
+        "(rule pattern: `$(rule_pat.op)`, scheme applies_to: `$(pat.op)`)"))
+    # Verify any pvar referenced by the scheme's applies_to (and any pvar in
+    # `dim`) is bound by the rule. Scheme's `applies_to` is a guard only —
+    # it does not introduce new bindings (§7.2.1).
+    _check_pvars_bound(scheme, pat, bindings)
+    if pat.dim !== nothing && _is_pvar_string(pat.dim)
+        haskey(bindings, pat.dim) || throw(RuleEngineError("E_SCHEME_MISMATCH",
+            "rule $(rule.name) / scheme $(scheme.name): pattern variable " *
+            "`$(pat.dim)` (dim) is not bound by rule pattern"))
+    end
+end
+
+function _check_pvars_bound(scheme::Scheme, e::Expr, bindings::Dict{String,Expr})
+    if e isa VarExpr && _is_pvar(e)
+        haskey(bindings, e.name) || throw(RuleEngineError("E_SCHEME_MISMATCH",
+            "scheme $(scheme.name): pattern variable `$(e.name)` referenced in " *
+            "applies_to is not bound by the triggering rule (RFC §7.2.1)"))
+    elseif e isa OpExpr
+        for a in e.args
+            _check_pvars_bound(scheme, a, bindings)
+        end
+    end
+end
+
 # ============================================================================
 # JSON loading (rules and expressions)
 # ============================================================================
@@ -695,9 +790,24 @@ RFC §5.2.7).
 function parse_rule(name::AbstractString, obj)::Rule
     pat = _parse_expr(_getkey(obj, "pattern"))
     repl_raw = _getkey(obj, "replacement"; default=nothing)
-    repl_raw === nothing && throw(RuleEngineError("E_RULE_REPLACEMENT_MISSING",
-        "rule $name: MVP supports only the 'replacement' form; 'use:' rules are deferred"))
-    repl = _parse_expr(repl_raw)
+    use_raw = _getkey(obj, "use"; default=nothing)
+    if repl_raw !== nothing && use_raw !== nothing
+        throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `replacement` and `use` are mutually exclusive (RFC §5.2)"))
+    end
+    repl::Union{Expr,Nothing} = nothing
+    use_scheme::Union{String,Nothing} = nothing
+    if use_raw !== nothing
+        use_raw isa AbstractString || throw(RuleEngineError("E_RULE_PARSE",
+            "rule $name: `use` must be a string scheme name"))
+        use_scheme = String(use_raw)
+    elseif repl_raw !== nothing
+        repl = _parse_expr(repl_raw)
+    else
+        throw(RuleEngineError("E_RULE_REPLACEMENT_MISSING",
+            "rule $name: must declare either `replacement` (inline AST) or " *
+            "`use: <scheme>` (RFC §5.2)"))
+    end
     where_raw = _getkey(obj, "where"; default=nothing)
     guards, where_expr = _parse_where(String(name), where_raw)
     region_raw = _getkey(obj, "region"; default=nothing)
@@ -709,7 +819,7 @@ function parse_rule(name::AbstractString, obj)::Rule
     bindings_raw = _getkey(obj, "bindings"; default=nothing)
     bindings = _parse_bindings(String(name), bindings_raw)
     return Rule(String(name), pat, guards, repl, region, where_expr,
-                boundary_policy, ghost_width, bindings)
+                boundary_policy, ghost_width, bindings, use_scheme)
 end
 
 # Closed set of policy kinds accepted in either the string-form
