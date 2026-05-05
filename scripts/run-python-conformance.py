@@ -38,6 +38,7 @@ class ConformanceResults:
         self.display_results = {}
         self.substitution_results = {}
         self.graph_results = {}
+        self.mathematical_correctness_results = {}
         self.errors = []
 
     def to_dict(self):
@@ -48,6 +49,7 @@ class ConformanceResults:
             "display_results": self.display_results,
             "substitution_results": self.substitution_results,
             "graph_results": self.graph_results,
+            "mathematical_correctness_results": self.mathematical_correctness_results,
             "errors": self.errors
         }
 
@@ -246,62 +248,161 @@ def run_substitution_tests(tests_dir: Path) -> Dict[str, Any]:
 
     return substitution_results
 
+def _resolve_graph_input_file(tests_dir: Path, fixture_path: Path, ref: str):
+    """Tests/graphs fixtures reference ESM files by bare filename — they
+    live in tests/valid/. Try a few obvious roots."""
+    for candidate in (
+        fixture_path.parent / ref,
+        tests_dir / "valid" / ref,
+        tests_dir / ref,
+    ):
+        if candidate.exists():
+            return candidate
+    return None
+
+def _load_esm_source(tests_dir: Path, fixture_path: Path, source):
+    """Source may be a bare filename (string) or an inline ESM dict (the
+    comprehensive_graph_generation_fixtures family inlines documents)."""
+    if isinstance(source, str):
+        path = _resolve_graph_input_file(tests_dir, fixture_path, source)
+        if path is None:
+            raise FileNotFoundError(f"ESM file not found: {source}")
+        return earthsci_toolkit.load(path)
+    return earthsci_toolkit.load(source)
+
+def _exercise_graph_fixture(esm_data) -> Dict[str, Any]:
+    """Drive an ESM doc through validate + component_graph + expression_graph
+    and capture comparison-friendly summaries. Each step is wrapped so a
+    single failure does not abort the rest."""
+    record: Dict[str, Any] = {"loaded": True}
+
+    try:
+        result = earthsci_toolkit.validate(esm_data)
+        record["validation"] = {
+            "is_valid": getattr(result, "is_valid", False),
+            "schema_error_count": len(getattr(result, "schema_errors", []) or []),
+            "structural_error_count": len(getattr(result, "structural_errors", []) or []),
+        }
+    except Exception as e:
+        record["validation"] = {"error": str(e)}
+
+    try:
+        cg = earthsci_toolkit.component_graph(esm_data)
+        record["component_graph"] = {
+            "nodes": len(cg.nodes),
+            "edges": len(cg.edges),
+        }
+    except Exception as e:
+        record["component_graph"] = {"error": str(e)}
+
+    try:
+        eg = earthsci_toolkit.expression_graph(esm_data)
+        record["expression_graph"] = {
+            "nodes": len(eg.nodes),
+            "edges": len(eg.edges),
+        }
+    except Exception as e:
+        record["expression_graph"] = {"error": str(e)}
+
+    return record
+
 def run_graph_tests(tests_dir: Path) -> Dict[str, Any]:
-    """Test graph generation functionality."""
+    """Drive each tests/graphs fixture through the load + validate +
+    component_graph + expression_graph pipeline. Captures node/edge counts
+    so the cross-language comparator can flag size divergence (esm-rs7).
+
+    Handles three fixture shapes:
+      1. Dict with `input_file` (bare filename in tests/valid/).
+      2. Dict with `esm_file` (legacy key, may be path or inline dict).
+      3. List of test cases each carrying its own `name` + `esm_file`.
+    """
     print("Running graph tests...")
-    graph_results = {}
+    graph_results: Dict[str, Any] = {}
 
     graphs_dir = tests_dir / "graphs"
-    if graphs_dir.exists() and graphs_dir.is_dir():
-        graph_files = [f for f in graphs_dir.iterdir() if f.suffix == ".json"]
+    if not (graphs_dir.exists() and graphs_dir.is_dir()):
+        return graph_results
 
-        for filepath in graph_files:
-            try:
-                with open(filepath, 'r') as f:
-                    test_data = json.load(f)
+    for filepath in sorted(graphs_dir.iterdir()):
+        if filepath.suffix != ".json":
+            continue
+        try:
+            with open(filepath, 'r') as f:
+                test_data = json.load(f)
 
-                if "esm_file" in test_data:
-                    esm_file_path = filepath.parent / test_data["esm_file"]
-                    if esm_file_path.exists():
-                        try:
-                            esm_data = earthsci_toolkit.load(esm_file_path)
-
-                            # Generate system graph
-                            system_graph = earthsci_toolkit.generate_system_graph(esm_data)
-
-                            # Export in different formats
-                            dot_output = earthsci_toolkit.export_dot(system_graph)
-                            json_output = earthsci_toolkit.export_json(system_graph)
-
-                            graph_results[filepath.name] = {
-                                "esm_file": str(esm_file_path),
-                                "system_graph": {
-                                    "nodes": len(system_graph.nodes),
-                                    "edges": len(system_graph.edges),
-                                    "dot_format": dot_output,
-                                    "json_format": json_output
-                                },
-                                "success": True
-                            }
-                        except Exception as e:
-                            graph_results[filepath.name] = {
-                                "esm_file": str(esm_file_path),
-                                "error": str(e),
-                                "success": False
-                            }
-                    else:
-                        graph_results[filepath.name] = {
-                            "error": f"ESM file not found: {esm_file_path}",
-                            "success": False
-                        }
-
-            except Exception as e:
-                graph_results[filepath.name] = {
-                    "error": str(e),
-                    "success": False
-                }
+            if isinstance(test_data, list):
+                cases: Dict[str, Any] = {}
+                for i, case in enumerate(test_data):
+                    name = case.get("name") if isinstance(case, dict) else None
+                    name = name or f"case_{i}"
+                    src = None
+                    if isinstance(case, dict):
+                        src = case.get("esm_file") or case.get("input_file")
+                    if src is None:
+                        cases[name] = {"skipped": "no esm_file/input_file"}
+                        continue
+                    try:
+                        esm_data = _load_esm_source(tests_dir, filepath, src)
+                        cases[name] = _exercise_graph_fixture(esm_data)
+                    except Exception as e:
+                        cases[name] = {"loaded": False, "error": str(e)}
+                graph_results[filepath.name] = {"test_cases": cases}
+            elif isinstance(test_data, dict):
+                src = test_data.get("input_file") or test_data.get("esm_file")
+                if src is None:
+                    graph_results[filepath.name] = {"skipped": "no input_file/esm_file"}
+                    continue
+                try:
+                    esm_data = _load_esm_source(tests_dir, filepath, src)
+                    record = _exercise_graph_fixture(esm_data)
+                    record["input_file"] = src if isinstance(src, str) else "<inline>"
+                    graph_results[filepath.name] = record
+                except Exception as e:
+                    graph_results[filepath.name] = {
+                        "loaded": False,
+                        "error": str(e),
+                        "input_file": src if isinstance(src, str) else "<inline>",
+                    }
+        except Exception as e:
+            graph_results[filepath.name] = {"loaded": False, "error": str(e)}
 
     return graph_results
+
+def run_mathematical_correctness_tests(tests_dir: Path) -> Dict[str, Any]:
+    """Drive each .esm file under tests/mathematical_correctness/ through
+    load + validate. Catches schema/structural drift in the conservation
+    laws / dimensional analysis / numerical correctness fixtures that
+    audit esm-rv3 §3.1 flagged as untested across bindings."""
+    print("Running mathematical-correctness tests...")
+    results: Dict[str, Any] = {}
+
+    math_dir = tests_dir / "mathematical_correctness"
+    if not (math_dir.exists() and math_dir.is_dir()):
+        return results
+
+    for filepath in sorted(math_dir.iterdir()):
+        if filepath.suffix != ".esm":
+            continue
+        try:
+            esm_data = earthsci_toolkit.load(filepath)
+            try:
+                result = earthsci_toolkit.validate(esm_data)
+                results[filepath.name] = {
+                    "loaded": True,
+                    "is_valid": getattr(result, "is_valid", False),
+                    "schema_error_count": len(getattr(result, "schema_errors", []) or []),
+                    "structural_error_count": len(getattr(result, "structural_errors", []) or []),
+                }
+            except Exception as e:
+                results[filepath.name] = {"loaded": True, "validation_error": str(e)}
+        except Exception as e:
+            results[filepath.name] = {
+                "loaded": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+
+    return results
 
 def main():
     if len(sys.argv) != 2:
@@ -350,6 +451,14 @@ def main():
         results.graph_results = {}
         results.errors.append(f"Graph tests failed: {str(e)}")
         print(f"✗ Graph tests failed: {e}")
+
+    try:
+        results.mathematical_correctness_results = run_mathematical_correctness_tests(tests_dir)
+        print("✓ Mathematical-correctness tests completed")
+    except Exception as e:
+        results.mathematical_correctness_results = {}
+        results.errors.append(f"Mathematical-correctness tests failed: {str(e)}")
+        print(f"✗ Mathematical-correctness tests failed: {e}")
 
     # Write results to file
     write_results(output_dir, results)
