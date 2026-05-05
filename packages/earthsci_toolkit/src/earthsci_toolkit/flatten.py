@@ -320,6 +320,12 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             perm=expr.perm,
             axis=expr.axis,
             fn=expr.fn,
+            handler_id=expr.handler_id,
+            name=expr.name,
+            value=expr.value,
+            table=expr.table,
+            table_axes=expr.table_axes,
+            output=expr.output,
         )
     return expr
 
@@ -817,7 +823,36 @@ def _namespace_event_expr(expr: Expr, system_var_names: Dict[str, str]) -> Expr:
         return system_var_names.get(expr, expr)
     if isinstance(expr, ExprNode):
         new_args = [_namespace_event_expr(a, system_var_names) for a in expr.args]
-        return ExprNode(op=expr.op, args=new_args, wrt=expr.wrt, dim=expr.dim)
+        new_body = (
+            _namespace_event_expr(expr.expr, system_var_names)
+            if expr.expr is not None else None
+        )
+        new_values = (
+            [_namespace_event_expr(v, system_var_names) for v in expr.values]
+            if expr.values is not None else None
+        )
+        return ExprNode(
+            op=expr.op,
+            args=new_args,
+            wrt=expr.wrt,
+            dim=expr.dim,
+            output_idx=expr.output_idx,
+            expr=new_body,
+            reduce=expr.reduce,
+            ranges=expr.ranges,
+            regions=expr.regions,
+            values=new_values,
+            shape=expr.shape,
+            perm=expr.perm,
+            axis=expr.axis,
+            fn=expr.fn,
+            handler_id=expr.handler_id,
+            name=expr.name,
+            value=expr.value,
+            table=expr.table,
+            table_axes=expr.table_axes,
+            output=expr.output,
+        )
     return expr
 
 

@@ -51,6 +51,12 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
             perm=expr.perm,
             axis=expr.axis,
             fn=expr.fn,
+            handler_id=expr.handler_id,
+            name=expr.name,
+            value=expr.value,
+            table=expr.table,
+            table_axes=expr.table_axes,
+            output=expr.output,
         )
     elif isinstance(expr, dict):
         # Handle dict-form expression nodes (e.g. {"op": "+", "args": ["x", "y"]})

@@ -24,7 +24,10 @@ import sympy as sp
 
 from .esm_types import Expr, ExprNode
 from .flatten import FlattenedSystem
-from .numpy_interpreter import UnreachableSpatialOperatorError
+from .numpy_interpreter import (
+    UnreachableSpatialOperatorError,
+    _INTERP_CONST_ARG_POSITIONS,
+)
 
 
 class SimulationError(Exception):
@@ -94,7 +97,64 @@ class _ess_numeric_abs(sp.Function):
 _LAMBDIFY_MODULES = [{"_ess_numeric_abs": np.abs}, "numpy"]
 
 
-def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
+def _make_fn_closure(
+    closed_name: str,
+    arity: int,
+    const_args: Dict[int, List],
+    sym_positions: List[int],
+) -> Callable:
+    """Build a closure for an ``fn`` op with const-array args baked in.
+
+    ``closed_name`` is the closed-function-registry name (e.g.
+    ``"interp.bilinear"``). ``const_args`` maps positional index → list (the
+    table/axis tensor extracted from a ``const``-op AST node at compile
+    time). ``sym_positions`` lists the positions whose values come from the
+    symbolic call site; the returned closure receives these in order from
+    the lambdified RHS at runtime.
+
+    The closure handles both scalar and array runtime inputs so that the
+    same compiled callable is reusable both inside the integrator's RHS
+    (called with scalar state/time per step) and in the observed-vector
+    pass (called once with arrays over the output time grid).
+    """
+    from .registered_functions import evaluate_closed_function
+
+    captured_consts = dict(const_args)
+    captured_positions = list(sym_positions)
+
+    def closure(*sym_vals):
+        arrs = [np.asarray(v, dtype=float) for v in sym_vals]
+        any_array = any(a.ndim > 0 for a in arrs)
+        if not any_array:
+            full_args: List = [None] * arity
+            for pos, val in captured_consts.items():
+                full_args[pos] = val
+            for k, pos in enumerate(captured_positions):
+                full_args[pos] = float(arrs[k])
+            return float(evaluate_closed_function(closed_name, full_args))
+        if arrs:
+            shape = np.broadcast_shapes(*(a.shape for a in arrs))
+        else:
+            shape = ()
+        broadcast = [np.broadcast_to(a, shape) for a in arrs]
+        out = np.empty(shape, dtype=float)
+        for idx in np.ndindex(*shape) if shape else [()]:
+            full_args = [None] * arity
+            for pos, val in captured_consts.items():
+                full_args[pos] = val
+            for k, pos in enumerate(captured_positions):
+                full_args[pos] = float(broadcast[k][idx])
+            out[idx] = float(evaluate_closed_function(closed_name, full_args))
+        return out
+
+    return closure
+
+
+def _expr_to_sympy(
+    expr: Expr,
+    symbol_map: Dict[str, sp.Symbol],
+    fn_registry: Optional[Dict[str, Callable]] = None,
+) -> sp.Expr:
     """
     Convert ESM Expr to SymPy expression.
 
@@ -138,8 +198,65 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
         if expr.op in ('grad', 'div', 'laplacian'):
             raise UnreachableSpatialOperatorError(expr.op)
 
+        # `const` (inline literal value, esm-spec §9.2 / §9.5). Scalar
+        # literals are inlined as ``sp.Float``. Array-valued ``const`` nodes
+        # are only meaningful as inline tables for ``interp.*`` calls (per
+        # esm-spec §9.2) and are extracted at the enclosing ``fn`` node;
+        # encountering one outside that context indicates a malformed AST
+        # for the SymPy/lambdify backend (the array-op path uses the NumPy
+        # interpreter instead).
+        if expr.op == 'const':
+            v = expr.value
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return sp.Float(v)
+            raise SimulationError(
+                "array-valued `const` op outside `fn` is not supported by "
+                "the SymPy backend; inline-const tables MUST appear as the "
+                "table/axis arg of an `interp.*` `fn` call (esm-spec §9.2)"
+            )
+
+        # `fn` (closed function registry call, esm-spec §9.2). Emitted as
+        # an opaque ``sp.Function`` so SymPy treats the call as an
+        # uninterpreted symbolic node — no derivative, no algebraic
+        # simplification — mirroring the Julia binding's
+        # ``@register_symbolic`` treatment that keeps ``interp.*`` opaque
+        # to ``structural_simplify``. Inline-``const`` table/axis args
+        # listed in ``_INTERP_CONST_ARG_POSITIONS`` are extracted at
+        # compile time and baked into a closure registered under a
+        # uniquified name so that distinct call sites with different
+        # tables map to distinct opaque functions.
+        if expr.op == 'fn':
+            if fn_registry is None:
+                raise SimulationError(
+                    "`fn` op encountered but no fn registry was provided to "
+                    "`_expr_to_sympy`. Callers that lambdify expressions "
+                    "containing `fn` calls MUST thread an `fn_registry` dict "
+                    "through compilation so the closures resolve at runtime."
+                )
+            if expr.name is None:
+                raise SimulationError("`fn` op missing required `name` field")
+            const_positions = set(_INTERP_CONST_ARG_POSITIONS.get(expr.name, ()))
+            const_args: Dict[int, List] = {}
+            sym_positions: List[int] = []
+            sym_args: List[sp.Expr] = []
+            for i, a in enumerate(expr.args):
+                if (
+                    i in const_positions
+                    and isinstance(a, ExprNode)
+                    and a.op == "const"
+                ):
+                    const_args[i] = list(a.value or [])
+                else:
+                    sym_args.append(_expr_to_sympy(a, symbol_map, fn_registry))
+                    sym_positions.append(i)
+            opaque_name = f"_ess_fn_{len(fn_registry)}"
+            fn_registry[opaque_name] = _make_fn_closure(
+                expr.name, len(expr.args), const_args, sym_positions,
+            )
+            return sp.Function(opaque_name)(*sym_args)
+
         # Convert arguments recursively
-        sympy_args = [_expr_to_sympy(arg, symbol_map) for arg in expr.args]
+        sympy_args = [_expr_to_sympy(arg, symbol_map, fn_registry) for arg in expr.args]
 
         # Handle different operations
         if expr.op == '+':
@@ -299,6 +416,7 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
 
 def _flat_to_sympy_rhs(
     flat: FlattenedSystem,
+    fn_registry: Optional[Dict[str, Callable]] = None,
 ) -> Tuple[
     List[str],
     List[str],
@@ -374,10 +492,12 @@ def _flat_to_sympy_rhs(
         if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
             inner = lhs.args[0]
             if isinstance(inner, str) and inner in flat.state_variables:
-                diff_rhs[inner] = _expr_to_sympy(eq.rhs, dict(symbol_map))
+                diff_rhs[inner] = _expr_to_sympy(
+                    eq.rhs, dict(symbol_map), fn_registry,
+                )
                 continue
         if isinstance(lhs, str) and lhs in flat.state_variables:
-            rhs_sym = _expr_to_sympy(eq.rhs, dict(symbol_map))
+            rhs_sym = _expr_to_sympy(eq.rhs, dict(symbol_map), fn_registry)
             if lhs in alg_rhs:
                 # Same-system DAE: a previous equation already defines this
                 # variable. Treat ``lhs = rhs_sym`` as an algebraic constraint
@@ -500,6 +620,7 @@ def _observed_to_sympy_value_exprs(
     symbol_map: Dict[str, sp.Symbol],
     algebraic_state_names: List[str],
     algebraic_value_exprs: Dict[str, sp.Expr],
+    fn_registry: Optional[Dict[str, Callable]] = None,
 ) -> Tuple[List[str], Dict[str, sp.Expr]]:
     """Build SymPy value expressions for ``flat.observed_variables``.
 
@@ -538,7 +659,7 @@ def _observed_to_sympy_value_exprs(
     for eq in flat.equations:
         lhs = eq.lhs
         if isinstance(lhs, str) and lhs in flat.observed_variables:
-            obs_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(sym_map))
+            obs_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(sym_map), fn_registry)
 
     observed_with_eq = [n for n in observed_names_all if n in obs_rhs]
     if not observed_with_eq:
@@ -654,6 +775,16 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     if cached is not None:
         return cached
 
+    # ``fn_registry`` collects opaque-function closures emitted by
+    # ``_expr_to_sympy`` for ``fn`` op nodes (closed function registry calls,
+    # esm-spec §9.2). Inline-``const`` table/axis args are baked into each
+    # closure at compile time; the lambdified RHS dispatches by the unique
+    # ``_ess_fn_<seq>`` name, so we hand the registry to ``sp.lambdify`` as
+    # an additional module dict. fastjx.esm and any other model with
+    # ``interp.linear`` / ``interp.bilinear`` observed bodies routes through
+    # this path.
+    fn_registry: Dict[str, Callable] = {}
+
     (
         state_names,
         parameter_names,
@@ -661,7 +792,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         rhs_exprs,
         algebraic_state_names,
         algebraic_value_exprs,
-    ) = _flat_to_sympy_rhs(flat)
+    ) = _flat_to_sympy_rhs(flat, fn_registry)
 
     observed_names, observed_value_exprs = _observed_to_sympy_value_exprs(
         flat,
@@ -670,6 +801,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         symbol_map,
         algebraic_state_names,
         algebraic_value_exprs,
+        fn_registry,
     )
 
     # Differential and algebraic RHS expressions may reference observed
@@ -703,9 +835,17 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     param_symbols = [symbol_map[name] for name in parameter_names]
     all_args = state_symbols + param_symbols
 
+    # If any ``fn`` op closures were registered, prepend them to the lambdify
+    # modules list so SymPy's code printer emits ``_ess_fn_<seq>(args)`` that
+    # resolves to our closure. Module-list entries take precedence in order,
+    # and the per-compile dict is harmless (empty) when no fn ops appear.
+    lambdify_modules = (
+        [fn_registry, *_LAMBDIFY_MODULES] if fn_registry else _LAMBDIFY_MODULES
+    )
+
     if state_names:
         rhs_vector_func = sp.lambdify(
-            all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=cse
+            all_args, rhs_exprs, modules=lambdify_modules, cse=cse
         )
     else:
         rhs_vector_func = None
@@ -713,7 +853,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     if algebraic_state_names:
         alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
         algebraic_vector_func = sp.lambdify(
-            all_args, alg_value_list, modules=_LAMBDIFY_MODULES, cse=cse
+            all_args, alg_value_list, modules=lambdify_modules, cse=cse
         )
     else:
         algebraic_vector_func = None
@@ -732,7 +872,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         t_symbol = sp.Symbol("t")
         observed_vector_func = sp.lambdify(
             [t_symbol, *all_args], obs_value_list,
-            modules=_LAMBDIFY_MODULES, cse=cse,
+            modules=lambdify_modules, cse=cse,
         )
     else:
         observed_vector_func = None
