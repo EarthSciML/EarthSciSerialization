@@ -52,6 +52,7 @@ pub mod parse;
 pub mod reactions;
 pub mod ref_loading;
 pub mod registered_functions;
+pub mod rule_applier;
 pub mod rule_engine;
 pub mod serialize;
 pub mod substitute;
