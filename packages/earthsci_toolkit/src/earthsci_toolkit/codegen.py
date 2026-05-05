@@ -61,23 +61,23 @@ def to_julia_code(file: Dict[str, Any]) -> str:
             lines.extend(_generate_event_code(name, event))
             lines.append("")
 
-    # Generate coupling as TODO comments
+    # Generate coupling placeholders (codegen not yet implemented)
     if file.get('coupling'):
-        lines.append("# Coupling (TODO)")
+        lines.append("# Coupling (codegen not yet implemented)")
         for coupling in file['coupling']:
             lines.extend(_generate_coupling_comment(coupling))
         lines.append("")
 
-    # Generate domain as TODO comment
+    # Generate domain placeholders (codegen not yet implemented)
     if file.get('domains'):
         for domain_name, domain_data in file['domains'].items():
-            lines.append(f"# Domain '{domain_name}' (TODO)")
+            lines.append(f"# Domain '{domain_name}' (codegen not yet implemented)")
             lines.extend(_generate_domain_comment(domain_data))
         lines.append("")
 
-    # Generate data loaders as TODO comments
+    # Generate data loader placeholders (codegen not yet implemented)
     if file.get('data_loaders'):
-        lines.append("# Data Loaders (TODO)")
+        lines.append("# Data Loaders (codegen not yet implemented)")
         for name, data_loader in file['data_loaders'].items():
             lines.extend(_generate_data_loader_comment(name, data_loader))
         lines.append("")
@@ -136,16 +136,16 @@ def to_python_code(file: Dict[str, Any]) -> str:
     lines.append("# result = esm.simulate(tspan=tspan, parameters=parameters, initial_conditions=initial_conditions)")
     lines.append("")
 
-    # Generate TODO comments for other features
+    # Generate placeholders for features whose codegen is not yet implemented
     if file.get('coupling'):
-        lines.append("# Coupling (TODO)")
+        lines.append("# Coupling (codegen not yet implemented)")
         for coupling in file['coupling']:
             lines.extend(_generate_python_coupling_comment(coupling))
         lines.append("")
 
     if file.get('domains'):
         for domain_name, domain_data in file['domains'].items():
-            lines.append(f"# Domain '{domain_name}' (TODO)")
+            lines.append(f"# Domain '{domain_name}' (codegen not yet implemented)")
             lines.extend(_generate_python_domain_comment(domain_data))
         lines.append("")
 
@@ -251,7 +251,7 @@ def _generate_event_code(name: str, event: Dict[str, Any]) -> List[str]:
 
 def _generate_coupling_comment(coupling: Dict[str, Any]) -> List[str]:
     lines = []
-    lines.append(f"# TODO: Implement coupling {coupling.get('type', 'unknown')}")
+    lines.append(f"# Coupling: {coupling.get('type', 'unknown')}")
     if coupling.get('from'):
         lines.append(f"#   From: {coupling['from']}")
     if coupling.get('to'):
@@ -261,7 +261,7 @@ def _generate_coupling_comment(coupling: Dict[str, Any]) -> List[str]:
 
 def _generate_domain_comment(domain: Dict[str, Any]) -> List[str]:
     lines = []
-    lines.append("# TODO: Implement domain")
+    lines.append("# Domain")
     if domain.get('spatial', {}).get('coordinates'):
         coords = domain['spatial']['coordinates']
         lines.append(f"#   Spatial coordinates: {', '.join(coords)}")
@@ -270,7 +270,7 @@ def _generate_domain_comment(domain: Dict[str, Any]) -> List[str]:
 
 def _generate_data_loader_comment(name: str, data_loader: Dict[str, Any]) -> List[str]:
     lines = []
-    lines.append(f"# TODO: Implement data loader {name}")
+    lines.append(f"# Data loader: {name}")
     source = data_loader.get('source')
     if isinstance(source, dict) and 'url_template' in source:
         lines.append(f"#   Source: {source['url_template']}")
@@ -540,7 +540,7 @@ def _generate_python_reaction_system_code(name: str, reaction_system: Dict[str, 
 
 def _generate_python_coupling_comment(coupling: Dict[str, Any]) -> List[str]:
     lines = []
-    lines.append(f"# TODO: Implement coupling {coupling.get('type', 'unknown')}")
+    lines.append(f"# Coupling: {coupling.get('type', 'unknown')}")
     if coupling.get('from'):
         lines.append(f"#   From: {coupling['from']}")
     if coupling.get('to'):
@@ -550,7 +550,7 @@ def _generate_python_coupling_comment(coupling: Dict[str, Any]) -> List[str]:
 
 def _generate_python_domain_comment(domain: Dict[str, Any]) -> List[str]:
     lines = []
-    lines.append("# TODO: Implement domain")
+    lines.append("# Domain")
     if domain.get('spatial', {}).get('coordinates'):
         coords = domain['spatial']['coordinates']
         lines.append(f"#   Spatial coordinates: {', '.join(coords)}")
