@@ -94,6 +94,20 @@ _CLOSED_FUNCTION_NAMES: frozenset = frozenset({
 })
 
 
+# Argument positions that MUST be inline `const` arrays (table / axis data) for
+# each closed function. Per esm-spec §9.2 ``interp.*``, these slots accept only
+# materialized constant data — they are not state-dependent expressions and the
+# evaluators (``numpy_interpreter.eval_expr`` and the SymPy bridge) extract the
+# raw Python list before calling :func:`evaluate_closed_function`. Any closed
+# function whose ``name`` is not a key here has all-dynamic arguments
+# (e.g. ``datetime.*`` takes a single scalar ``t_utc``).
+INTERP_CONST_ARG_POSITIONS: Dict[str, tuple] = {
+    "interp.searchsorted": (1,),
+    "interp.linear": (0, 1),
+    "interp.bilinear": (0, 1, 2),
+}
+
+
 def closed_function_names() -> frozenset:
     """Return the v0.3.0 closed function set.
 

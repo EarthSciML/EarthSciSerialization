@@ -33,16 +33,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from .esm_types import Expr, ExprNode
+from .registered_functions import (
+    INTERP_CONST_ARG_POSITIONS as _INTERP_CONST_ARG_POSITIONS,
+)
 
 
 Shape = Tuple[int, ...]
-
-
-_INTERP_CONST_ARG_POSITIONS: Dict[str, tuple] = {
-    "interp.searchsorted": (1,),
-    "interp.linear": (0, 1),
-    "interp.bilinear": (0, 1, 2),
-}
 
 
 @dataclass

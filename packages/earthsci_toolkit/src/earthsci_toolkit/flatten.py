@@ -10,7 +10,7 @@ This module is the Python equivalent of EarthSciSerialization.jl/src/flatten.jl.
 """
 
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ._monitoring import track_performance
@@ -305,22 +305,12 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             [_namespace_expr(v, prefix, local_leave) for v in expr.values]
             if expr.values is not None else None
         )
-        return ExprNode(
-            op=expr.op,
-            args=new_args,
-            wrt=expr.wrt,
-            dim=expr.dim,
-            output_idx=expr.output_idx,
-            expr=new_body,
-            reduce=expr.reduce,
-            ranges=expr.ranges,
-            regions=expr.regions,
-            values=new_values,
-            shape=expr.shape,
-            perm=expr.perm,
-            axis=expr.axis,
-            fn=expr.fn,
-        )
+        # Use ``replace`` so closed-function metadata (``name``, ``value``,
+        # ``handler_id``, ``table``, ``table_axes``, ``output``) is preserved
+        # automatically. Hand-listing fields silently drops any new
+        # ExprNode attribute and cost the SymPy bridge ``fn``-op support
+        # before this fix (esm-6ka).
+        return replace(expr, args=new_args, expr=new_body, values=new_values)
     return expr
 
 
@@ -817,7 +807,9 @@ def _namespace_event_expr(expr: Expr, system_var_names: Dict[str, str]) -> Expr:
         return system_var_names.get(expr, expr)
     if isinstance(expr, ExprNode):
         new_args = [_namespace_event_expr(a, system_var_names) for a in expr.args]
-        return ExprNode(op=expr.op, args=new_args, wrt=expr.wrt, dim=expr.dim)
+        # See _namespace_expr: use ``replace`` to preserve closed-function
+        # metadata that hand-listing fields would silently drop. (esm-6ka)
+        return replace(expr, args=new_args)
     return expr
 
 

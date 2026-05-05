@@ -25,6 +25,12 @@ import sympy as sp
 from .esm_types import Expr, ExprNode
 from .flatten import FlattenedSystem
 from .numpy_interpreter import UnreachableSpatialOperatorError
+from .registered_functions import (
+    INTERP_CONST_ARG_POSITIONS,
+    closed_function_names,
+    evaluate_closed_function,
+    extract_const_array,
+)
 
 
 class SimulationError(Exception):
@@ -94,7 +100,48 @@ class _ess_numeric_abs(sp.Function):
 _LAMBDIFY_MODULES = [{"_ess_numeric_abs": np.abs}, "numpy"]
 
 
-def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
+def _make_fn_callable(
+    name: str,
+    total_arity: int,
+    const_args_by_position: Dict[int, list],
+) -> Callable:
+    """Build a Python callable for a single ``fn``-op call site.
+
+    SymPy's :func:`lambdify` cannot route Python list/array literals through
+    its symbolic argument list, so the table / axis arguments to closed
+    functions like ``interp.bilinear`` cannot become :class:`sympy.Expr` nodes.
+    Instead, each ``fn``-op call site emits a unique synthetic
+    :class:`sympy.Function` placeholder over only its dynamic (state-/
+    parameter-/time-dependent) arguments; the const arrays are baked into a
+    Python closure that is registered in ``modules`` for that specific
+    placeholder. At runtime the lambdified RHS calls into this closure, which
+    reconstructs the original argument vector and dispatches through
+    :func:`registered_functions.evaluate_closed_function`.
+
+    Always returns ``float`` so the result composes with NumPy arithmetic
+    inside ``solve_ivp`` regardless of whether the registry returned an int
+    (``datetime.year``) or a float (``interp.bilinear``).
+    """
+
+    def _fn_call(*dynamic_args):
+        all_args: List = [None] * total_arity
+        for i, v in const_args_by_position.items():
+            all_args[i] = v
+        di = 0
+        for i in range(total_arity):
+            if all_args[i] is None:
+                all_args[i] = float(dynamic_args[di])
+                di += 1
+        return float(evaluate_closed_function(name, all_args))
+
+    return _fn_call
+
+
+def _expr_to_sympy(
+    expr: Expr,
+    symbol_map: Dict[str, sp.Symbol],
+    fn_callable_map: Optional[Dict[str, Callable]] = None,
+) -> sp.Expr:
     """
     Convert ESM Expr to SymPy expression.
 
@@ -109,9 +156,21 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
     :class:`sympy.Function` has no ``.eval``, so the decomposition cannot
     fire and the lambdified RHS stays in pure-real form.
 
+    The ``'fn'`` op (closed-function registry, esm-spec §9.2) and its
+    companion ``'const'`` op are handled by extracting the inline-const
+    array arguments (table / axis data) at conversion time and emitting a
+    unique :class:`sympy.Function` placeholder over only the dynamic
+    arguments. The const arrays are baked into a Python closure registered
+    in ``fn_callable_map`` keyed by the placeholder name; the caller threads
+    that map into :data:`_LAMBDIFY_MODULES` at lambdify time so the RHS can
+    call into the registry at runtime. (esm-6ka)
+
     Args:
         expr: Expression to convert
         symbol_map: Mapping from variable names to SymPy symbols
+        fn_callable_map: Mutable map populated with ``synthetic_name → callable``
+            for every ``fn``-op call site encountered. Required when ``expr``
+            contains ``fn`` ops; ``None`` raises with a clear diagnostic.
 
     Returns:
         SymPy expression
@@ -138,8 +197,78 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
         if expr.op in ('grad', 'div', 'laplacian'):
             raise UnreachableSpatialOperatorError(expr.op)
 
+        # Closed-function registry (esm-spec §9.2 / §9.3) and inline const
+        # values must be handled before the generic argument recursion below,
+        # because ``fn`` calls take materialized const arrays in some argument
+        # positions (table / axis data) that have no sensible SymPy
+        # representation, and the bare ``const`` op carries the value in
+        # ``expr.value`` rather than ``expr.args``. (esm-6ka)
+        if expr.op == 'const':
+            v = expr.value
+            if isinstance(v, bool):
+                # bool subclasses int — treat as numeric scalar (0 or 1) only
+                # via explicit float conversion to avoid sp.Float(True)
+                # producing a Boolean atom.
+                return sp.Float(float(v))
+            if isinstance(v, (int, float)):
+                return sp.Float(v)
+            # Inline arrays only have meaning as positional arguments to a
+            # ``fn`` op (the closed-function registry consumes them as raw
+            # Python lists). A standalone array-valued ``const`` reaching this
+            # path would mean someone tried to lambdify an array literal as
+            # an ODE RHS subterm, which is not supported.
+            raise SimulationError(
+                f"`const` op with non-scalar value (type "
+                f"{type(v).__name__}) cannot appear outside of a closed-"
+                f"function `fn` argument slot in the SymPy simulator path"
+            )
+        if expr.op == 'fn':
+            if expr.name is None:
+                raise SimulationError("`fn` op requires a `name` field")
+            if expr.name not in closed_function_names():
+                raise SimulationError(
+                    f"`fn` name `{expr.name}` is not in the closed function "
+                    f"registry (esm-spec §9.2)"
+                )
+            if fn_callable_map is None:
+                raise SimulationError(
+                    "internal: `fn` op encountered without a fn_callable_map "
+                    "to register the closure into. The simulator entry point "
+                    "must construct one and thread it through "
+                    "_expr_to_sympy."
+                )
+            const_positions = INTERP_CONST_ARG_POSITIONS.get(expr.name, ())
+            const_args_by_position: Dict[int, list] = {}
+            dynamic_sympy_args: List[sp.Expr] = []
+            for i, a in enumerate(expr.args):
+                if i in const_positions:
+                    if not (isinstance(a, ExprNode) and a.op == 'const'):
+                        raise SimulationError(
+                            f"`{expr.name}` argument {i} must be an inline "
+                            f"`const` array (esm-spec §9.2 ``interp.*``)"
+                        )
+                    const_args_by_position[i] = extract_const_array(a)
+                else:
+                    dynamic_sympy_args.append(
+                        _expr_to_sympy(a, symbol_map, fn_callable_map)
+                    )
+            synthetic_name = f"_ess_fn_{len(fn_callable_map)}"
+            fn_callable_map[synthetic_name] = _make_fn_callable(
+                expr.name, len(expr.args), const_args_by_position,
+            )
+            placeholder = sp.Function(synthetic_name)
+            return placeholder(*dynamic_sympy_args)
+        if expr.op == 'enum':
+            raise SimulationError(
+                "`enum` op encountered in SymPy bridge — `lower_enums(file)` "
+                "should have run during load (esm-spec §9.3)"
+            )
+
         # Convert arguments recursively
-        sympy_args = [_expr_to_sympy(arg, symbol_map) for arg in expr.args]
+        sympy_args = [
+            _expr_to_sympy(arg, symbol_map, fn_callable_map)
+            for arg in expr.args
+        ]
 
         # Handle different operations
         if expr.op == '+':
@@ -299,6 +428,7 @@ def _expr_to_sympy(expr: Expr, symbol_map: Dict[str, sp.Symbol]) -> sp.Expr:
 
 def _flat_to_sympy_rhs(
     flat: FlattenedSystem,
+    fn_callable_map: Optional[Dict[str, Callable]] = None,
 ) -> Tuple[
     List[str],
     List[str],
@@ -366,6 +496,9 @@ def _flat_to_sympy_rhs(
     for name in state_names + parameter_names:
         symbol_map[name] = sp.Symbol(name)
 
+    if fn_callable_map is None:
+        fn_callable_map = {}
+
     # Classify equations: differential (D(var, t) = …) vs algebraic (var = …).
     diff_rhs: Dict[str, sp.Expr] = {}
     alg_rhs: Dict[str, sp.Expr] = {}
@@ -374,10 +507,14 @@ def _flat_to_sympy_rhs(
         if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
             inner = lhs.args[0]
             if isinstance(inner, str) and inner in flat.state_variables:
-                diff_rhs[inner] = _expr_to_sympy(eq.rhs, dict(symbol_map))
+                diff_rhs[inner] = _expr_to_sympy(
+                    eq.rhs, dict(symbol_map), fn_callable_map,
+                )
                 continue
         if isinstance(lhs, str) and lhs in flat.state_variables:
-            rhs_sym = _expr_to_sympy(eq.rhs, dict(symbol_map))
+            rhs_sym = _expr_to_sympy(
+                eq.rhs, dict(symbol_map), fn_callable_map,
+            )
             if lhs in alg_rhs:
                 # Same-system DAE: a previous equation already defines this
                 # variable. Treat ``lhs = rhs_sym`` as an algebraic constraint
@@ -500,6 +637,7 @@ def _observed_to_sympy_value_exprs(
     symbol_map: Dict[str, sp.Symbol],
     algebraic_state_names: List[str],
     algebraic_value_exprs: Dict[str, sp.Expr],
+    fn_callable_map: Optional[Dict[str, Callable]] = None,
 ) -> Tuple[List[str], Dict[str, sp.Expr]]:
     """Build SymPy value expressions for ``flat.observed_variables``.
 
@@ -534,11 +672,16 @@ def _observed_to_sympy_value_exprs(
         if name not in sym_map:
             sym_map[name] = sp.Symbol(name)
 
+    if fn_callable_map is None:
+        fn_callable_map = {}
+
     obs_rhs: Dict[str, sp.Expr] = {}
     for eq in flat.equations:
         lhs = eq.lhs
         if isinstance(lhs, str) and lhs in flat.observed_variables:
-            obs_rhs[lhs] = _expr_to_sympy(eq.rhs, dict(sym_map))
+            obs_rhs[lhs] = _expr_to_sympy(
+                eq.rhs, dict(sym_map), fn_callable_map,
+            )
 
     observed_with_eq = [n for n in observed_names_all if n in obs_rhs]
     if not observed_with_eq:
@@ -654,6 +797,14 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     if cached is not None:
         return cached
 
+    # A single fn_callable_map is shared across the differential-RHS,
+    # algebraic, and observed conversions so all three lambdify calls below
+    # see the same set of synthetic ``_ess_fn_<idx>`` placeholders. After
+    # observed substitution into rhs_exprs / algebraic_value_exprs, fn-call
+    # placeholders from observed bodies appear in the differential RHS and
+    # must resolve against the same module dict.
+    fn_callable_map: Dict[str, Callable] = {}
+
     (
         state_names,
         parameter_names,
@@ -661,7 +812,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         rhs_exprs,
         algebraic_state_names,
         algebraic_value_exprs,
-    ) = _flat_to_sympy_rhs(flat)
+    ) = _flat_to_sympy_rhs(flat, fn_callable_map)
 
     observed_names, observed_value_exprs = _observed_to_sympy_value_exprs(
         flat,
@@ -670,6 +821,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         symbol_map,
         algebraic_state_names,
         algebraic_value_exprs,
+        fn_callable_map,
     )
 
     # Differential and algebraic RHS expressions may reference observed
@@ -703,9 +855,18 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     param_symbols = [symbol_map[name] for name in parameter_names]
     all_args = state_symbols + param_symbols
 
+    # Merge any fn-op closures into the lambdify module list so each
+    # ``_ess_fn_<idx>`` placeholder resolves to its captured Python callable
+    # at runtime. Built fresh per compile so module dicts don't leak across
+    # FlattenedSystems (each call site is unique to its source AST).
+    if fn_callable_map:
+        modules = [fn_callable_map, *_LAMBDIFY_MODULES]
+    else:
+        modules = _LAMBDIFY_MODULES
+
     if state_names:
         rhs_vector_func = sp.lambdify(
-            all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=cse
+            all_args, rhs_exprs, modules=modules, cse=cse
         )
     else:
         rhs_vector_func = None
@@ -713,7 +874,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     if algebraic_state_names:
         alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
         algebraic_vector_func = sp.lambdify(
-            all_args, alg_value_list, modules=_LAMBDIFY_MODULES, cse=cse
+            all_args, alg_value_list, modules=modules, cse=cse
         )
     else:
         algebraic_vector_func = None
@@ -732,7 +893,7 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         t_symbol = sp.Symbol("t")
         observed_vector_func = sp.lambdify(
             [t_symbol, *all_args], obs_value_list,
-            modules=_LAMBDIFY_MODULES, cse=cse,
+            modules=modules, cse=cse,
         )
     else:
         observed_vector_func = None
