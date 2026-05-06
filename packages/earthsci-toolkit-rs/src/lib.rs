@@ -37,6 +37,7 @@
 //! ```
 
 pub mod canonicalize;
+pub mod coupling;
 pub mod dae;
 pub mod display;
 pub mod edit;
@@ -55,6 +56,7 @@ pub mod registered_functions;
 pub mod rule_applier;
 pub mod rule_engine;
 pub mod serialize;
+pub mod structural;
 pub mod substitute;
 pub mod types;
 pub mod units;
