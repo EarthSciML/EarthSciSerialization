@@ -304,3 +304,97 @@ end
     @test gaps isa Vector{GapReport}
     @test isempty(gaps)  # no brownians declared
 end
+
+# ---------------------------------------------------------------------
+# min/max operator round-trip — gt-p3ep gap resolution
+# ---------------------------------------------------------------------
+
+@testset "mtk2esm: min/max operators round-trip" begin
+    # Build a system with min/max clamping equations
+    vars = Dict{String,ESM.ModelVariable}(
+        "u" => ESM.ModelVariable(ESM.StateVariable; default=0.5),
+        "k" => ESM.ModelVariable(ESM.ParameterVariable; default=0.1),
+    )
+    # D(u) ~ -k * min(max(u, 0.0), 1.0)  — clamped decay
+    eqs = ESM.Equation[
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("u")], wrt="t"),
+            OpExpr("*", ESM.Expr[
+                OpExpr("-", ESM.Expr[VarExpr("k")]),
+                OpExpr("min", ESM.Expr[
+                    OpExpr("max", ESM.Expr[VarExpr("u"), NumExpr(0.0)]),
+                    NumExpr(1.0)
+                ])
+            ])
+        ),
+    ]
+    model = ESM.Model(vars, eqs)
+    sys = MTK.System(model; name=:MinMaxClamp)
+
+    # Export to ESM
+    out = mtk2esm(sys; metadata=(; source_ref="test/minmax"))
+
+    @test out["esm"] == "0.1.0"
+    @test haskey(out["models"], "MinMaxClamp")
+
+    model_dict = out["models"]["MinMaxClamp"]
+    @test haskey(model_dict, "equations")
+    @test length(model_dict["equations"]) == 1
+
+    # Verify the equation contains min/max operators (not TODO_GAP)
+    eq = model_dict["equations"][1]
+    rhs = eq["rhs"]
+    @test rhs["op"] == "*"
+    @test rhs["args"][2]["op"] == "min"
+    @test rhs["args"][2]["args"][1]["op"] == "max"
+
+    # Round-trip through JSON and verify
+    s = JSON3.write(out)
+    parsed = JSON3.read(s)
+    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["op"] == "min"
+
+    # Load back and verify we can reconstruct the MTK system
+    tmpfile = tempname() * ".esm"
+    try
+        open(tmpfile, "w") do io
+            write(io, s)
+        end
+        reloaded = ESM.load(tmpfile)
+        rt_sys = MTK.System(reloaded.models["MinMaxClamp"]; name=:MinMaxClampRT)
+        @test rt_sys isa MTK.AbstractSystem
+    finally
+        isfile(tmpfile) && rm(tmpfile)
+    end
+end
+
+@testset "mtk2esm: n-ary min/max (nested)" begin
+    # Test that min(a, b, c) is represented as nested min(a, min(b, c))
+    vars = Dict{String,ESM.ModelVariable}(
+        "x" => ESM.ModelVariable(ESM.StateVariable; default=1.0),
+        "y" => ESM.ModelVariable(ESM.StateVariable; default=2.0),
+        "z" => ESM.ModelVariable(ESM.StateVariable; default=3.0),
+    )
+    # D(x) ~ -min(x, y, z) — nested min
+    eqs = ESM.Equation[
+        ESM.Equation(
+            OpExpr("D", ESM.Expr[VarExpr("x")], wrt="t"),
+            OpExpr("-", ESM.Expr[
+                OpExpr("min", ESM.Expr[
+                    VarExpr("x"),
+                    OpExpr("min", ESM.Expr[VarExpr("y"), VarExpr("z")])
+                ])
+            ])
+        ),
+    ]
+    model = ESM.Model(vars, eqs)
+    sys = MTK.System(model; name=:NaryMinMax)
+
+    out = mtk2esm(sys)
+    @test out["esm"] == "0.1.0"
+
+    model_dict = out["models"]["NaryMinMax"]
+    eq = model_dict["equations"][1]
+    inner_min = eq["rhs"]["args"][1]
+    @test inner_min["op"] == "min"
+    @test length(inner_min["args"]) == 2
+end

@@ -1675,6 +1675,8 @@ function _symbolic_to_esm_export(expr, known_vars::Set{String},
         elseif op == sqrt; return OpExpr("sqrt", esm_args)
         elseif op == abs; return OpExpr("abs", esm_args)
         elseif op == ifelse; return OpExpr("ifelse", esm_args)
+        elseif op == min; return OpExpr("min", esm_args)
+        elseif op == max; return OpExpr("max", esm_args)
         else
             opname = try
                 string(nameof(op))
