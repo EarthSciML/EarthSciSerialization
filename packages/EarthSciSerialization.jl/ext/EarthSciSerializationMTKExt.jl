@@ -2226,6 +2226,11 @@ The grid is queried only through the esm-a3z Grid trait — no struct fields:
   - `coord_jacobian(grid, target)`        — `(N, 2, 2)`, `∂(comp)/∂(target)`
   - `coord_jacobian_second(grid, target)` — `(N, 2, 2, 2)`, second derivs
 
+`coord_jacobian` / `coord_jacobian_second` are queried **only** when the
+PDE contains a derivative w.r.t. a target (physical) axis distinct from the
+two computational axes; a PDE written directly in the grid's computational
+axes never triggers the call.
+
 `target` defaults to a symbol joining the spatial IV names (e.g. for
 `(t, lon, lat)` the default is `:lon_lat`). `xi_axis`/`eta_axis` name the
 two computational axes the grid impl exposes through `cell_widths` and
@@ -2280,10 +2285,30 @@ function EarthSciSerialization.discretize(
     # Bulk metric arrays. The chain-rule path needs the coordinate Jacobian
     # and its second derivative; the FV stencil itself is built from neighbor
     # indices + dξ, dη, so we don't need metric_g / metric_ginv here.
-    cj  = ESM_.coord_jacobian(grid, target)         # (N, 2, T)
-    cj2 = ESM_.coord_jacobian_second(grid, target)  # (N, 2, T, T)
-    size(cj, 1)  == N || error("discretize: coord_jacobian first dim $(size(cj,1)) != n_cells=$N")
-    size(cj2, 1) == N || error("discretize: coord_jacobian_second first dim $(size(cj2,1)) != n_cells=$N")
+    #
+    # `coord_jacobian` is fetched lazily: it is only ever indexed when a
+    # Differential resolves to a `(:target, k)` axis, which `_resolve_axis`
+    # does only for a spatial IV that is NOT one of the two computational
+    # axes. When every spatial IV is itself a computational axis — e.g. a
+    # PDE written in (xi, eta) discretized on its own cubed-sphere grid —
+    # the transform is a structural no-op and `cj`/`cj2` stay untouched.
+    # Calling them eagerly there would force every grid's `coord_jacobian`
+    # to accept the `:auto`-derived target symbol (e.g. `:xi_eta`) even
+    # though the result is discarded.
+    _is_comp_axis(nm::Symbol) =
+        nm == xi_axis || nm == eta_axis || nm in (:xi, :ξ, :eta, :η)
+    needs_chain_rule = !all(_is_comp_axis, spatial_iv_names)
+    if needs_chain_rule
+        cj  = ESM_.coord_jacobian(grid, target)         # (N, 2, T)
+        cj2 = ESM_.coord_jacobian_second(grid, target)  # (N, 2, T, T)
+        size(cj, 1)  == N || error("discretize: coord_jacobian first dim $(size(cj,1)) != n_cells=$N")
+        size(cj2, 1) == N || error("discretize: coord_jacobian_second first dim $(size(cj2,1)) != n_cells=$N")
+    else
+        # Rank-correct placeholders, (N, 2, T) / (N, 2, T, T) with T = 2.
+        # Never indexed — no derivative resolves to a `(:target, k)` axis.
+        cj  = zeros(N, 2, 2)
+        cj2 = zeros(N, 2, 2, 2)
+    end
 
     # Neighbor index arrays. Boundary sentinels (0) fall back to self so the
     # generated stencils stay well-defined; concrete grids that wrap (periodic,
