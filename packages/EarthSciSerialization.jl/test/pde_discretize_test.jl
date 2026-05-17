@@ -1,12 +1,15 @@
 # Tests for the PDE discretization pipeline (esm-2qw):
 #   EarthSciSerialization.discretize(::PDESystem, ::AbstractCurvilinearGrid)
 #
-# Until ESD registers concrete trait impls (CubedSphereGrid, LatLonGrid),
-# we exercise the pipeline against the same minimal `TestCartesianGrid`
-# used in `grid_assembly_test.jl` — identity metric, identity coordinate
-# Jacobian, periodic neighbor wrap. The discretizer's chain-rule path
-# collapses to plain centered FD on this grid, so MMS results should
-# match the classical 5-point Laplacian and centered gradient.
+# This file exercises the pipeline against a minimal inline `PDETestCartesianGrid`
+# — identity metric, identity coordinate Jacobian, periodic neighbor wrap. The
+# discretizer's chain-rule path collapses to plain centered FD on this grid, so
+# MMS results match the classical 5-point Laplacian and centered gradient. The
+# stub keeps these unit tests fast and dependency-free.
+#
+# The end-to-end integration against REAL EarthSciDiscretizations grids
+# (`LatLonGrid`, `CubedSphereGrid`) lives in
+# `pde_discretize_esd_integration_test.jl` (ess-d1e).
 
 using Test
 using EarthSciSerialization
