@@ -1,0 +1,229 @@
+description = """
+Update the .esm format end-to-end: spec, schema, language bindings, and
+existing components — in that order — for one logical change.
+
+The procedure this formula implements is documented in
+`docs/content/SCHEMA_CHANGE_PROCEDURE.md` in this repo. Read that document
+before working; it is the source of truth for the four ordered steps below.
+
+The formula reads the proposed change off the assignment bead's metadata:
+
+| Metadata field             | Required | Purpose                                   |
+|----------------------------|----------|-------------------------------------------|
+| `spec_change_summary`      | yes      | 1–3 paragraph description of the change   |
+| `schema_version_bump`      | yes      | `patch` | `minor` | `major` (per the rules in the procedure doc) |
+| `related_beads`            | no       | space-separated bead IDs that motivate or constrain the change (e.g. open ESS/ESD issues) |
+| `component_migration_plan` | no       | `none` | `optional` | `mandatory` — how existing .esm files are affected |
+
+The formula will fail fast on a step if its prerequisite metadata is missing
+or self-contradictory. Each step is a single wisp leg; do not skip ahead.
+"""
+formula = "mol-update-spec-schema"
+version = 1
+
+[vars]
+[vars.issue]
+description = "The assignment bead carrying the proposed change in its metadata"
+required = true
+
+[[steps]]
+id = "read-procedure-and-bead"
+title = "Read the procedure document and the assignment bead"
+description = """
+Prime your environment and absorb the canonical procedure before touching code.
+
+**1. Prime:**
+```bash
+gc prime
+gc bd prime
+```
+
+**2. Read the procedure document in full** (it defines what every later step has to do):
+```bash
+cat docs/content/SCHEMA_CHANGE_PROCEDURE.md
+```
+
+**3. Read the assignment bead and its metadata:**
+```bash
+gc bd show {{issue}}
+gc bd show {{issue}} --json | jq '.[0].metadata'
+```
+
+**Verify required metadata is present:**
+
+```bash
+gc bd show {{issue}} --json | jq -r '.[0].metadata | "summary=\\(.spec_change_summary | length > 0)\\nbump=\\(.schema_version_bump // "MISSING")"'
+```
+
+`summary` must be `true`. `bump` must be `patch`, `minor`, or `major`. If either
+is missing or invalid, do NOT proceed — write a note on the bead explaining the
+gap and escalate to the coordinator via `gc mail send`. The procedure exists to
+keep the four artifacts aligned; refusing to start without the input data is
+the correct behavior.
+
+**4. Read any `related_beads`:**
+For each bead ID in `metadata.related_beads`, run `gc bd show <id>` and
+record in your notes whether it implies schema additions (e.g. PDE work in
+ESS/ESD often surfaces new fields under `Grid`, `BoundaryCondition`,
+`Domain`, or `InitialConditions`). Bundle those additions into this change
+rather than spawning a second format-version bump in the next week.
+
+**5. Compute target version:**
+The current schema version is the trailing `M.N.P` in the `$id` of
+`esm-schema.json`. Apply `schema_version_bump` (semver patch/minor/major) to
+get the target version. Pin it as `$TARGET_VERSION` (a shell variable in your
+context, not a real environment export) and use it consistently below.
+"""
+
+[[steps]]
+id = "update-spec"
+title = "Step 1 — update esm-spec.md"
+needs = ["read-procedure-and-bead"]
+description = """
+Make the spec changes that describe the new on-disk shape. The spec is normative
+for the format; everything below it must follow what the spec says.
+
+Per the procedure doc:
+- Locate the affected section(s) by topic, not by line number.
+- Edit field tables, prose, and worked examples to reflect the new shape.
+- If the change is RFC-scale, add a new file under `docs/content/rfcs/` and
+  link it from the schema description in the next step.
+
+Do NOT touch the schema or any binding in this step — only `esm-spec.md` and
+optionally a new RFC document.
+
+Stage but do not yet commit; the whole change lands as a single commit at the
+end so the four artifacts move together.
+"""
+
+[[steps]]
+id = "update-schema"
+title = "Step 2 — update esm-schema.json (root) and sync mirrors"
+needs = ["update-spec"]
+description = """
+Edit only the **root** `esm-schema.json`. Do not edit any of the mirror copies
+manually — `scripts/sync-schema.sh` writes them.
+
+Required edits:
+1. Body changes that match the spec edits from Step 1.
+2. Bump `$id` to `https://earthsciml.org/schemas/esm/$TARGET_VERSION/esm.schema.json`.
+3. Update the top-level `description` field with one to two sentences naming
+   the new version and what changed. Match the wording style of the existing
+   v0.3.0 and v0.4.0 entries.
+
+Then sync the four mirrors and verify:
+
+```bash
+scripts/sync-schema.sh
+scripts/sync-schema.sh --check
+```
+
+The `--check` invocation must exit 0. This is the same check
+`schema-sync-check.yml` runs on CI; a failure here means the binding-manifest
+versions and embedded schema copies are out of sync and the change will be
+rejected.
+"""
+
+[[steps]]
+id = "update-bindings"
+title = "Step 3 — update all language bindings (parsers, validators, tests, manifest versions)"
+needs = ["update-schema"]
+description = """
+Embedded-schema sync from Step 2 is **not enough**. Every binding needs its
+parser/validator/types updated, its tests extended, and its manifest version
+bumped to `$TARGET_VERSION`.
+
+Walk these packages in order (Python first because ESM CI installs Python; a
+broken Python parse blocks every other rig). For each:
+
+| Binding | Package path |
+|---|---|
+| Python | `packages/earthsci_toolkit/` |
+| Julia | `packages/EarthSciSerialization.jl/` |
+| Rust | `packages/earthsci-toolkit-rs/` |
+| Go | `packages/esm-format-go/` |
+| TypeScript (if needed) | `packages/earthsci-toolkit/` |
+
+For each binding:
+1. Update the parser to accept the new shape. For widening changes that map
+   onto an existing internal representation (e.g. inline-array `y` →
+   `series` list), do the normalization at parse time so consumers don't
+   change.
+2. Update runtime types/dataclasses if the new shape needs to be exposed.
+3. Add a test covering the new shape — at least one round-trip fixture.
+4. Bump the manifest version (`pyproject.toml`, `Cargo.toml`,
+   `Project.toml`, `package.json`) to `$TARGET_VERSION`. Go uses
+   git-tag-driven module versioning and has no manifest version to edit.
+
+If a binding cannot be updated in this change (external dependency, etc.),
+still keep its embedded schema synced (Step 2 already did that), then file
+a follow-up issue tagged `binding-debt:<lang>` and add a line to the commit
+message explaining the gap.
+
+Run the binding tests locally before moving on. The polecat work_dir has a
+checkout of this rig; run `python -m pytest`, `julia --project=... -e 'using
+Pkg; Pkg.test()'`, `cargo test`, `go test ./...` as applicable.
+"""
+
+[[steps]]
+id = "update-components"
+title = "Step 4 — update .esm components as required"
+needs = ["update-bindings"]
+description = """
+The procedure doc defines three flavors of component impact: **no-op**,
+**new authoring form**, and **breaking**. The `component_migration_plan`
+metadata field on the assignment bead tells you which flavor applies.
+
+| Plan          | Action |
+|---------------|--------|
+| `none`        | No component edits. Skip to step `verify-and-commit`. |
+| `optional`    | No component edits required in this change. File a follow-up bead in EarthSciModels naming the new authoring form so a future polecat sweep can adopt it if desired. |
+| `mandatory`   | Sweep every affected .esm file in EarthSciModels. Each touched file MUST have its top-level `"esm":` version updated to `$TARGET_VERSION` and any new required fields filled in. |
+
+If the metadata is missing, infer the plan from the spec change (the procedure
+doc has the decision rules), record your inference on the bead, and proceed.
+
+For `mandatory`: do the sweep as a follow-up bead dispatched to a fresh
+polecat after the format change lands — do NOT bundle a multi-file content
+sweep into the schema-change commit. The polecat doing this formula touches
+spec/schema/bindings only.
+"""
+
+[[steps]]
+id = "verify-and-commit"
+title = "Verify, commit (one logical change), and push"
+needs = ["update-components"]
+description = """
+Before committing, verify that the four artifacts are aligned:
+
+```bash
+scripts/sync-schema.sh --check                       # schema mirrors + manifest versions agree
+grep -E '"\\$id"' esm-schema.json                     # contains $TARGET_VERSION
+grep -E '"version"' packages/earthsci_toolkit/pyproject.toml  # contains $TARGET_VERSION
+grep -E 'version = ' packages/EarthSciSerialization.jl/Project.toml
+grep -E 'version = ' packages/earthsci-toolkit-rs/Cargo.toml
+grep -E '"version"' packages/earthsci-toolkit/package.json 2>/dev/null || true
+```
+
+Run the relevant binding tests one more time end-to-end.
+
+Then stage and commit **everything for the change as one commit** so a reviewer
+can see spec ↔ schema ↔ bindings move together:
+
+```bash
+git add esm-spec.md esm-schema.json packages/ docs/content/rfcs/*.md 2>/dev/null || true
+git status
+git commit -m "format: bump to $TARGET_VERSION — <short description>"
+git push origin <branch>
+```
+
+If working on a feature branch (refinery-driven workflow), set
+`metadata.branch` and `metadata.target` on the assignment bead and hand the
+bead to `<rig>/gastown.refinery` for merge. If pushing directly to main is
+appropriate for this change (rare), document the rationale in the commit
+message.
+
+Finally, write the full procedure log into the bead notes — what was changed,
+why, what binding-debt issues were filed (if any), and which follow-up
+component sweep was filed (if any). Close the bead.
+"""
