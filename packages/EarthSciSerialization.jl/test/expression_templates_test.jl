@@ -201,8 +201,11 @@ const ARRHENIUS_FIXTURE_JSON = """
         expanded_via_pass = lower_expression_templates(raw)
         expanded_dict = JSON3.read(read(expanded_path, String))
         # Compare reactions arrays as JSON-normalised strings.
+        # `lower_expression_templates` returns `JSONLikeDict` wrappers on
+        # the template-expansion path; treat them like any other dict so
+        # the comparison sees the same shape on both sides.
         function _norm(x)
-            if x isa AbstractDict || x isa JSON3.Object
+            if x isa AbstractDict || x isa JSON3.Object || x isa EarthSciSerialization.JSONLikeDict
                 return Dict{String,Any}(string(k) => _norm(v) for (k, v) in pairs(x))
             elseif x isa AbstractVector || x isa JSON3.Array
                 return Any[_norm(v) for v in x]

@@ -459,7 +459,10 @@ struct Model
     guesses::Dict{String,Union{Float64,Expr}}
     system_kind::Union{String,Nothing}
 
-    # Primary constructor with separate event arrays
+    # Primary constructor with separate event arrays.
+    # Dicts that already match the concrete element types are reused by
+    # reference so editing helpers (e.g. substitute_in_equations) can
+    # preserve `===` identity for fields they don't touch.
     Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
           subsystems::AbstractDict{String,Model};
@@ -467,8 +470,9 @@ struct Model
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
           system_kind=nothing) =
-        new(Dict{String,ModelVariable}(variables), equations,
-            discrete_events, continuous_events, Dict{String,Model}(subsystems),
+        new(variables isa Dict{String,ModelVariable} ? variables : Dict{String,ModelVariable}(variables),
+            equations, discrete_events, continuous_events,
+            subsystems isa Dict{String,Model} ? subsystems : Dict{String,Model}(subsystems),
             domain, tolerance, tests,
             initialization_equations, guesses, system_kind)
 
@@ -500,8 +504,9 @@ struct Model
                 end
             end
         end
-        return new(Dict{String,ModelVariable}(variables), equations,
-                   discrete_events, continuous_events, Dict{String,Model}(subsystems),
+        return new(variables isa Dict{String,ModelVariable} ? variables : Dict{String,ModelVariable}(variables),
+                   equations, discrete_events, continuous_events,
+                   subsystems isa Dict{String,Model} ? subsystems : Dict{String,Model}(subsystems),
                    domain, tolerance, tests,
                    initialization_equations, guesses, system_kind)
     end

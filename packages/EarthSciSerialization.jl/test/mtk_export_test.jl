@@ -341,17 +341,20 @@ end
     @test haskey(model_dict, "equations")
     @test length(model_dict["equations"]) == 1
 
-    # Verify the equation contains min/max operators (not TODO_GAP)
+    # Verify the equation contains min/max operators (not TODO_GAP).
+    # MTK normalizes `-k * min(max(u,0),1)` as the flat product
+    # `*{-1, min(max(u,0),1), k}`, so the min lives at args[2].
     eq = model_dict["equations"][1]
     rhs = eq["rhs"]
     @test rhs["op"] == "*"
     @test rhs["args"][2]["op"] == "min"
     @test rhs["args"][2]["args"][1]["op"] == "max"
 
-    # Round-trip through JSON and verify
+    # Round-trip through JSON and verify the min node survives.
     s = JSON3.write(out)
     parsed = JSON3.read(s)
-    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["op"] == "min"
+    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["args"][2]["op"] == "min"
+    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["args"][2]["args"][1]["op"] == "max"
 
     # Load back and verify we can reconstruct the MTK system
     tmpfile = tempname() * ".esm"
@@ -394,7 +397,12 @@ end
 
     model_dict = out["models"]["NaryMinMax"]
     eq = model_dict["equations"][1]
-    inner_min = eq["rhs"]["args"][1]
-    @test inner_min["op"] == "min"
-    @test length(inner_min["args"]) == 2
+    # MTK normalizes `-min(x, min(y,z))` as the flat product
+    # `*{-1, min(x, min(y,z))}`, so the outer min lives at args[2].
+    outer = eq["rhs"]["args"][2]
+    @test outer["op"] == "min"
+    @test length(outer["args"]) == 2
+    inner = outer["args"][2]
+    @test inner["op"] == "min"
+    @test length(inner["args"]) == 2
 end

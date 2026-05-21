@@ -13,6 +13,10 @@ using Test
 using EarthSciSerialization
 import ModelingToolkit
 import OrdinaryDiffEqTsit5
+# DAE fixtures (e.g. algebraic_diameter_growth.esm) trigger a nonlinear
+# initialization solve; loading this package wires the nonlinear-solve
+# extension into OrdinaryDiffEq so Tsit5 can drive index-1 DAEs.
+import OrdinaryDiffEqNonlinearSolve
 
 const _ESM_TB = EarthSciSerialization
 const _MTK_TB = ModelingToolkit

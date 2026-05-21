@@ -2147,7 +2147,7 @@ const _KNOWN_OPS = Set([
     ">", "<", ">=", "<=", "==", "!=",
     "D", "grad", "div", "laplacian",
     "arrayop", "makearray", "index", "broadcast", "reshape", "transpose",
-    "concat", "Pre", "ifelse", "call",
+    "concat", "Pre", "ifelse", "min", "max", "call",
 ])
 
 function _detect_registered_call_gaps!(gaps::Vector{GapReport},
