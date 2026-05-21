@@ -1169,7 +1169,17 @@
         },
         "description": { "type": "string" },
         "x": { "$ref": "#/$defs/PlotAxis" },
-        "y": { "$ref": "#/$defs/PlotAxis" },
+        "y": {
+          "description": "Y-axis specification. May be a single PlotAxis, or an array of PlotAxis for inline multi-series line/scatter plots (alternative to the `series` field for the common case of plotting several variables against a shared x-axis).",
+          "oneOf": [
+            { "$ref": "#/$defs/PlotAxis" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/PlotAxis" },
+              "minItems": 1
+            }
+          ]
+        },
         "value": {
           "$ref": "#/$defs/PlotValue",
           "description": "Required for heatmap; defines the color channel. Ignored for line/scatter. For field_snapshot, the variable plotted as the color channel (use `value.variable`); `at_time` and `reduce` are ignored — the field is sampled at `at_time` declared on the plot."
