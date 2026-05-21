@@ -16,10 +16,16 @@
 # `discretize` now fetches `coord_jacobian` lazily. Two pre-existing
 # limitations are documented, not fixed (out of scope — each has a follow-up
 # bead):
-#   * ess-gp3 — the discretizer has no boundary-condition handling for
-#     NON-periodic axes, so the `LatLonGrid` pole rows (pole_policy=:none →
-#     sentinel 0 → self-fallback) carry an O(1) stencil error; interior
-#     convergence is unaffected and is what this test asserts.
+#   * ess-gp3 — partially addressed: the discretizer now consumes
+#     Dirichlet/Neumann spatial BCs from `sys.bcs` and applies them as
+#     ghost-cell values at non-periodic boundaries (see
+#     `pde_discretize_test.jl` for the BC unit tests). The lat-axis MMS
+#     test below intentionally provides NO spatial BCs for the lat poles
+#     — `LatLonGrid` (pole_policy=:none) therefore still hits the
+#     self-fallback and the pole rows carry an O(1) residual that
+#     guards the no-BC path; interior convergence is unaffected.
+#     Per-DV pole-singularity handling (a real pole policy on the
+#     spherical Laplacian) remains future work.
 #   * ess-3g6 — the `CubedSphereGrid` chain-rule path (a PDE written in
 #     physical (lon, lat) on a cubed-sphere grid) needs `cell_centers(grid,
 #     :lon)`, which ESD's cubed sphere does not expose; only the

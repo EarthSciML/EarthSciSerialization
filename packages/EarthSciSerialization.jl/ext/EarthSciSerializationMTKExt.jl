@@ -2245,6 +2245,24 @@ Each spatial Differential is interpreted as either:
 Initial conditions come from BCs of the form `dv(t0, ivs...) ~ rhs(ivs...)`;
 unmatched DVs default to zero. The single time domain in `sys.domain`
 defines `tspan`.
+
+**Boundary conditions (ess-gp3).** Spatial BCs in `sys.bcs` whose LHS pins
+a spatial IV to a domain endpoint feed the ghost-cell stencil at the
+matching boundary:
+
+  - `dv(t, ..., x_bound, ...) ~ g`        → Dirichlet at `(axis, side)`
+  - `Differential(x)(dv(t, ..., x_bound, ...)) ~ g` → Neumann at `(axis, side)`
+
+For Dirichlet the ghost value is `2·g - u_C` (face value = `g`); for
+Neumann it is `u_C ± dx·g` (face derivative = `g`). Boundary cells whose
+direction is *not* covered by a parsed BC retain the legacy self-fallback
+(ghost = self), which produces an O(1) stencil error there — concrete
+grids that wrap (periodic, cubed-sphere) hide the boundary inside
+`neighbor_indices` and never see this path. **Gaps**: compound corner
+stencil points (NE/NW/SE/SW) used by mixed second derivatives still use
+the self-fallback at non-periodic boundaries; per-DV singular-coord
+adjustments (e.g. spherical pole policy on a LatLonGrid) are out of
+scope here.
 """
 function EarthSciSerialization.discretize(
         sys::PDESystem,
@@ -2310,19 +2328,28 @@ function EarthSciSerialization.discretize(
         cj2 = zeros(N, 2, 2, 2)
     end
 
-    # Neighbor index arrays. Boundary sentinels (0) fall back to self so the
-    # generated stencils stay well-defined; concrete grids that wrap (periodic,
-    # cubed-sphere, MPAS) hide the boundary inside neighbor_indices.
+    # Raw neighbor index arrays — `0` marks a sentinel where the grid has no
+    # neighbor in that direction (a non-periodic boundary). The `_safe`
+    # variants substitute the cell itself for the sentinel, which keeps the
+    # generated stencil well-defined; concrete grids that wrap (periodic,
+    # cubed-sphere, MPAS) hide the boundary inside `neighbor_indices` and
+    # never expose a sentinel here. Boundary-condition handling below
+    # consumes the *raw* arrays to detect ghost positions and substitutes
+    # BC-derived ghost values from `sys.bcs` (ess-gp3).
     self_idx = collect(1:N)
     _safe(arr) = map((n, s) -> n == 0 ? s : n, arr, self_idx)
-    nbE  = _safe(ESM_.neighbor_indices(grid, xi_axis,  +1))
-    nbW  = _safe(ESM_.neighbor_indices(grid, xi_axis,  -1))
-    nbNp = _safe(ESM_.neighbor_indices(grid, eta_axis, +1))
-    nbSp = _safe(ESM_.neighbor_indices(grid, eta_axis, -1))
-    nbNE = _safe(ESM_.neighbor_indices(grid, eta_axis, +1)[nbE])
-    nbNW = _safe(ESM_.neighbor_indices(grid, eta_axis, +1)[nbW])
-    nbSE = _safe(ESM_.neighbor_indices(grid, eta_axis, -1)[nbE])
-    nbSW = _safe(ESM_.neighbor_indices(grid, eta_axis, -1)[nbW])
+    rawE   = ESM_.neighbor_indices(grid, xi_axis,  +1)
+    rawW   = ESM_.neighbor_indices(grid, xi_axis,  -1)
+    rawNp  = ESM_.neighbor_indices(grid, eta_axis, +1)
+    rawSp  = ESM_.neighbor_indices(grid, eta_axis, -1)
+    nbE    = _safe(rawE)
+    nbW    = _safe(rawW)
+    nbNp   = _safe(rawNp)
+    nbSp   = _safe(rawSp)
+    nbNE   = _safe(rawNp[nbE])
+    nbNW   = _safe(rawNp[nbW])
+    nbSE   = _safe(rawSp[nbE])
+    nbSW   = _safe(rawSp[nbW])
 
     # Per-cell symbolic state arrays of length N, one per dependent variable.
     dvs = sys.dvs
@@ -2333,6 +2360,30 @@ function EarthSciSerialization.discretize(
         disc_vars[dv] = arr
     end
 
+    # Boundary-condition lookup. Walk `sys.bcs`, drop initial conditions, and
+    # classify the rest as Dirichlet or Neumann at a specific (axis, side).
+    # Cell-center coordinate caches feed BC value expressions.
+    tspan = _extract_tspan_pde(sys, t_iv)
+    t0 = tspan[1]
+    coord_arrays = Dict{Symbol,Vector{Float64}}()
+    for nm in spatial_iv_names
+        coord_arrays[nm] = Vector{Float64}(ESM_.cell_centers(grid, nm))
+    end
+    domain_bounds = _domain_bounds_by_iv(sys)
+    bc_lookup = _build_bc_lookup(sys, t_iv, spatial_ivs, spatial_iv_names,
+                                  domain_bounds, dvs, t0)
+    dx_by_axis = Dict{Symbol,Float64}(xi_axis => dξ, eta_axis => dη)
+
+    bc_ctx = (
+        disc_vars   = disc_vars,
+        dvs         = dvs,
+        spatial_ivs = spatial_ivs,
+        spatial_iv_names = spatial_iv_names,
+        coord_arrays = coord_arrays,
+        bc_lookup   = bc_lookup,
+        dx_by_axis  = dx_by_axis,
+    )
+
     # Per-cell ODE equations. Each PDE equation expands into N scalar eqns.
     Dt = ModelingToolkit.Differential(t_iv)
     all_eqs = Symbolics.Equation[]
@@ -2340,11 +2391,22 @@ function EarthSciSerialization.discretize(
         lhs_dv = _identify_lhs_dv_pde(eq.lhs, dvs)
         lhs_arr = disc_vars[lhs_dv]
         for c in 1:N
+            # Per-direction ghost markers: `nothing` for interior, otherwise
+            # `(axis, side)` indicating which BC applies. Compound corner
+            # stencils (NE/NW/SE/SW) keep the legacy self-fallback — see the
+            # docstring's "Mixed boundaries" note.
+            gh = (
+                E  = rawE[c]   == 0 ? (axis=xi_axis,  side=:upper) : nothing,
+                W  = rawW[c]   == 0 ? (axis=xi_axis,  side=:lower) : nothing,
+                Np = rawNp[c]  == 0 ? (axis=eta_axis, side=:upper) : nothing,
+                Sp = rawSp[c]  == 0 ? (axis=eta_axis, side=:lower) : nothing,
+                NE = nothing, NW = nothing, SE = nothing, SW = nothing,
+            )
             nb = (E=nbE[c], W=nbW[c], Np=nbNp[c], Sp=nbSp[c],
                   NE=nbNE[c], NW=nbNW[c], SE=nbSE[c], SW=nbSW[c])
             rhs_c = _substitute_at_cell(
                 eq.rhs, disc_vars, dvs, spatial_iv_names,
-                xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2,
+                xi_axis, eta_axis, c, nb, gh, bc_ctx, dξ, dη, cj, cj2,
             )
             push!(all_eqs, Dt(lhs_arr[c]) ~ rhs_c)
         end
@@ -2354,7 +2416,6 @@ function EarthSciSerialization.discretize(
     compiled = ModelingToolkit.mtkcompile(sys_disc)
 
     u0 = _build_u0_pde(sys, disc_vars, dvs, spatial_ivs, spatial_iv_names, grid, t_iv)
-    tspan = _extract_tspan_pde(sys, t_iv)
     return ModelingToolkit.ODEProblem(compiled, u0, tspan; kwargs...)
 end
 
@@ -2402,8 +2463,14 @@ end
 # their centered-FD form (with chain-rule transform when the wrt-axis is a
 # target axis). Nonlinear terms are preserved by recursing into operator
 # arguments — `u^2` becomes `u_arr[c]^2`, `sin(u)` becomes `sin(u_arr[c])`.
+#
+# `gh` carries per-direction ghost markers (`nothing` or `(axis, side)`)
+# that the stencil helpers consult to substitute BC-derived ghost values
+# at non-periodic boundaries (ess-gp3); `bc_ctx` carries the BC lookup
+# and the coordinate / spacing tables needed to evaluate ghosts.
 function _substitute_at_cell(expr, disc_vars, dvs, spatial_iv_names,
-                              xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2)
+                              xi_axis, eta_axis, c, nb, gh, bc_ctx,
+                              dξ, dη, cj, cj2)
     ex = Symbolics.unwrap(expr)
     if !Symbolics.iscall(ex)
         return Symbolics.wrap(ex)
@@ -2429,7 +2496,7 @@ function _substitute_at_cell(expr, disc_vars, dvs, spatial_iv_names,
         if order == 2
             # ∂²/∂x² form — outer and inner axis are the same.
             return _second_deriv_cell(inner_arg, outer, outer, disc_vars, dvs,
-                                       c, nb, dξ, dη, cj, cj2)
+                                       c, nb, gh, bc_ctx, dξ, dη, cj, cj2)
         end
         order > 2 && error("discretize: Differential order $(order) not supported (≤ 2 only)")
 
@@ -2444,46 +2511,56 @@ function _substitute_at_cell(expr, disc_vars, dvs, spatial_iv_names,
             inner = _resolve_axis(Symbol(inner_op.x), xi_axis, eta_axis, spatial_iv_names)
             innermost = Symbolics.arguments(inner_arg)[1]
             return _second_deriv_cell(innermost, outer, inner, disc_vars, dvs,
-                                       c, nb, dξ, dη, cj, cj2)
+                                       c, nb, gh, bc_ctx, dξ, dη, cj, cj2)
         end
         return _first_deriv_cell(inner_arg, outer, disc_vars, dvs,
-                                  c, nb, dξ, dη, cj)
+                                  c, nb, gh, bc_ctx, dξ, dη, cj)
     end
 
     # General operator — recurse into arguments (preserves nonlinear structure).
     new_args = [
         _substitute_at_cell(Symbolics.wrap(a), disc_vars, dvs, spatial_iv_names,
-                            xi_axis, eta_axis, c, nb, dξ, dη, cj, cj2)
+                            xi_axis, eta_axis, c, nb, gh, bc_ctx, dξ, dη, cj, cj2)
         for a in args
     ]
     return Symbolics.wrap(op(Symbolics.unwrap.(new_args)...))
 end
 
 # Evaluate a (possibly nonlinear) symbolic expression at neighbor cell `cn`,
-# replacing every DV call with `disc_vars[dv][cn]`. Used to build the value
-# of `f(u, v, ...)` at each stencil point during second-derivative assembly.
-function _eval_expr_at(expr, disc_vars, dvs, cn)
+# replacing every DV call with `disc_vars[dv][cn]`. When `ghost` carries
+# `(axis, side)`, the cell is a non-periodic boundary ghost — DV occurrences
+# are replaced with the BC-derived ghost value relative to interior cell
+# `c_orig` (ess-gp3). With no matching BC, the lookup falls back to the
+# interior value (preserving the legacy self-fallback behavior).
+function _eval_expr_at(expr, disc_vars, dvs, cn, ghost, c_orig, bc_ctx)
     ex = Symbolics.unwrap(expr)
     if !Symbolics.iscall(ex)
         return Symbolics.wrap(ex)
     end
     for dv in dvs
-        isequal(Symbolics.wrap(ex), dv) && return disc_vars[dv][cn]
+        if isequal(Symbolics.wrap(ex), dv)
+            if ghost === nothing
+                return disc_vars[dv][cn]
+            else
+                return _bc_ghost_value(dv, ghost.axis, ghost.side, c_orig, bc_ctx)
+            end
+        end
     end
     op = Symbolics.operation(ex)
     args = Symbolics.arguments(ex)
-    new_args = [_eval_expr_at(Symbolics.wrap(a), disc_vars, dvs, cn) for a in args]
+    new_args = [_eval_expr_at(Symbolics.wrap(a), disc_vars, dvs, cn,
+                              ghost, c_orig, bc_ctx) for a in args]
     return Symbolics.wrap(op(Symbolics.unwrap.(new_args)...))
 end
 
 # Centered first derivative w.r.t. an axis, with chain-rule transform when
 # the axis is a physical target axis.
 function _first_deriv_cell(inner_arg, outer, disc_vars, dvs,
-                            c, nb, dξ, dη, cj)
-    f_E = _eval_expr_at(inner_arg, disc_vars, dvs, nb.E)
-    f_W = _eval_expr_at(inner_arg, disc_vars, dvs, nb.W)
-    f_N = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Np)
-    f_S = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Sp)
+                            c, nb, gh, bc_ctx, dξ, dη, cj)
+    f_E = _eval_expr_at(inner_arg, disc_vars, dvs, nb.E,  gh.E,  c, bc_ctx)
+    f_W = _eval_expr_at(inner_arg, disc_vars, dvs, nb.W,  gh.W,  c, bc_ctx)
+    f_N = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Np, gh.Np, c, bc_ctx)
+    f_S = _eval_expr_at(inner_arg, disc_vars, dvs, nb.Sp, gh.Sp, c, bc_ctx)
     df_dξ = (f_E - f_W) / (2 * dξ)
     df_dη = (f_N - f_S) / (2 * dη)
     if outer === :xi
@@ -2502,16 +2579,18 @@ end
 #            + Σ_k  (∂²ξ_k/∂x∂y)         ∂u/∂ξ_k
 # Computational-axis derivatives use plain centered second / mixed FD.
 function _second_deriv_cell(innermost, outer, inner, disc_vars, dvs,
-                              c, nb, dξ, dη, cj, cj2)
-    f_C  = _eval_expr_at(innermost, disc_vars, dvs, c)
-    f_E  = _eval_expr_at(innermost, disc_vars, dvs, nb.E)
-    f_W  = _eval_expr_at(innermost, disc_vars, dvs, nb.W)
-    f_N  = _eval_expr_at(innermost, disc_vars, dvs, nb.Np)
-    f_S  = _eval_expr_at(innermost, disc_vars, dvs, nb.Sp)
-    f_NE = _eval_expr_at(innermost, disc_vars, dvs, nb.NE)
-    f_NW = _eval_expr_at(innermost, disc_vars, dvs, nb.NW)
-    f_SE = _eval_expr_at(innermost, disc_vars, dvs, nb.SE)
-    f_SW = _eval_expr_at(innermost, disc_vars, dvs, nb.SW)
+                              c, nb, gh, bc_ctx, dξ, dη, cj, cj2)
+    f_C  = _eval_expr_at(innermost, disc_vars, dvs, c,     nothing, c, bc_ctx)
+    f_E  = _eval_expr_at(innermost, disc_vars, dvs, nb.E,  gh.E,    c, bc_ctx)
+    f_W  = _eval_expr_at(innermost, disc_vars, dvs, nb.W,  gh.W,    c, bc_ctx)
+    f_N  = _eval_expr_at(innermost, disc_vars, dvs, nb.Np, gh.Np,   c, bc_ctx)
+    f_S  = _eval_expr_at(innermost, disc_vars, dvs, nb.Sp, gh.Sp,   c, bc_ctx)
+    # Corner stencil points still use the legacy self-fallback at boundaries;
+    # mixed-derivative BC handling at corners is a documented gap.
+    f_NE = _eval_expr_at(innermost, disc_vars, dvs, nb.NE, gh.NE,   c, bc_ctx)
+    f_NW = _eval_expr_at(innermost, disc_vars, dvs, nb.NW, gh.NW,   c, bc_ctx)
+    f_SE = _eval_expr_at(innermost, disc_vars, dvs, nb.SE, gh.SE,   c, bc_ctx)
+    f_SW = _eval_expr_at(innermost, disc_vars, dvs, nb.SW, gh.SW,   c, bc_ctx)
 
     d2f_dξ2  = (f_E - 2 * f_C + f_W) / dξ^2
     d2f_dη2  = (f_N - 2 * f_C + f_S) / dη^2
@@ -2529,6 +2608,37 @@ function _second_deriv_cell(innermost, outer, inner, disc_vars, dvs,
         a_η_o * a_η_i * d2f_dη2 +
         b_ξ * df_dξ + b_η * df_dη
     )
+end
+
+# Resolve the per-DV ghost value at a non-periodic boundary. `c_orig` is the
+# interior cell whose neighbor on `(axis, side)` is the ghost. Returns:
+#   - Dirichlet  → `2 * g(coords_at_face) - u_interior`  (face value = g)
+#   - Neumann    → `u_interior ± dx * g(coords_at_face)` (face derivative = g)
+#   - no BC      → `u_interior`                          (legacy self-fallback)
+function _bc_ghost_value(dv, axis::Symbol, side::Symbol, c_orig::Int, bc_ctx)
+    dv_name = Symbol(replace(String(Symbolics.tosymbol(dv, escape=false)), '.' => '_'))
+    bc_info = get(bc_ctx.bc_lookup, (dv_name, axis, side), nothing)
+    interior_value = bc_ctx.disc_vars[dv][c_orig]
+    bc_info === nothing && return interior_value
+
+    # Substitute the boundary value for the bound axis and the cell-c coord
+    # for every other spatial IV. Leaves `t` symbolic so time-varying BCs
+    # work; numeric BCs collapse to a literal.
+    subs = Dict{Any,Any}()
+    for (iv, nm) in zip(bc_ctx.spatial_ivs, bc_ctx.spatial_iv_names)
+        val = nm == axis ? bc_info.bound_value : bc_ctx.coord_arrays[nm][c_orig]
+        subs[iv] = val
+        subs[Symbolics.unwrap(iv)] = val
+    end
+    g = Symbolics.substitute(bc_info.value_expr, subs)
+
+    if bc_info.bc_type === :dirichlet
+        return 2 * g - interior_value
+    elseif bc_info.bc_type === :neumann
+        dx = bc_ctx.dx_by_axis[axis]
+        return side === :upper ? interior_value + dx * g : interior_value - dx * g
+    end
+    error("discretize: unknown BC type $(bc_info.bc_type)")
 end
 
 # (∂ξ/∂axis, ∂η/∂axis): identity for computational axes, coord-jacobian
@@ -2633,6 +2743,121 @@ function _extract_tspan_pde(sys, t_iv)
             return (Float64(d.domain.left), Float64(d.domain.right))
     end
     error("discretize: no time domain found in PDESystem.domain")
+end
+
+# Per-IV `(low, high)` bounds from `sys.domain`. Used to recognise the
+# numeric coord on a spatial BC LHS as a specific boundary side.
+function _domain_bounds_by_iv(sys)::Dict{Symbol,Tuple{Float64,Float64}}
+    out = Dict{Symbol,Tuple{Float64,Float64}}()
+    for d in sys.domain
+        nm = Symbol(d.variables)
+        out[nm] = (Float64(d.domain.left), Float64(d.domain.right))
+    end
+    return out
+end
+
+# Walk `sys.bcs` and emit a lookup table for spatial boundary conditions:
+#   (dv_name, axis, side) → (bc_type, bound_value, value_expr)
+#
+# A BC is classified by inspecting its LHS:
+#   - `u(t, ..., x_bound, ..., t)` → Dirichlet at the spatial IV whose arg
+#     position carries a numeric literal matching a domain endpoint
+#   - `Differential(x)(u(t, ..., x_bound, ...))` → Neumann at `x`
+#   - first arg numeric and equal to `t0` → initial condition (skipped here;
+#     `_build_u0_pde` consumes it instead)
+function _build_bc_lookup(sys, t_iv, spatial_ivs, spatial_iv_names,
+                          domain_bounds, dvs, t0)
+    lookup = Dict{Tuple{Symbol,Symbol,Symbol},
+                  NamedTuple{(:bc_type, :bound_value, :value_expr),
+                             Tuple{Symbol,Float64,Any}}}()
+    dv_names_by_obj = Dict{Any,Symbol}()
+    for dv in dvs
+        nm = Symbol(replace(String(Symbolics.tosymbol(dv, escape=false)),
+                            '.' => '_'))
+        dv_names_by_obj[dv] = nm
+    end
+    name_to_dv = Dict(v => k for (k, v) in dv_names_by_obj)
+
+    for bc in sys.bcs
+        info = _classify_spatial_bc(bc, t0, spatial_ivs, spatial_iv_names,
+                                     domain_bounds, name_to_dv)
+        info === nothing && continue
+        key = (info.dv_name, info.axis, info.side)
+        # Last wins if duplicated — MTK accepts only one BC per spec, but be
+        # forgiving so a typo (two BCs at the same boundary) does not crash.
+        lookup[key] = (bc_type = info.bc_type,
+                       bound_value = info.bound_value,
+                       value_expr = info.value_expr)
+    end
+    return lookup
+end
+
+# Classify a single BC equation. Returns `nothing` for ICs, BCs with no
+# matching spatial endpoint, or BCs whose Differential axis disagrees with
+# the constrained spatial axis (Neumann must match its boundary axis).
+function _classify_spatial_bc(bc, t0, spatial_ivs, spatial_iv_names,
+                               domain_bounds, name_to_dv)
+    lhs = Symbolics.unwrap(bc.lhs)
+    Symbolics.iscall(lhs) || return nothing
+    op = Symbolics.operation(lhs)
+
+    bc_type = :dirichlet
+    diff_axis::Union{Symbol,Nothing} = nothing
+    dv_call = lhs
+    if op isa ModelingToolkit.Differential
+        # Only first-order Neumann BCs are supported here; higher-order or
+        # nested Differentials fall through and the BC is ignored.
+        _diff_order(op) == 1 || return nothing
+        bc_type = :neumann
+        diff_axis = Symbol(op.x)
+        inner = Symbolics.arguments(lhs)[1]
+        Symbolics.iscall(inner) || return nothing
+        Symbolics.operation(inner) isa ModelingToolkit.Differential && return nothing
+        dv_call = Symbolics.unwrap(inner)
+    end
+
+    call_name = Symbol(Symbolics.tosymbol(Symbolics.wrap(dv_call), escape=false))
+    # Match DV by sanitized name (matches `_make_array_dep_var`'s naming).
+    dv_name = nothing
+    for (nm, _) in name_to_dv
+        if nm == call_name
+            dv_name = nm
+            break
+        end
+    end
+    dv_name === nothing && return nothing
+
+    args = Symbolics.arguments(dv_call)
+    isempty(args) && return nothing
+
+    # First arg is t. Skip ICs whose t-arg is the numeric t0.
+    t_val = Symbolics.value(Symbolics.wrap(args[1]))
+    if t_val isa Number && isapprox(Float64(t_val), t0)
+        return nothing
+    end
+
+    # Look for a numeric literal among the spatial args. Match its value
+    # against domain endpoints to pin down the (axis, side).
+    for (i, nm) in pairs(spatial_iv_names)
+        arg_idx = i + 1
+        arg_idx > length(args) && break
+        v = Symbolics.value(Symbolics.wrap(args[arg_idx]))
+        v isa Number || continue
+        bounds = get(domain_bounds, nm, nothing)
+        bounds === nothing && continue
+        if isapprox(Float64(v), bounds[1]; atol=1e-12)
+            bc_type === :neumann && diff_axis !== nm && return nothing
+            return (dv_name = dv_name, axis = nm, side = :lower,
+                    bc_type = bc_type, bound_value = Float64(v),
+                    value_expr = bc.rhs)
+        elseif isapprox(Float64(v), bounds[2]; atol=1e-12)
+            bc_type === :neumann && diff_axis !== nm && return nothing
+            return (dv_name = dv_name, axis = nm, side = :upper,
+                    bc_type = bc_type, bound_value = Float64(v),
+                    value_expr = bc.rhs)
+        end
+    end
+    return nothing
 end
 
 end # module EarthSciSerializationMTKExt
