@@ -122,3 +122,6 @@ docs/.hugo_build.lock
 *.db
 .beads-credential-key
 .claude/
+
+# Beads / Dolt files (added by bd init)
+.beads/proxieddb/

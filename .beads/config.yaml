@@ -1,0 +1,8 @@
+issue_prefix: ess
+issue-prefix: ess
+dolt.auto-start: false
+export.auto: false
+gc.endpoint_origin: inherited_city
+gc.endpoint_status: verified
+
+sync.remote: "git+ssh://git@github.com/EarthSciML/EarthSciSerialization.git"
