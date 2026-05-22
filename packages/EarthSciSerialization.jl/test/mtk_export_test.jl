@@ -351,7 +351,7 @@ end
     # Round-trip through JSON and verify
     s = JSON3.write(out)
     parsed = JSON3.read(s)
-    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["op"] == "min"
+    @test parsed["models"]["MinMaxClamp"]["equations"][1]["rhs"]["op"] == "*"
 
     # Load back and verify we can reconstruct the MTK system
     tmpfile = tempname() * ".esm"
@@ -394,7 +394,11 @@ end
 
     model_dict = out["models"]["NaryMinMax"]
     eq = model_dict["equations"][1]
-    inner_min = eq["rhs"]["args"][1]
+    rhs = eq["rhs"]
+    # D(x) ~ -min(x, min(y,z)) is exported as *(-1, min(x, min(y,z)));
+    # canonical Symbolics sort puts the numeric coefficient first.
+    @test rhs["op"] == "*"
+    inner_min = rhs["args"][2]
     @test inner_min["op"] == "min"
     @test length(inner_min["args"]) == 2
 end

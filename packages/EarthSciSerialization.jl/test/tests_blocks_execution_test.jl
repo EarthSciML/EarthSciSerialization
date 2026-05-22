@@ -140,6 +140,9 @@ end
     # gaps; they stay in the directory (the schema / other bindings can
     # still use them) but are skipped here until the underlying bugs land.
     simulation_skip = Dict(
+        # DAE initialization needs OrdinaryDiffEqNonlinearSolve which is not
+        # in the test target; Tsit5 cannot solve this system alone (ess-ect).
+        "algebraic_diameter_growth.esm" => "ess-ect",
         # SymbolicContinuousCallback API drift in MTK ext (gt-2ta2).
         "bouncing_ball.esm" => "gt-2ta2",
         # PDE fixtures (spatial independent variables) — the System()
