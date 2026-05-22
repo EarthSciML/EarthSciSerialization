@@ -29,9 +29,13 @@ iteration are all forwarded to the underlying dict; anything not
 covered here is intentionally not implemented (this wrapper exists
 only for the load-time path).
 """
-struct JSONLikeDict
+struct JSONLikeDict <: AbstractDict{String,Any}
     data::Dict{String,Any}
 end
+
+# Read-only: mutation not supported on this wrapper.
+Base.setindex!(::JSONLikeDict, _, _) = error("JSONLikeDict is read-only")
+Base.delete!(::JSONLikeDict, _) = error("JSONLikeDict is read-only")
 
 _wrap(x) = x isa Dict{String,Any} ? JSONLikeDict(x) :
            x isa AbstractDict ? JSONLikeDict(Dict{String,Any}(string(k) => v for (k,v) in pairs(x))) :

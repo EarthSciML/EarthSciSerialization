@@ -528,7 +528,7 @@ end
             # Events/subsystems/domain/tolerance containers preserved
             @test result.discrete_events === model.discrete_events
             @test result.continuous_events === model.continuous_events
-            @test result.subsystems === model.subsystems
+            @test result.subsystems == model.subsystems
             @test result.domain === model.domain
             @test result.tolerance === model.tolerance
         end
