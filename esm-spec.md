@@ -1,6 +1,6 @@
 # ESM Format Specification
 
-**EarthSciML Serialization Format — Version 0.3.0 Draft**
+**EarthSciML Serialization Format — Version 0.5.0**
 
 ## 1. Overview
 
@@ -40,7 +40,7 @@ The full authoring stance, normatively:
 
 ```json
 {
-  "esm": "0.4.0",
+  "esm": "0.5.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
@@ -1251,13 +1251,31 @@ Five plot types are defined:
 | `id` | ✓ | Identifier unique within this example's `plots` array. |
 | `type` | ✓ | `line`, `scatter`, `heatmap`, `field_slice`, or `field_snapshot`. |
 | `description` | | Human-readable description. |
-| `x`, `y` | ✓ | Axis specifications (`{variable, label?}`). For trajectory/sweep plots `variable` may be any state variable, observed variable, parameter name, or swept parameter; for `field_slice` and `field_snapshot`, `x` (and `y` for snapshots) MUST name a domain spatial dimension. |
+| `x` | ✓ | X-axis specification (`{variable, label?}`). For trajectory/sweep plots `variable` may be any state variable, observed variable, parameter name, or swept parameter; for `field_slice` and `field_snapshot`, `x` MUST name a domain spatial dimension. |
+| `y` | ✓ | Y-axis specification. May be a single `PlotAxis` (`{variable, label?}`) or, for `line`/`scatter` plots, an array of `PlotAxis` objects as an inline multi-series shorthand (see below). For `field_slice` and `field_snapshot`, `y` MUST be a single `PlotAxis` naming a domain spatial dimension. |
 | `value` | heatmap, field_snapshot | Color channel for `heatmap` (a `PlotValue`) and for `field_snapshot` (only `value.variable` is used; `at_time` and `reduce` are ignored — the field is sampled at the plot-level `at_time`). |
 | `series` | | For `line`/`scatter`: an array of `{name, variable}` pairs selecting multiple trajectories to overlay. Ignored for heatmap/field plots. |
 | `at_time` | field_slice, field_snapshot | Required for field plots: simulation time at which to extract the spatial field. Must lie within the example's `time_span`. |
 | `pinned_coords` | field plots, when domain has higher dimensionality than the plot | Map from each non-plotted spatial dimension name to a numeric coordinate. Required when the component domain has more spatial dimensions than the plot uses (1 axis for `field_slice`, 2 for `field_snapshot`). |
 
 **Plot axes are flexible.** Any state variable, observed variable, parameter, or swept-parameter name is allowed for `x`, `y`, and (for heatmaps) the `value.variable`. The independent variable of the simulation is typically spelled `"t"`.
+
+**Inline multi-series shorthand for `y`.** For `line` and `scatter` plots, `y` may be an array of `PlotAxis` objects instead of a single object. The first entry is the canonical y-axis; each entry is projected onto the `series` list using `label` as the series name (falling back to `variable` when `label` is absent). Using `y: [a, b, c]` is equivalent to writing `y: a` with `series: [{name: a.label || a.variable, variable: a.variable}, {name: b.label || b.variable, variable: b.variable}, {name: c.label || c.variable, variable: c.variable}]` explicitly. If an explicit `series` array is also present, it takes precedence over the inline array.
+
+```json
+{
+  "id": "concentrations",
+  "type": "line",
+  "x": { "variable": "t", "label": "Time (s)" },
+  "y": [
+    { "variable": "O3",  "label": "O3"  },
+    { "variable": "NO",  "label": "NO"  },
+    { "variable": "NO2", "label": "NO2" }
+  ]
+}
+```
+
+This is equivalent to specifying `y: {"variable": "O3", "label": "O3"}` and `series: [{"name": "O3", "variable": "O3"}, {"name": "NO", "variable": "NO"}, {"name": "NO2", "variable": "NO2"}]`.
 
 **PlotValue** (required for heatmaps, optional otherwise) reduces the per-run trajectory of one variable to a scalar:
 

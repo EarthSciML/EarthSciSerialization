@@ -157,7 +157,7 @@ func TestInlineTestsExamplesRoundTrip(t *testing.T) {
 	if got, want := len(rs.Tests), 1; got != want {
 		t.Errorf("rs tests: got %d, want %d", got, want)
 	}
-	if got, want := len(rs.Examples), 1; got != want {
+	if got, want := len(rs.Examples), 2; got != want {
 		t.Errorf("rs examples: got %d, want %d", got, want)
 	}
 	// PlotSeries survives round-trip on the reaction-system example.
@@ -168,5 +168,33 @@ func TestInlineTestsExamplesRoundTrip(t *testing.T) {
 	if rsExample.Plots[0].Series[0].Name != "A" ||
 		rsExample.Plots[0].Series[1].Name != "B" {
 		t.Errorf("rs plot series names: %+v", rsExample.Plots[0].Series)
+	}
+
+	// multi_y_trace: inline array-form y (v0.5.0) projects onto Y + Series.
+	var multiYEx *Example
+	for i := range rs.Examples {
+		if rs.Examples[i].ID == "multi_y_trace" {
+			multiYEx = &rs.Examples[i]
+			break
+		}
+	}
+	if multiYEx == nil {
+		t.Fatalf("multi_y_trace example missing")
+	}
+	if got, want := len(multiYEx.Plots), 1; got != want {
+		t.Fatalf("multi_y_trace plots: got %d, want %d", got, want)
+	}
+	multiPlot := multiYEx.Plots[0]
+	if multiPlot.Y.Variable != "A" {
+		t.Errorf("multi_y canonical Y: got %q, want \"A\"", multiPlot.Y.Variable)
+	}
+	if got, want := len(multiPlot.Series), 2; got != want {
+		t.Fatalf("multi_y series count: got %d, want %d", got, want)
+	}
+	if multiPlot.Series[0].Name != "A" || multiPlot.Series[0].Variable != "A" {
+		t.Errorf("multi_y series[0]: %+v", multiPlot.Series[0])
+	}
+	if multiPlot.Series[1].Name != "B" || multiPlot.Series[1].Variable != "B" {
+		t.Errorf("multi_y series[1]: %+v", multiPlot.Series[1])
 	}
 }

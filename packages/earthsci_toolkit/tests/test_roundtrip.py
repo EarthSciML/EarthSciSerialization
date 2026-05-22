@@ -396,6 +396,60 @@ def test_roundtrip_tests_and_examples_fixture():
     series = rs_example["plots"][0]["series"]
     assert [s["name"] for s in series] == ["A", "B"]
 
+    # Inline array-form y (v0.5.0) is parsed and normalized to canonical form.
+    multi_y_example = next(
+        e for e in out["reaction_systems"]["SimpleDecay"]["examples"]
+        if e["id"] == "multi_y_trace"
+    )
+    multi_plot = multi_y_example["plots"][0]
+    # After normalization, y is the canonical single PlotAxis (first entry).
+    assert multi_plot["y"] == {"variable": "A", "label": "A"}
+    # Series is projected from the array.
+    assert multi_plot["series"] == [
+        {"name": "A", "variable": "A"},
+        {"name": "B", "variable": "B"},
+    ]
+
+
+def test_inline_multi_y_parse():
+    """Array-form plots.y is normalized: first entry -> canonical y, all -> series."""
+    from earthsci_toolkit.parse import _parse_plot
+
+    raw = {
+        "id": "p1",
+        "type": "line",
+        "x": {"variable": "t"},
+        "y": [
+            {"variable": "A", "label": "Species A"},
+            {"variable": "B"},
+        ],
+    }
+    plot = _parse_plot(raw)
+    assert plot.y.variable == "A"
+    assert plot.y.label == "Species A"
+    assert len(plot.series) == 2
+    assert plot.series[0].name == "Species A"
+    assert plot.series[0].variable == "A"
+    assert plot.series[1].name == "B"  # falls back to variable when label absent
+    assert plot.series[1].variable == "B"
+
+
+def test_inline_multi_y_explicit_series_wins():
+    """When y is array and explicit series is present, explicit series takes precedence."""
+    from earthsci_toolkit.parse import _parse_plot
+
+    raw = {
+        "id": "p2",
+        "type": "line",
+        "x": {"variable": "t"},
+        "y": [{"variable": "A"}, {"variable": "B"}],
+        "series": [{"name": "alpha", "variable": "A"}],
+    }
+    plot = _parse_plot(raw)
+    assert plot.y.variable == "A"
+    assert len(plot.series) == 1
+    assert plot.series[0].name == "alpha"
+
 
 def test_roundtrip_typed_test_assertion():
     """Construct Test/Assertion directly and ensure they round-trip to the wire."""

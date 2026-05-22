@@ -228,4 +228,46 @@ using JSON3
         @test_throws ParseError EarthSciSerialization.parse_expression(Dict("invalid" => "data"))
     end
 
+    @testset "v0.5.0 inline multi-series y (plots.y array form)" begin
+        esm_json = """
+        {
+          "esm": "0.5.0",
+          "metadata": { "name": "multi_y_test" },
+          "models": {
+            "AB": {
+              "variables": {
+                "A": { "type": "state", "default": 1.0 },
+                "B": { "type": "state", "default": 0.0 }
+              },
+              "equations": [
+                { "lhs": { "op": "D", "args": ["A"], "wrt": "t" }, "rhs": { "op": "*", "args": [-0.1, "A"] } },
+                { "lhs": { "op": "D", "args": ["B"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, "A"] } }
+              ],
+              "examples": [
+                {
+                  "id": "ab_trace",
+                  "time_span": { "start": 0.0, "end": 10.0 },
+                  "plots": [
+                    {
+                      "id": "ab_multi",
+                      "type": "line",
+                      "x": { "variable": "t" },
+                      "y": [
+                        { "variable": "A", "label": "Species A" },
+                        { "variable": "B", "label": "Species B" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """
+        # Schema validation must accept array-form y (v0.5.0 widening).
+        esm = load(IOBuffer(esm_json))
+        @test esm isa EarthSciSerialization.EsmFile
+        @test esm.esm == "0.5.0"
+    end
+
 end

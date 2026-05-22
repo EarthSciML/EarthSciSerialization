@@ -535,3 +535,58 @@ fn test_fractional_stoichiometry_round_trip() {
     let substrates = r4.substrates.as_ref().expect("R4 substrates missing");
     assert_eq!(substrates[0].coefficient, 2.0);
 }
+
+/// v0.5.0: tests_examples_comprehensive fixture (includes multi-series y array form) round-trips.
+#[test]
+fn test_tests_examples_comprehensive_round_trip() {
+    let fixture = include_str!("../../../tests/valid/tests_examples_comprehensive.esm");
+
+    let parsed: EsmFile = load(fixture)
+        .expect("tests_examples_comprehensive.esm must load (schema accepts array-form plots.y)");
+    let serialized = save(&parsed).expect("serialize comprehensive fixture");
+    let reparsed: EsmFile = load(&serialized).expect("re-load serialized comprehensive fixture");
+
+    assert_eq!(parsed.esm, reparsed.esm);
+    assert_eq!(parsed.metadata.name, reparsed.metadata.name);
+}
+
+/// v0.5.0: inline array-form plots.y passes schema validation.
+#[test]
+fn test_inline_multi_y_schema_validation() {
+    let esm = r#"{
+        "esm": "0.5.0",
+        "metadata": { "name": "multi_y_test" },
+        "models": {
+            "AB": {
+                "variables": {
+                    "A": { "type": "state", "default": 1.0 },
+                    "B": { "type": "state", "default": 0.0 }
+                },
+                "equations": [
+                    { "lhs": { "op": "D", "args": ["A"], "wrt": "t" }, "rhs": { "op": "*", "args": [-0.1, "A"] } },
+                    { "lhs": { "op": "D", "args": ["B"], "wrt": "t" }, "rhs": { "op": "*", "args": [0.1, "A"] } }
+                ],
+                "examples": [
+                    {
+                        "id": "ab_trace",
+                        "time_span": { "start": 0.0, "end": 10.0 },
+                        "plots": [
+                            {
+                                "id": "ab_multi",
+                                "type": "line",
+                                "x": { "variable": "t" },
+                                "y": [
+                                    { "variable": "A", "label": "Species A" },
+                                    { "variable": "B", "label": "Species B" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }"#;
+
+    let parsed: EsmFile = load(esm).expect("inline array-form plots.y must pass schema validation");
+    assert_eq!(parsed.esm, "0.5.0");
+}

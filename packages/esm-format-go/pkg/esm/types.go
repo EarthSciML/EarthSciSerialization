@@ -253,6 +253,65 @@ type Plot struct {
 	Series      []PlotSeries `json:"series,omitempty"`
 }
 
+// UnmarshalJSON handles plots.y as either a single PlotAxis or an array of
+// PlotAxis objects (v0.5.0 inline multi-series shorthand). When y is an
+// array the first entry becomes the canonical Y axis and all entries are
+// projected onto Series (using label-or-variable as the series name).
+// An explicit series field, if present, takes precedence over the projection.
+func (p *Plot) UnmarshalJSON(data []byte) error {
+	type TempPlot struct {
+		ID          string          `json:"id"`
+		Type        string          `json:"type"`
+		Description *string         `json:"description,omitempty"`
+		X           PlotAxis        `json:"x"`
+		Y           json.RawMessage `json:"y"`
+		Value       *PlotValue      `json:"value,omitempty"`
+		Series      []PlotSeries    `json:"series,omitempty"`
+	}
+
+	var temp TempPlot
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	p.ID = temp.ID
+	p.Type = temp.Type
+	p.Description = temp.Description
+	p.X = temp.X
+	p.Value = temp.Value
+
+	trimmed := bytes.TrimSpace(temp.Y)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var axes []PlotAxis
+		if err := json.Unmarshal(temp.Y, &axes); err != nil {
+			return fmt.Errorf("failed to unmarshal y as PlotAxis array: %w", err)
+		}
+		if len(axes) == 0 {
+			return fmt.Errorf("plots.y array must have at least one entry")
+		}
+		p.Y = axes[0]
+		if len(temp.Series) > 0 {
+			p.Series = temp.Series
+		} else {
+			p.Series = make([]PlotSeries, len(axes))
+			for i, axis := range axes {
+				name := axis.Variable
+				if axis.Label != nil {
+					name = *axis.Label
+				}
+				p.Series[i] = PlotSeries{Name: name, Variable: axis.Variable}
+			}
+		}
+	} else {
+		if err := json.Unmarshal(temp.Y, &p.Y); err != nil {
+			return fmt.Errorf("failed to unmarshal y as PlotAxis: %w", err)
+		}
+		p.Series = temp.Series
+	}
+
+	return nil
+}
+
 // SweepRange is a generated range of parameter values.
 type SweepRange struct {
 	Start float64 `json:"start"`

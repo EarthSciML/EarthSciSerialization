@@ -304,6 +304,28 @@
               ]
             }
           ]
+        },
+        {
+          "id": "multi_y_trace",
+          "description": "Demonstrates inline multi-series y array (v0.5.0): y takes an array of PlotAxis rather than a single one. Parsers project the array onto the canonical Y (first entry) plus Series.",
+          "initial_state": {
+            "type": "per_variable",
+            "values": { "A": 1.0, "B": 0.0 }
+          },
+          "parameters": { "k": 0.1 },
+          "time_span": { "start": 0.0, "end": 50.0 },
+          "plots": [
+            {
+              "id": "ab_multi_y",
+              "type": "line",
+              "description": "A and B plotted with inline array-form y.",
+              "x": { "variable": "t", "label": "time (s)" },
+              "y": [
+                { "variable": "A", "label": "A" },
+                { "variable": "B", "label": "B" }
+              ]
+            }
+          ]
         }
       ]
     }
