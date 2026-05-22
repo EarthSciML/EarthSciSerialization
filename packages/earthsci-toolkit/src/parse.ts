@@ -73,9 +73,9 @@ const KNOWN_GRID_BUILTINS = new Set<string>([
 // Embedded ESM schema - browser-compatible (no file system access required)
 const schema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://earthsciml.org/schemas/esm/0.4.0/esm.schema.json",
+  "$id": "https://earthsciml.org/schemas/esm/0.5.0/esm.schema.json",
   "title": "ESM Format",
-  "description": "EarthSciML Serialization Format (v0.4.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
+  "description": "EarthSciML Serialization Format (v0.5.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.5.0 widens the `plots.y` field to accept either a single PlotAxis or an array of PlotAxis objects: the array form is an inline multi-series shorthand for `line`/`scatter` plots that projects each axis entry onto the `series` list (first entry becomes the canonical y-axis; each entry's `label`, or its `variable` when `label` is absent, becomes the series name). v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).",
   "type": "object",
   "required": [
     "esm",
@@ -1904,7 +1904,19 @@ const schema = {
           "$ref": "#/$defs/PlotAxis"
         },
         "y": {
-          "$ref": "#/$defs/PlotAxis"
+          "description": "Y-axis specification. May be a single PlotAxis, or an array of PlotAxis for inline multi-series line/scatter plots (alternative to the `series` field for the common case of plotting several variables against a shared x-axis).",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PlotAxis"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PlotAxis"
+              },
+              "minItems": 1
+            }
+          ]
         },
         "value": {
           "$ref": "#/$defs/PlotValue",

@@ -400,6 +400,46 @@ describe('Parse and Serialize', () => {
     })
   })
 
+  describe('v0.5.0 inline multi-series y (plots.y array form)', () => {
+    it('should accept array-form plots.y without schema error', () => {
+      const esmWithArrayY = {
+        esm: "0.5.0",
+        metadata: { name: "multi_y_test" },
+        models: {
+          AB: {
+            variables: {
+              A: { type: "state", default: 1.0 },
+              B: { type: "state", default: 0.0 },
+            },
+            equations: [
+              { lhs: { op: "D", args: ["A"], wrt: "t" }, rhs: { op: "*", args: [-0.1, "A"] } },
+              { lhs: { op: "D", args: ["B"], wrt: "t" }, rhs: { op: "*", args: [0.1, "A"] } },
+            ],
+            examples: [
+              {
+                id: "ab_trace",
+                time_span: { start: 0.0, end: 10.0 },
+                plots: [
+                  {
+                    id: "ab_multi",
+                    type: "line",
+                    x: { variable: "t" },
+                    y: [
+                      { variable: "A", label: "Species A" },
+                      { variable: "B", label: "Species B" },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }
+      const errors = validateSchema(esmWithArrayY)
+      expect(errors).toHaveLength(0)
+    })
+  })
+
   describe('error handling', () => {
     it('should preserve original error in ParseError', () => {
       try {
