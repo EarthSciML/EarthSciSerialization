@@ -1231,7 +1231,7 @@
         },
         "initial_state": {
           "$ref": "#/$defs/InitialConditions",
-          "description": "Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file)."
+          "description": "Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file / expression). For PDE components the `expression` variant carries per-variable closed-form initial fields (see esm-spec.md §11.4)."
         },
         "parameters": {
           "type": "object",

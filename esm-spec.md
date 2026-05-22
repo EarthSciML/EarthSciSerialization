@@ -2749,6 +2749,30 @@ The `expression` shape replaces the prior need to spill PDE initial conditions i
 }
 ```
 
+#### Consumer contract for `expression` entries
+
+**Simulators** (consumers that integrate the model equations) MUST evaluate each variable's expression at every spatial grid point to produce the initial field. Every free symbol in the expression MUST be bound to the corresponding domain spatial-dimension coordinate. Failing to evaluate an `expression` IC is an error for these consumers.
+
+**Non-integrating consumers** (renderers, schema validators, documentation generators) that do not have access to discretization infrastructure MUST NOT raise an error when they encounter `{type: "expression"}`. They MUST handle it one of the following two ways:
+
+1. **Skip with placeholder** *(minimum requirement)*: omit the variable from any scalar display and MAY substitute a human-readable label such as `"⟨expression IC: varname⟩"` wherever a scalar value would otherwise appear.
+2. **Sample for illustration** *(optional enrichment)*: evaluate the expression on a coarse uniform grid derived from the declared domain spatial dimensions, and render the result as an illustrative thumbnail. This requires the consumer to implement the ESM expression AST evaluator (§4).
+
+Option 1 is always acceptable. Silently dropping the variable from all output without any indication to the user is PERMITTED but DISCOURAGED — it makes the IC invisible without explanation. Option 2 is reserved for consumers that already embed an expression evaluator.
+
+The key invariant: **a consumer MUST NOT crash or return an error code merely because an IC is expression-typed.** Unrecognised IC shapes MUST be surfaced as validation warnings, not unhandled exceptions.
+
+#### Design rationale: discriminated union
+
+`InitialConditions` uses a **discriminated union on the `type` field**. Any consumer can short-circuit on `type !== "expression"` without inspecting the structure of `values`.
+
+Two alternative designs were considered and rejected:
+
+- **Polymorphic `values` map** (scalars and expressions intermixed in one map without a type tag): consumers must duck-type or speculatively parse every entry to distinguish scalars from expression trees. This is the failure mode that motivated this contract — a renderer that iterated `values` assuming all entries were numbers would silently drop or misrender expression entries.
+- **Two-channel split** (`values` for scalars, `value_expressions` for symbolic): readers must consult two sibling fields to reconstruct the full IC picture; merging, copying, or validating IC objects becomes more complex with no compensating benefit.
+
+The discriminated union is the canonical JSON Schema pattern for variant records. Bindings in all five languages can dispatch cleanly on a single string field.
+
 ### 11.5 Boundary Condition Types
 
 | Type | Description |
