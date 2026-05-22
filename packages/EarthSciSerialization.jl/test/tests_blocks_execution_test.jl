@@ -13,6 +13,7 @@ using Test
 using EarthSciSerialization
 import ModelingToolkit
 import OrdinaryDiffEqTsit5
+import OrdinaryDiffEqNonlinearSolve
 
 const _ESM_TB = EarthSciSerialization
 const _MTK_TB = ModelingToolkit

@@ -210,7 +210,7 @@ const ARRHENIUS_FIXTURE_JSON = """
                 return x
             end
         end
-        got = _norm(expanded_via_pass.reaction_systems["chem"]["reactions"])
+        got = _norm(expanded_via_pass.data["reaction_systems"]["chem"]["reactions"])
         want = _norm(expanded_dict.reaction_systems.chem.reactions)
         @test got == want
     end
