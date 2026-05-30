@@ -6,7 +6,7 @@
  */
 
 /**
- * EarthSciML Serialization Format (v0.6.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.6.0 adds the `integral` built-in AST op for spatial partial integrals in PIDEs. v0.5.0 widens the `plots.y` field to accept either a single PlotAxis or an array of PlotAxis objects: the array form is an inline multi-series shorthand for `line`/`scatter` plots that projects each axis entry onto the `series` list (first entry becomes the canonical y-axis; each entry's `label`, or its `variable` when `label` is absent, becomes the series name). v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
+ * EarthSciML Serialization Format (v0.6.0) — a language-agnostic JSON format for Earth system model components, their composition, and runtime configuration. v0.6.0 adds the `integral` built-in AST op for spatial partial integrals in partial integro-differential equations (PIDEs): an `integral` node carries `var` (integration dimension name), `lower` (lower-bound Expression), `upper` (upper-bound Expression), and `args[0]` (integrand); the upper bound may be the spatial variable itself for cumulative/partial integrals, or a constant for whole-domain integrals. Lowers to MethodOfLines.jl `Integral(x in DomainSets.ClosedInterval(lower, upper))`. v0.5.0 widens the `plots.y` field to accept either a single PlotAxis or an array of PlotAxis objects: the array form is an inline multi-series shorthand for `line`/`scatter` plots that projects each axis entry onto the `series` list (first entry becomes the canonical y-axis; each entry's `label`, or its `variable` when `label` is absent, becomes the series name). v0.4.0 adds first-class sampled function tables: a top-level `function_tables` block carrying named axes plus per-output literal data, and a new `table_lookup` AST op that names a table, supplies a per-axis input expression map, and selects an output. Tables are syntactic sugar that bindings lower to the existing `interp.linear` / `interp.bilinear` / `index` semantics — same numerical result, with the bulk data lifted out of repeated inline `const` arrays (see docs/rfcs/sampled-tables.md). v0.4.0 also adds component-scoped in-file `expression_templates` blocks (declared inside a single model or reaction_system) plus a new `apply_expression_template` AST op that references a template by name with per-parameter bindings. Templates are pure syntactic substitution — no recursion, no template-calls-template, no metaprogramming — and are expanded at load time so downstream consumers see only normal Expression ASTs (see docs/rfcs/ast-expression-templates.md). v0.3.0 closed the function-registry extension point (see docs/rfcs/closed-function-registry.md): the top-level `operators` and `registered_functions` blocks are removed, the `call` AST op is removed, and a new top-level `enums` block plus `fn` and `enum` AST ops are added. The `fn` op invokes a spec-defined closed function (currently the `datetime.*` calendar family plus `interp.searchsorted`, `interp.linear`, and `interp.bilinear`); `enum` resolves a file-local symbol to a positive integer used by the existing `index` op. Files declaring `operators` or `registered_functions` are no longer valid under this schema and must be migrated to AST equations + closed-function calls + discretization schemes (RFC §6).
  */
 export type ESMFormat = ESMFormat1 & ESMFormat2;
 export type ESMFormat1 = {
@@ -108,7 +108,8 @@ export type ExpressionNode = ExpressionNode1 & {
     | "enum"
     | "const"
     | "bc"
-    | "table_lookup";
+    | "table_lookup"
+    | "apply_expression_template";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -128,11 +129,11 @@ export type ExpressionNode = ExpressionNode1 & {
    */
   var?: string;
   /**
-   * Lower integration bound for the integral operator. Any Expression: a numeric literal, a parameter reference, or an AST subtree.
+   * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
   lower?: number | string | ExpressionNode1;
   /**
-   * Upper integration bound for the integral operator. Any Expression: a numeric literal, a parameter reference, the integration variable name (string) for a cumulative/partial integral, or an AST subtree.
+   * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
   upper?: number | string | ExpressionNode1;
   /**
@@ -184,7 +185,7 @@ export type ExpressionNode = ExpressionNode1 & {
    */
   fn?: string;
   /**
-   * For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear.
+   * For fn: the dotted module path of a function in the closed function registry (esm-spec.md §9.2). The set of valid names is fixed by the spec version; bindings MUST reject unknown names with diagnostic 'unknown_closed_function'. v0.3.0 set: datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.day_of_year, datetime.julian_day, datetime.is_leap_year, interp.searchsorted, interp.linear, interp.bilinear. For apply_expression_template: the id of an `expression_templates` entry declared in the same component (esm-spec.md §9.6 / docs/rfcs/ast-expression-templates.md). Bindings MUST reject references to undeclared template names at file-load time with diagnostic 'apply_expression_template_unknown_template'.
    */
   name?: string;
   /**
@@ -215,6 +216,12 @@ export type ExpressionNode = ExpressionNode1 & {
    * For table_lookup: which output of a multi-output table to return. Either a non-negative integer (0-based index into the leading data dimension) or a string (an entry in the table's `outputs` array). Single-output tables MAY omit this field (defaults to 0). Out-of-range or unknown-name selectors are rejected with 'table_lookup_output_out_of_range'.
    */
   output?: number | string;
+  /**
+   * For apply_expression_template: a map from each parameter name declared by the referenced template to the Expression bound to that parameter. Every entry of the template's `params` MUST appear as a key; extra keys are rejected at load time with diagnostic 'apply_expression_template_bindings_mismatch'. Values may be numeric literals, variable name references (strings), or arbitrary Expression ASTs (full subtrees). `args` MUST be empty for an apply_expression_template node — the parameter values live here.
+   */
+  bindings?: {
+    [k: string]: Expression;
+  };
 };
 export type ExpressionNode1 = {
   [k: string]: unknown;
@@ -283,7 +290,7 @@ export type DiscreteEvent1 =
       [k: string]: unknown;
     };
 /**
- * A single scalar check against a model variable at a specific (variable, time) point. PDE-aware variants pin a spatial point via `coords`, or reduce the field to a scalar via `reduce` (domain-integral, mean, max, min, or an error-norm against a `reference` solution). `coords` and `reduce` are mutually exclusive; if neither is given the assertion is pointwise and only valid on a 0-D component. Error-norm reductions (L2_error, Linf_error) require `reference`.
+ * A single scalar check against a model variable at a specific (variable, time) point. PDE-aware variants pin a spatial point via `coords`, or reduce the field to a scalar via `reduce` (domain-integral, mean, max, min, error-norm, or convergence-order). `coords` and `reduce` are mutually exclusive; if neither is given the assertion is pointwise and only valid on a 0-D component. Error-norm reductions (L2_error, Linf_error) require `reference`. The `convergence_order` reduction requires `grid_refs` on the enclosing test, `reference`, and `expected_order`; `expected` is not used for convergence assertions.
  */
 export type Assertion = Assertion1 & {
   /**
@@ -297,7 +304,7 @@ export type Assertion = Assertion1 & {
   /**
    * Expected scalar value of the variable at the given time.
    */
-  expected: number;
+  expected?: number;
   tolerance?: Tolerance2;
   /**
    * Spatial-point evaluation: map from the enclosing component's domain dimension name (e.g., "x", "lon") to the numeric coordinate at which to sample the field. All keys MUST be names of dimensions declared in the component's domain.spatial. Mutually exclusive with `reduce`.
@@ -306,9 +313,9 @@ export type Assertion = Assertion1 & {
     [k: string]: number;
   };
   /**
-   * Domain reduction: collapse the spatial field to a single scalar before comparison. `integral`/`mean`/`max`/`min` are pure reductions; `L2_error`/`Linf_error` require a `reference` solution and compute ||u_actual - u_reference||_norm. Mutually exclusive with `coords`.
+   * Domain reduction: collapse the spatial field to a single scalar before comparison. `integral`/`mean`/`max`/`min` are pure reductions; `L2_error`/`Linf_error` require a `reference` solution and compute ||u_actual - u_reference||_norm; `convergence_order` requires `grid_refs` on the enclosing test, `reference`, and `expected_order`, and asserts the measured log-log convergence slope. Mutually exclusive with `coords`.
    */
-  reduce?: "integral" | "mean" | "max" | "min" | "L2_error" | "Linf_error";
+  reduce?: "integral" | "mean" | "max" | "min" | "L2_error" | "Linf_error" | "convergence_order";
   /**
    * Reference (analytic or precomputed) solution required by error-norm reductions. Either an inline Expression evaluated over the component's domain coordinates, or a from_file shape pointing at a precomputed snapshot.
    */
@@ -319,8 +326,16 @@ export type Assertion = Assertion1 & {
         path: string;
         format?: string;
       };
+  /**
+   * Required when `reduce` is `convergence_order`. The expected numerical convergence rate (e.g., 2.0 for second-order methods). The assertion passes when the measured rate p_obs >= expected_order * (1 - tolerance.rel).
+   */
+  expected_order?: number;
 };
 export type Assertion1 = {
+  [k: string]: unknown;
+} & {
+  [k: string]: unknown;
+} & {
   [k: string]: unknown;
 } & {
   [k: string]: unknown;
@@ -362,9 +377,9 @@ export type Plot = Plot1 & {
   description?: string;
   x: PlotAxis;
   /**
-   * Y-axis specification. May be a single PlotAxis, or an array of PlotAxis for inline multi-series line/scatter plots (v0.5.0).
+   * Y-axis specification. May be a single PlotAxis, or an array of PlotAxis for inline multi-series line/scatter plots (alternative to the `series` field for the common case of plotting several variables against a shared x-axis).
    */
-  y: PlotAxis | PlotAxis[];
+  y: PlotAxis | [PlotAxis, ...PlotAxis[]];
   value?: PlotValue;
   /**
    * Multiple named series for line or scatter plots. Ignored for heatmap and field plots.
@@ -1163,6 +1178,12 @@ export interface Model {
   boundary_conditions?: {
     [k: string]: BoundaryCondition;
   };
+  /**
+   * Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this model's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.
+   */
+  expression_templates?: {
+    [k: string]: ExpressionTemplate;
+  };
 }
 /**
  * An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
@@ -1298,6 +1319,25 @@ export interface Test {
    * @minItems 1
    */
   assertions: [Assertion, ...Assertion1[]];
+  /**
+   * PDE only. Array of {ref} objects pointing to GridDiscretization Descriptor files (see esm-spec.md §4.7.1). Each entry overrides the component's declared spatial grid and discretization for one run. A single-element list runs the test on exactly that grid configuration. Two or more entries enable a resolution sweep for convergence_order assertions.
+   *
+   * @minItems 1
+   */
+  grid_refs?: [
+    {
+      /**
+       * URL or path to a GridDiscretization Descriptor (.gdd.json) file.
+       */
+      ref: string;
+    },
+    ...{
+      /**
+       * URL or path to a GridDiscretization Descriptor (.gdd.json) file.
+       */
+      ref: string;
+    }[]
+  ];
 }
 /**
  * Simulation time interval expressed in the component's time units.
@@ -1345,7 +1385,7 @@ export interface Example {
    */
   description?: string;
   /**
-   * Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file).
+   * Initial conditions for state variables. Reuses the top-level InitialConditions $def (constant / per_variable / from_file / expression). For PDE components the `expression` variant carries per-variable closed-form initial fields (see esm-spec.md §11.4).
    */
   initial_state?:
     | {
@@ -1384,6 +1424,25 @@ export interface Example {
    * Plot specifications derived from this example's run(s).
    */
   plots?: Plot[];
+  /**
+   * PDE only. Array of {ref} objects pointing to GridDiscretization Descriptor files (see esm-spec.md §4.7.1). Each entry overrides the component's declared spatial grid and discretization for one run. A single-element list runs the example on exactly that grid configuration. When multiple entries are provided, the example represents a family of runs at different grid configurations; may be combined with parameter_sweep (total runs = Cartesian product).
+   *
+   * @minItems 1
+   */
+  grid_refs?: [
+    {
+      /**
+       * URL or path to a GridDiscretization Descriptor (.gdd.json) file.
+       */
+      ref: string;
+    },
+    ...{
+      /**
+       * URL or path to a GridDiscretization Descriptor (.gdd.json) file.
+       */
+      ref: string;
+    }[]
+  ];
 }
 /**
  * Optional parameter sweep. When present, the example represents a family of runs (one per Cartesian combination) rather than a single trajectory.
@@ -1502,6 +1561,22 @@ export interface BoundaryCondition {
   description?: string;
 }
 /**
+ * A single in-file Expression-AST template (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md). The `body` is a normal Expression AST in which parameter occurrences are written as bare parameter-name strings in any position where a variable reference would appear. At load time `apply_expression_template` nodes are expanded by structural substitution: every parameter occurrence in `body` is replaced by the bound argument's AST in source order. Pure syntactic substitution — no evaluation, no metaprogramming. Bodies MUST NOT contain `apply_expression_template` nodes themselves (no template-calls-template); bindings reject this with diagnostic 'apply_expression_template_recursive_body'.
+ */
+export interface ExpressionTemplate {
+  /**
+   * Ordered list of parameter names. MUST be unique within this template. Each name occurs zero or more times inside `body`; every name MUST also appear as a key in every `apply_expression_template.bindings` referencing this template.
+   *
+   * @minItems 1
+   */
+  params: [string, ...string[]];
+  /**
+   * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
+   */
+  body: number | string | ExpressionNode1;
+  description?: string;
+}
+/**
  * A reaction network — declarative representation of chemical or biological reactions.
  */
 export interface ReactionSystem {
@@ -1553,6 +1628,12 @@ export interface ReactionSystem {
    * Inline illustrative examples of how to run this reaction system. Each example specifies initial state, parameters, a time span, an optional parameter sweep, and plot specifications.
    */
   examples?: Example[];
+  /**
+   * Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component (typically inside `reactions[*].rate`) reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this reaction system's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.
+   */
+  expression_templates?: {
+    [k: string]: ExpressionTemplate;
+  };
 }
 /**
  * A reactive species in a reaction system.
