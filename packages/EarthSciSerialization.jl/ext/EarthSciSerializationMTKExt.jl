@@ -569,10 +569,12 @@ end
 # are the index expressions. This is used outside arrayop bodies (inside an
 # arrayop body, the `index` op is consumed by `_esm_to_julia_ast`).
 #
-# When the array operand is a concrete symbolic array (from arrayop
-# pre-scalarization) and an index evaluates to an out-of-bounds integer,
-# apply mod1 periodic wrapping. This correctly handles stencil access
-# patterns like u[i-1] at boundary cells (e.g. i=1 → index=0 wraps to N).
+# Out-of-bounds integer indices produce a symbolic element that is not in
+# the `dvs` (states) list, so MTK treats them as fixed-at-zero ghost cells
+# (Dirichlet BC semantics). Periodic BC stencils must apply explicit modular
+# index folding BEFORE reaching this function — see `_apply_periodic_folding!`
+# in `discretize.jl`, which rewrites periodic index expressions using `ifelse`
+# so they evaluate to in-bounds values during `_build_arrayop` scalarization.
 function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
                       t_sym, dim_dict::Dict{String,Any})
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
@@ -585,20 +587,6 @@ function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
         else
             push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
         end
-    end
-    # Periodic wrapping: when the array is a concrete Symbolics.Arr (produced
-    # by _make_array_dep_var during arrayop pre-scalarization) and an integer
-    # index is out of bounds, apply mod1 wrapping so stencil accesses like
-    # u[0,j] or u[N+1,j] resolve to u[N,j] / u[1,j] respectively.
-    if arr isa Symbolics.Arr
-        n = ndims(arr)
-        sz = size(arr)
-        wrapped = ntuple(n) do d
-            idx = d <= length(idxs) ? idxs[d] : 1
-            (idx isa Integer && sz[d] isa Integer && !(1 <= idx <= sz[d])) ?
-                mod1(idx, sz[d]) : idx
-        end
-        return getindex(arr, wrapped...)
     end
     return getindex(arr, idxs...)
 end

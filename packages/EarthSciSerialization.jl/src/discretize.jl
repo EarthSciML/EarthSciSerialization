@@ -339,9 +339,32 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
         "ranges"     => ranges,
     )
 
-    # Wrap existing (already-rewritten) RHS in arrayop
+    # Wrap existing (already-rewritten) RHS in arrayop.
+    # For periodic grid dimensions, fold stencil boundary accesses like u[0,j]
+    # into u[N,j] using ifelse-based modular arithmetic evaluated at
+    # scalarization time. This avoids relying on MTK/Symbolics ghost-cell
+    # behaviour for periodic BCs.
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
+
+    periodic_dims = get(gmeta, "periodic_dims", nothing)
+    if periodic_dims isa AbstractVector && !isempty(periodic_dims)
+        var_periodic_sizes = Dict{String,Vector{Tuple{Int,Bool}}}()
+        dims_info = Tuple{Int,Bool}[]
+        all_found = true
+        for d in 1:ndims
+            dim_name = String(shape[d])
+            sz = get(dim_sizes, dim_name, nothing)
+            sz isa Integer || (all_found = false; break)
+            is_periodic = dim_name in (String(p) for p in periodic_dims)
+            push!(dims_info, (Int(sz), is_periodic))
+        end
+        if all_found && any(d -> d[2], dims_info)
+            var_periodic_sizes[var_name] = dims_info
+            _apply_periodic_folding!(rhs_raw, var_periodic_sizes)
+        end
+    end
+
     eqn["rhs"] = Dict{String,Any}(
         "op"         => "arrayop",
         "args"       => Any[],
@@ -349,6 +372,67 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
         "expr"       => rhs_raw,
         "ranges"     => ranges,
     )
+end
+
+# Walk a raw JSON-like body Dict and fold stencil index accesses for periodic
+# grid dimensions. For each `index(u, e1, e2, ...)` node where variable `u`
+# lives on a periodic dimension d of size N, replaces `e_d` with:
+#   ifelse(e_d < 1, e_d + N, ifelse(e_d > N, e_d - N, e_d))
+# This is exact for nearest-neighbor stencils where e_d ∈ {0, 1, …, N, N+1}.
+# At _build_arrayop scalarization time, e_d is a concrete integer, so the
+# ifelse collapses to the correct in-bounds index.
+function _apply_periodic_folding!(body::Any,
+                                   var_periodic_sizes::Dict{String,Vector{Tuple{Int,Bool}}})
+    body isa AbstractDict || return
+    op = get(body, "op", nothing)
+    if op == "index"
+        args = get(body, "args", nothing)
+        args isa AbstractVector && length(args) >= 2 || return
+        varname = args[1] isa AbstractString ? String(args[1]) : nothing
+        if varname !== nothing
+            dims = get(var_periodic_sizes, varname, nothing)
+            if dims !== nothing
+                new_args = Any[args[1]]
+                for (d, idx_expr) in enumerate(args[2:end])
+                    if d <= length(dims)
+                        N, is_periodic = dims[d]
+                        if is_periodic && !(idx_expr isa AbstractString)
+                            idx_expr = Dict{String,Any}(
+                                "op"   => "ifelse",
+                                "args" => Any[
+                                    Dict{String,Any}("op" => "<",
+                                        "args" => Any[idx_expr, 1]),
+                                    Dict{String,Any}("op" => "+",
+                                        "args" => Any[idx_expr, N]),
+                                    Dict{String,Any}("op" => "ifelse",
+                                        "args" => Any[
+                                            Dict{String,Any}("op" => ">",
+                                                "args" => Any[idx_expr, N]),
+                                            Dict{String,Any}("op" => "-",
+                                                "args" => Any[idx_expr, N]),
+                                            idx_expr
+                                        ])
+                                ]
+                            )
+                        end
+                    end
+                    push!(new_args, idx_expr)
+                end
+                body["args"] = new_args
+                return
+            end
+        end
+    end
+    # Recurse into all child values.
+    for val in values(body)
+        if val isa AbstractDict
+            _apply_periodic_folding!(val, var_periodic_sizes)
+        elseif val isa AbstractVector
+            for item in val
+                item isa AbstractDict && _apply_periodic_folding!(item, var_periodic_sizes)
+            end
+        end
+    end
 end
 
 # ============================================================================
