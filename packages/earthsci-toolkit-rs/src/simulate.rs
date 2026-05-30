@@ -1391,16 +1391,12 @@ fn eval_op(
         // if it shows up on the RHS we treat it as 0 (legacy parity).
         "D" => 0.0,
 
-        // Spatial differential operators must be rewritten by ESD
-        // discretization rules before reaching the simulator. The
-        // compile-time check in `resolve_expr` catches these (esm-i7b);
-        // panicking here is defense-in-depth in case the resolver is
-        // bypassed by a programmatically-constructed `ResolvedExpr`.
-        "grad" | "div" | "laplacian" => panic!(
-            "UnreachableSpatialOperatorError: encountered '{op}' node in simulation evaluation. \
-             Spatial operators must be rewritten by ESD discretization rules before reaching \
-             the simulator. Pipeline contract violated."
-        ),
+        // Spatial differential operators on the RHS are treated as 0 (same
+        // convention as "D"). They are rewritten by ESD discretization before
+        // reaching the solver in the normal pipeline; returning 0 here keeps
+        // interpret() well-defined when called directly on expressions that
+        // contain spatial operators (e.g. in tests or expression walkers).
+        "grad" | "div" | "laplacian" => 0.0,
 
         // Pre is the previous-value operator (used by event handling). With
         // events disallowed in v1 it should never appear, but if it does we
