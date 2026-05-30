@@ -3,7 +3,7 @@
   "metadata": {
     "name": "ExpressionGraphVariableDependencies",
     "description": "Complex variable-level dependency graph test case",
-    "created": "2026-02-16"
+    "created": "2026-02-16T00:00:00Z"
   },
   "models": {
     "VariableDependencyModel": {

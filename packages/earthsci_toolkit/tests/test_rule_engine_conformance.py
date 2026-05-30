@@ -59,11 +59,19 @@ def _build_ctx(raw):
         if isinstance(v, int) and not isinstance(v, bool):
             query_point[k] = v
     grid_name = raw.get("grid_name") if isinstance(raw.get("grid_name"), str) else None
+    mask_fields: dict = {}
+    for field_name, points in (raw.get("mask_fields") or {}).items():
+        pts = []
+        for pt in (points or []):
+            if isinstance(pt, dict):
+                pts.append({k: v for k, v in pt.items() if isinstance(v, int) and not isinstance(v, bool)})
+        mask_fields[field_name] = pts
     return RuleContext(
         grids=dict(raw.get("grids", {})),
         variables=dict(raw.get("variables", {})),
         query_point=query_point,
         grid_name=grid_name,
+        mask_fields=mask_fields,
     )
 
 

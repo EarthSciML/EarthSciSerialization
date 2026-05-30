@@ -72,11 +72,22 @@ function buildContext(fixture: Record<string, unknown>): RuleContext {
           }
         }
       }
+      let panelConnectivity: { neighbors: number[][]; axis_flip: number[][] } | undefined
+      if (typeof meta.panel_connectivity === 'object' && meta.panel_connectivity !== null) {
+        const pc = meta.panel_connectivity as Record<string, unknown>
+        if (Array.isArray(pc.neighbors) && Array.isArray(pc.axis_flip)) {
+          panelConnectivity = {
+            neighbors: pc.neighbors as number[][],
+            axis_flip: pc.axis_flip as number[][],
+          }
+        }
+      }
       ctx.grids[k] = {
         spatial_dims: asStringArray(meta.spatial_dims),
         periodic_dims: asStringArray(meta.periodic_dims),
         nonuniform_dims: asStringArray(meta.nonuniform_dims),
         dim_bounds: dimBounds,
+        panel_connectivity: panelConnectivity,
       }
     }
   }
@@ -100,6 +111,24 @@ function buildContext(fixture: Record<string, unknown>): RuleContext {
   }
   if (typeof c.grid_name === 'string') {
     ctx.grid_name = c.grid_name
+  }
+  if (typeof c.mask_fields === 'object' && c.mask_fields !== null) {
+    const mf: Record<string, Array<Record<string, number>>> = {}
+    for (const [field, points] of Object.entries(c.mask_fields as Record<string, unknown>)) {
+      if (!Array.isArray(points)) continue
+      const pts: Array<Record<string, number>> = []
+      for (const pt of points) {
+        if (typeof pt !== 'object' || pt === null) continue
+        const entry: Record<string, number> = {}
+        for (const [k, v] of Object.entries(pt as Record<string, unknown>)) {
+          const n = asInt(v)
+          if (n !== undefined) entry[k] = n
+        }
+        pts.push(entry)
+      }
+      mf[field] = pts
+    }
+    ctx.mask_fields = mf
   }
   return ctx
 }

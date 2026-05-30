@@ -114,7 +114,6 @@ class TestSection02TopLevelStructure:
                 "source": {"url_template": "file:///data/test_{date:%Y%m%d}.nc"},
                 "variables": {"var1": {"file_variable": "v1", "units": "1"}}
             }},
-            "operators": {"test_op": {"operator_id": "test", "needed_vars": []}},
             "coupling": [],
             "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}}
         }
@@ -1066,65 +1065,35 @@ class TestSection09Operators:
     """Section 9: Operators - runtime-specific with needed_vars"""
 
     def test_complete_operator_examples(self):
-        """Test complete operator examples from spec."""
+        """Test that the operators top-level block (removed in v0.3.0) is rejected by the schema."""
         schema = _get_schema()
 
-        valid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "operators": {
-                "DryDepGrid": {
-                    "operator_id": "WesleyDryDep",
-                    "reference": {
-                        "doi": "10.1016/0004-6981(89)90153-4",
-                        "citation": "Wesely, 1989. Parameterization of surface resistances to gaseous dry deposition.",
-                        "notes": "Resistance-based model: r_total = r_a + r_b + r_c"
-                    },
-                    "config": {"season": "summer", "land_use_categories": 11},
-                    "needed_vars": ["O3", "NO2", "SO2", "T", "u_star", "LAI"],
-                    "modifies": ["O3", "NO2", "SO2"],
-                    "description": "Dry deposition loss based on surface resistance"
-                },
-                "WetScavenging": {
-                    "operator_id": "BelowCloudScav",
-                    "reference": {"doi": "10.1029/2001JD001480"},
-                    "needed_vars": ["precip_rate", "cloud_fraction"],
-                    "modifies": ["H2O2", "CH2O", "HNO3"],
-                    "description": "Below-cloud washout of soluble species"
-                }
-            }
-        }
-        jsonschema.validate(valid_data, schema)
-
-    def test_operator_required_fields(self):
-        """Test that required fields are enforced for operators."""
-        schema = _get_schema()
-
-        # Missing operator_id
-        with pytest.raises(ValidationError, match="'operator_id' is a required property"):
+        # operators was removed in v0.3.0; it should now be rejected as an
+        # additional property.
+        with pytest.raises(ValidationError, match="Additional properties are not allowed"):
             jsonschema.validate({
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
                 "operators": {
-                    "bad_op": {
-                        "needed_vars": ["x"]
+                    "DryDepGrid": {
+                        "operator_id": "WesleyDryDep",
+                        "needed_vars": ["O3", "NO2"],
                     }
                 }
             }, schema)
 
-        # Missing needed_vars
-        with pytest.raises(ValidationError, match="'needed_vars' is a required property"):
+    def test_operator_required_fields(self):
+        """Test that the removed operators block is rejected regardless of its contents."""
+        schema = _get_schema()
+
+        # Any use of the operators block (removed in v0.3.0) must be rejected.
+        with pytest.raises(ValidationError, match="Additional properties are not allowed"):
             jsonschema.validate({
                 "esm": "0.1.0",
                 "metadata": {"name": "Test"},
                 "models": {"test": {"variables": {}, "equations": []}},
-                "operators": {
-                    "bad_op": {
-                        "operator_id": "test"
-                    }
-                }
+                "operators": {"bad_op": {"needed_vars": ["x"]}}
             }, schema)
 
     def test_operator_field_types(self):
@@ -1215,27 +1184,18 @@ class TestSection10Coupling:
             jsonschema.validate(valid_data, schema)
 
     def test_operator_apply_coupling(self):
-        """Test operator_apply coupling."""
+        """Test that operator_apply coupling (removed in v0.3.0) is rejected by the schema."""
         schema = _get_schema()
 
-        valid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "coupling": [
-                {
-                    "type": "operator_apply",
-                    "operator": "DryDepGrid",
-                    "description": "Apply dry deposition operator"
-                },
-                {
-                    "type": "operator_apply",
-                    "operator": "WetScavenging",
-                    "description": "Apply wet scavenging operator"
-                }
-            ]
-        }
-        jsonschema.validate(valid_data, schema)
+        # operator_apply was removed in v0.3.0; any coupling entry with that
+        # type should fail schema validation.
+        with pytest.raises(ValidationError):
+            jsonschema.validate({
+                "esm": "0.1.0",
+                "metadata": {"name": "Test"},
+                "models": {"test": {"variables": {}, "equations": []}},
+                "coupling": [{"type": "operator_apply", "operator": "DryDepGrid"}]
+            }, schema)
 
     def test_callback_coupling(self):
         """Test callback coupling type."""
@@ -1596,15 +1556,8 @@ class TestSection13CompleteExamples:
                     }
                 }
             },
-            "operators": {
-                "Deposition": {
-                    "operator_id": "DryDep",
-                    "needed_vars": ["O3", "NO2"]
-                }
-            },
             "coupling": [
-                {"type": "operator_compose", "systems": ["FullChemistry", "VerticalMixing"]},
-                {"type": "operator_apply", "operator": "Deposition"}
+                {"type": "operator_compose", "systems": ["FullChemistry", "VerticalMixing"]}
             ],
             "domains": {"default": {
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
@@ -1769,16 +1722,6 @@ class TestSection15FutureConsiderations:
                     }
                 }
             },
-            "operators": {
-                "future_op": {
-                    "operator_id": "NextGenOperator",
-                    "needed_vars": ["x"],
-                    "config": {
-                        "algorithm_version": "2.0",
-                        "performance_hints": {"use_gpu": True}
-                    }
-                }
-            }
         }
         jsonschema.validate(extensible_config, schema)
 
@@ -1887,12 +1830,6 @@ class TestCrossSectionValidation:
                     }]
                 }
             },
-            "operators": {
-                "SystemController": {
-                    "operator_id": "ControlLogic",
-                    "needed_vars": ["controller"]
-                }
-            }
         }
         jsonschema.validate(valid_data, schema)
 
@@ -1942,16 +1879,9 @@ class TestCrossSectionValidation:
                     }
                 }
             },
-            "operators": {
-                "Emissions": {
-                    "operator_id": "EmissionOperator",
-                    "needed_vars": ["O3"]
-                }
-            },
             "coupling": [
                 {"type": "operator_compose", "systems": ["Chemistry", "Transport"]},
-                {"type": "variable_map", "from": "MetData.wind_field", "to": "Transport.wind", "transform": "param_to_var"},
-                {"type": "operator_apply", "operator": "Emissions"}
+                {"type": "variable_map", "from": "MetData.wind_field", "to": "Transport.wind", "transform": "param_to_var"}
             ],
             "domains": {"default": {
                 "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z"},

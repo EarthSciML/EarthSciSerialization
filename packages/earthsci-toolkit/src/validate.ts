@@ -31,7 +31,8 @@ import type {
     AffectEquation,
     FunctionalAffect,
     Reaction,
-    StoichiometryEntry
+    StoichiometryEntry,
+    SubsystemRef,
 } from './types.js';
 
 /**
@@ -839,6 +840,70 @@ function validateConversionFactorConsistency(model: Model, modelPath: string): S
 }
 
 /**
+ * Flag subsystem entries that are unresolved SubsystemRef objects.
+ * The synchronous validate() function cannot resolve external file references;
+ * call resolveSubsystemRefs() before validate() to inline them first.
+ */
+function validateSubsystemRefs(esmFile: EsmFile): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (esmFile.models) {
+        for (const [modelName, model] of Object.entries(esmFile.models)) {
+            if (!model.subsystems) continue;
+            for (const [subsystemName, subsystem] of Object.entries(model.subsystems)) {
+                if ('ref' in subsystem && typeof (subsystem as SubsystemRef).ref === 'string') {
+                    errors.push({
+                        path: `/models/${modelName}/subsystems/${subsystemName}`,
+                        code: 'unresolved_subsystem_ref',
+                        message: `Subsystem '${subsystemName}' is an unresolved file reference ('${(subsystem as SubsystemRef).ref}'). Call resolveSubsystemRefs() before validate().`,
+                        details: { ref: (subsystem as SubsystemRef).ref },
+                    });
+                }
+            }
+        }
+    }
+    if (esmFile.reaction_systems) {
+        for (const [systemName, system] of Object.entries(esmFile.reaction_systems)) {
+            if (!system.subsystems) continue;
+            for (const [subsystemName, subsystem] of Object.entries(system.subsystems)) {
+                if ('ref' in subsystem && typeof (subsystem as SubsystemRef).ref === 'string') {
+                    errors.push({
+                        path: `/reaction_systems/${systemName}/subsystems/${subsystemName}`,
+                        code: 'unresolved_subsystem_ref',
+                        message: `Subsystem '${subsystemName}' is an unresolved file reference ('${(subsystem as SubsystemRef).ref}'). Call resolveSubsystemRefs() before validate().`,
+                        details: { ref: (subsystem as SubsystemRef).ref },
+                    });
+                }
+            }
+        }
+    }
+    return errors;
+}
+
+/**
+ * Flag model variables where default_units is set and the conversion from
+ * default_units to units is affine (e.g., degC → K) rather than a pure
+ * scale factor. Affine unit conversions are not expressible as a simple
+ * default value and must use an explicit expression instead.
+ */
+function validateDefaultUnits(model: Model, modelPath: string): StructuralError[] {
+    const errors: StructuralError[] = [];
+    if (!model.variables) return errors;
+    for (const [vname, vdef] of Object.entries(model.variables)) {
+        const { units, default_units } = vdef;
+        if (!default_units || !units || default_units === units) continue;
+        if (isAffineTempUnit(default_units) || isAffineTempUnit(units)) {
+            errors.push({
+                path: `${modelPath}/variables/${vname}`,
+                code: 'unit_inconsistency',
+                message: `default_units '${default_units}' requires an affine conversion to/from '${units}'; use an expression instead of a scalar default`,
+                details: { variable: vname, units, default_units },
+            });
+        }
+    }
+    return errors;
+}
+
+/**
  * Check coupling entries reference integrity
  */
 function validateCouplingIntegrity(esmFile: EsmFile): StructuralError[] {
@@ -1148,6 +1213,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
             errors.push(...validateEventConsistency(model, modelPath));
             errors.push(...validatePhysicalConstantUnits(model, modelPath));
             errors.push(...validateConversionFactorConsistency(model, modelPath));
+            errors.push(...validateDefaultUnits(model, modelPath));
 
             // Recursively validate subsystems
             if (model.subsystems) {
@@ -1183,6 +1249,9 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
             }
         }
     }
+
+    // Validate subsystem ref resolution
+    errors.push(...validateSubsystemRefs(esmFile));
 
     // Validate coupling integrity
     errors.push(...validateCouplingIntegrity(esmFile));

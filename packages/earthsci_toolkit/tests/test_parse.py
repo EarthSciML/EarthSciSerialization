@@ -228,7 +228,7 @@ def test_operator_field_requirements():
 
 
 def test_load_comprehensive_fields():
-    """Test loading ESM file with events, data_loaders, operators, and coupling."""
+    """Test loading ESM file with events, data_loaders, and coupling."""
     comprehensive_esm = {
         "esm": "0.1.0",
         "metadata": {"name": "Comprehensive Test"},
@@ -270,13 +270,6 @@ def test_load_comprehensive_fields():
                 }
             }
         },
-        "operators": {
-            "interpolator": {
-                "operator_id": "linear_interp",
-                "needed_vars": ["temperature"],
-                "modifies": ["temp_interp"]
-            }
-        },
         "coupling": [
             {
                 "type": "operator_compose",
@@ -296,10 +289,9 @@ def test_load_comprehensive_fields():
     json_str = json.dumps(comprehensive_esm)
     esm_file = load(json_str)
 
-    # Verify all fields are parsed correctly (no longer empty!)
+    # Verify all fields are parsed correctly
     assert len(esm_file.events) == 2
     assert len(esm_file.data_loaders) == 1
-    assert len(esm_file.operators) == 1
     assert len(esm_file.coupling) == 2
 
     # Check events
@@ -316,11 +308,6 @@ def test_load_comprehensive_fields():
     assert "pressure" in data_loader.variables
     assert data_loader.variables["temperature"].file_variable == "t"
     assert data_loader.variables["temperature"].units == "K"
-
-    # Check operator
-    operator = esm_file.operators[0]
-    assert "temperature" in operator.needed_vars
-    assert "temp_interp" in operator.modifies
 
     # Check coupling
     assert len(esm_file.coupling) == 2

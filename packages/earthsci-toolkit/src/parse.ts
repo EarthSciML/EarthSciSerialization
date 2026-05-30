@@ -5342,6 +5342,21 @@ try {
  * Validate data against the ESM schema
  */
 export function validateSchema(data: unknown): SchemaError[] {
+  // Reject unsupported major versions before AJV validation.
+  if (typeof data === 'object' && data !== null) {
+    const esm = (data as Record<string, unknown>).esm
+    if (typeof esm === 'string') {
+      const v = parseSemanticVersion(esm)
+      if (v !== null && v.major !== 0) {
+        return [{
+          path: '/esm',
+          message: `Unsupported major version ${v.major}; this validator supports major version 0`,
+          keyword: 'major_version_mismatch'
+        }]
+      }
+    }
+  }
+
   const isValid = validator(data)
   if (isValid || !validator.errors) {
     return []

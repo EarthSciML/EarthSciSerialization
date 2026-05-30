@@ -181,6 +181,7 @@ class RuleContext:
     variables: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     query_point: Dict[str, int] = field(default_factory=dict)
     grid_name: Optional[str] = None
+    mask_fields: Dict[str, List[Dict[str, int]]] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -558,6 +559,14 @@ def check_scope(rule: Rule, bindings: Bindings, ctx: RuleContext) -> bool:
 _CANONICAL_INDEX_NAMES = ("i", "j", "k", "l", "m")
 
 
+_PANEL_SIDES: Dict[str, tuple] = {
+    "xmin": ("i", False), "west": ("i", False),
+    "xmax": ("i", True),  "east": ("i", True),
+    "ymin": ("j", False), "south": ("j", False),
+    "ymax": ("j", True),  "north": ("j", True),
+}
+
+
 def _eval_region(region: Mapping[str, Any], ctx: RuleContext) -> bool:
     kind = region.get("kind")
     if kind == "index_range":
@@ -575,8 +584,54 @@ def _eval_region(region: Mapping[str, Any], ctx: RuleContext) -> bool:
     if kind == "boundary":
         side = region.get("side")
         return isinstance(side, str) and _eval_boundary(side, ctx)
-    # panel_boundary, mask_field: deferred — conservative fall-through.
+    if kind == "panel_boundary":
+        return _eval_panel_boundary(region, ctx)
+    if kind == "mask_field":
+        return _eval_mask_field(region, ctx)
     return False
+
+
+def _eval_panel_boundary(region: Mapping[str, Any], ctx: RuleContext) -> bool:
+    grid_name = ctx.grid_name
+    if grid_name is None:
+        raise RuleEngineError(
+            "E_REGION_GRID_MISMATCH",
+            "region.panel_boundary requires a grid context (grid_name not set)",
+        )
+    meta = ctx.grids.get(grid_name)
+    if meta is None or "panel_connectivity" not in meta:
+        raise RuleEngineError(
+            "E_REGION_GRID_MISMATCH",
+            f"region.panel_boundary requires a cubed-sphere grid with panel_connectivity; "
+            f"grid '{grid_name}' has none",
+        )
+    panel = region.get("panel")
+    if not isinstance(panel, int):
+        return False
+    if ctx.query_point.get("p") != panel:
+        return False
+    side = region.get("side")
+    if not isinstance(side, str) or side not in _PANEL_SIDES:
+        return False
+    dim, which_hi = _PANEL_SIDES[side]
+    bounds = meta.get("dim_bounds", {}).get(dim)
+    if not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+        return False
+    v = ctx.query_point.get(dim)
+    if v is None:
+        return False
+    target = bounds[1] if which_hi else bounds[0]
+    return v == target
+
+
+def _eval_mask_field(region: Mapping[str, Any], ctx: RuleContext) -> bool:
+    field_name = region.get("field")
+    if not isinstance(field_name, str):
+        return False
+    mask = ctx.mask_fields.get(field_name)
+    if mask is None:
+        return False
+    return ctx.query_point in mask
 
 
 def _eval_boundary(side: str, ctx: RuleContext) -> bool:

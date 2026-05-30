@@ -226,6 +226,11 @@ export interface GridMeta {
    * disabled" (conservative fall-through).
    */
   dim_bounds?: Record<string, [number, number]>
+  /**
+   * Cubed-sphere panel connectivity table. Presence signals that this grid
+   * is a cubed-sphere and unlocks region.panel_boundary scope evaluation.
+   */
+  panel_connectivity?: { neighbors: number[][]; axis_flip: number[][] }
 }
 
 export interface VariableMeta {
@@ -248,6 +253,12 @@ export interface RuleContext {
    * region.boundary.side against `dim_bounds`).
    */
   grid_name?: string
+  /**
+   * Named loader-backed mask tables. Each entry is a list of query-point
+   * coordinates at which the mask is truthy. Used by region.mask_field
+   * scope evaluation (RFC §5.2.7).
+   */
+  mask_fields?: Record<string, Array<Record<string, number>>>
 }
 
 export function emptyContext(): RuleContext {
@@ -655,10 +666,51 @@ function evalRegion(region: RuleRegionScope, ctx: RuleContext): boolean {
     case 'boundary':
       return evalBoundary(region.side, ctx)
     case 'panel_boundary':
+      return evalPanelBoundary(region, ctx)
     case 'mask_field':
-      // Deferred — conservative fall-through.
-      return false
+      return evalMaskField(region, ctx)
   }
+}
+
+function evalPanelBoundary(region: RuleRegionScope & { kind: 'panel_boundary' }, ctx: RuleContext): boolean {
+  if (ctx.grid_name === undefined || !ctx.query_point) return false
+  const meta = ctx.grids[ctx.grid_name]
+  if (meta === undefined || !meta.panel_connectivity) {
+    throw new RuleEngineError(
+      'E_REGION_GRID_MISMATCH',
+      `region.panel_boundary requires a cubed-sphere grid with panel_connectivity; grid '${ctx.grid_name}' has none`
+    )
+  }
+  // Check panel coordinate (query_point uses 'p' key for panel index)
+  const p = ctx.query_point['p']
+  if (p === undefined || p !== region.panel) return false
+  // Map side to (dim, isMax) using panel-local i/j axes
+  const panelSides: Record<string, [string, boolean]> = {
+    xmin: ['i', false], west: ['i', false],
+    xmax: ['i', true],  east: ['i', true],
+    ymin: ['j', false], south: ['j', false],
+    ymax: ['j', true],  north: ['j', true],
+  }
+  const entry = panelSides[region.side]
+  if (entry === undefined) return false
+  const [dim, whichHi] = entry
+  const bounds = meta.dim_bounds?.[dim]
+  if (bounds === undefined) return false
+  const v = ctx.query_point[dim]
+  if (v === undefined) return false
+  return v === (whichHi ? bounds[1] : bounds[0])
+}
+
+function evalMaskField(region: RuleRegionScope & { kind: 'mask_field' }, ctx: RuleContext): boolean {
+  if (!ctx.query_point || !ctx.mask_fields) return false
+  const mask = ctx.mask_fields[region.field]
+  if (!mask) return false
+  const qp = ctx.query_point
+  return mask.some(entry => {
+    const entryKeys = Object.keys(entry)
+    return entryKeys.length === Object.keys(qp).length &&
+      entryKeys.every(k => qp[k] === entry[k])
+  })
 }
 
 function evalBoundary(side: string, ctx: RuleContext): boolean {
