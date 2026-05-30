@@ -125,3 +125,6 @@ docs/.hugo_build.lock
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
+
+# Gas City
+.beads/
