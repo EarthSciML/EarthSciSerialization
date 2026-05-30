@@ -30,6 +30,12 @@
       "input":  "inputs/cfl_sine_advection.esm",
       "golden": "golden/cfl_sine_advection.json",
       "tags": ["step1", "pde", "rules", "grid", "boundary_policy", "bindings"]
+    },
+    {
+      "id": "nonuniform_1d_diffusion",
+      "input":  "inputs/nonuniform_1d_diffusion.esm",
+      "golden": "golden/nonuniform_1d_diffusion.json",
+      "tags": ["step2", "pde", "use-scheme", "metric-array", "nonuniform-grid", "section-6.2.1"]
     }
   ]
 }

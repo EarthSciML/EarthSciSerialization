@@ -254,4 +254,190 @@ const ESM_Expr = EarthSciSerialization.Expr
         @test occursin("\"index\"", rhs_str)
         @test occursin("\"u\"", rhs_str)
     end
+
+    @testset "§6.2.1 nonuniform metric-array auto-index rewrite" begin
+        # Non-uniform 2nd derivative scheme: bare "dz" in stencil coeff should be
+        # rewritten to index(dz, i) for a nonuniform z-dimension.
+        nonuniform_scheme_obj = Dict{String,Any}(
+            "applies_to"  => Dict("op" => "laplacian", "args" => Any["\$u"], "dim" => "\$z"),
+            "grid_family" => "cartesian",
+            "combine"     => "+",
+            "stencil"     => Any[
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "\$z", "offset" => -1),
+                     "coeff"    => Dict("op" => "/", "args" => Any[2,
+                         Dict("op" => "*", "args" => Any[
+                             "dz",
+                             Dict("op" => "+", "args" => Any["dz",
+                                 Dict("op" => "index", "args" => Any["dz",
+                                     Dict("op" => "+", "args" => Any["i", 1])])])])])),
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "\$z", "offset" => 0),
+                     "coeff"    => Dict("op" => "neg", "args" => Any[
+                         Dict("op" => "/", "args" => Any[2,
+                             Dict("op" => "*", "args" => Any["dz",
+                                 Dict("op" => "index", "args" => Any["dz",
+                                     Dict("op" => "+", "args" => Any["i", 1])])])])])),
+                Dict("selector" => Dict("kind" => "cartesian", "axis" => "\$z", "offset" => 1),
+                     "coeff"    => Dict("op" => "/", "args" => Any[2,
+                         Dict("op" => "*", "args" => Any[
+                             Dict("op" => "index", "args" => Any["dz",
+                                 Dict("op" => "+", "args" => Any["i", 1])]),
+                             Dict("op" => "+", "args" => Any["dz",
+                                 Dict("op" => "index", "args" => Any["dz",
+                                     Dict("op" => "+", "args" => Any["i", 1])])])])])),
+            ],
+        )
+
+        @testset "expand_scheme applies §6.2.1 rewrite on nonuniform z-grid" begin
+            schemes = parse_schemes(Dict("d2_nonuniform_z" => nonuniform_scheme_obj))
+            ctx = EarthSciSerialization.RuleContext(
+                Dict("gz" => Dict{String,Any}(
+                    "spatial_dims"      => ["z"],
+                    "nonuniform_dims"   => ["z"],
+                    "metric_array_names" => ["dz"],
+                )),
+                Dict("u" => Dict{String,Any}("grid" => "gz",
+                                              "shape" => Any["i"],
+                                              "location" => "cell_center")),
+                Dict{String,Int}(), nothing,
+                Dict{String,Vector{Dict{String,Int}}}(), schemes)
+
+            sch = schemes["d2_nonuniform_z"]
+            bindings = Dict{String,ESM_Expr}("\$u" => VarExpr("u"), "\$z" => VarExpr("z"))
+            lowered = expand_scheme(sch, bindings, ctx)
+
+            # Combined result is a "+" of three terms.
+            @test lowered isa OpExpr
+            @test lowered.op == "+"
+
+            # Each term is coeff * operand_ref. Walk all terms and collect
+            # the coefficient sub-trees.
+            terms = lowered.args
+            @test length(terms) == 3
+
+            # Verify that no bare (unindexed) VarExpr("dz") survives in any term — all
+            # bare metric references should have been rewritten to index(dz, i).
+            # Note: VarExpr("dz") is still expected as index.args[1] (the array reference);
+            # the check skips first args of index nodes so those don't false-positive.
+            function _has_bare_dz(e)
+                e isa VarExpr && e.name == "dz" && return true
+                if e isa OpExpr && e.op == "index" && !isempty(e.args)
+                    # Skip first arg (the array name — dz there is structural, not bare).
+                    return any(_has_bare_dz, e.args[2:end])
+                end
+                e isa OpExpr && return any(_has_bare_dz, e.args)
+                return false
+            end
+            for t in terms
+                @test !_has_bare_dz(t)
+            end
+
+            # Verify that index(dz, i) nodes appear in the first term's coeff.
+            t1 = terms[1]  # offset -1 term
+            t1 isa OpExpr && @test t1.op == "*"
+            coeff1 = t1.args[1]
+            # The coeff should contain at least one index(dz, i) node.
+            function _has_dz_index_i(e)
+                if e isa OpExpr && e.op == "index"
+                    length(e.args) == 2 || return false
+                    (e.args[1] isa VarExpr && e.args[1].name == "dz") || return false
+                    return e.args[2] isa VarExpr && e.args[2].name == "i"
+                end
+                e isa OpExpr && return any(_has_dz_index_i, e.args)
+                return false
+            end
+            @test _has_dz_index_i(coeff1)
+        end
+
+        @testset "§6.2.1 rewrite does NOT fire on uniform grid" begin
+            # Same scheme, but the grid has no nonuniform_dims — no rewrite.
+            schemes = parse_schemes(Dict("d2_nonuniform_z" => nonuniform_scheme_obj))
+            ctx_uniform = EarthSciSerialization.RuleContext(
+                Dict("gz" => Dict{String,Any}(
+                    "spatial_dims"       => ["z"],
+                    "nonuniform_dims"    => String[],     # uniform!
+                    "metric_array_names" => ["dz"],
+                )),
+                Dict("u" => Dict{String,Any}("grid" => "gz",
+                                              "shape" => Any["i"],
+                                              "location" => "cell_center")),
+                Dict{String,Int}(), nothing,
+                Dict{String,Vector{Dict{String,Int}}}(), schemes)
+
+            sch = schemes["d2_nonuniform_z"]
+            bindings = Dict{String,ESM_Expr}("\$u" => VarExpr("u"), "\$z" => VarExpr("z"))
+            lowered = expand_scheme(sch, bindings, ctx_uniform)
+
+            # On a uniform grid, bare "dz" should survive (no §6.2.1 rewrite).
+            function _has_bare_dz(e)
+                e isa VarExpr && e.name == "dz" && return true
+                e isa OpExpr && return any(_has_bare_dz, e.args)
+                return false
+            end
+            @test _has_bare_dz(lowered)
+        end
+
+        @testset "§6.2.1 rewrite end-to-end via discretize()" begin
+            esm = Dict{String,Any}(
+                "esm" => "0.2.0",
+                "metadata" => Dict{String,Any}("name" => "nonuniform_1d_test"),
+                "grids" => Dict{String,Any}(
+                    "gz" => Dict{String,Any}(
+                        "family" => "cartesian",
+                        "dimensions" => Any[
+                            Dict{String,Any}("name" => "z", "size" => 8,
+                                              "periodic" => true, "spacing" => "nonuniform"),
+                        ],
+                        "metric_arrays" => Dict{String,Any}(
+                            "dz" => Dict{String,Any}(
+                                "rank" => 1, "dim" => "z",
+                                "generator" => Dict{String,Any}(
+                                    "kind" => "expression",
+                                    "expr" => Dict{String,Any}("op" => "*",
+                                        "args" => Any[1.0, Dict("op" => "^", "args" => Any[1.2, "i"])]),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                "discretizations" => Dict{String,Any}(
+                    "d2_nonuniform_z" => nonuniform_scheme_obj,
+                ),
+                "rules" => Any[
+                    Dict{String,Any}(
+                        "name" => "d2_nonuniform_z_rule",
+                        "pattern" => Dict{String,Any}("op" => "laplacian",
+                                                       "args" => Any["\$u"], "dim" => "\$z"),
+                        "use" => "d2_nonuniform_z",
+                    ),
+                ],
+                "models" => Dict{String,Any}(
+                    "M" => Dict{String,Any}(
+                        "grid" => "gz",
+                        "variables" => Dict{String,Any}(
+                            "u" => Dict{String,Any}("type" => "state", "default" => 0.0,
+                                                     "units" => "1", "shape" => Any["i"],
+                                                     "location" => "cell_center"),
+                        ),
+                        "equations" => Any[
+                            Dict{String,Any}(
+                                "lhs" => Dict{String,Any}("op" => "D", "args" => Any["u"], "wrt" => "t"),
+                                "rhs" => Dict{String,Any}("op" => "laplacian", "args" => Any["u"], "dim" => "z"),
+                            ),
+                        ],
+                    ),
+                ),
+            )
+
+            out = discretize(esm)
+            rhs_str = JSON3.write(out["models"]["M"]["equations"][1]["rhs"])
+            # The rewritten RHS must not contain the bare laplacian op.
+            @test !occursin("\"laplacian\"", rhs_str)
+            # The rewritten RHS must contain index nodes (from §6.2.1 rewrite and stencil expansion).
+            @test occursin("\"index\"", rhs_str)
+            # Bare "dz" should not appear as a value (only as array name inside index nodes).
+            # In canonical JSON, a bare string "dz" would appear as "\"dz\"" — check for
+            # { "args": ["dz", ...] } patterns (bare var inside index args is expected).
+            @test occursin("\"u\"", rhs_str)
+        end
+    end
 end

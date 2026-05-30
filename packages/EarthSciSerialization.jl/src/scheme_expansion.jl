@@ -224,8 +224,14 @@ function expand_scheme(scheme::Scheme,
     spatial_dims = _grid_spatial_dims(grid_name, ctx)
     target = _cartesian_target(spatial_dims)
 
+    # §6.2.1 — extract nonuniform dims and metric array names from grid metadata
+    _gm = get(ctx.grids, grid_name, nothing)
+    _nonuniform_dims = _gm !== nothing ? get(_gm, "nonuniform_dims", String[]) : String[]
+    _metric_names = _gm !== nothing ? get(_gm, "metric_array_names", String[]) : String[]
+
     terms = Expr[_expand_stencil_entry(scheme, e, operand_var, target,
-                                       spatial_dims, bindings)
+                                       spatial_dims, bindings,
+                                       _nonuniform_dims, _metric_names)
                  for e in scheme.stencil]
 
     if length(terms) == 1
@@ -291,7 +297,9 @@ end
 function _expand_stencil_entry(scheme::Scheme, entry::StencilEntry,
                                operand_var::Expr, target::Vector{Expr},
                                spatial_dims::Vector{String},
-                               bindings::Dict{String,Expr})::Expr
+                               bindings::Dict{String,Expr},
+                               nonuniform_dims::Vector{String}=String[],
+                               metric_array_names::Vector{String}=String[])::Expr
     sel = entry.selector
     sel isa CartesianSelector || throw(RuleEngineError("E_SCHEME_MATERIALIZE",
         "scheme $(scheme.name): non-cartesian selectors not supported in this " *
@@ -306,6 +314,11 @@ function _expand_stencil_entry(scheme::Scheme, entry::StencilEntry,
     operand_ref = OpExpr("index", Expr[operand_var, indices...])
 
     coeff = apply_bindings(entry.coeff, bindings)
+
+    # §6.2.1 — auto-index rewrite: bare metric-array names → index(name, target_idx)
+    if !isempty(metric_array_names) && axis_name in nonuniform_dims
+        coeff = _rewrite_metric_refs(coeff, metric_array_names, target[axis_pos])
+    end
 
     return OpExpr("*", Expr[coeff, operand_ref])
 end
@@ -323,4 +336,27 @@ function _resolve_axis_pvar(scheme::Scheme, axis::String,
         return v.name
     end
     return axis
+end
+
+# §6.2.1 — rewrite bare metric-array VarExpr nodes to indexed form.
+# Bare name "dz" in a nonuniform dimension → OpExpr("index", [VarExpr("dz"), target_idx]).
+# Existing index nodes (already-explicit array accesses) are passed through unchanged,
+# so the author-written neighbor index dz[k+1] is never double-wrapped.
+function _rewrite_metric_refs(expr::Expr, metric_names::Vector{String},
+                               target_idx::Expr)::Expr
+    if expr isa VarExpr && expr.name in metric_names
+        return OpExpr("index", Expr[expr, target_idx])
+    elseif expr isa OpExpr && expr.op == "index"
+        return expr  # already an explicit index reference — pass through
+    elseif expr isa OpExpr
+        new_args = Expr[_rewrite_metric_refs(a, metric_names, target_idx)
+                        for a in expr.args]
+        return OpExpr(expr.op, new_args;
+                      wrt=expr.wrt, dim=expr.dim, output_idx=expr.output_idx,
+                      expr_body=expr.expr_body, reduce=expr.reduce,
+                      ranges=expr.ranges, regions=expr.regions,
+                      values=expr.values, shape=expr.shape, perm=expr.perm,
+                      axis=expr.axis, fn=expr.fn, name=expr.name, value=expr.value)
+    end
+    return expr
 end

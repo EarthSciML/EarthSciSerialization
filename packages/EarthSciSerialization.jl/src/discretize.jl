@@ -179,6 +179,13 @@ function _extract_grid_meta(graw)::Dict{String,Any}
         meta["periodic_dims"] = periodic
         meta["nonuniform_dims"] = nonuniform
     end
+    # §6.2.1 — collect metric array names for nonuniform dimension rewrites
+    metric_arrays_raw = get(graw, "metric_arrays", nothing)
+    if metric_arrays_raw isa AbstractDict
+        meta["metric_array_names"] = String[String(k) for k in keys(metric_arrays_raw)]
+    else
+        meta["metric_array_names"] = String[]
+    end
     return meta
 end
 

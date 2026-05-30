@@ -63,6 +63,10 @@ function _uniform_dx(grid::AbstractGrid, axis::Symbol)
     return Float64(w0)
 end
 
+function _cell_widths_vec(grid::AbstractGrid, axis::Symbol)::Vector{Float64}
+    return Vector{Float64}(cell_widths(grid, axis))
+end
+
 # ---------------------------------------------------------------------------
 # FV Laplacian stencil (9-point covariant Laplacian, 2D curvilinear)
 # ---------------------------------------------------------------------------
@@ -115,8 +119,8 @@ function precompute_laplacian_stencil(
         eta_axis::Symbol = :eta,
     )
     N = n_cells(grid)
-    dξ = _uniform_dx(grid, xi_axis)
-    dη = _uniform_dx(grid, eta_axis)
+    dξ = _cell_widths_vec(grid, xi_axis)
+    dη = _cell_widths_vec(grid, eta_axis)
 
     # Tier-M bulk arrays.
     g_inv = metric_ginv(grid)                  # (N, 2, 2)
@@ -169,7 +173,7 @@ function precompute_laplacian_stencil(
     orth_dxi_corr  = invJ .* dJgxx_dξ ./ (2 * dξ)
     orth_deta_corr = invJ .* dJgyy_dη ./ (2 * dη)
 
-    cross_d2   = 2 .* gxe ./ (4 * dξ * dη)
+    cross_d2   = 2 .* gxe ./ (4 .* dξ .* dη)
     cross_dxi  = invJ .* dJgxe_dη ./ (2 * dξ)
     cross_deta = invJ .* dJgxe_dξ ./ (2 * dη)
 
@@ -248,8 +252,8 @@ function precompute_gradient_stencil(
         eta_axis::Symbol = :eta,
     )
     N = n_cells(grid)
-    dξ = _uniform_dx(grid, xi_axis)
-    dη = _uniform_dx(grid, eta_axis)
+    dξ = _cell_widths_vec(grid, xi_axis)
+    dη = _cell_widths_vec(grid, eta_axis)
 
     cj = coord_jacobian(grid, target)          # (N, 2, 2)  :: ∂(ξ_k)/∂(t_l)
     size(cj) == (N, 2, 2) || throw(ArgumentError(
