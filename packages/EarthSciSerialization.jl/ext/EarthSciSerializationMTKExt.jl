@@ -569,12 +569,14 @@ end
 # are the index expressions. This is used outside arrayop bodies (inside an
 # arrayop body, the `index` op is consumed by `_esm_to_julia_ast`).
 #
-# Out-of-bounds integer indices produce a symbolic element that is not in
-# the `dvs` (states) list, so MTK treats them as fixed-at-zero ghost cells
-# (Dirichlet BC semantics). Periodic BC stencils must apply explicit modular
-# index folding BEFORE reaching this function — see `_apply_periodic_folding!`
-# in `discretize.jl`, which rewrites periodic index expressions using `ifelse`
-# so they evaluate to in-bounds values during `_build_arrayop` scalarization.
+# Ghost-cell / Dirichlet-BC semantics: when all indices are concrete integers
+# and any falls outside the declared array bounds (< 1 or > size(arr, d)),
+# the stencil access is on a ghost cell whose value is fixed at zero. This
+# handles boundary cells in arrayops like the 2D heat stencil where `u[0,j]`
+# or `u[N+1,j]` reference cells outside the interior domain. The underlying
+# Symbolics.Arr is 1-based and would raise BoundsError without this guard.
+# Periodic BCs fold indices into range before reaching here via
+# _apply_periodic_folding! in discretize.jl.
 function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
                       t_sym, dim_dict::Dict{String,Any})
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
@@ -586,6 +588,16 @@ function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
             push!(idxs, Int(a.value))
         else
             push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
+        end
+    end
+    # Ghost-cell guard: concrete integer indices outside the declared array
+    # bounds map to Dirichlet ghost cells (value = 0).
+    if arr isa AbstractArray && !isempty(idxs) && all(idx isa Integer for idx in idxs)
+        sz = size(arr)
+        if length(sz) == length(idxs)
+            for (d, idx) in enumerate(idxs)
+                (idx < 1 || idx > sz[d]) && return Symbolics.Num(0)
+            end
         end
     end
     return getindex(arr, idxs...)
