@@ -318,58 +318,97 @@ function _build_arrayop(expr::OpExpr, var_dict::Dict{String,Any},
 end
 
 # Compute the authoritative shape for array state variables by taking the
-# union of all LHS arrayop output ranges across equations. This is correct
-# even when the stencil body accesses ghost cells (e.g. u[i-1] at i=1 for
-# periodic BCs), which would otherwise cause infer_array_shapes to widen the
-# shape beyond the actual grid. The variable name is extracted from the
-# arrayop body: D(index(var, ...)) → var.
+# union of all LHS-defined cell ranges across equations. This correctly
+# handles both full-domain periodic stencils (where ghost-cell body accesses
+# would otherwise cause infer_array_shapes to widen beyond the real grid)
+# and interior-only stencils with separate scalar boundary equations.
+#
+# Three LHS forms are recognized:
+#   1. arrayop  — output_idx+ranges give a rectangular region
+#   2. D(u[k])  — scalar differential with a concrete integer index
+#   3. index(u, k1, k2, ...) — direct indexed LHS
+#
+# The resulting shape is the union of all such contributions per variable.
 function _lhs_arrayop_shapes(equations::Vector{Equation})
     shapes = Dict{String,Vector{UnitRange{Int}}}()
     for eq in equations
         lhs = eq.lhs
-        lhs isa OpExpr && lhs.op == "arrayop" || continue
-        lhs.ranges === nothing && continue
-        lhs.output_idx === nothing || isempty(lhs.output_idx) && continue
-        # Find variable name from body: D(index(var,...)) or index(var,...)
-        body = lhs.expr_body
-        body isa OpExpr || continue
-        vname = if body.op == "D" && !isempty(body.args)
-            inner = body.args[1]
-            (inner isa OpExpr && inner.op == "index" &&
-             !isempty(inner.args) && inner.args[1] isa VarExpr) ?
-                inner.args[1].name : nothing
-        elseif body.op == "index"
-            (!isempty(body.args) && body.args[1] isa VarExpr) ?
-                body.args[1].name : nothing
-        else
-            nothing
-        end
-        vname === nothing && continue
-        # Build per-axis ranges from output_idx entries that have explicit ranges
-        axis_ranges = UnitRange{Int}[]
-        all_found = true
-        for entry in lhs.output_idx
-            entry isa AbstractString || continue
-            r = get(lhs.ranges, String(entry), nothing)
-            if r === nothing
-                all_found = false; break
+        lhs isa OpExpr || continue
+        if lhs.op == "arrayop"
+            lhs.ranges === nothing && continue
+            lhs.output_idx === nothing && continue
+            isempty(lhs.output_idx) && continue
+            body = lhs.expr_body
+            body isa OpExpr || continue
+            vname = if body.op == "D" && !isempty(body.args)
+                inner = body.args[1]
+                (inner isa OpExpr && inner.op == "index" &&
+                 !isempty(inner.args) && inner.args[1] isa VarExpr) ?
+                    inner.args[1].name : nothing
+            elseif body.op == "index"
+                (!isempty(body.args) && body.args[1] isa VarExpr) ?
+                    body.args[1].name : nothing
+            else
+                nothing
             end
-            lo, hi = _range_bounds_int(r)
-            push!(axis_ranges, lo:hi)
-        end
-        (!all_found || isempty(axis_ranges)) && continue
-        # Union with existing shape for this variable
-        if haskey(shapes, vname)
-            ex = shapes[vname]
-            length(ex) == length(axis_ranges) || continue
-            for (d, r) in enumerate(axis_ranges)
-                ex[d] = min(first(ex[d]), first(r)):max(last(ex[d]), last(r))
+            vname === nothing && continue
+            axis_ranges = UnitRange{Int}[]
+            all_found = true
+            for entry in lhs.output_idx
+                entry isa AbstractString || continue
+                r = get(lhs.ranges, String(entry), nothing)
+                if r === nothing; all_found = false; break; end
+                lo, hi = _range_bounds_int(r)
+                push!(axis_ranges, lo:hi)
             end
-        else
-            shapes[vname] = axis_ranges
+            (!all_found || isempty(axis_ranges)) && continue
+            _merge_lhs_shape!(shapes, vname, axis_ranges)
+        elseif lhs.op == "D" && !isempty(lhs.args)
+            # Scalar D(u[k], t): concrete integer index for boundary cells
+            inner = lhs.args[1]
+            inner isa OpExpr && inner.op == "index" || continue
+            !isempty(inner.args) && inner.args[1] isa VarExpr || continue
+            vname = inner.args[1].name
+            axis_ranges = UnitRange{Int}[]
+            ok = true
+            for a in inner.args[2:end]
+                v = a isa IntExpr ? Int(a.value) :
+                    (a isa NumExpr && isinteger(a.value)) ? Int(a.value) :
+                    (ok = false; break; 0)
+                push!(axis_ranges, v:v)
+            end
+            (ok && !isempty(axis_ranges)) || continue
+            _merge_lhs_shape!(shapes, vname, axis_ranges)
+        elseif lhs.op == "index"
+            # Direct indexed LHS: u[k1, k2, ...] = ...
+            !isempty(lhs.args) && lhs.args[1] isa VarExpr || continue
+            vname = lhs.args[1].name
+            axis_ranges = UnitRange{Int}[]
+            ok = true
+            for a in lhs.args[2:end]
+                v = a isa IntExpr ? Int(a.value) :
+                    (a isa NumExpr && isinteger(a.value)) ? Int(a.value) :
+                    (ok = false; break; 0)
+                push!(axis_ranges, v:v)
+            end
+            (ok && !isempty(axis_ranges)) || continue
+            _merge_lhs_shape!(shapes, vname, axis_ranges)
         end
     end
     return shapes
+end
+
+function _merge_lhs_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
+                            vname::String, axis_ranges::Vector{UnitRange{Int}})
+    if haskey(shapes, vname)
+        ex = shapes[vname]
+        length(ex) == length(axis_ranges) || return
+        for (d, r) in enumerate(axis_ranges)
+            ex[d] = min(first(ex[d]), first(r)):max(last(ex[d]), last(r))
+        end
+    else
+        shapes[vname] = copy(axis_ranges)
+    end
 end
 
 # Decode a range field `[lo, hi]` or `[lo, step, hi]` to integer bounds.
