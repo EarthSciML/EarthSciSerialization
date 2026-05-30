@@ -416,3 +416,63 @@ def test_simulate_observed_referenced_in_diff_rhs_no_namespace_leak():
     assert np.isclose(
         result.y[no2_idx, -1], np.exp(-j_expected * 1.0), rtol=1e-6,
     )
+
+
+def test_simulate_deep_algebraic_chain_sequential_evaluation():
+    """A 3-level algebraic chain must be evaluated in correct topological order.
+
+    Chain: C = a * b (depends only on params)
+           D = C * x  (depends on C and state x)
+           E = D + C  (depends on D and C)
+    ODE:   dx/dt = -E
+
+    With sequential evaluation, C is computed first, then D (using fresh C),
+    then E (using fresh C and fresh D).  If evaluation order were wrong (e.g.
+    all stale), D and E would use the default/IC value of C rather than the
+    computed one.  Analytical: C = a*b = 6, D(t)=C*x(t), E(t)=D(t)+C,
+    dx/dt = -(C*x + C) = -C*(x+1), x(t) = (x0+1)*exp(-C*t) - 1.
+    """
+    variables = {
+        "a": ModelVariable(type="parameter", default=2.0),
+        "b": ModelVariable(type="parameter", default=3.0),
+        "x": ModelVariable(type="state", default=1.0),
+        "C": ModelVariable(type="state"),
+        "D": ModelVariable(type="state"),
+        "E": ModelVariable(type="state"),
+    }
+    eq_C = Equation(lhs="C", rhs=ExprNode(op="*", args=["a", "b"]))
+    eq_D = Equation(lhs="D", rhs=ExprNode(op="*", args=["C", "x"]))
+    eq_E = Equation(lhs="E", rhs=ExprNode(op="+", args=["D", "C"]))
+    eq_dx = Equation(
+        lhs=ExprNode(op="D", args=["x"], wrt="t"),
+        rhs=ExprNode(op="*", args=[-1, "E"]),
+    )
+    model = Model(name="Chain", variables=variables, equations=[eq_C, eq_D, eq_E, eq_dx])
+    file = EsmFile(
+        version="0.1.0",
+        metadata=Metadata(title="deep_alg_chain"),
+        models={"Chain": model},
+    )
+
+    result = simulate(file, tspan=(0.0, 1.0), parameters={}, initial_conditions={"x": 1.0})
+    assert result.success, f"simulate() failed: {result.message}"
+
+    x_idx = result.vars.index("Chain.x")
+    c_idx = result.vars.index("Chain.C")
+    d_idx = result.vars.index("Chain.D")
+    e_idx = result.vars.index("Chain.E")
+
+    C_val = 2.0 * 3.0  # = 6
+    # x(t) = (x0 + 1)*exp(-C*t) - 1, x0 = 1 → x(t) = 2*exp(-6t) - 1
+    t_end = result.t[-1]
+    x_analytical = 2.0 * np.exp(-C_val * t_end) - 1.0
+    assert np.isclose(result.y[x_idx, -1], x_analytical, rtol=1e-5)
+
+    # C is constant = a*b = 6 everywhere.
+    assert np.allclose(result.y[c_idx, :], C_val, rtol=1e-10)
+
+    # D = C * x at every output time.
+    assert np.allclose(result.y[d_idx, :], C_val * result.y[x_idx, :], rtol=1e-10)
+
+    # E = D + C at every output time.
+    assert np.allclose(result.y[e_idx, :], result.y[d_idx, :] + C_val, rtol=1e-10)

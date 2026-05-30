@@ -17,7 +17,7 @@ via :func:`sympy.lambdify`. This module owns:
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import sympy as sp
@@ -436,6 +436,8 @@ def _flat_to_sympy_rhs(
     List[sp.Expr],
     List[str],
     Dict[str, sp.Expr],
+    List[str],
+    Dict[str, List[str]],
 ]:
     """Build the SymPy ODE RHS expressions from a FlattenedSystem.
 
@@ -476,9 +478,15 @@ def _flat_to_sympy_rhs(
         Subset of ``state_names`` whose values are determined algebraically
         rather than by integration.
     algebraic_value_exprs:
-        Per-algebraic-state SymPy expression for the variable's value
-        (already substituted so it depends only on differential states and
-        free parameter symbols).
+        Per-algebraic-state SymPy expression for the variable's value in
+        its *original unexpanded form* — may reference other algebraic-state
+        symbols and free parameter symbols.  Eager substitution (alg-into-alg
+        and alg-into-diff) is intentionally omitted; the caller is responsible
+        for evaluating algebraic states in topological order at runtime.
+    sorted_alg:
+        Topological ordering of ``algebraic_state_names`` (leaves first).
+    alg_deps:
+        Per-algebraic-state list of direct algebraic-state dependencies.
 
     Observed variables (``flat.observed_variables``) are not handled here
     — see :func:`_observed_to_sympy_value_exprs` for the parallel pass that
@@ -595,21 +603,13 @@ def _flat_to_sympy_rhs(
     for n in algebraic_state_names:
         _topo_visit(n, [])
 
-    # Substitute earlier-sorted algebraic bodies into later ones, so each
-    # alg_rhs[n] ends up expressed only in terms of differential states and
-    # parameters.
-    for n in sorted_alg:
-        deps_subs = {symbol_map[d]: alg_rhs[d] for d in alg_deps[n]}
-        if deps_subs:
-            alg_rhs[n] = alg_rhs[n].subs(deps_subs, simultaneous=False)
-
-    # Substitute the (now fully-resolved) algebraic bodies into every
-    # differential RHS. The integrator's RHS no longer references any
-    # algebraic state symbol.
-    full_alg_subs = {symbol_map[k]: alg_rhs[k] for k in algebraic_state_names}
-    if full_alg_subs:
-        for k in list(diff_rhs.keys()):
-            diff_rhs[k] = diff_rhs[k].subs(full_alg_subs, simultaneous=False)
+    # Eager alg-into-alg and alg-into-diff substitutions are intentionally
+    # omitted.  For models with many Piecewise algebraic bodies (e.g.
+    # heat_momentum_fluxes.esm, 78 algebraic states) those substitutions cause
+    # expression-tree sizes to grow combinatorially, making compile time exceed
+    # CI limits (>30 min without CSE).  Instead we keep alg_rhs in its
+    # original unexpanded form and build per-state lambdified functions that
+    # evaluate algebraic states sequentially at runtime (see _compile_flat_rhs).
 
     rhs_exprs: List[sp.Expr] = []
     for name in state_names:
@@ -627,6 +627,8 @@ def _flat_to_sympy_rhs(
         rhs_exprs,
         algebraic_state_names,
         alg_rhs,
+        sorted_alg,
+        alg_deps,
     )
 
 
@@ -642,10 +644,14 @@ def _observed_to_sympy_value_exprs(
     """Build SymPy value expressions for ``flat.observed_variables``.
 
     Mirrors the algebraic-state pass in :func:`_flat_to_sympy_rhs`: equations
-    whose LHS is an observed variable are collected, topologically sorted by
-    their dependence on each other, and folded so each body depends only on
-    differential states and parameters. Algebraic-state bodies (already
-    substituted to the same closed form) are folded in too.
+    whose LHS is an observed variable are collected and topologically sorted by
+    their dependence on each other.  Observed-into-observed substitution is
+    applied so each body depends on differential states, parameters, and
+    algebraic-state symbols (but NOT on other observed symbols).  Eager
+    alg-into-observed substitution is intentionally omitted to avoid the same
+    expression-tree explosion described in :func:`_flat_to_sympy_rhs`; the
+    caller resolves algebraic-state values at runtime before evaluating
+    observed bodies.
 
     This is a separate function from :func:`_flat_to_sympy_rhs` to keep the
     latter's tuple-return shape stable for external callers (the EarthSciModels
@@ -658,8 +664,10 @@ def _observed_to_sympy_value_exprs(
     observed_names:
         Observed variables that have an algebraic body, in input order.
     observed_value_exprs:
-        Per-observed SymPy expression for the variable's value, depending only
-        on differential-state symbols and free parameter symbols.
+        Per-observed SymPy expression for the variable's value.  Each
+        expression depends on differential-state symbols, free parameter
+        symbols, and algebraic-state symbols (the alg→obs substitution is
+        intentionally skipped; alg values are resolved at runtime).
     """
     observed_names_all = list(flat.observed_variables.keys())
     if not observed_names_all:
@@ -718,12 +726,12 @@ def _observed_to_sympy_value_exprs(
     for n in observed_with_eq:
         _obs_topo_visit(n, [])
 
-    full_alg_subs = {
-        sym_map[k]: algebraic_value_exprs[k] for k in algebraic_state_names
-    }
     for n in sorted_obs:
-        if full_alg_subs:
-            obs_rhs[n] = obs_rhs[n].subs(full_alg_subs, simultaneous=False)
+        # Fold earlier observed bodies into later ones so each obs_rhs[n]
+        # references only diff states, params, and alg-state symbols.
+        # The alg-into-obs substitution is intentionally omitted (see
+        # _flat_to_sympy_rhs for rationale); alg values are resolved at
+        # runtime via the sequential closure in _compile_flat_rhs.
         deps_subs = {sym_map[d]: obs_rhs[d] for d in obs_deps[n]}
         if deps_subs:
             obs_rhs[n] = obs_rhs[n].subs(deps_subs, simultaneous=False)
@@ -811,7 +819,9 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         symbol_map,
         rhs_exprs,
         algebraic_state_names,
-        algebraic_value_exprs,
+        algebraic_value_exprs,  # unexpanded per-alg bodies
+        sorted_alg,
+        alg_deps,
     ) = _flat_to_sympy_rhs(flat, fn_callable_map)
 
     observed_names, observed_value_exprs = _observed_to_sympy_value_exprs(
@@ -824,18 +834,11 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         fn_callable_map,
     )
 
-    # Differential and algebraic RHS expressions may reference observed
-    # variables by their dot-namespaced name (e.g. ``D(FastJX.NO2) = ... *
-    # FastJX.j_NO2`` where ``FastJX.j_NO2`` is observed). ``_expr_to_sympy``
-    # creates such references as on-the-fly ``sp.Symbol`` instances because
-    # observed names are not in ``symbol_map``; if we hand those expressions
-    # straight to ``sp.lambdify`` the dotted names are printed literally
-    # (``FastJX.j_NO2``) and Python parses them as attribute access on a
-    # nonexistent ``FastJX`` module — the ``NameError: name 'FastJX' is not
-    # defined`` reported in esm-4id. Substitute the (already fully-resolved)
-    # observed bodies in so the lambdified RHS depends only on differential
-    # state and parameter symbols, all of which appear in ``all_args`` and
-    # are dummy-renamed by ``lambdify`` for safe code emission.
+    # Observed-symbol substitution: replace dotted-name observed symbols in
+    # rhs_exprs (and alg bodies that may reference observed variables) with
+    # their compact bodies.  With the sequential evaluation approach the
+    # observed bodies still reference algebraic-state symbols — that is
+    # intentional; alg values are resolved at runtime before each rhs/obs call.
     if observed_names:
         observed_subs = {
             sp.Symbol(name): observed_value_exprs[name]
@@ -845,11 +848,12 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
             expr.subs(observed_subs, simultaneous=False)
             for expr in rhs_exprs
         ]
-        if algebraic_state_names:
-            algebraic_value_exprs = {
-                k: v.subs(observed_subs, simultaneous=False)
-                for k, v in algebraic_value_exprs.items()
-            }
+        # Also substitute into alg bodies to handle the rare case where an
+        # algebraic state references an observed variable by its dotted name.
+        algebraic_value_exprs = {
+            k: v.subs(observed_subs, simultaneous=False)
+            for k, v in algebraic_value_exprs.items()
+        }
 
     state_symbols = [symbol_map[name] for name in state_names]
     param_symbols = [symbol_map[name] for name in parameter_names]
@@ -864,21 +868,70 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
     else:
         modules = _LAMBDIFY_MODULES
 
+    # -------------------------------------------------------------------------
+    # Algebraic states — sequential lambdified closures.
+    #
+    # Instead of eagerly substituting alg bodies into each other and into the
+    # differential RHS (which causes combinatorial expression-tree growth for
+    # models with Piecewise algebraic chains), we lambdify each alg body in its
+    # original unexpanded form with all_args as the argument list.  At runtime
+    # the sequential closure evaluates algebraic states in topological order,
+    # updating args[alg_idx[n]] in-place so that later states pick up the
+    # freshly-computed value of their algebraic dependencies.
+    # -------------------------------------------------------------------------
+    alg_idx: Dict[str, int] = {n: state_names.index(n) for n in algebraic_state_names}
+
+    if algebraic_state_names:
+        alg_funcs: Dict[str, Callable] = {}
+        for n in sorted_alg:
+            alg_funcs[n] = sp.lambdify(
+                all_args,
+                algebraic_value_exprs[n],
+                modules=modules, cse=cse,
+            )
+
+        def algebraic_vector_func(
+            *all_state_and_params: Any,
+            _funcs: Dict[str, Callable] = alg_funcs,
+            _sorted: List[str] = sorted_alg,
+            _idx: Dict[str, int] = alg_idx,
+            _names: List[str] = algebraic_state_names,
+        ) -> List[Any]:
+            args = list(all_state_and_params)
+            for n in _sorted:
+                args[_idx[n]] = _funcs[n](*args)
+            return [args[_idx[n]] for n in _names]
+    else:
+        alg_funcs = {}
+        algebraic_vector_func = None
+
+    # -------------------------------------------------------------------------
+    # Differential RHS — compact core function + sequential-alg wrapper.
+    # -------------------------------------------------------------------------
     if state_names:
-        rhs_vector_func = sp.lambdify(
+        rhs_core_func = sp.lambdify(
             all_args, rhs_exprs, modules=modules, cse=cse
         )
+        if algebraic_state_names:
+            def rhs_vector_func(
+                *all_state_and_params: Any,
+                _core: Callable = rhs_core_func,
+                _funcs: Dict[str, Callable] = alg_funcs,
+                _sorted: List[str] = sorted_alg,
+                _idx: Dict[str, int] = alg_idx,
+            ) -> Any:
+                args = list(all_state_and_params)
+                for n in _sorted:
+                    args[_idx[n]] = _funcs[n](*args)
+                return _core(*args)
+        else:
+            rhs_vector_func = rhs_core_func
     else:
         rhs_vector_func = None
 
-    if algebraic_state_names:
-        alg_value_list = [algebraic_value_exprs[n] for n in algebraic_state_names]
-        algebraic_vector_func = sp.lambdify(
-            all_args, alg_value_list, modules=modules, cse=cse
-        )
-    else:
-        algebraic_vector_func = None
-
+    # -------------------------------------------------------------------------
+    # Observed variables — compact core function + sequential-alg wrapper.
+    # -------------------------------------------------------------------------
     if observed_names:
         obs_value_list = [observed_value_exprs[n] for n in observed_names]
         # Observed bodies may legitimately reference the independent
@@ -891,10 +944,25 @@ def _compile_flat_rhs(flat: FlattenedSystem, cse: bool = True) -> _CompiledRhs:
         # able to bind. Plumbing ``t`` here keeps the runner generic
         # without per-equation dispatch.
         t_symbol = sp.Symbol("t")
-        observed_vector_func = sp.lambdify(
+        obs_core_func = sp.lambdify(
             [t_symbol, *all_args], obs_value_list,
             modules=modules, cse=cse,
         )
+        if algebraic_state_names:
+            def observed_vector_func(
+                t: Any,
+                *all_state_and_params: Any,
+                _core: Callable = obs_core_func,
+                _funcs: Dict[str, Callable] = alg_funcs,
+                _sorted: List[str] = sorted_alg,
+                _idx: Dict[str, int] = alg_idx,
+            ) -> Any:
+                args = list(all_state_and_params)
+                for n in _sorted:
+                    args[_idx[n]] = _funcs[n](*args)
+                return _core(t, *args)
+        else:
+            observed_vector_func = obs_core_func
     else:
         observed_vector_func = None
 

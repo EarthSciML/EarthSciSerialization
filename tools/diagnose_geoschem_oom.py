@@ -139,13 +139,11 @@ def _find_esm() -> Path:
 
 # ----- 1. imports_loaded -------------------------------------------------
 _arm()
-import sympy as sp  # noqa: E402
 import earthsci_toolkit as ek  # noqa: E402
-from earthsci_toolkit.simulation import (  # noqa: E402
-    _CompiledRhs,
+from earthsci_toolkit.simulation import simulate  # noqa: E402
+from earthsci_toolkit.sympy_bridge import (  # noqa: E402
     _LAMBDIFY_MODULES,
-    _flat_to_sympy_rhs,
-    simulate,
+    _compile_flat_rhs,
 )
 _disarm()
 phase("imports_loaded")
@@ -174,41 +172,10 @@ _disarm()
 phase("flatten_done")
 
 # ----- 4. lambdify_no_cse ------------------------------------------------
-# Build the _CompiledRhs ourselves with cse=False, then stash on the
-# FlattenedSystem so the simulate() calls below see a cache hit and skip
-# the cse=True compile path inside _compile_flat_rhs.
+# Compile with cse=False and stash on the FlattenedSystem so the
+# simulate() calls below see a cache hit and skip the cse=True path.
 _arm()
-(
-    state_names,
-    parameter_names,
-    symbol_map,
-    rhs_exprs,
-    algebraic_state_names,
-    algebraic_value_exprs,
-) = _flat_to_sympy_rhs(flat)
-state_symbols = [symbol_map[n] for n in state_names]
-param_symbols = [symbol_map[n] for n in parameter_names]
-all_args = state_symbols + param_symbols
-rhs_vec = sp.lambdify(
-    all_args, rhs_exprs, modules=_LAMBDIFY_MODULES, cse=False
-)
-if algebraic_state_names:
-    alg_vec = sp.lambdify(
-        all_args,
-        [algebraic_value_exprs[n] for n in algebraic_state_names],
-        modules=_LAMBDIFY_MODULES,
-        cse=False,
-    )
-else:
-    alg_vec = None
-flat._simulate_compile_cache = _CompiledRhs(
-    state_names=state_names,
-    parameter_names=parameter_names,
-    symbol_map=symbol_map,
-    algebraic_state_names=algebraic_state_names,
-    rhs_vector_func=rhs_vec,
-    algebraic_vector_func=alg_vec,
-)
+_compile_flat_rhs(flat, cse=False)
 _disarm()
 phase("lambdify_no_cse")
 
