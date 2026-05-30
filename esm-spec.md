@@ -528,7 +528,7 @@ GDD files are published by the EarthSciDiscretizations (ESD) project at stable U
   "grids": {
     "domain": {
       "spatial": {
-        "x": { "min": 0.0, "max": 1.0, "units": "m", "cells": 32 }
+        "x": { "min": 0.0, "max": 1.0, "units": "m", "grid_spacing": 0.03125 }
       }
     }
   },
@@ -1206,7 +1206,7 @@ The `reduce: "convergence_order"` assertion is the **gold-standard PDE validatio
 
 1. The test is executed once per entry in `grid_refs`, substituting the GDD's grid and discretizations into the component's declared domain.
 2. At each run, the relative L2 error is computed: `e_k = ||u_k − u_ref||_2 / ||u_ref||_2`.
-3. The representative grid spacing `h_k` for each run is taken as the geometric mean of the per-dimension `grid_spacing` values declared in the GDD's `grids` block. For runs with the same topology but different `cells` counts, `h` scales as `1 / cells`.
+3. The representative grid spacing `h_k` for each run is taken as the geometric mean of the per-dimension `grid_spacing` values declared in the GDD's `grids` block.
 4. The observed convergence order is estimated by linear regression of `log(e_k)` on `log(h_k)`: `p_obs = Δ log(e) / Δ log(h)`.
 5. The assertion passes when `p_obs ≥ expected_order × (1 − rel)` where `rel` is resolved from the assertion's `tolerance.rel` (default: `0.1` — allowing 10% under the nominal order).
 
@@ -1230,9 +1230,9 @@ The `reduce: "convergence_order"` assertion is the **gold-standard PDE validatio
   },
   "time_span": { "start": 0.0, "end": 0.1 },
   "grid_refs": [
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_n16_fd2.gdd.json" },
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_n32_fd2.gdd.json" },
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_n64_fd2.gdd.json" }
+    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p0625_fd2.gdd.json" },
+    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p03125_fd2.gdd.json" },
+    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p015625_fd2.gdd.json" }
   ],
   "assertions": [
     {
@@ -1253,7 +1253,7 @@ The `reduce: "convergence_order"` assertion is the **gold-standard PDE validatio
 }
 ```
 
-The three GDD files encode grids at N = 16, 32, 64 cells. Assuming second-order centered FD, the runtime should observe `p_obs ≈ 2.0`. With `tolerance.rel = 0.1`, the test passes when `p_obs ≥ 1.8`.
+The three GDD files encode grids at `grid_spacing` = 0.0625, 0.03125, 0.015625 (halving each step, i.e. N = 16, 32, 64 cells). Assuming second-order centered FD, the runtime should observe `p_obs ≈ 2.0`. With `tolerance.rel = 0.1`, the test passes when `p_obs ≥ 1.8`.
 
 ### 6.7 Examples
 
