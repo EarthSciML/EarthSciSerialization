@@ -4,6 +4,7 @@
 
 use earthsci_toolkit::*;
 use std::collections::HashMap;
+use serde_json;
 
 /// Test free variables detection
 #[test]
@@ -398,6 +399,45 @@ fn test_public_evaluate() {
     // unbound variable returns Err
     let result = evaluate(&Expr::Variable("z".to_string()), &empty);
     assert!(result.is_err());
+}
+
+/// Validate the ESD `eval_coeff` integration path:
+/// JSON-deserialized expression → `earthsci_toolkit::evaluate` → f64.
+///
+/// The ESD crate (`earthsci_grids`) receives stencil coefficients as
+/// raw `serde_json::Value` trees, deserializes them into `Expr`, then
+/// calls `earthsci_toolkit::evaluate`.  This test mirrors that exact
+/// pipeline using the `centered_2nd_uniform_latlon` stencil coefficient
+/// expression: `-1 / (2 * R * cos_lat * dlon)`.
+#[test]
+fn test_evaluate_from_json_expr() {
+    // -1 / (2 * R * cos_lat * dlon)
+    let json_ast = serde_json::json!({
+        "op": "/",
+        "args": [-1, {"op": "*", "args": [2, "R", "cos_lat", "dlon"]}]
+    });
+    let expr: Expr = serde_json::from_value(json_ast).expect("deserialize expression");
+
+    let r = 6_371_000.0_f64;
+    let cos_lat = 30.0_f64.to_radians().cos();
+    let dlon = std::f64::consts::PI / 180.0;
+    let mut bindings = HashMap::new();
+    bindings.insert("R".to_string(), r);
+    bindings.insert("cos_lat".to_string(), cos_lat);
+    bindings.insert("dlon".to_string(), dlon);
+
+    let got = evaluate(&expr, &bindings).expect("evaluate");
+    let expected = -1.0 / (2.0 * r * cos_lat * dlon);
+    assert!(
+        (got - expected).abs() <= 1e-12 * expected.abs().max(1.0),
+        "got {got}, expected {expected}"
+    );
+
+    // unbound variable surfaces in Err
+    let json_var = serde_json::json!("missing_var");
+    let expr_var: Expr = serde_json::from_value(json_var).expect("deserialize variable");
+    let err = evaluate(&expr_var, &HashMap::new()).unwrap_err();
+    assert_eq!(err, vec!["missing_var".to_string()]);
 }
 
 /// Test expression tree depth
