@@ -1293,17 +1293,33 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         Value::Scalar(s) if node.args.len() == 1 => return Value::Scalar(s),
         Value::Scalar(_) => return Value::Scalar(f64::NAN),
     };
-    // Evaluate index expressions into integer indices (1-based → subtract 1).
+    // Evaluate index expressions into integer indices (1-based).
+    // Out-of-bounds accesses return 0.0 — this implements homogeneous Dirichlet
+    // ghost-cell semantics: a discretized PDE's stencil can reference u[i-1]
+    // when i=1 (ghost cell at i=0) and the boundary condition is u=0.
+    let mut in_bounds = true;
     let indices: Vec<usize> = node.args[1..]
         .iter()
-        .map(|a| {
+        .enumerate()
+        .map(|(d, a)| {
             let v = eval(a, ctx);
-            match v.as_scalar() {
-                Some(f) => (f.round() as i64 - 1).max(0) as usize,
-                None => 0,
+            let one_based = match v.as_scalar() {
+                Some(f) => f.round() as i64,
+                None => {
+                    in_bounds = false;
+                    return 0;
+                }
+            };
+            let dim_size = arr.shape().get(d).copied().unwrap_or(0) as i64;
+            if one_based < 1 || one_based > dim_size {
+                in_bounds = false;
             }
+            (one_based - 1).max(0) as usize
         })
         .collect();
+    if !in_bounds {
+        return Value::Scalar(0.0);
+    }
     if indices.len() != arr.ndim() {
         return Value::Scalar(f64::NAN);
     }
@@ -1311,7 +1327,7 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     if let Some(v) = arr.get(ix) {
         Value::Scalar(*v)
     } else {
-        Value::Scalar(f64::NAN)
+        Value::Scalar(0.0)
     }
 }
 
@@ -1641,15 +1657,22 @@ fn extract_algebraic_arrayop(
 /// `index(var, ...)` reference, `D(index(var, ...))` reference, and
 /// `arrayop` over its elements. Returns a map var_name → shape (empty Vec
 /// means scalar). Origins are assumed 1-based.
+///
+/// Two-pass design: LHS equations pin the authoritative state extent; RHS
+/// index references (which may include stencil offsets like `i-1` or `i+1`)
+/// are only used for variables not already shaped by the LHS. This prevents
+/// neighbor references in PDE stencils from bloating the inferred shape.
 fn infer_shapes(
     state_vars: &[&String],
     equations: &[crate::types::Equation],
 ) -> Result<HashMap<String, Vec<usize>>, CompileError> {
     let state_set: HashSet<&str> = state_vars.iter().map(|s| s.as_str()).collect();
+
+    // Pass 1: LHS only — these are the authoritative (pinned) shapes.
     let mut per_var_min: HashMap<String, Vec<i64>> = HashMap::new();
     let mut per_var_max: HashMap<String, Vec<i64>> = HashMap::new();
     let mut seen_indexed: HashSet<String> = HashSet::new();
-
+    let skip_none: HashSet<String> = HashSet::new();
     for eq in equations {
         walk_for_shapes(
             &eq.lhs,
@@ -1658,7 +1681,14 @@ fn infer_shapes(
             &mut per_var_max,
             &mut seen_indexed,
             &HashMap::new(),
+            &skip_none,
         );
+    }
+
+    // Pass 2: RHS — skip variables already pinned by LHS to prevent stencil
+    // offsets (e.g. index(u, i-1)) from expanding the state's extent.
+    let lhs_pinned = seen_indexed.clone();
+    for eq in equations {
         walk_for_shapes(
             &eq.rhs,
             &state_set,
@@ -1666,6 +1696,7 @@ fn infer_shapes(
             &mut per_var_max,
             &mut seen_indexed,
             &HashMap::new(),
+            &lhs_pinned,
         );
     }
 
@@ -1693,6 +1724,10 @@ fn infer_shapes(
     Ok(out)
 }
 
+/// Walk an expression tree collecting per-variable index bounds for shape
+/// inference. `skip_shape_update` lists variables whose shapes are already
+/// pinned (by a prior LHS pass); their bounds are not updated here, though
+/// they are still marked as seen.
 fn walk_for_shapes(
     expr: &Expr,
     states: &HashSet<&str>,
@@ -1700,6 +1735,7 @@ fn walk_for_shapes(
     per_var_max: &mut HashMap<String, Vec<i64>>,
     seen_indexed: &mut HashSet<String>,
     loop_ranges: &HashMap<String, (i64, i64)>,
+    skip_shape_update: &HashSet<String>,
 ) {
     match expr {
         Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => {}
@@ -1708,27 +1744,29 @@ fn walk_for_shapes(
                 if let Some(Expr::Variable(var)) = node.args.first()
                     && states.contains(var.as_str())
                 {
-                    let mut dim_min: Vec<i64> = Vec::new();
-                    let mut dim_max: Vec<i64> = Vec::new();
-                    for idx_expr in node.args.iter().skip(1) {
-                        let (lo, hi) = evaluate_index_range(idx_expr, loop_ranges);
-                        dim_min.push(lo);
-                        dim_max.push(hi);
-                    }
                     seen_indexed.insert(var.clone());
-                    let cur_min = per_var_min.entry(var.clone()).or_default();
-                    let cur_max = per_var_max.entry(var.clone()).or_default();
-                    if cur_min.len() < dim_min.len() {
-                        cur_min.resize(dim_min.len(), i64::MAX);
-                    }
-                    if cur_max.len() < dim_max.len() {
-                        cur_max.resize(dim_max.len(), i64::MIN);
-                    }
-                    for (d, v) in dim_min.iter().enumerate() {
-                        cur_min[d] = cur_min[d].min(*v);
-                    }
-                    for (d, v) in dim_max.iter().enumerate() {
-                        cur_max[d] = cur_max[d].max(*v);
+                    if !skip_shape_update.contains(var) {
+                        let mut dim_min: Vec<i64> = Vec::new();
+                        let mut dim_max: Vec<i64> = Vec::new();
+                        for idx_expr in node.args.iter().skip(1) {
+                            let (lo, hi) = evaluate_index_range(idx_expr, loop_ranges);
+                            dim_min.push(lo);
+                            dim_max.push(hi);
+                        }
+                        let cur_min = per_var_min.entry(var.clone()).or_default();
+                        let cur_max = per_var_max.entry(var.clone()).or_default();
+                        if cur_min.len() < dim_min.len() {
+                            cur_min.resize(dim_min.len(), i64::MAX);
+                        }
+                        if cur_max.len() < dim_max.len() {
+                            cur_max.resize(dim_max.len(), i64::MIN);
+                        }
+                        for (d, v) in dim_min.iter().enumerate() {
+                            cur_min[d] = cur_min[d].min(*v);
+                        }
+                        for (d, v) in dim_max.iter().enumerate() {
+                            cur_max[d] = cur_max[d].max(*v);
+                        }
                     }
                 }
             }
@@ -1748,14 +1786,31 @@ fn walk_for_shapes(
                         per_var_max,
                         seen_indexed,
                         &inner,
+                        skip_shape_update,
                     );
                 }
                 for a in &node.args {
-                    walk_for_shapes(a, states, per_var_min, per_var_max, seen_indexed, &inner);
+                    walk_for_shapes(
+                        a,
+                        states,
+                        per_var_min,
+                        per_var_max,
+                        seen_indexed,
+                        &inner,
+                        skip_shape_update,
+                    );
                 }
                 if let Some(vs) = &node.values {
                     for v in vs {
-                        walk_for_shapes(v, states, per_var_min, per_var_max, seen_indexed, &inner);
+                        walk_for_shapes(
+                            v,
+                            states,
+                            per_var_min,
+                            per_var_max,
+                            seen_indexed,
+                            &inner,
+                            skip_shape_update,
+                        );
                     }
                 }
                 return;
@@ -1768,6 +1823,7 @@ fn walk_for_shapes(
                     per_var_max,
                     seen_indexed,
                     loop_ranges,
+                    skip_shape_update,
                 );
             }
             if let Some(vs) = &node.values {
@@ -1779,6 +1835,7 @@ fn walk_for_shapes(
                         per_var_max,
                         seen_indexed,
                         loop_ranges,
+                        skip_shape_update,
                     );
                 }
             }
@@ -1790,6 +1847,7 @@ fn walk_for_shapes(
                     per_var_max,
                     seen_indexed,
                     loop_ranges,
+                    skip_shape_update,
                 );
             }
         }
