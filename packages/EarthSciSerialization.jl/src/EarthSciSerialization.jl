@@ -80,6 +80,7 @@ export
     FunctionTable, FunctionTableAxis,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
+    parse_expression,
     # Subsystem reference resolution
     resolve_subsystem_refs!, SubsystemRefError,
     # Coupling serialization functions

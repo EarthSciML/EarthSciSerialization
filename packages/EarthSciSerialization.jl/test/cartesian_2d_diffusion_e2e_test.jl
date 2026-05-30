@@ -117,11 +117,11 @@ function _model_from_dict(model_dict::Dict{String,Any})
         vars[vname] = mv
     end
 
-    eqs = Equation[]
+    eqs = _ESS.Equation[]
     for eq_raw in model_dict["equations"]
-        lhs = parse_expression(eq_raw["lhs"])
-        rhs = parse_expression(eq_raw["rhs"])
-        push!(eqs, Equation(lhs, rhs))
+        lhs = _ESS.parse_expression(eq_raw["lhs"])
+        rhs = _ESS.parse_expression(eq_raw["rhs"])
+        push!(eqs, _ESS.Equation(lhs, rhs))
     end
 
     return Model(vars, eqs)

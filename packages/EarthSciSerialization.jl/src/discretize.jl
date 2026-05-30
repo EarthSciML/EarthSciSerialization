@@ -297,6 +297,9 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     shape === nothing && return
     shape isa AbstractVector && !isempty(shape) || return
     ndims = length(shape)
+    # Only lift to arrayop form for multidimensional (ndims > 1) variables.
+    # 1D array variables (ndims == 1) preserve the bare D(var, wrt=t) LHS form.
+    ndims > 1 || return
     ndims > length(_ARRAYOP_INDEX_NAMES) && return
 
     grid_name = get(vmeta, "grid", nothing)
