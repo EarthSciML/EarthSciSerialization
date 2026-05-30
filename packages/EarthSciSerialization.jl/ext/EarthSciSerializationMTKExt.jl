@@ -317,6 +317,61 @@ function _build_arrayop(expr::OpExpr, var_dict::Dict{String,Any},
     return result
 end
 
+# Compute the authoritative shape for array state variables by taking the
+# union of all LHS arrayop output ranges across equations. This is correct
+# even when the stencil body accesses ghost cells (e.g. u[i-1] at i=1 for
+# periodic BCs), which would otherwise cause infer_array_shapes to widen the
+# shape beyond the actual grid. The variable name is extracted from the
+# arrayop body: D(index(var, ...)) → var.
+function _lhs_arrayop_shapes(equations::Vector{Equation})
+    shapes = Dict{String,Vector{UnitRange{Int}}}()
+    for eq in equations
+        lhs = eq.lhs
+        lhs isa OpExpr && lhs.op == "arrayop" || continue
+        lhs.ranges === nothing && continue
+        lhs.output_idx === nothing || isempty(lhs.output_idx) && continue
+        # Find variable name from body: D(index(var,...)) or index(var,...)
+        body = lhs.expr_body
+        body isa OpExpr || continue
+        vname = if body.op == "D" && !isempty(body.args)
+            inner = body.args[1]
+            (inner isa OpExpr && inner.op == "index" &&
+             !isempty(inner.args) && inner.args[1] isa VarExpr) ?
+                inner.args[1].name : nothing
+        elseif body.op == "index"
+            (!isempty(body.args) && body.args[1] isa VarExpr) ?
+                body.args[1].name : nothing
+        else
+            nothing
+        end
+        vname === nothing && continue
+        # Build per-axis ranges from output_idx entries that have explicit ranges
+        axis_ranges = UnitRange{Int}[]
+        all_found = true
+        for entry in lhs.output_idx
+            entry isa AbstractString || continue
+            r = get(lhs.ranges, String(entry), nothing)
+            if r === nothing
+                all_found = false; break
+            end
+            lo, hi = _range_bounds_int(r)
+            push!(axis_ranges, lo:hi)
+        end
+        (!all_found || isempty(axis_ranges)) && continue
+        # Union with existing shape for this variable
+        if haskey(shapes, vname)
+            ex = shapes[vname]
+            length(ex) == length(axis_ranges) || continue
+            for (d, r) in enumerate(axis_ranges)
+                ex[d] = min(first(ex[d]), first(r)):max(last(ex[d]), last(r))
+            end
+        else
+            shapes[vname] = axis_ranges
+        end
+    end
+    return shapes
+end
+
 # Decode a range field `[lo, hi]` or `[lo, step, hi]` to integer bounds.
 function _range_bounds_int(r::Vector{Int})
     if length(r) == 2
@@ -492,14 +547,17 @@ function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
             push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
         end
     end
-    # Periodic wrapping for concrete symbolic arrays: when a concrete integer
-    # index is out of bounds for dimension d, wrap it with mod1 so that
-    # stencil accesses like u[0,j] or u[N+1,j] resolve to u[N,j] / u[1,j].
-    if arr isa AbstractArray
-        ndims_arr = ndims(arr)
-        wrapped = ntuple(ndims_arr) do d
+    # Periodic wrapping: when the array is a concrete Symbolics.Arr (produced
+    # by _make_array_dep_var during arrayop pre-scalarization) and an integer
+    # index is out of bounds, apply mod1 wrapping so stencil accesses like
+    # u[0,j] or u[N+1,j] resolve to u[N,j] / u[1,j] respectively.
+    if arr isa Symbolics.Arr
+        n = ndims(arr)
+        sz = size(arr)
+        wrapped = ntuple(n) do d
             idx = d <= length(idxs) ? idxs[d] : 1
-            (idx isa Integer && !(1 <= idx <= size(arr, d))) ? mod1(idx, size(arr, d)) : idx
+            (idx isa Integer && sz[d] isa Integer && !(1 <= idx <= sz[d])) ?
+                mod1(idx, sz[d]) : idx
         end
         return getindex(arr, wrapped...)
     end
@@ -827,7 +885,12 @@ function _build_var_dict(flat::FlattenedSystem)
     end
 
     # Shape inference: scalar-only systems get an empty dict and pay nothing.
+    # Use LHS arrayop output ranges as the authoritative shape when available:
+    # they define the actual grid (e.g. 1:N × 1:N), while infer_array_shapes
+    # can widen the shape to cover stencil ghost-cell offsets (e.g. 0:N+1).
     inferred_shapes = infer_array_shapes(flat.equations)
+    lhs_shapes = _lhs_arrayop_shapes(flat.equations)
+    merge!(inferred_shapes, lhs_shapes)  # LHS definition takes precedence
 
     var_dict = Dict{String,Any}()
     states = Vector{Num}()
@@ -873,12 +936,7 @@ function _build_var_dict(flat::FlattenedSystem)
             # Enumerate the individual scalar elements for the dvs vector.
             # Description metadata is attached per-element because
             # Symbolics.setmetadata has no method for Symbolics.Arr.
-            # infer_array_shapes widens ranges to cover stencil offsets (e.g.
-            # u[i-1] with i in 1:N gives shape 0:N), but _make_array_dep_var
-            # pads the low side to 1. Use the same 1:last(r) padding here so
-            # the loop indices stay within the Symbolics.Arr's actual bounds.
-            padded_shape = [max(1, first(r)):last(r) for r in shape]
-            for idx in Iterators.product(padded_shape...)
+            for idx in Iterators.product(shape...)
                 elt = _with_description(Num(array_var[idx...]), desc_text)
                 push!(states, elt)
             end
