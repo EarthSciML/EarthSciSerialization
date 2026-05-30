@@ -873,7 +873,12 @@ function _build_var_dict(flat::FlattenedSystem)
             # Enumerate the individual scalar elements for the dvs vector.
             # Description metadata is attached per-element because
             # Symbolics.setmetadata has no method for Symbolics.Arr.
-            for idx in Iterators.product(shape...)
+            # infer_array_shapes widens ranges to cover stencil offsets (e.g.
+            # u[i-1] with i in 1:N gives shape 0:N), but _make_array_dep_var
+            # pads the low side to 1. Use the same 1:last(r) padding here so
+            # the loop indices stay within the Symbolics.Arr's actual bounds.
+            padded_shape = [max(1, first(r)):last(r) for r in shape]
+            for idx in Iterators.product(padded_shape...)
                 elt = _with_description(Num(array_var[idx...]), desc_text)
                 push!(states, elt)
             end
