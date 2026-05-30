@@ -1,0 +1,36 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "FailingDecayFixture",
+    "description": "Inline-test fixture with an intentionally-wrong expected value. The model is the same first-order decay as passing_decay.esm but the t=100 assertion expects 0.5 (truth: 0.367879). Used by run_esm_tests_test.jl to verify the runner correctly reports FAIL.",
+    "authors": ["EarthSciML Authors and Contributors"],
+    "created": "2026-04-19T00:00:00Z"
+  },
+  "models": {
+    "FailingDecay": {
+      "variables": {
+        "x": { "type": "state", "units": "1", "default": 1.0 },
+        "k": { "type": "parameter", "units": "1/s", "default": 0.01 }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "rhs": { "op": "*", "args": [ { "op": "-", "args": ["k"] }, "x" ] }
+        }
+      ],
+      "tolerance": { "rel": 1e-06 },
+      "tests": [
+        {
+          "id": "intentionally_wrong",
+          "initial_conditions": { "x": 1.0 },
+          "parameter_overrides": { "k": 0.01 },
+          "time_span": { "start": 0.0, "end": 100.0 },
+          "assertions": [
+            { "variable": "x", "time": 100.0, "expected": 0.5,
+              "tolerance": { "rel": 1e-06 } }
+          ]
+        }
+      ]
+    }
+  }
+}

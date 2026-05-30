@@ -1,0 +1,79 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "SubsystemComposedDecay",
+    "description": "Inline-test fixture for _resolve_handle model-relative fallback. A composed model wraps a single subsystem whose test assertions use the spec §10.7 fully-qualified 'ModelName.sub.var' form. Verifies that run_esm_tests correctly resolves subsystem variable refs in composed models (fixes esm-ol5qa).",
+    "authors": [
+      "EarthSciML Authors and Contributors"
+    ],
+    "created": "2026-05-30T00:00:00Z"
+  },
+  "models": {
+    "ComposedDecay": {
+      "variables": {},
+      "equations": [],
+      "subsystems": {
+        "sub": {
+          "variables": {
+            "x": {
+              "type": "state",
+              "default": 1.0,
+              "units": "1"
+            },
+            "k": {
+              "type": "parameter",
+              "default": 0.01,
+              "units": "1/s"
+            }
+          },
+          "equations": [
+            {
+              "lhs": {"op": "D", "args": ["x"], "wrt": "t"},
+              "rhs": {"op": "*", "args": [{"op": "-", "args": ["k"]}, "x"]}
+            }
+          ]
+        }
+      },
+      "tolerance": {"rel": 1e-06},
+      "tests": [
+        {
+          "id": "subsystem_var_qualified_name",
+          "description": "Assertion variable uses the spec §10.7 fully-qualified form 'ComposedDecay.sub.x'. Tests the model-relative fallback in _resolve_handle (esm-ol5qa fix).",
+          "time_span": {"start": 0.0, "end": 200.0},
+          "assertions": [
+            {
+              "variable": "ComposedDecay.sub.x",
+              "time": 0.0,
+              "expected": 1.0
+            },
+            {
+              "variable": "ComposedDecay.sub.x",
+              "time": 100.0,
+              "expected": 0.36787944117144233
+            },
+            {
+              "variable": "ComposedDecay.sub.x",
+              "time": 200.0,
+              "expected": 0.1353352832366127
+            }
+          ]
+        },
+        {
+          "id": "subsystem_param_override_qualified_name",
+          "description": "parameter_overrides uses the fully-qualified 'ComposedDecay.sub.k' form. Tests that _resolve_handle resolves subsystem parameter refs correctly.",
+          "time_span": {"start": 0.0, "end": 100.0},
+          "parameter_overrides": {
+            "ComposedDecay.sub.k": 0.02
+          },
+          "assertions": [
+            {
+              "variable": "ComposedDecay.sub.x",
+              "time": 50.0,
+              "expected": 0.36787944117144233
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

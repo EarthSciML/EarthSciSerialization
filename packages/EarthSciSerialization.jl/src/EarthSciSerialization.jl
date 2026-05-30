@@ -46,6 +46,7 @@ include("grid_assembly.jl")
 include("ghost_cells.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
+include("run_tests.jl")
 
 export
     # Expression types
@@ -136,6 +137,10 @@ export
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
     build_evaluator, evaluate_expr, TreeWalkError,
+    # Inline-test runner (esm-ol5qa; spec §6.6)
+    AssertionStatus, AssertionResult, PASS, FAIL, ERROR, SKIP,
+    esm_root, esm_path,
+    discover_esm_files, run_esm_tests, write_junit_xml,
     # Closed function registry (esm-tzp / esm-4aw; esm-spec §9.2)
     evaluate_closed_function, closed_function_names, ClosedFunctionError,
     lower_enums!,
