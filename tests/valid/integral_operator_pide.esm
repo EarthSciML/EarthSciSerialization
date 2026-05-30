@@ -1,0 +1,115 @@
+{
+  "esm": "0.1.0",
+  "metadata": {
+    "name": "integral_operator_pide",
+    "description": "Round-trip fixture for the integral operator (v0.6.0 schema) in a PIDE context. Demonstrates the partial/cumulative form (upper = integration variable) and the whole-domain form (constant bounds), following the auxiliary-variable PIDE idiom from MethodOfLines.jl."
+  },
+  "models": {
+    "pide_partial": {
+      "domain": "x_domain",
+      "variables": {
+        "u": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        },
+        "cumuSum": {
+          "type": "observed",
+          "units": "1",
+          "expression": {
+            "op": "integral",
+            "args": ["u"],
+            "var": "x",
+            "lower": "xmin",
+            "upper": "x"
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": {
+            "op": "D",
+            "args": ["u"],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "+",
+            "args": [
+              {
+                "op": "*",
+                "args": [-2, "u"]
+              },
+              {
+                "op": "*",
+                "args": [
+                  5,
+                  {
+                    "op": "grad",
+                    "args": ["cumuSum"],
+                    "dim": "x"
+                  }
+                ]
+              },
+              1
+            ]
+          }
+        }
+      ]
+    },
+    "whole_domain_integral_model": {
+      "domain": "x_domain",
+      "variables": {
+        "f": {
+          "type": "state",
+          "units": "1",
+          "default": 1.0
+        },
+        "f_total": {
+          "type": "observed",
+          "units": "1",
+          "expression": {
+            "op": "integral",
+            "args": ["f"],
+            "var": "x",
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": {
+            "op": "D",
+            "args": ["f"],
+            "wrt": "t"
+          },
+          "rhs": {
+            "op": "-",
+            "args": ["f"]
+          }
+        }
+      ]
+    }
+  },
+  "domains": {
+    "x_domain": {
+      "independent_variable": "t",
+      "spatial": {
+        "x": {
+          "min": 0.0,
+          "max": 1.0,
+          "units": "1",
+          "grid_spacing": 0.05
+        }
+      },
+      "boundary_conditions": [
+        {
+          "type": "dirichlet",
+          "dimensions": ["x"],
+          "value": 0.0
+        }
+      ],
+      "element_type": "Float64"
+    }
+  }
+}

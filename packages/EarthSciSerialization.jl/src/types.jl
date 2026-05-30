@@ -51,13 +51,16 @@ struct VarExpr <: Expr
 end
 
 """
-    OpExpr(op::String, args::Vector{Expr}; wrt, dim, output_idx, expr_body, reduce, ranges, regions, values, shape, perm, axis, fn)
+    OpExpr(op::String, args::Vector{Expr}; wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce, ranges, regions, values, shape, perm, axis, fn)
 
 Operator expression node containing:
 - `op`: operator name (e.g., "+", "*", "log", "D", "arrayop")
 - `args`: vector of argument expressions
 - `wrt`: variable name for differentiation (optional; for `D`)
 - `dim`: dimension for spatial operators (optional; for `grad`, `div`)
+- `int_var`: integration variable name (optional; for `integral`, matches JSON field "var")
+- `lower`: lower integration bound expression (optional; for `integral`)
+- `upper`: upper integration bound expression (optional; for `integral`)
 - `output_idx`: for `arrayop`, list of result index symbols (String) or literal
   singleton dimensions (Int 1). Mirrors SymbolicUtils.ArrayOp.output_idx.
 - `expr_body`: for `arrayop`, the scalar body evaluated at each index point
@@ -88,6 +91,9 @@ struct OpExpr <: Expr
     args::Vector{Expr}
     wrt::Union{String,Nothing}
     dim::Union{String,Nothing}
+    int_var::Union{String,Nothing}
+    lower::Union{Expr,Nothing}
+    upper::Union{Expr,Nothing}
     output_idx::Union{Vector{Any},Nothing}
     expr_body::Union{Expr,Nothing}
     reduce::Union{String,Nothing}
@@ -113,6 +119,7 @@ struct OpExpr <: Expr
 
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
+           int_var=nothing, lower=nothing, upper=nothing,
            output_idx=nothing, expr_body=nothing, reduce=nothing,
            ranges=nothing, regions=nothing, values=nothing,
            shape=nothing, perm=nothing, axis=nothing, fn=nothing,
@@ -123,7 +130,7 @@ struct OpExpr <: Expr
            # so internal helpers that still pass it through don't break
            # mid-migration; the field is no longer stored or serialized.
            handler_id=nothing) =
-        new(op, args, wrt, dim, output_idx, expr_body, reduce, ranges,
+        new(op, args, wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce, ranges,
             regions, values, shape, perm, axis, fn, name, value,
             table, table_axes, output)
 end

@@ -16,8 +16,11 @@ import (
 type ExprNode struct {
 	Op   string        `json:"op"`
 	Args []interface{} `json:"args"`
-	Wrt  *string       `json:"wrt,omitempty"`  // for derivatives
-	Dim  *string       `json:"dim,omitempty"`  // for grad
+	Wrt   *string      `json:"wrt,omitempty"`   // for derivatives
+	Dim   *string      `json:"dim,omitempty"`   // for grad
+	Var   *string      `json:"var,omitempty"`   // integration variable name (for integral)
+	Lower interface{}  `json:"lower,omitempty"` // lower integration bound (for integral)
+	Upper interface{}  `json:"upper,omitempty"` // upper integration bound (for integral)
 	// Name carries the dotted module path of a closed-registry function
 	// (esm-spec §4.4 / §9.2) for `fn` op nodes — e.g. "datetime.julian_day".
 	Name *string `json:"name,omitempty"`

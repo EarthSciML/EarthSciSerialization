@@ -49,6 +49,15 @@ function serialize_expression(expr::Expr)
         if expr.dim !== nothing
             result["dim"] = expr.dim
         end
+        if expr.int_var !== nothing
+            result["var"] = expr.int_var
+        end
+        if expr.lower !== nothing
+            result["lower"] = serialize_expression(expr.lower)
+        end
+        if expr.upper !== nothing
+            result["upper"] = serialize_expression(expr.upper)
+        end
         if expr.output_idx !== nothing
             result["output_idx"] = expr.output_idx
         end

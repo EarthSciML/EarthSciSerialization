@@ -36,6 +36,8 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
             [substitute(v, bindings) for v in expr.values]
             if expr.values is not None else None
         )
+        substituted_lower = substitute(expr.lower, bindings) if expr.lower is not None else None
+        substituted_upper = substitute(expr.upper, bindings) if expr.upper is not None else None
         return ExprNode(
             op=expr.op,
             args=substituted_args,
@@ -51,6 +53,9 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
             perm=expr.perm,
             axis=expr.axis,
             fn=expr.fn,
+            var=expr.var,
+            lower=substituted_lower,
+            upper=substituted_upper,
         )
     elif isinstance(expr, dict):
         # Handle dict-form expression nodes (e.g. {"op": "+", "args": ["x", "y"]})
@@ -61,6 +66,12 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
                 result["wrt"] = expr["wrt"]
             if "dim" in expr:
                 result["dim"] = expr["dim"]
+            if "var" in expr:
+                result["var"] = expr["var"]
+            if "lower" in expr:
+                result["lower"] = substitute(expr["lower"], bindings)
+            if "upper" in expr:
+                result["upper"] = substitute(expr["upper"], bindings)
             return result
         # For other dicts, return unchanged
         return expr

@@ -59,7 +59,7 @@ end
 function substitute(expr::OpExpr, bindings::Dict{String,Expr})::Expr
     # Recursively substitute arguments
     new_args = Expr[substitute(arg, bindings) for arg in expr.args]
-    return OpExpr(expr.op, new_args, wrt=expr.wrt, dim=expr.dim)
+    return OpExpr(expr.op, new_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=expr.lower, upper=expr.upper)
 end
 
 # ========================================
@@ -235,6 +235,8 @@ literal_value(expr::IntExpr) = Float64(expr.value)
 function simplify(expr::OpExpr)::Expr
     # First recursively simplify all arguments
     simplified_args = Expr[simplify(arg) for arg in expr.args]
+    lower_simplified = expr.lower === nothing ? nothing : simplify(expr.lower)
+    upper_simplified = expr.upper === nothing ? nothing : simplify(expr.upper)
 
     op = expr.op
 
@@ -249,7 +251,7 @@ function simplify(expr::OpExpr)::Expr
     if all(is_literal, simplified_args)
         try
             result_value = evaluate_expr(
-                OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim),
+                OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified),
                 Dict{String,Float64}())
             all_int = all(arg -> isa(arg, IntExpr), simplified_args)
             if all_int && isfinite(result_value) && result_value == trunc(result_value) &&
@@ -275,7 +277,7 @@ function simplify(expr::OpExpr)::Expr
         elseif length(non_zero_args) == 1
             return non_zero_args[1]
         else
-            return OpExpr(op, Expr[non_zero_args...], wrt=expr.wrt, dim=expr.dim)
+            return OpExpr(op, Expr[non_zero_args...], wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
         end
 
     elseif op == "*"
@@ -293,7 +295,7 @@ function simplify(expr::OpExpr)::Expr
         elseif length(non_one_args) == 1
             return non_one_args[1]
         else
-            return OpExpr(op, Expr[non_one_args...], wrt=expr.wrt, dim=expr.dim)
+            return OpExpr(op, Expr[non_one_args...], wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
         end
 
     elseif op == "^" && length(simplified_args) == 2
@@ -320,7 +322,7 @@ function simplify(expr::OpExpr)::Expr
             return NumExpr(1.0)
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
 
     elseif op == "-" && length(simplified_args) == 2
         # x - 0 = x
@@ -328,7 +330,7 @@ function simplify(expr::OpExpr)::Expr
             return simplified_args[1]
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
 
     elseif op == "/" && length(simplified_args) == 2
         # x / 1 = x
@@ -341,9 +343,9 @@ function simplify(expr::OpExpr)::Expr
             return NumExpr(0.0)
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
     end
 
     # If no simplification rules apply, return the expression with simplified arguments
-    return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim)
+    return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
 end

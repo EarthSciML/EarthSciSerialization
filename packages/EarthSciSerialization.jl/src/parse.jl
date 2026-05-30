@@ -57,11 +57,13 @@ function parse_expression(data::Any)::Expr
         return VarExpr(data)
     elseif isa(data, Dict) && haskey(data, "op")
         return _parse_op_dict(data, "op", "args", "wrt", "dim",
+                              "var", "lower", "upper",
                               "output_idx", "expr", "reduce", "ranges",
                               "regions", "values", "shape", "perm", "axis", "fn",
                               "name", "value", "table", "axes", "output")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
+                              :var, :lower, :upper,
                               :output_idx, :expr, :reduce, :ranges,
                               :regions, :values, :shape, :perm, :axis, :fn,
                               :name, :value, :table, :axes, :output)
@@ -73,6 +75,7 @@ end
 # Shared implementation for Dict and JSON3.Object parse paths. The key
 # arguments are passed as strings for Dict and symbols for JSON3.Object.
 function _parse_op_dict(data, kop, kargs, kwrt, kdim,
+                        kint_var, klower, kupper,
                         koutput_idx, kexpr, kreduce, kranges,
                         kregions, kvalues, kshape, kperm, kaxis, kfn,
                         kname, kvalue, ktable, ktable_axes, koutput)
@@ -99,6 +102,25 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     args = Vector{EarthSciSerialization.Expr}([parse_expression(arg) for arg in args_data])
     wrt = get(data, kwrt, nothing)
     dim = get(data, kdim, nothing)
+
+    int_var_val = get(data, kint_var, nothing)
+    int_var_str = int_var_val === nothing ? nothing : string(int_var_val)
+    lower_raw = get(data, klower, nothing)
+    lower_expr = lower_raw === nothing ? nothing : parse_expression(lower_raw)
+    upper_raw = get(data, kupper, nothing)
+    upper_expr = upper_raw === nothing ? nothing : parse_expression(upper_raw)
+
+    if op == "integral"
+        if int_var_str === nothing
+            throw(ParseError("`integral` op requires `var` field (integration variable name)"))
+        end
+        if lower_expr === nothing
+            throw(ParseError("`integral` op requires `lower` field"))
+        end
+        if upper_expr === nothing
+            throw(ParseError("`integral` op requires `upper` field"))
+        end
+    end
 
     output_idx = _coerce_output_idx(get(data, koutput_idx, nothing))
     raw_expr = get(data, kexpr, nothing)
@@ -154,6 +176,7 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
+        int_var=int_var_str, lower=lower_expr, upper=upper_expr,
         output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
         perm=perm_vec, axis=axis_int, fn=fn_str,

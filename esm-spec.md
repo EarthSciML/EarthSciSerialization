@@ -136,8 +136,23 @@ ExprNode := { "op": string, "args": [Expr, ...], ...optional_fields }
 | `grad` | `"dim": "x"` | Spatial gradient: ∂/∂x |
 | `div` | | Divergence: ∇· |
 | `laplacian` | | Laplacian: ∇² |
+| `integral` | `"var": "x"`, `"lower": <expr>`, `"upper": <expr>` | Spatial partial integral: ∫ₗᵒʷᵉʳᵘᵖᵖᵉʳ args[0] d(var) |
 
 Example: `{"op": "D", "args": ["O3"], "wrt": "t"}` represents ∂O₃/∂t.
+
+The `integral` op encodes a spatial partial integral for use in partial integro-differential equations (PIDEs).
+`args[0]` is the integrand expression; `var` names the spatial dimension variable being integrated over;
+`lower` and `upper` are `Expression` values giving the integration bounds.
+
+Two modes:
+- **Partial / cumulative**: `"upper": "x"` (the spatial variable itself) — produces a field cumulative up to the current
+  grid point, e.g. ∫ₓₘᵢₙˣ u(t, x′) dx′.
+- **Whole-domain**: both bounds are constants (e.g. `"lower": 0, "upper": 1`) — produces a spatially uniform value;
+  consumed via an auxiliary variable plus boundary extraction.
+
+Reference lowering target: MethodOfLines.jl `Integral(x in DomainSets.ClosedInterval(lower, upper))`.
+See https://docs.sciml.ai/MethodOfLines/stable/tutorials/PIDE/ for the auxiliary-variable PIDE idiom.
+Discretization of the resulting integral term is handled by EarthSciDiscretizations (tracked in esd-yfj).
 
 #### Elementary Functions
 

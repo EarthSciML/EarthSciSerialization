@@ -309,6 +309,20 @@ pub struct ExpressionNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dim: Option<String>,
 
+    /// Integration variable name for the `integral` op (spatial dimension being integrated over).
+    /// Serialized under JSON key `var`. Required when op is "integral".
+    #[serde(default, rename = "var", skip_serializing_if = "Option::is_none")]
+    pub int_var: Option<String>,
+
+    /// Lower integration bound for the `integral` op (any `Expr`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower: Option<Box<Expr>>,
+
+    /// Upper integration bound for the `integral` op (any `Expr`). May be the
+    /// integration variable itself (a string) for a cumulative/partial integral.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper: Option<Box<Expr>>,
+
     /// Body expression for `arrayop` nodes (the scalar body evaluated for
     /// each tuple of loop-index values). Out-of-band from `args` because the
     /// serialized schema uses a sidecar `expr` field.

@@ -18,6 +18,9 @@ class ExprNode:
     args: List['Expr'] = field(default_factory=list)
     wrt: Optional[str] = None  # with respect to (for derivatives)
     dim: Optional[str] = None  # dimension information
+    var: Optional[str] = None  # integration variable name (for integral operator, JSON key "var")
+    lower: Optional['Expr'] = None  # lower integration bound (for integral operator)
+    upper: Optional['Expr'] = None  # upper integration bound (for integral operator)
 
     # Array-op extensions (schema §ExpressionNode). None unless the op uses them.
     # arrayop:
