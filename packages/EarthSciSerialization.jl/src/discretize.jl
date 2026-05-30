@@ -160,6 +160,7 @@ function _extract_grid_meta(graw)::Dict{String,Any}
         spatial = String[]
         periodic = String[]
         nonuniform = String[]
+        dim_sizes = Dict{String,Int}()
         for d in dims_raw
             name = get(d, "name", nothing)
             name === nothing && continue
@@ -174,10 +175,15 @@ function _extract_grid_meta(graw)::Dict{String,Any}
             elseif spacing === "nonuniform" || spacing == "nonuniform"
                 push!(nonuniform, String(name))
             end
+            sz = get(d, "size", nothing)
+            if sz isa Integer
+                dim_sizes[String(name)] = Int(sz)
+            end
         end
         meta["spatial_dims"] = spatial
         meta["periodic_dims"] = periodic
         meta["nonuniform_dims"] = nonuniform
+        meta["dim_sizes"] = dim_sizes
     end
     # §6.2.1 — collect metric array names for nonuniform dimension rewrites
     metric_arrays_raw = get(graw, "metric_arrays", nothing)
@@ -218,6 +224,10 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
         end
     end
 
+    # Arrayop lifting: wrap array-variable differential equations in arrayop
+    # after the rule engine rewrites PDE ops to stencil/index form.
+    _arrayop_lift_equations!(model, ctx.grids, ctx.variables)
+
     # Boundary conditions (model-level).
     bcs = get(model, "boundary_conditions", nothing)
     if bcs isa AbstractDict
@@ -238,6 +248,104 @@ function _lookup_max_passes(model::Dict{String,Any}, default::Int)::Int
         mp isa Integer && return Int(mp)
     end
     return default
+end
+
+# ============================================================================
+# Arrayop lifting: wrap array-variable differential equations in arrayop form
+# ============================================================================
+
+# Canonical index variable names for arrayop iteration (dimension position → name).
+const _ARRAYOP_INDEX_NAMES = ("i", "j", "k", "l", "m", "n")
+
+function _arrayop_lift_equations!(model::Dict{String,Any},
+                                   grids::Dict{String,Dict{String,Any}},
+                                   variables::Dict{String,Dict{String,Any}})
+    eqns = get(model, "equations", nothing)
+    eqns isa AbstractVector || return
+    for (i, eqn_any) in enumerate(eqns)
+        eqn = eqn_any isa Dict{String,Any} ? eqn_any :
+            Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
+        _try_arrayop_lift_equation!(eqn, grids, variables)
+        eqns[i] = eqn
+    end
+end
+
+# Lift a scalar-LHS differential equation for an N-dimensional array variable to
+# arrayop form. Conditions:
+#   1. LHS is D(var_name, wrt=<indep>) where var_name is a plain VarExpr.
+#   2. var_name has a "shape" vector of length ≥ 1 in the variable metadata.
+#   3. The variable's grid carries "dim_sizes" for every shape dimension.
+# When all conditions hold, wraps both LHS and RHS in arrayop nodes with ranges
+# derived from the grid dimension sizes, using canonical index names i, j, k, …
+function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
+                                      grids::Dict{String,Dict{String,Any}},
+                                      variables::Dict{String,Dict{String,Any}})
+    lhs_raw = get(eqn, "lhs", nothing)
+    lhs_raw === nothing && return
+
+    lhs_expr = try parse_expression(lhs_raw) catch; return end
+    lhs_expr isa OpExpr || return
+    lhs_expr.op == "D" || return
+    length(lhs_expr.args) == 1 || return
+    var_arg = lhs_expr.args[1]
+    var_arg isa VarExpr || return
+    var_name = var_arg.name
+
+    vmeta = get(variables, var_name, nothing)
+    vmeta === nothing && return
+    shape = get(vmeta, "shape", nothing)
+    shape === nothing && return
+    shape isa AbstractVector && !isempty(shape) || return
+    ndims = length(shape)
+    ndims > length(_ARRAYOP_INDEX_NAMES) && return
+
+    grid_name = get(vmeta, "grid", nothing)
+    grid_name === nothing && return
+    gmeta = get(grids, grid_name, nothing)
+    gmeta === nothing && return
+    dim_sizes = get(gmeta, "dim_sizes", nothing)
+    dim_sizes isa AbstractDict || return
+
+    output_idx = Any[]
+    ranges = Dict{String,Any}()
+    for d in 1:ndims
+        dim_name = String(shape[d])
+        sz = get(dim_sizes, dim_name, nothing)
+        sz isa Integer || return
+        idx = _ARRAYOP_INDEX_NAMES[d]
+        push!(output_idx, idx)
+        ranges[idx] = Any[1, Int(sz)]
+    end
+
+    # Build index args: [var_name, idx1, idx2, ...]
+    index_args = Any[var_name]
+    for idx in output_idx
+        push!(index_args, idx)
+    end
+
+    # New LHS: arrayop{D(index(var, i, j, ...), wrt=t)}
+    eqn["lhs"] = Dict{String,Any}(
+        "op"         => "arrayop",
+        "args"       => Any[],
+        "output_idx" => output_idx,
+        "expr"       => Dict{String,Any}(
+            "op"   => "D",
+            "args" => Any[Dict{String,Any}("op" => "index", "args" => index_args)],
+            "wrt"  => lhs_expr.wrt === nothing ? "t" : lhs_expr.wrt,
+        ),
+        "ranges"     => ranges,
+    )
+
+    # Wrap existing (already-rewritten) RHS in arrayop
+    rhs_raw = get(eqn, "rhs", nothing)
+    rhs_raw === nothing && return
+    eqn["rhs"] = Dict{String,Any}(
+        "op"         => "arrayop",
+        "args"       => Any[],
+        "output_idx" => output_idx,
+        "expr"       => rhs_raw,
+        "ranges"     => ranges,
+    )
 end
 
 # ============================================================================
@@ -465,6 +573,15 @@ function _is_algebraic_equation(eqn::AbstractDict, indep::String)::Bool
         wrt = lhs.wrt
         if wrt === nothing || wrt == indep
             return false
+        end
+    end
+    if lhs isa OpExpr && lhs.op == "arrayop" && lhs.expr_body isa OpExpr
+        body = lhs.expr_body
+        if body.op == "D"
+            wrt = body.wrt
+            if wrt === nothing || wrt == indep
+                return false
+            end
         end
     end
     return true
