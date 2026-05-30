@@ -558,6 +558,40 @@ def fold_constant_expr(
     return float(result)
 
 
+def evaluate(expr: Expr, bindings: Dict[str, float]) -> float:
+    """Evaluate a scalar AST expression against a dict of float variable bindings.
+
+    This is the official ESS Python runner entry point (the public API
+    imported as ``from earthsci_toolkit import evaluate``). It wraps
+    :func:`eval_expr` with an empty-state :class:`EvalContext` so callers
+    don't need to construct one themselves.
+
+    ``bindings`` maps free-variable names to their numeric values. The
+    special key ``"t"`` supplies the simulation time (defaults to ``0.0``
+    if absent). Returns the scalar result as a Python ``float``.
+    Raises :class:`NumpyInterpreterError` if any variable in ``expr`` is
+    not in ``bindings``.
+    """
+    t = float(bindings.get("t", 0.0))
+    param_values = {k: float(v) for k, v in bindings.items() if k != "t"}
+    ctx = EvalContext(
+        state_layout={},
+        state_shapes={},
+        param_values=param_values,
+        observed_values={},
+        y=np.empty((0,), dtype=float),
+        t=t,
+    )
+    result = eval_expr(expr, ctx)
+    if isinstance(result, np.ndarray):
+        if result.shape == ():
+            return float(result)
+        raise NumpyInterpreterError(
+            f"evaluate() expected a scalar result, got array of shape {result.shape}"
+        )
+    return float(result)
+
+
 def expr_contains_array_op(expr: Expr) -> bool:
     """Return True if ``expr`` contains any array op node."""
     if expr is None or isinstance(expr, (int, float, str)):

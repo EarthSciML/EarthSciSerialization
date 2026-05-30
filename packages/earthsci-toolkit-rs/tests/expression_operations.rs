@@ -363,6 +363,43 @@ fn test_special_function_expressions() {
     }
 }
 
+/// Test the public `evaluate` entry point (earthsci_toolkit::evaluate)
+#[test]
+fn test_public_evaluate() {
+    // scalar literal
+    let expr_num = Expr::Number(2.5);
+    let empty: HashMap<String, f64> = HashMap::new();
+    assert!((evaluate(&expr_num, &empty).unwrap() - 2.5).abs() < 1e-10);
+
+    // variable lookup
+    let expr_var = Expr::Variable("x".to_string());
+    let mut bindings = HashMap::new();
+    bindings.insert("x".to_string(), 7.0_f64);
+    assert!((evaluate(&expr_var, &bindings).unwrap() - 7.0).abs() < 1e-10);
+
+    // arithmetic: (x + 2) * y with x=3, y=4 → 20
+    let expr_arith = Expr::Operator(ExpressionNode {
+        op: "*".to_string(),
+        args: vec![
+            Expr::Operator(ExpressionNode {
+                op: "+".to_string(),
+                args: vec![Expr::Variable("x".to_string()), Expr::Integer(2)],
+                ..Default::default()
+            }),
+            Expr::Variable("y".to_string()),
+        ],
+        ..Default::default()
+    });
+    let mut b2 = HashMap::new();
+    b2.insert("x".to_string(), 3.0_f64);
+    b2.insert("y".to_string(), 4.0_f64);
+    assert!((evaluate(&expr_arith, &b2).unwrap() - 20.0).abs() < 1e-10);
+
+    // unbound variable returns Err
+    let result = evaluate(&Expr::Variable("z".to_string()), &empty);
+    assert!(result.is_err());
+}
+
 /// Test expression tree depth
 #[test]
 fn test_deeply_nested_expressions() {

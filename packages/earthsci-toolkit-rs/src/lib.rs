@@ -78,6 +78,8 @@ pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_c
 pub use dae::{DaeError, DiscretizeOptions, apply_dae_contract, default_dae_support, discretize};
 pub use display::{to_ascii, to_latex, to_unicode};
 pub use expression::{contains, free_parameters, free_variables, simplify};
+#[cfg(not(target_arch = "wasm32"))]
+pub use expression::evaluate;
 pub use flatten::{
     DimensionPromotionRecord, FlattenError, FlattenMetadata, FlattenedSystem, flatten,
     flatten_model,

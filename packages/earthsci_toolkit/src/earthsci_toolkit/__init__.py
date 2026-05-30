@@ -111,6 +111,9 @@ from .expression import (
     symbolic_jacobian as jacobian
 )
 
+# Scalar expression evaluator — the official ESS Python runner entry point
+from .numpy_interpreter import evaluate
+
 # Substitution (Core tier requirement)
 from .substitute import (
     substitute,
@@ -378,6 +381,7 @@ __all__ = [
     "to_sympy",
     "from_sympy",
     "jacobian",
+    "evaluate",
 
     # Substitution
     "substitute",

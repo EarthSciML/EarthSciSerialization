@@ -403,3 +403,48 @@ class TestNAryMinMax:
     def test_to_sympy_min_single_arg_rejected(self):
         with pytest.raises(TypeError, match="Min requires at least 2 arguments"):
             to_sympy(ExprNode(op="min", args=["x"]))
+
+
+class TestPublicEvaluate:
+    """Unit tests for the public ``earthsci_toolkit.evaluate`` entry point.
+
+    This verifies the thin wrapper exported from ``__init__`` delegating to
+    the NumPy interpreter (the single-pathway evaluator for this binding).
+    Numeric results must agree with the Julia reference for the shared test
+    AST cases.
+    """
+
+    def test_import_from_package(self):
+        from earthsci_toolkit import evaluate
+        assert callable(evaluate)
+
+    def test_scalar_literal(self):
+        from earthsci_toolkit import evaluate
+        assert evaluate(42, {}) == 42.0
+        assert evaluate(3.14, {}) == pytest.approx(3.14)
+
+    def test_variable_lookup(self):
+        from earthsci_toolkit import evaluate
+        assert evaluate("x", {"x": 7.0}) == pytest.approx(7.0)
+
+    def test_arithmetic_expression(self):
+        from earthsci_toolkit import evaluate
+        # (x + 2) * y  with x=3, y=4 → 20
+        expr = ExprNode(op="*", args=[ExprNode(op="+", args=["x", 2]), "y"])
+        assert evaluate(expr, {"x": 3.0, "y": 4.0}) == pytest.approx(20.0)
+
+    def test_t_binding_respected(self):
+        from earthsci_toolkit import evaluate
+        # expression is just the symbol "t"
+        assert evaluate("t", {"t": 5.0}) == pytest.approx(5.0)
+
+    def test_t_defaults_to_zero(self):
+        from earthsci_toolkit import evaluate
+        # "t" resolves to ctx.t which defaults to 0.0 when absent from bindings
+        assert evaluate("t", {}) == pytest.approx(0.0)
+
+    def test_unbound_variable_raises(self):
+        from earthsci_toolkit import evaluate
+        from earthsci_toolkit.numpy_interpreter import NumpyInterpreterError
+        with pytest.raises(NumpyInterpreterError):
+            evaluate("z", {})
