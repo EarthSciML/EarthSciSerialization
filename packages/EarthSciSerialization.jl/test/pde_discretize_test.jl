@@ -103,6 +103,85 @@ end
 EarthSciSerialization.coord_jacobian_second(g::PDETestCartesianGrid, ::Symbol) =
     zeros(n_cells(g), 2, 2, 2)
 
+# Non-periodic in y: returns 0 sentinel at y=0 (south) and y=Ly (north) boundaries.
+struct PDEBoundaryCartesianGrid <: AbstractCurvilinearGrid
+    Nx::Int
+    Ny::Int
+    Lx::Float64
+    Ly::Float64
+end
+
+_bflat(g::PDEBoundaryCartesianGrid, i::Int, j::Int) = i + (j - 1) * g.Nx
+_bwrap(idx::Int, n::Int) = mod(idx - 1, n) + 1
+
+EarthSciSerialization.n_cells(g::PDEBoundaryCartesianGrid) = g.Nx * g.Ny
+EarthSciSerialization.n_dims(g::PDEBoundaryCartesianGrid)  = 2
+EarthSciSerialization.axis_names(g::PDEBoundaryCartesianGrid) = (:x, :y)
+
+function EarthSciSerialization.cell_centers(g::PDEBoundaryCartesianGrid, axis::Symbol)
+    N = n_cells(g)
+    out = Vector{Float64}(undef, N)
+    dx = g.Lx / g.Nx; dy = g.Ly / g.Ny
+    for j in 1:g.Ny, i in 1:g.Nx
+        c = _bflat(g, i, j)
+        out[c] = axis === :x ? (i - 0.5) * dx :
+                 axis === :y ? (j - 0.5) * dy :
+                 throw(ArgumentError("unknown axis $axis"))
+    end
+    return out
+end
+
+function EarthSciSerialization.cell_widths(g::PDEBoundaryCartesianGrid, axis::Symbol)
+    N = n_cells(g)
+    w = axis === :x ? g.Lx / g.Nx :
+        axis === :y ? g.Ly / g.Ny :
+        throw(ArgumentError("unknown axis $axis"))
+    return fill(w, N)
+end
+
+function EarthSciSerialization.cell_volume(g::PDEBoundaryCartesianGrid)
+    dx = g.Lx / g.Nx; dy = g.Ly / g.Ny
+    return fill(dx * dy, n_cells(g))
+end
+
+function EarthSciSerialization.neighbor_indices(g::PDEBoundaryCartesianGrid, axis::Symbol, offset::Int)
+    N = n_cells(g); out = Vector{Int}(undef, N)
+    for j in 1:g.Ny, i in 1:g.Nx
+        c = _bflat(g, i, j)
+        if axis === :x
+            # x is periodic
+            ni = _bwrap(i + offset, g.Nx); out[c] = _bflat(g, ni, j)
+        elseif axis === :y
+            # y is non-periodic: return 0 (sentinel) at boundaries
+            nj = j + offset
+            out[c] = (nj < 1 || nj > g.Ny) ? 0 : _bflat(g, i, nj)
+        else
+            throw(ArgumentError("unknown axis $axis"))
+        end
+    end
+    return out
+end
+
+EarthSciSerialization.boundary_mask(g::PDEBoundaryCartesianGrid, ::Symbol, ::Symbol) =
+    falses(n_cells(g))
+
+function EarthSciSerialization.metric_g(g::PDEBoundaryCartesianGrid)
+    N = n_cells(g); out = zeros(N, 2, 2)
+    @inbounds for c in 1:N; out[c, 1, 1] = 1.0; out[c, 2, 2] = 1.0; end
+    return out
+end
+EarthSciSerialization.metric_ginv(g::PDEBoundaryCartesianGrid) = metric_g(g)
+EarthSciSerialization.metric_jacobian(g::PDEBoundaryCartesianGrid) = ones(n_cells(g))
+EarthSciSerialization.metric_dgij_dxk(g::PDEBoundaryCartesianGrid) = zeros(n_cells(g), 2, 2, 2)
+
+function EarthSciSerialization.coord_jacobian(g::PDEBoundaryCartesianGrid, ::Symbol)
+    N = n_cells(g); out = zeros(N, 2, 2)
+    @inbounds for c in 1:N; out[c, 1, 1] = 1.0; out[c, 2, 2] = 1.0; end
+    return out
+end
+EarthSciSerialization.coord_jacobian_second(g::PDEBoundaryCartesianGrid, ::Symbol) =
+    zeros(n_cells(g), 2, 2, 2)
+
 # ---------------------------------------------------------------------------
 
 @testset "discretize(PDESystem, AbstractCurvilinearGrid)" begin
@@ -256,5 +335,89 @@ EarthSciSerialization.coord_jacobian_second(g::PDETestCartesianGrid, ::Symbol) =
         # Should use the cos(y) IC, not the zero BC: u0 spans cos(y) on the grid,
         # whose max value reaches ≈1 (the BC `u(t, 0, y) ~ 0.0` would zero u0).
         @test maximum(prob.u0) > 0.5
+    end
+
+    @testset "Dirichlet BC: non-periodic y, homogeneous ∂u/∂t = ∂²u/∂y²" begin
+        # u0 = sin(π·y/L), u(t,x,0)=0, u(t,x,L)=0
+        # Exact: ∂²/∂y²[sin(πy/L)] = -(π/L)²·sin(πy/L)
+        # → du/dt = -(π/L)²·u at t=0 for interior AND boundary cells.
+        L = 1.0
+        function _bc_err(Ny)
+            @parameters x y
+            @variables u(..)
+            Dy = Differential(y)
+            eq  = [D_(u(t_, x, y)) ~ Dy(Dy(u(t_, x, y)))]
+            bcs = [
+                u(0, x, y)  ~ sin(π * y / L),   # IC
+                u(t_, x, 0.0) ~ 0.0,             # Dirichlet south
+                u(t_, x, L)   ~ 0.0,             # Dirichlet north
+            ]
+            domains = [
+                t_ ∈ Interval(0.0, 0.0),
+                x  ∈ Interval(0.0, 2π),
+                y  ∈ Interval(0.0, L),
+            ]
+            @named sys = PDESystem(eq, bcs, domains, [t_, x, y], [u(t_, x, y)])
+            grid = PDEBoundaryCartesianGrid(4, Ny, 2π, L)
+            prob = EarthSciSerialization.discretize(sys, grid; xi_axis=:x, eta_axis=:y)
+            du = prob.f(prob.u0, prob.p, 0.0)
+            λ = (π / L)^2
+            return maximum(abs.(du .+ λ .* prob.u0))
+        end
+        e8  = _bc_err(8)
+        e16 = _bc_err(16)
+        order = log2(e8 / e16)
+        @info "Dirichlet BC MMS" e8 e16 order
+        @test e8 < 0.2      # Ny=8 O(h²) max error ≈ π⁴/12·h² ≈ 0.13; 0.2 gives headroom
+        @test e16 < e8
+        @test order > 1.5   # centered FD is O(h²) throughout
+    end
+
+    @testset "Neumann BC: non-periodic y, zero normal gradient" begin
+        # u0 = cos(π·y/L), ∂u/∂y(0)=0, ∂u/∂y(L)=0 (homogeneous Neumann)
+        # ∂²/∂y²[cos(πy/L)] = -(π/L)²·cos(πy/L) → du/dt = -(π/L)²·u everywhere.
+        L = 1.0
+        Ny = 16
+        @parameters x y
+        @variables u(..)
+        Dy = Differential(y)
+        eq  = [D_(u(t_, x, y)) ~ Dy(Dy(u(t_, x, y)))]
+        bcs = [
+            u(0, x, y)        ~ cos(π * y / L),  # IC
+            Dy(u(t_, x, 0.0)) ~ 0.0,             # Neumann south
+            Dy(u(t_, x, L))   ~ 0.0,             # Neumann north
+        ]
+        domains = [
+            t_ ∈ Interval(0.0, 0.0),
+            x  ∈ Interval(0.0, 2π),
+            y  ∈ Interval(0.0, L),
+        ]
+        @named sys = PDESystem(eq, bcs, domains, [t_, x, y], [u(t_, x, y)])
+        grid = PDEBoundaryCartesianGrid(4, Ny, 2π, L)
+        prob = EarthSciSerialization.discretize(sys, grid; xi_axis=:x, eta_axis=:y)
+        du = prob.f(prob.u0, prob.p, 0.0)
+        λ = (π / L)^2
+        err = maximum(abs.(du .+ λ .* prob.u0))
+        @info "Neumann BC MMS" err
+        @test err < 0.1    # ghost-cell Neumann reduces error significantly vs. self-fallback
+    end
+
+    @testset "Self-fallback preserved when no spatial BC given (non-periodic grid)" begin
+        # Without an explicit BC on a non-periodic grid, the code should still
+        # produce an ODEProblem (the self-fallback/zero-Neumann behavior is unchanged).
+        @parameters x y
+        @variables u(..)
+        Dy = Differential(y)
+        eq  = [D_(u(t_, x, y)) ~ Dy(Dy(u(t_, x, y)))]
+        bcs = [u(0, x, y) ~ sin(y)]   # only IC, no spatial BC
+        domains = [
+            t_ ∈ Interval(0.0, 1.0),
+            x  ∈ Interval(0.0, 2π),
+            y  ∈ Interval(0.0, 2π),
+        ]
+        @named sys = PDESystem(eq, bcs, domains, [t_, x, y], [u(t_, x, y)])
+        grid = PDEBoundaryCartesianGrid(4, 8, 2π, 2π)
+        prob = EarthSciSerialization.discretize(sys, grid; xi_axis=:x, eta_axis=:y)
+        @test prob isa ODEProblem   # no error, self-fallback behavior preserved
     end
 end
