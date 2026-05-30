@@ -474,6 +474,11 @@ end
 # Build an `index` node: `args[1]` is the array-shaped operand, `args[2:]`
 # are the index expressions. This is used outside arrayop bodies (inside an
 # arrayop body, the `index` op is consumed by `_esm_to_julia_ast`).
+#
+# When the array operand is a concrete symbolic array (from arrayop
+# pre-scalarization) and an index evaluates to an out-of-bounds integer,
+# apply mod1 periodic wrapping. This correctly handles stencil access
+# patterns like u[i-1] at boundary cells (e.g. i=1 → index=0 wraps to N).
 function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
                       t_sym, dim_dict::Dict{String,Any})
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
@@ -486,6 +491,17 @@ function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
         else
             push!(idxs, _esm_to_symbolic(a, var_dict, t_sym, dim_dict))
         end
+    end
+    # Periodic wrapping for concrete symbolic arrays: when a concrete integer
+    # index is out of bounds for dimension d, wrap it with mod1 so that
+    # stencil accesses like u[0,j] or u[N+1,j] resolve to u[N,j] / u[1,j].
+    if arr isa AbstractArray
+        ndims_arr = ndims(arr)
+        wrapped = ntuple(ndims_arr) do d
+            idx = d <= length(idxs) ? idxs[d] : 1
+            (idx isa Integer && !(1 <= idx <= size(arr, d))) ? mod1(idx, size(arr, d)) : idx
+        end
+        return getindex(arr, wrapped...)
     end
     return getindex(arr, idxs...)
 end
