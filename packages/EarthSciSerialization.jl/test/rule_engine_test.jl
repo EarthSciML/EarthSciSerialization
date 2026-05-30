@@ -321,4 +321,100 @@ const ESM_Expr = EarthSciSerialization.Expr
         end
     end
 
+    @testset "nested derivative patterns: nonlinear Laplacian and mixed cross-derivative (ess-0wl)" begin
+        # Verifies that the pattern matcher handles depth-2 nested D ops per
+        # discretization.md §5.2. applies_to is depth-1 (scheme guard only),
+        # so nonlinear-Laplacian Dx(f·Dx(u)) and mixed cross-derivative
+        # Dx(Dy(u)) MUST be matched by a rule's `pattern`, which has no
+        # depth limit (the matcher is a fully recursive tree walk).
+
+        # ------------------------------------------------------------------
+        # Shape 1: Nonlinear Laplacian  D(f * D(u, wrt=x), wrt=x)
+        #
+        # $x in two wrt positions → §5.2.2 non-linear matching: both
+        # occurrences must bind the same dim name.
+        # ------------------------------------------------------------------
+        pat_nonlin = OpExpr("D", ESM_Expr[
+            OpExpr("*", ESM_Expr[
+                VarExpr("\$f"),
+                OpExpr("D", ESM_Expr[VarExpr("\$u")]; wrt="\$x")
+            ])
+        ]; wrt="\$x")
+        # Dummy replacement: surface $u so rewrite produces a VarExpr.
+        repl_nonlin = VarExpr("\$u")
+
+        # Match: Dx(kappa * Dx(T))
+        seed_nonlin = OpExpr("D", ESM_Expr[
+            OpExpr("*", ESM_Expr[
+                VarExpr("kappa"),
+                OpExpr("D", ESM_Expr[VarExpr("T")]; wrt="x")
+            ])
+        ]; wrt="x")
+        m1 = match_pattern(pat_nonlin, seed_nonlin)
+        @test m1 !== nothing
+        @test m1["\$f"] isa VarExpr && m1["\$f"].name == "kappa"
+        @test m1["\$u"] isa VarExpr && m1["\$u"].name == "T"
+        @test m1["\$x"] isa VarExpr && m1["\$x"].name == "x"
+
+        # Non-linear guard: outer wrt=x and inner wrt=y must disagree →
+        # no match for Dx(kappa * Dy(T)).
+        seed_dim_mismatch = OpExpr("D", ESM_Expr[
+            OpExpr("*", ESM_Expr[
+                VarExpr("kappa"),
+                OpExpr("D", ESM_Expr[VarExpr("T")]; wrt="y")
+            ])
+        ]; wrt="x")
+        @test match_pattern(pat_nonlin, seed_dim_mismatch) === nothing
+
+        # No AC matching (§5.2.3): Dx(Dx(T)*kappa) — commuted product —
+        # does NOT match pat_nonlin; authors need a second rule for this form.
+        seed_commuted = OpExpr("D", ESM_Expr[
+            OpExpr("*", ESM_Expr[
+                OpExpr("D", ESM_Expr[VarExpr("T")]; wrt="x"),
+                VarExpr("kappa")
+            ])
+        ]; wrt="x")
+        @test match_pattern(pat_nonlin, seed_commuted) === nothing
+
+        # Full rewrite round-trip: rule fires and produces the replacement.
+        rule_nonlin = Rule("nonlin_lap", pat_nonlin, repl_nonlin)
+        out1 = rewrite(seed_nonlin, Rule[rule_nonlin])
+        @test out1 isa VarExpr && out1.name == "T"
+
+        # ------------------------------------------------------------------
+        # Shape 2: Mixed cross-derivative  D(D(u, wrt=y), wrt=x)
+        #
+        # $x and $y are independent name-class pvars; they may or may not
+        # bind the same dim (second derivative Dx(Dx(u)) is also matched).
+        # ------------------------------------------------------------------
+        pat_mixed = OpExpr("D", ESM_Expr[
+            OpExpr("D", ESM_Expr[VarExpr("\$u")]; wrt="\$y")
+        ]; wrt="\$x")
+        repl_mixed = VarExpr("\$u")
+
+        # Match: Dx(Dy(T)) — cross-derivative
+        seed_mixed = OpExpr("D", ESM_Expr[
+            OpExpr("D", ESM_Expr[VarExpr("T")]; wrt="y")
+        ]; wrt="x")
+        m2 = match_pattern(pat_mixed, seed_mixed)
+        @test m2 !== nothing
+        @test m2["\$u"] isa VarExpr && m2["\$u"].name == "T"
+        @test m2["\$x"] isa VarExpr && m2["\$x"].name == "x"
+        @test m2["\$y"] isa VarExpr && m2["\$y"].name == "y"
+
+        # Match: Dx(Dx(T)) — second derivative in same dim ($x=$y=x)
+        seed_2nd = OpExpr("D", ESM_Expr[
+            OpExpr("D", ESM_Expr[VarExpr("T")]; wrt="x")
+        ]; wrt="x")
+        m3 = match_pattern(pat_mixed, seed_2nd)
+        @test m3 !== nothing
+        @test m3["\$x"] isa VarExpr && m3["\$x"].name == "x"
+        @test m3["\$y"] isa VarExpr && m3["\$y"].name == "x"
+
+        # Full rewrite round-trip for the cross-derivative case.
+        rule_mixed = Rule("mixed_deriv", pat_mixed, repl_mixed)
+        out2 = rewrite(seed_mixed, Rule[rule_mixed])
+        @test out2 isa VarExpr && out2.name == "T"
+    end
+
 end
