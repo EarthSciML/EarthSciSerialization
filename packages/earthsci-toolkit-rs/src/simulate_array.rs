@@ -185,6 +185,32 @@ pub fn file_has_array_ops(file: &EsmFile) -> bool {
     false
 }
 
+/// Return true if the file has spatial structure: top-level grid declarations
+/// or any model with array-shaped state variables (`shape` field non-empty).
+///
+/// Used by [`crate::simulate::simulate`] to route discretized-PDE files to the
+/// ArrayOp runtime even when the equations do not yet contain explicit
+/// `arrayop`/`index` nodes (e.g. a spatial model whose equations were rewritten
+/// using indexed-scalar D(u[i])=... form rather than the `arrayop` wrapper).
+pub fn file_has_spatial_model(file: &EsmFile) -> bool {
+    if file.grids.is_some() {
+        return true;
+    }
+    let Some(models) = &file.models else {
+        return false;
+    };
+    for model in models.values() {
+        for var in model.variables.values() {
+            if let Some(shape) = &var.shape {
+                if !shape.is_empty() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn model_has_array_ops(model: &Model) -> bool {
     for eq in &model.equations {
         if expr_has_array_op(&eq.lhs) || expr_has_array_op(&eq.rhs) {
@@ -1494,6 +1520,7 @@ fn extract_derivative_scalar(lhs: &Expr) -> Option<(String, Option<Vec<i64>>)> {
                 .skip(1)
                 .map(|a| match a {
                     Expr::Number(n) => Some(*n as i64),
+                    Expr::Integer(n) => Some(*n),
                     _ => None,
                 })
                 .collect::<Option<Vec<_>>>()?;

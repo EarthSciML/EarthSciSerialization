@@ -929,8 +929,15 @@ where
 ///
 /// Dispatches to the array-op interpreter ([`crate::simulate_array`]) when
 /// the file contains any `arrayop`, `makearray`, `reshape`, `transpose`,
-/// `concat`, `broadcast`, or `index` nodes (gt-oxr). Otherwise uses the
-/// scalar path via [`Compiled::from_file`].
+/// `concat`, `broadcast`, or `index` nodes (gt-oxr), **or** when the file
+/// has spatial model structure — top-level grid declarations or any model
+/// with array-shaped state variables (non-empty `shape` field). Spatial
+/// models that have already been discretized (spatial ops rewritten to
+/// `index`-addressed array equations) integrate end-to-end via the ArrayOp
+/// runtime without hitting the scalar-ODE rejection guard.
+///
+/// Falls back to the scalar path via [`Compiled::from_file`] for pure-ODE
+/// files with no array-op or spatial structure.
 pub fn simulate(
     file: &EsmFile,
     tspan: (f64, f64),
@@ -938,7 +945,9 @@ pub fn simulate(
     initial_conditions: &HashMap<String, f64>,
     opts: &SimulateOptions,
 ) -> Result<Solution, SimulateError> {
-    if crate::simulate_array::file_has_array_ops(file) {
+    if crate::simulate_array::file_has_array_ops(file)
+        || crate::simulate_array::file_has_spatial_model(file)
+    {
         let compiled = crate::simulate_array::ArrayCompiled::from_file(file)?;
         return compiled.simulate(tspan, params, initial_conditions, opts);
     }
