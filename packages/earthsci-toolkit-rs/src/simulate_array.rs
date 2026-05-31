@@ -109,6 +109,7 @@ enum RhsRule {
         var_name: String,
         output_idx_names: Vec<String>,
         output_ranges: Vec<(i64, i64)>,
+        lhs_idx_exprs: Vec<Expr>,
         body: Box<Expr>,
     },
 }
@@ -511,7 +512,7 @@ impl ArrayCompiled {
         let mut covered_slots: HashSet<usize> = HashSet::new();
 
         for eq in &model.equations {
-            if let Some((var, idx_names, ranges, body)) =
+            if let Some((var, idx_names, ranges, lhs_idx_exprs, body)) =
                 extract_derivative_arrayop(&eq.lhs, &eq.rhs)
             {
                 // Array-op derivative over (idx_names, ranges).
@@ -525,15 +526,22 @@ impl ArrayCompiled {
                 // Mark the covered slots.
                 let shape = &var_shapes[&var];
                 for tuple in cartesian_range(&ranges) {
-                    // Map to column-major flat offset.
-                    let multi: Vec<i64> = tuple.clone();
-                    let flat = multi_to_flat_col_major(&multi, &shape.shape, &shape.origin);
+                    // Map to column-major flat offset using actual LHS index expressions.
+                    let binds: HashMap<String, i64> = idx_names.iter()
+                        .zip(tuple.iter())
+                        .map(|(n, v)| (n.clone(), *v))
+                        .collect();
+                    let actual_multi: Vec<i64> = lhs_idx_exprs.iter()
+                        .map(|e| eval_simple_index(e, &binds))
+                        .collect();
+                    let flat = multi_to_flat_col_major(&actual_multi, &shape.shape, &shape.origin);
                     covered_slots.insert(shape.flat_offset + flat);
                 }
                 rhs_rules.push(RhsRule::ArrayLoop {
                     var_name: var,
                     output_idx_names: idx_names,
                     output_ranges: ranges,
+                    lhs_idx_exprs,
                     body: Box::new(body),
                 });
                 continue;
@@ -937,6 +945,7 @@ fn evaluate_rhs(
                 var_name,
                 output_idx_names,
                 output_ranges,
+                lhs_idx_exprs,
                 body,
             } => {
                 let vs = &var_shapes[var_name];
@@ -953,7 +962,10 @@ fn evaluate_rhs(
                         ctx.loop_binds.insert(name.clone(), *val);
                     }
                     let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
-                    let flat = multi_to_flat_col_major(&tuple, &vs.shape, &vs.origin);
+                    let actual_multi: Vec<i64> = lhs_idx_exprs.iter()
+                        .map(|e| eval_simple_index(e, &ctx.loop_binds))
+                        .collect();
+                    let flat = multi_to_flat_col_major(&actual_multi, &vs.shape, &vs.origin);
                     dy[vs.flat_offset + flat] = v;
                 }
             }
@@ -1502,7 +1514,7 @@ fn collect_derivative_targets(equations: &[crate::types::Equation]) -> HashSet<S
         if let Some((name, _)) = extract_derivative_scalar(&eq.lhs) {
             out.insert(name);
         }
-        if let Some((name, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
+        if let Some((name, _, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
             out.insert(name);
         }
     }
@@ -1547,13 +1559,13 @@ fn extract_derivative_scalar(lhs: &Expr) -> Option<(String, Option<Vec<i64>>)> {
 }
 
 /// If `lhs` is `arrayop(expr=D(index(var, idx...)), ...)`, extract
-/// `(var_name, output_idx_names, output_ranges, rhs_body)`.
+/// `(var_name, output_idx_names, output_ranges, lhs_idx_exprs, rhs_body)`.
 /// The RHS is extracted from `rhs` under the assumption that it's an
 /// arrayop with matching output_idx; if not, an error is raised elsewhere.
 fn extract_derivative_arrayop(
     lhs: &Expr,
     rhs: &Expr,
-) -> Option<(String, Vec<String>, Vec<(i64, i64)>, Expr)> {
+) -> Option<(String, Vec<String>, Vec<(i64, i64)>, Vec<Expr>, Expr)> {
     let Expr::Operator(node) = lhs else {
         return None;
     };
@@ -1580,6 +1592,7 @@ fn extract_derivative_arrayop(
         Expr::Variable(v) => v.clone(),
         _ => return None,
     };
+    let lhs_idx_exprs: Vec<Expr> = inner.args.iter().skip(1).cloned().collect();
     // Map idx_names → ranges in order.
     let ranges: Vec<(i64, i64)> = idx_names
         .iter()
@@ -1596,7 +1609,7 @@ fn extract_derivative_arrayop(
         }
         other => other.clone(),
     };
-    Some((var_name, idx_names, ranges, rhs_body))
+    Some((var_name, idx_names, ranges, lhs_idx_exprs, rhs_body))
 }
 
 /// Extract an algebraic `arrayop(expr=index(var, idx...)) = arrayop(...)`
@@ -1851,6 +1864,24 @@ fn walk_for_shapes(
                 );
             }
         }
+    }
+}
+
+/// Evaluate a simple index expression given concrete loop variable bindings.
+/// Supports integer literals, bare variable lookups, and `a + b` / `a - b`.
+fn eval_simple_index(expr: &Expr, binds: &HashMap<String, i64>) -> i64 {
+    match expr {
+        Expr::Integer(n) => *n,
+        Expr::Number(n) => *n as i64,
+        Expr::Variable(name) => binds.get(name).copied().unwrap_or(0),
+        Expr::Operator(node)
+            if (node.op == "+" || node.op == "-") && node.args.len() == 2 =>
+        {
+            let a = eval_simple_index(&node.args[0], binds);
+            let b = eval_simple_index(&node.args[1], binds);
+            if node.op == "+" { a + b } else { a - b }
+        }
+        _ => 0,
     }
 }
 

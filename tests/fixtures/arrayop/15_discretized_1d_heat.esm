@@ -2,7 +2,7 @@
   "esm": "0.1.0",
   "metadata": {
     "name": "arrayop_15_discretized_1d_heat",
-    "description": "Discretized 1D heat equation on 4 interior cells with Dirichlet BCs (ghost cells u[0]=u[5]=0). dx=0.2, stencil coefficient 1/dx^2=25. The first-mode sinusoidal IC u[i]=sin(pi*i/5) decays with the exact discrete eigenvalue lambda_1 = 25*(2*cos(pi/5)-2) = -9.5492, so u[i,t] = exp(lambda_1*t)*sin(pi*i/5). This fixture tests the spatial-PDE dispatch path: simulate() must route models with shape-d state variables to the ArrayOp runtime.",
+    "description": "Discretized 1D heat equation on 4 interior cells with Dirichlet BCs (ghost cells u[0]=u[5]=0). dx=0.2, stencil coefficient 1/dx^2=25. Interior stencil: D(u[i+1]) = 25*(u[i] - 2u[i+1] + u[i+2]) for 1-based i in 1..2. The first-mode sinusoidal IC u[i]=sin(pi*i/5) decays with the exact discrete eigenvalue lambda_1 = 25*(2*cos(pi/5)-2) = -9.5492, so u[i,t] = exp(lambda_1*t)*sin(pi*i/5). This fixture tests the spatial-PDE dispatch path: simulate() must route models with shape-d state variables to the ArrayOp runtime.",
     "authors": [
       "EarthSciSerialization/polecats/gastown.furiosa"
     ],
@@ -57,17 +57,17 @@
           }
         },
         {
-          "_comment": "Interior cells via arrayop for i=2..3",
+          "_comment": "Interior cells via arrayop, 1-based i in 1..2, offsets baked into body",
           "lhs": {
             "op": "arrayop",
             "args": [],
             "output_idx": ["i"],
             "expr": {
               "op": "D",
-              "args": [{"op": "index", "args": ["u", "i"]}],
+              "args": [{"op": "index", "args": ["u", {"op": "+", "args": ["i", 1]}]}],
               "wrt": "t"
             },
-            "ranges": {"i": [2, 3]}
+            "ranges": {"i": [1, 2]}
           },
           "rhs": {
             "op": "arrayop",
@@ -80,14 +80,14 @@
                 {
                   "op": "+",
                   "args": [
-                    {"op": "index", "args": ["u", {"op": "-", "args": ["i", 1]}]},
-                    {"op": "*", "args": [-2, {"op": "index", "args": ["u", "i"]}]},
-                    {"op": "index", "args": ["u", {"op": "+", "args": ["i", 1]}]}
+                    {"op": "index", "args": ["u", "i"]},
+                    {"op": "*", "args": [-2, {"op": "index", "args": ["u", {"op": "+", "args": ["i", 1]}]}]},
+                    {"op": "index", "args": ["u", {"op": "+", "args": ["i", 2]}]}
                   ]
                 }
               ]
             },
-            "ranges": {"i": [2, 3]}
+            "ranges": {"i": [1, 2]}
           }
         },
         {

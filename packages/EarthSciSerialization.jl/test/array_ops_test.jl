@@ -235,13 +235,13 @@ end
         vars = Dict{String,ESM2.ModelVariable}(
             "u" => ESM2.ModelVariable(ESM2.StateVariable),
         )
-        # interior arrayop
+        # interior arrayop (1-based output range, offsets baked into body)
         body = _op("+",
-            _idx("u", _op("-", _var("i"), _num(1))),
-            _op("*", _num(-2), _idx("u", _var("i"))),
-            _idx("u", _op("+", _var("i"), _num(1))))
-        lint = _arrayop1d(_d_index("u", _var("i")), "i", 2, N-1)
-        rint = _arrayop1d(body, "i", 2, N-1)
+            _idx("u", _var("i")),
+            _op("*", _num(-2), _idx("u", _op("+", _var("i"), _num(1)))),
+            _idx("u", _op("+", _var("i"), _num(2))))
+        lint = _arrayop1d(_d_index("u", _op("+", _var("i"), _num(1))), "i", 1, N-2)
+        rint = _arrayop1d(body, "i", 1, N-2)
         eq_int = ESM2.Equation(lint, rint)
 
         # Scalar BCs
@@ -414,13 +414,13 @@ end
         @test haskey(shapes, "u")
         @test shapes["u"] == [1:5]
 
-        # 1D with offset: u[i-1] + u[i+1] where i in 2:9 → u has shape [1:10].
+        # 1D with offset: u[i] + u[i+2] where i in 1:8 → u has shape [1:10].
         body = _op("+",
-            _idx("u", _op("-", _var("i"), _num(1))),
-            _idx("u", _op("+", _var("i"), _num(1))))
+            _idx("u", _var("i")),
+            _idx("u", _op("+", _var("i"), _num(2))))
         eq_off = ESM2.Equation(
-            _arrayop1d(_d_index("u", _var("i")), "i", 2, 9),
-            _arrayop1d(body, "i", 2, 9))
+            _arrayop1d(_d_index("u", _op("+", _var("i"), _num(1))), "i", 1, 8),
+            _arrayop1d(body, "i", 1, 8))
         shapes_off = infer_array_shapes([eq_off])
         @test shapes_off["u"] == [1:10]
 
