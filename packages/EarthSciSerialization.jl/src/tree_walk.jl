@@ -199,7 +199,12 @@ function build_evaluator(model::Model;
             push!(p_vals, d === nothing ? 0.0 : Float64(d))
         end
     end
-    p = NamedTuple{Tuple(p_syms)}(Tuple(p_vals))
+    # Use `nothing` for parameter-free models: some SciMLBase versions enter
+    # an infinite recursion in SymbolicIndexingInterface when the problem
+    # carries an empty NamedTuple{(),()} as `p`. `nothing` is SciMLBase's
+    # canonical "no parameters" sentinel and avoids the dispatch loop.
+    p = isempty(p_syms) ? nothing :
+        NamedTuple{Tuple(p_syms)}(Tuple(p_vals))
 
     # ---- Observed substitution ----
     observed_exprs = Dict{String,Expr}()
