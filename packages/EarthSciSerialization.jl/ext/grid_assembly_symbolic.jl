@@ -74,13 +74,20 @@ end
 """
     evaluate_arrayop(ao) -> Array{Float64}
 
-Scalarize an ArrayOp built from `Const`-wrapped numeric data and extract
-Float64 values. For tests and validation; production callers should keep
-the ArrayOp symbolic and let MTK compile it.
+Evaluate an ArrayOp built from `Const`-wrapped numeric data by iterating over
+the output index range and substituting each concrete index value. Returns a
+`Float64` vector. For tests and validation; production callers should keep the
+ArrayOp symbolic and let MTK compile it.
 """
 function evaluate_arrayop(ao)
-    s = Symbolics.scalarize(Symbolics.wrap(ao))
-    return Float64.(Symbolics.value.(s))
+    c = ao.output_idx[1]
+    rng = ao.ranges[c]
+    result = Array{Float64}(undef, length(rng))
+    for (i, c_val) in enumerate(rng)
+        val = SymUtils.substitute(ao.expr, Dict(c => c_val); fold = Val{true}())
+        result[i] = Float64(Symbolics.value(val))
+    end
+    return result
 end
 
 # ---------------------------------------------------------------------------
