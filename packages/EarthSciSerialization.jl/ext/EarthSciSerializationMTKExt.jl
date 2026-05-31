@@ -181,11 +181,133 @@ function _reduce_fn(name::Union{Nothing,AbstractString})
            error("Unsupported arrayop reduce: $name")
 end
 
+# ========================================
+# Stencil boundary handling via numeric gather tables (ess-c59)
+# ========================================
+#
+# Background: an arrayop body for a discretized PDE stencil reads neighbor
+# cells `u[i-1, j]`, `u[i, j+1]`, ... At a Dirichlet boundary (e.g. i=1) the
+# read `u[i-1, j]` resolves to `u[0, j]`, which is OUTSIDE the 1:N field and
+# must take the ghost value 0. The `_build_index` ghost guard only fires for
+# CONCRETE integer indices; if we baked a SYMBOLIC offset `pool[k]-1` into the
+# body, the OOB index would escape to scalarize-time as `u[0, j]` and raise an
+# `ArgumentError` (out of `1:N` bounds).
+#
+# Fix (mirrors ESD's `_stencil_arrayop` / `_build_symbolic_ghost_extension` and
+# the PDE-grid `_build_ghost_vals` / `_eval_at_nb`): resolve each stencil read
+# over the declared range into a NUMERIC per-cell gather table at build time.
+# Each `index` read `u[i±1, …]` becomes a `Const`-wrapped N-D table whose entry
+# at output cell `(c₁,…,c_M)` is the in-bounds symbolic reference `u_sym[…]`,
+# or `0` for an out-of-bounds (Dirichlet ghost) cell. The body then indexes that
+# Const table with the RAW 1-based pool vars, so NO symbolic index ever leaves
+# `1:N` — scalarize sees only 1-based positions into a precomputed table.
+
+# Context threaded into `_build_index` (via a reserved `dim_dict` key) while a
+# stencil arrayop body is being built. Carries everything needed to materialize
+# a per-output-cell gather table for an indexed read.
+struct _GatherCtx
+    # output index var name => (pool var, physical-index lo, length N_d)
+    out_vars::Dict{String,Tuple{Any,Int,Int}}
+    # ordered output var names (defines the table axis order = pool var order)
+    out_order::Vector{String}
+end
+
+const _GATHER_CTX_KEY = "__esm_arrayop_gather_ctx__"
+
+# Pure-integer evaluation of an ESM index-argument expression given concrete
+# integer values for the output index vars (`binding`). Returns the resolved
+# Int, or `nothing` if the expression is not resolvable to a concrete integer
+# from the output vars alone (e.g. it references a reduction var, a parameter,
+# or a non-affine/function term — in which case the read is NOT gather-eligible
+# and the caller falls back to the symbolic-offset path).
+function _eval_index_arg_int(e::EsmExpr, binding::Dict{String,Int})
+    if e isa IntExpr
+        return Int(e.value)
+    elseif e isa NumExpr
+        v = e.value
+        (isfinite(v) && v == floor(v)) || return nothing
+        return Int(v)
+    elseif e isa VarExpr
+        return get(binding, e.name, nothing)
+    elseif e isa OpExpr
+        if e.op == "+" || e.op == "-" || e.op == "*"
+            vals = Int[]
+            for a in e.args
+                r = _eval_index_arg_int(a, binding)
+                r === nothing && return nothing
+                push!(vals, r)
+            end
+            isempty(vals) && return nothing
+            if e.op == "+"
+                return sum(vals)
+            elseif e.op == "*"
+                return prod(vals)
+            else # "-"
+                return length(vals) == 1 ? -vals[1] : foldl(-, vals)
+            end
+        end
+        return nothing
+    end
+    return nothing
+end
+
+# True iff EVERY index arg of an `index` node is resolvable to a concrete
+# integer from the output index vars alone (across the whole output grid).
+# Such reads are handled by a numeric gather table; everything else falls back.
+function _index_args_gatherable(idx_args::Vector{<:EsmExpr}, ctx::_GatherCtx)
+    isempty(idx_args) && return false
+    # Probe with the lower-corner physical indices; `_eval_index_arg_int`
+    # returns `nothing` structurally (independent of the concrete values) when
+    # a non-output symbol or unsupported op appears, so one probe suffices.
+    binding = Dict{String,Int}(name => lo for (name, (_, lo, _)) in ctx.out_vars)
+    for a in idx_args
+        _eval_index_arg_int(a, binding) === nothing && return false
+    end
+    return true
+end
+
+# Build the per-output-cell gather table for a single indexed read of a shaped
+# state-variable array `arr` (a `Symbolics.Arr`). `idx_args` are the ESM index
+# expressions (affine in the output vars). Each entry of the returned N-D table
+# is `unwrap(arr[resolved...])` for an in-bounds read or `0` for a Dirichlet
+# ghost (any axis out of the array's declared bounds). The table is then
+# `Const`-wrapped and indexed by the output pool vars so it scalarizes cleanly.
+function _build_gather_read(arr, idx_args::Vector{<:EsmExpr}, ctx::_GatherCtx)
+    sz = size(arr)                       # declared 1-based field extent, e.g. (3, 3)
+    ndim_out = length(ctx.out_order)
+    dims = ntuple(d -> ctx.out_vars[ctx.out_order[d]][3], ndim_out)  # (N₁, …, N_M)
+
+    table = Array{Any}(undef, dims...)
+    for cell in CartesianIndices(dims)
+        # Physical index value for each output var at this cell.
+        binding = Dict{String,Int}()
+        for d in 1:ndim_out
+            name = ctx.out_order[d]
+            lo = ctx.out_vars[name][2]
+            binding[name] = lo + cell[d] - 1
+        end
+        # Resolve each axis index of the read.
+        resolved = ntuple(k -> _eval_index_arg_int(idx_args[k], binding)::Int,
+                          length(idx_args))
+        inbounds = length(resolved) == length(sz) &&
+                   all(1 <= resolved[k] <= sz[k] for k in 1:length(resolved))
+        table[cell] = inbounds ? Symbolics.unwrap(getindex(arr, resolved...)) :
+                                 Symbolics.unwrap(Symbolics.Num(0))
+    end
+
+    pool_idx = Any[ctx.out_vars[ctx.out_order[d]][1] for d in 1:ndim_out]
+    return Symbolics.wrap(ConstSR(table)[pool_idx...])
+end
+
 # Build an un-scalarized `Symbolics.wrap(ArrayOp)` for an ESM `arrayop` node.
 # All index variables are drawn from the shared `SymbolicUtils.idxs_for_arrayop`
 # pool; the body is built once with symbolic indices and handed to MTK's
 # `mtkcompile` to own scalarization. This requires all output ranges to be
 # 1-based (guaranteed by the ess-5kf canonicalization gate).
+#
+# Stencil neighbor reads that can leave the field bounds at a boundary cell are
+# materialized as numeric gather tables (see `_build_gather_read` above) so no
+# symbolic out-of-bounds index ever reaches the scalarizer.
 function _build_arrayop_sym(expr::OpExpr, var_dict::Dict{String,Any},
                              t_sym, dim_dict::Dict{String,Any})
     output_idx = expr.output_idx === nothing ? Any[] : expr.output_idx
@@ -245,17 +367,43 @@ function _build_arrayop_sym(expr::OpExpr, var_dict::Dict{String,Any},
     end
     singleton_vars = [pool[n_named + s] for s in 1:n_singletons]
 
+    # Build the gather context for the OUTPUT index vars. Stencil reads whose
+    # indices are affine in these (and so resolvable to a concrete cell index)
+    # are materialized as numeric gather tables inside `_build_index`, which
+    # keeps boundary/ghost reads within `1:N`. Reads referencing reduction-only
+    # index vars are not gatherable and fall back to the symbolic-offset path
+    # below (correct for in-bounds contractions, which was already passing).
+    out_vars = Dict{String,Tuple{Any,Int,Int}}()
+    out_order = String[]
+    for entry in output_idx
+        entry isa AbstractString || continue
+        name = String(entry)
+        r = ranges[name]
+        out_vars[name] = (pool[findfirst(==(name), all_named)], first(r), length(r))
+        push!(out_order, name)
+    end
+    gather_ctx = _GatherCtx(out_vars, out_order)
+
     # Inject OFFSET-ADJUSTED index vars into var_dict and evaluate the body.
+    # Also install the gather context so `_build_index` can intercept
+    # gather-eligible reads. Both are restored in the `finally`.
     saved = Dict{String,Any}()
     for (k, v) in idx_body
         if haskey(var_dict, k); saved[k] = var_dict[k]; end
         var_dict[k] = v
     end
+    saved_ctx = get(dim_dict, _GATHER_CTX_KEY, nothing)
+    dim_dict[_GATHER_CTX_KEY] = gather_ctx
     body_sym = try
         _esm_to_symbolic(body, var_dict, t_sym, dim_dict)
     finally
         for k in keys(idx_body)
             if haskey(saved, k); var_dict[k] = saved[k]; else; delete!(var_dict, k); end
+        end
+        if saved_ctx === nothing
+            delete!(dim_dict, _GATHER_CTX_KEY)
+        else
+            dim_dict[_GATHER_CTX_KEY] = saved_ctx
         end
     end
 
@@ -505,8 +653,21 @@ end
 function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
                       t_sym, dim_dict::Dict{String,Any})
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)
+    idx_args = expr.args[2:end]
+
+    # Stencil gather path (ess-c59): inside a stencil arrayop body, when this
+    # read's indices are all affine in the output index vars, materialize a
+    # numeric per-cell gather table instead of emitting a symbolic index. This
+    # keeps boundary reads (e.g. u[i-1, j] at i=1 -> Dirichlet ghost 0) within
+    # the 1:N field, so the scalarizer never sees an out-of-bounds index.
+    ctx = get(dim_dict, _GATHER_CTX_KEY, nothing)
+    if ctx isa _GatherCtx && arr isa AbstractArray && !isempty(idx_args) &&
+       _index_args_gatherable(idx_args, ctx)
+        return _build_gather_read(arr, idx_args, ctx)
+    end
+
     idxs = Any[]
-    for a in expr.args[2:end]
+    for a in idx_args
         if a isa IntExpr
             push!(idxs, Int(a.value))
         elseif a isa NumExpr
