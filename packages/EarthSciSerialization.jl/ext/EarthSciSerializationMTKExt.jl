@@ -227,27 +227,38 @@ function _build_arrayop_sym(expr::OpExpr, var_dict::Dict{String,Any},
     all_named = collect(keys(ranges))
     n_named = length(all_named)
     pool = get_idx_vars(n_named + n_singletons)
+    # idx_sym: raw pool vars, used as keys in output_idx_syms and ranges_sym.
+    # idx_body: offset-adjusted vars injected into var_dict for body evaluation.
+    # SymbolicUtils scalarizes by iterating the shape (1:length(r)) and
+    # substituting pool[k] = 1..N. For non-1-based ranges (e.g. i ∈ 2:4),
+    # we inject pool[k] + offset into the body so that when pool[k] = 1..3
+    # the body sees 2..4 (the actual physical indices).
     idx_sym = Dict{String,Any}()
+    idx_body = Dict{String,Any}()
     for (k, name) in enumerate(all_named)
+        r = ranges[name]
         idx_sym[name] = pool[k]
+        offset = first(r) - 1
+        idx_body[name] = offset == 0 ? pool[k] : Symbolics.wrap(pool[k]) + offset
     end
     singleton_vars = [pool[n_named + s] for s in 1:n_singletons]
 
-    # Inject index vars into var_dict and evaluate the body symbolically.
+    # Inject OFFSET-ADJUSTED index vars into var_dict and evaluate the body.
     saved = Dict{String,Any}()
-    for (k, v) in idx_sym
+    for (k, v) in idx_body
         if haskey(var_dict, k); saved[k] = var_dict[k]; end
         var_dict[k] = v
     end
     body_sym = try
         _esm_to_symbolic(body, var_dict, t_sym, dim_dict)
     finally
-        for k in keys(idx_sym)
+        for k in keys(idx_body)
             if haskey(saved, k); var_dict[k] = saved[k]; else; delete!(var_dict, k); end
         end
     end
 
-    # Assemble output index symbol list, interleaving named and singleton vars.
+    # Assemble output index symbol list using RAW pool vars (not offset-adjusted),
+    # interleaving named and singleton vars.
     output_idx_syms = Any[]
     s_i = 0
     for entry in output_idx
@@ -259,16 +270,22 @@ function _build_arrayop_sym(expr::OpExpr, var_dict::Dict{String,Any},
         end
     end
 
-    # Ranges dict keyed by symbolic index vars (StepRange form required by ArrayOp).
+    # Ranges dict keyed by RAW pool vars, all 1-based (shape = 1:length(r)).
+    # The body uses idx_body (offset-adjusted) so physical index values are correct.
     ranges_sym = Dict{Any,Any}()
     for (name, r) in ranges
-        ranges_sym[idx_sym[name]] = StepRange(first(r), 1, last(r))
+        ranges_sym[idx_sym[name]] = StepRange(1, 1, length(r))
     end
     for sv in singleton_vars
         ranges_sym[sv] = StepRange(1, 1, 1)
     end
 
     body_unwrapped = Symbolics.unwrap(body_sym)
+    # arrayop_shape requires a BasicSymbolic; wrap numeric constants (e.g. literal
+    # Dirichlet BC bodies like `0.0`) so ArrayOp construction doesn't MethodError.
+    if !(body_unwrapped isa SymUtils.BasicSymbolic)
+        body_unwrapped = ConstSR(body_unwrapped)
+    end
     arr_op = SymUtils.ArrayOp{SymReal}(output_idx_syms, body_unwrapped,
         reduce_fn, nothing, ranges_sym)
     return Symbolics.wrap(arr_op)
