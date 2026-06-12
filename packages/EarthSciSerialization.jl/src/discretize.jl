@@ -30,7 +30,7 @@
 
 """
     discretize(esm::AbstractDict; max_passes::Int=32, strict_unrewritten::Bool=true,
-               dae_support::Bool=true) -> Dict{String,Any}
+               dae_support::Bool=true, lift_1d_arrayop::Bool=false) -> Dict{String,Any}
 
 Run the RFC §11 discretization pipeline on an ESM document and apply
 the RFC §12 DAE binding contract.
@@ -70,11 +70,19 @@ Behavior:
   ModelingToolkit, so `dae_support=true` is the normal setting.
 - `metadata.discretized_from` is set on the output to the input's
   `metadata.name`.
+- With `lift_1d_arrayop=true`, differential equations for 1-dimensional
+  array variables are lifted to arrayop form just like multidimensional
+  ones. The default (`false`) preserves the bare `D(var, wrt=t)` LHS for
+  1D variables, which the committed cross-binding discretize goldens
+  encode; opt in when the consumer evaluates through the tree-walk
+  arrayop path (e.g. the EarthSciDiscretizations Layer-B conformance
+  walker).
 """
 function discretize(esm::AbstractDict;
                     max_passes::Int = 32,
                     strict_unrewritten::Bool = true,
-                    dae_support::Bool = _default_dae_support())::Dict{String,Any}
+                    dae_support::Bool = _default_dae_support(),
+                    lift_1d_arrayop::Bool = false)::Dict{String,Any}
     out = _deep_native(esm)
     out isa Dict{String,Any} || throw(ArgumentError(
         "discretize: input must be a JSON object / Dict; got $(typeof(esm))"))
@@ -89,7 +97,7 @@ function discretize(esm::AbstractDict;
         for (mname, mraw) in models
             model = mraw isa Dict{String,Any} ? mraw : Dict{String,Any}(String(k) => v for (k, v) in mraw)
             _discretize_model!(String(mname), model, top_rules, ctx,
-                               max_passes, strict_unrewritten)
+                               max_passes, strict_unrewritten, lift_1d_arrayop)
             models[mname] = model
         end
     end
@@ -203,7 +211,8 @@ _string_or_nothing_any(x) = x === nothing ? nothing : String(x)
 
 function _discretize_model!(mname::String, model::Dict{String,Any},
                              top_rules::Vector{Rule}, ctx::RuleContext,
-                             max_passes::Int, strict_unrewritten::Bool)
+                             max_passes::Int, strict_unrewritten::Bool,
+                             lift_1d_arrayop::Bool = false)
     # Collect rules: model-local overrides/extends top-level.
     local_rules_raw = get(model, "rules", nothing)
     local_rules = _load_rules(local_rules_raw)
@@ -226,7 +235,7 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
 
     # Arrayop lifting: wrap array-variable differential equations in arrayop
     # after the rule engine rewrites PDE ops to stencil/index form.
-    _arrayop_lift_equations!(model, ctx.grids, ctx.variables)
+    _arrayop_lift_equations!(model, ctx.grids, ctx.variables; lift_1d = lift_1d_arrayop)
 
     # Boundary conditions (model-level).
     bcs = get(model, "boundary_conditions", nothing)
@@ -259,13 +268,14 @@ const _ARRAYOP_INDEX_NAMES = ("i", "j", "k", "l", "m", "n")
 
 function _arrayop_lift_equations!(model::Dict{String,Any},
                                    grids::Dict{String,Dict{String,Any}},
-                                   variables::Dict{String,Dict{String,Any}})
+                                   variables::Dict{String,Dict{String,Any}};
+                                   lift_1d::Bool = false)
     eqns = get(model, "equations", nothing)
     eqns isa AbstractVector || return
     for (i, eqn_any) in enumerate(eqns)
         eqn = eqn_any isa Dict{String,Any} ? eqn_any :
             Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
-        _try_arrayop_lift_equation!(eqn, grids, variables)
+        _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
         eqns[i] = eqn
     end
 end
@@ -279,7 +289,8 @@ end
 # derived from the grid dimension sizes, using canonical index names i, j, k, …
 function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
                                       grids::Dict{String,Dict{String,Any}},
-                                      variables::Dict{String,Dict{String,Any}})
+                                      variables::Dict{String,Dict{String,Any}};
+                                      lift_1d::Bool = false)
     lhs_raw = get(eqn, "lhs", nothing)
     lhs_raw === nothing && return
 
@@ -297,9 +308,12 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     shape === nothing && return
     shape isa AbstractVector && !isempty(shape) || return
     ndims = length(shape)
-    # Only lift to arrayop form for multidimensional (ndims > 1) variables.
-    # 1D array variables (ndims == 1) preserve the bare D(var, wrt=t) LHS form.
-    ndims > 1 || return
+    # By default only multidimensional (ndims > 1) variables are lifted to
+    # arrayop form; 1D array variables preserve the bare D(var, wrt=t) LHS
+    # form that the committed cross-binding discretize goldens encode.
+    # `lift_1d=true` opts a caller into lifting 1D variables too (for the
+    # tree-walk arrayop evaluation path).
+    ndims > 1 || lift_1d || return
     ndims > length(_ARRAYOP_INDEX_NAMES) && return
 
     grid_name = get(vmeta, "grid", nothing)

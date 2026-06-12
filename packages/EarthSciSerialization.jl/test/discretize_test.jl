@@ -135,6 +135,26 @@ using JSON3
         @test occursin("\"index\"", JSON3.write(rhs))
     end
 
+    @testset "lift_1d_arrayop=true lifts 1D shaped variables to arrayop form" begin
+        # Default: 1D shaped variables keep the bare D(u) LHS (golden-stable).
+        esm = _heat_1d_esm(; with_rule=true)
+        out_default = discretize(esm)
+        lhs_default = out_default["models"]["M"]["equations"][1]["lhs"]
+        @test lhs_default["op"] == "D"
+
+        # Opt-in: same document lifts to arrayop with ranges from the grid,
+        # and periodic stencil accesses fold via ifelse wrapping.
+        out = discretize(esm; lift_1d_arrayop=true)
+        eqn = out["models"]["M"]["equations"][1]
+        @test eqn["lhs"]["op"] == "arrayop"
+        @test eqn["lhs"]["output_idx"] == Any["i"]
+        @test eqn["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
+        @test eqn["rhs"]["op"] == "arrayop"
+        rhs_str = JSON3.write(eqn["rhs"])
+        @test occursin("\"index\"", rhs_str)
+        @test occursin("\"ifelse\"", rhs_str)   # periodic folding applied
+    end
+
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
         esm = _heat_1d_esm(; with_rule=true)
         a = discretize(esm)
