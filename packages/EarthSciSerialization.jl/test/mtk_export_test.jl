@@ -341,12 +341,18 @@ end
     @test haskey(model_dict, "equations")
     @test length(model_dict["equations"]) == 1
 
-    # Verify the equation contains min/max operators (not TODO_GAP)
+    # Verify the equation contains min/max operators (not TODO_GAP).
+    # MTK/Symbolics may canonicalize `-k * min(...)` as an n-ary product
+    # with a literal -1 factor (`(-1) * k * min(...)`), so locate the min
+    # node among the product's factors instead of assuming its position.
     eq = model_dict["equations"][1]
     rhs = eq["rhs"]
     @test rhs["op"] == "*"
-    @test rhs["args"][2]["op"] == "min"
-    @test rhs["args"][2]["args"][1]["op"] == "max"
+    min_idx = findfirst(a -> a isa AbstractDict && get(a, "op", nothing) == "min",
+                        rhs["args"])
+    @test min_idx !== nothing
+    min_node = rhs["args"][min_idx]
+    @test min_node["args"][1]["op"] == "max"
 
     # Round-trip through JSON and verify
     s = JSON3.write(out)
