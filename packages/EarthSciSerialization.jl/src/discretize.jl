@@ -363,18 +363,30 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
 
     periodic_dims = get(gmeta, "periodic_dims", nothing)
     if periodic_dims isa AbstractVector && !isempty(periodic_dims)
+        # Fold EVERY shaped variable on this grid, not just the equation's
+        # LHS variable: a stencil RHS may index other fields (e.g. a
+        # space-varying velocity in an advection rule), and an unfolded
+        # out-of-range read would silently hit the zero-ghost convention
+        # instead of wrapping.
         var_periodic_sizes = Dict{String,Vector{Tuple{Int,Bool}}}()
-        dims_info = Tuple{Int,Bool}[]
-        all_found = true
-        for d in 1:ndims
-            dim_name = String(shape[d])
-            sz = get(dim_sizes, dim_name, nothing)
-            sz isa Integer || (all_found = false; break)
-            is_periodic = dim_name in (String(p) for p in periodic_dims)
-            push!(dims_info, (Int(sz), is_periodic))
+        for (vname, vm) in variables
+            vshape = get(vm, "shape", nothing)
+            vshape isa AbstractVector && !isempty(vshape) || continue
+            get(vm, "grid", nothing) == grid_name || continue
+            dims_info = Tuple{Int,Bool}[]
+            all_found = true
+            for d in eachindex(vshape)
+                dim_name = String(vshape[d])
+                sz = get(dim_sizes, dim_name, nothing)
+                sz isa Integer || (all_found = false; break)
+                is_periodic = dim_name in (String(p) for p in periodic_dims)
+                push!(dims_info, (Int(sz), is_periodic))
+            end
+            if all_found && any(d -> d[2], dims_info)
+                var_periodic_sizes[String(vname)] = dims_info
+            end
         end
-        if all_found && any(d -> d[2], dims_info)
-            var_periodic_sizes[var_name] = dims_info
+        if !isempty(var_periodic_sizes)
             _apply_periodic_folding!(rhs_raw, var_periodic_sizes)
         end
     end

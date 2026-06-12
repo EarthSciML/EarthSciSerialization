@@ -155,6 +155,54 @@ using JSON3
         @test occursin("\"ifelse\"", rhs_str)   # periodic folding applied
     end
 
+    @testset "arrayop lift folds periodic accesses of every shaped grid variable" begin
+        # A stencil RHS may index shaped fields other than the equation's LHS
+        # variable (e.g. a space-varying velocity in an advection rule); the
+        # periodic fold must wrap those reads too, not just the LHS variable's.
+        esm = _heat_1d_esm(; with_rule=true)
+        esm["models"]["M"]["variables"]["U"] = Dict{String,Any}(
+            "type" => "state", "default" => 1.0, "units" => "1",
+            "shape" => Any["i"], "location" => "cell_center",
+        )
+        # Rule replacement gains a literal reference to U at an offset:
+        #   grad($u, dim=$x) -> index(U, $x+1) * index($u, $x+1) - index($u, $x-1)
+        esm["rules"][1]["replacement"] = Dict{String,Any}(
+            "op" => "-",
+            "args" => Any[
+                Dict{String,Any}("op" => "*", "args" => Any[
+                    Dict{String,Any}("op" => "index", "args" => Any[
+                        "U", Dict{String,Any}("op" => "+", "args" => Any["\$x", 1])]),
+                    Dict{String,Any}("op" => "index", "args" => Any[
+                        "\$u", Dict{String,Any}("op" => "+", "args" => Any["\$x", 1])]),
+                ]),
+                Dict{String,Any}("op" => "index", "args" => Any[
+                    "\$u", Dict{String,Any}("op" => "-", "args" => Any["\$x", 1])]),
+            ],
+        )
+        out = discretize(esm; lift_1d_arrayop=true)
+        rhs = out["models"]["M"]["equations"][1]["rhs"]
+        @test rhs["op"] == "arrayop"
+
+        # Every index node — into u AND into U — must carry an ifelse-folded
+        # index expression.
+        unfolded = String[]
+        function _walk_fold(node)
+            node isa AbstractDict || return
+            if get(node, "op", nothing) == "index"
+                target = node["args"][1]
+                idx_arg = node["args"][2]
+                folded = idx_arg isa AbstractDict && get(idx_arg, "op", nothing) == "ifelse"
+                folded || push!(unfolded, String(target))
+            end
+            for a in get(node, "args", Any[])
+                _walk_fold(a)
+            end
+            haskey(node, "expr") && _walk_fold(node["expr"])
+        end
+        _walk_fold(rhs)
+        @test unfolded == String[]
+    end
+
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
         esm = _heat_1d_esm(; with_rule=true)
         a = discretize(esm)
