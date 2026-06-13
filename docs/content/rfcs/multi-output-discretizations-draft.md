@@ -36,12 +36,13 @@ write one distinct PDE op per output (`reconstruct_left(q)`,
 into the model document. Rejected as the primary mechanism (though the
 `scheme#output` resolution syntax is reused in option B).
 
-**B. Scheme-emitted observed fields** (recommended). A new scheme
-`kind: "multi_output_stencil"`. When a `use:` rule matches, the engine
-does two things:
+**B. Scheme-emitted observed fields with demand-driven provider
+resolution** (recommended; resolution of former open question 2 — see
+§4.2). A new scheme `kind: "multi_output_stencil"`. Two trigger paths:
 
-1. **Emits one observed arrayop equation per named output** into the
-   enclosing model:
+1. **Consumed directly** — a `use:` rule matches an expression
+   occurrence; the engine emits one observed arrayop equation per named
+   output into the enclosing model:
 
    ```jsonc
    { "lhs": { "op": "arrayop", "output_idx": ["i"],
@@ -50,23 +51,53 @@ does two things:
      "observed": true, "emitted_by": "ppm_reconstruction" }
    ```
 
-   Output variables are auto-declared with `location` from the scheme's
+   and rewrites the matched expression to the output named by the
+   scheme's `primary` field (e.g. `flux_1d_ppm`'s `F_{i+1/2}`). Output
+   variables are auto-declared with `location` from the scheme's
    `emits_location` (face outputs live on faces; see open question §4.1)
    and `shape` from the operand's grid.
 
-2. **Rewrites the matched expression** to the output named by a required
-   `primary` field (e.g. `flux_1d_ppm`'s `F_{i+1/2}`), or — when the
-   matched op is purely a *provider* (its value is never consumed
-   directly, as with `reconstruct`) — the rule must appear in
-   `provides`-position: matched as an equation-level declaration, not an
-   expression rewrite. Strawman: a model-level `discretization_uses`
-   block listing provider rules, mirroring how `boundary_conditions`
-   flow through the engine as synthetic ops.
+2. **Demanded by a consumer** — provider-only schemes (no occurrence of
+   their `applies_to` op in any equation; `reconstruct` is the canonical
+   case) fire when a downstream scheme **`requires`** one of their named
+   outputs:
+
+   ```jsonc
+   "ppm_flux": {
+     "applies_to": { "op": "flux", "args": ["$q", "$c"], "dim": "$x" },
+     "requires": { "q_left_edge":  "ppm_reconstruction#q_left_edge",
+                   "q_right_edge": "ppm_reconstruction#q_right_edge" },
+     ...
+   }
+   ```
+
+   On first reference the engine instantiates the provider with the
+   consumer's **inherited bindings** (the same §7.2.1 name-flow protocol
+   that `dimensional_split.inner_rule` and `cross_metric.axis_stencil`
+   already use — this is the fourth instance of sibling-scheme
+   reference, not a new mechanism) and emits the observed equations.
+   Resolution is recursive (limiter → reconstruction → flux chains),
+   with a resolution stack for cycle detection (`E_SCHEME_CYCLE`).
+   Providers nobody demands never emit.
 
 Downstream rules reference the emitted names as ordinary shaped
 variables (they are, after emission). This composes with the existing
 `requires_locations` / `emits_location` fields, which are parsed today
 but unenforced.
+
+Two mechanical sub-decisions that come with demand-driven resolution:
+
+- **Name scoping.** Two consumers demanding reconstruction of
+  *different* operands need distinct emitted-field names. Emitted names
+  are mangled per instantiation —
+  `<output>__<operand>__<axis>` (e.g. `q_left_edge__rho__x`) — unless
+  the document author pre-declares the variable, in which case the
+  declared name wins and a second conflicting instantiation is an error
+  (`E_PROVIDER_NAME_CLASH`).
+- **Once-only emission.** Provider instantiations are memoized by
+  `(scheme name, canonical bindings)` so diamond dependencies (two
+  consumers demanding the same reconstruction) emit a single set of
+  observed equations.
 
 **C. Tuple/record AST node** (a §4 `outputs` bundle selected by field
 access). Uniform but heavy: touches expression typing, canonical JSON,
@@ -83,11 +114,17 @@ and every binding's evaluator. Rejected for v1.
       "grid_family": "cartesian",
       "outputs": ["q_left_edge", "q_right_edge"],
       "emits_location": "face",          // per-output override allowed
-      "primary": null,                    // provider-only: no expression rewrite
+      "primary": null,                    // provider-only: demanded via requires
       "stencil": {
         "q_left_edge":  [ { "selector": {...}, "coeff": {...} }, ... ],
         "q_right_edge": [ ... ]
       }
+    },
+    "ppm_flux": {
+      "applies_to": { "op": "flux", "args": ["$q", "$c"], "dim": "$x" },
+      "requires": { "q_left_edge":  "ppm_reconstruction#q_left_edge",
+                    "q_right_edge": "ppm_reconstruction#q_right_edge" },
+      "stencil": [ ... ]                  // may reference required names
     }
   }
 }
@@ -95,7 +132,11 @@ and every binding's evaluator. Rejected for v1.
 
 Loader contract: `outputs` must equal the `stencil` object's key set;
 each entry list validates per §7.1; `primary`, when non-null, names an
-output. Bindings round-trip the block losslessly (same contract as §7.5
+output; every `requires` value resolves to
+`<sibling scheme>#<declared output>` **statically at load time**
+(`requires` is declared, not discovered mid-rewrite, so resolvability —
+though not binding compatibility — is a parse-time check). Bindings
+round-trip the block losslessly (same contract as §7.5
 `dimensional_split`).
 
 ## 4. Open questions
@@ -104,11 +145,24 @@ output. Bindings round-trip the block losslessly (same contract as §7.5
    periodic dimension has `n` faces, but `n+1` on a bounded one. The
    arrayop `ranges` for emitted equations need the §7.4 staggering
    vocabulary to be answerable; this proposal should land after (or
-   with) staggered-location enforcement.
-2. **Provider matching.** Option B's provider-position (`primary:
-   null`) needs a home for the triggering occurrence: a
-   `discretization_uses` model block, or matching `reconstruct(...)`
-   equations whose LHS is discarded. Neither exists today.
+   with) staggered-location enforcement. (A deliberately scoped v1 —
+   periodic dimensions only, where face extent equals cell extent `n` —
+   sidesteps the extent question and covers the catalog's current
+   periodic conformance fixtures.)
+2. **Provider matching — RESOLVED (2026-06-13): demand-driven
+   resolution via consumer `requires`,** as specified in §2 option B.
+   The alternatives were rejected: a model-level `discretization_uses`
+   block leaks discretization structure into the model document
+   (switching PPM→WENO would edit the model, not the rule set, and
+   provider *chains* would need author-maintained ordering); phantom
+   `reconstruct(...)` equations with discarded LHS pollute ODE/DAE
+   classification and the canonical byte contracts. Demand-driven
+   resolution reuses the existing §7.2.1 binding name-flow and the
+   sibling-scheme reference pattern of §7.5/§7.6, keeps model documents
+   scheme-agnostic, composes recursively, and never emits unconsumed
+   providers. A document-level materialization block remains a possible
+   *orthogonal* later feature for diagnostics-only outputs (an
+   output-selection concern, not a trigger mechanism).
 3. **Derived (non-stencil) outputs.** CW84's parabola coefficients
    (`a_6 = 6·(q̄ − (a_L+a_R)/2)`) are expressions over other outputs,
    not stencil rows. A `derived: { <name>: <ExpressionNode over
