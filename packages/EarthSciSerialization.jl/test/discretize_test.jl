@@ -203,6 +203,76 @@ using JSON3
         @test unfolded == String[]
     end
 
+    @testset "non-periodic BCs: interior shrink + boundary-cell emission (ess-gp3)" begin
+        # 1D bounded heat-like model: D(u) = grad(u) rewritten to a centered
+        # stencil; dirichlet at xmin (value 3), zero-flux neumann at xmax.
+        function _bounded_1d_esm(; bcs=true)
+            esm = _heat_1d_esm(; with_rule=true)
+            esm["grids"]["gx"]["dimensions"][1]["periodic"] = false
+            if bcs
+                esm["models"]["M"]["boundary_conditions"] = Dict{String,Any}(
+                    "left" => Dict{String,Any}(
+                        "variable" => "u", "kind" => "dirichlet",
+                        "side" => "imin", "value" => 3,
+                    ),
+                    "right" => Dict{String,Any}(
+                        "variable" => "u", "kind" => "neumann",
+                        "side" => "imax", "value" => 0,
+                    ),
+                )
+            end
+            return esm
+        end
+
+        out = discretize(_bounded_1d_esm(); lift_1d_arrayop=true)
+        eqs = out["models"]["M"]["equations"]
+        # 1 interior arrayop + 2 boundary cells (reach 1, both sides bounded).
+        @test length(eqs) == 3
+        interior = eqs[1]
+        @test interior["lhs"]["op"] == "arrayop"
+        @test interior["lhs"]["ranges"] == Dict{String,Any}("i" => Any[2, 7])
+        @test interior["rhs"]["ranges"] == Dict{String,Any}("i" => Any[2, 7])
+        # No periodic folding on a bounded dim.
+        @test !occursin("ifelse", JSON3.write(interior["rhs"]))
+
+        # Left boundary cell: ghost u[0] replaced by the dirichlet value 3.
+        # Rule rhs is -u[i-1] + u[i+1], so at i=1: -(3) + u[2].
+        left = eqs[2]
+        @test left["lhs"]["args"][1] == Dict{String,Any}("op" => "index", "args" => Any["u", 1])
+        s_left = JSON3.write(left["rhs"])
+        @test !occursin("\"index\",\"args\":[\"u\",0]", replace(s_left, " " => ""))
+        @test occursin("3", s_left)
+        @test occursin("[\"u\",2]", replace(s_left, " " => ""))
+
+        # Right boundary cell: ghost u[9] mirrors to u[8] (zero-flux).
+        right = eqs[3]
+        @test right["lhs"]["args"][1] == Dict{String,Any}("op" => "index", "args" => Any["u", 8])
+        s_right = replace(JSON3.write(right["rhs"]), " " => "")
+        @test occursin("[\"u\",8]", s_right)   # mirrored ghost
+        @test occursin("[\"u\",7]", s_right)   # interior neighbor
+        @test !occursin("[\"u\",9]", s_right)  # no out-of-range read survives
+
+        # Backward compat: bounded dim WITHOUT declared BCs is unchanged
+        # (full range, no extra equations, zero-ghost convention).
+        out0 = discretize(_bounded_1d_esm(bcs=false); lift_1d_arrayop=true)
+        eqs0 = out0["models"]["M"]["equations"]
+        @test length(eqs0) == 1
+        @test eqs0[1]["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
+
+        # Unsupported kinds on a lifted bounded dim are loud, not silent.
+        bad = _bounded_1d_esm()
+        bad["models"]["M"]["boundary_conditions"]["left"]["kind"] = "robin"
+        err = try discretize(bad; lift_1d_arrayop=true); nothing catch e; e end
+        @test err isa RuleEngineError
+        @test err.code == "E_BC_UNSUPPORTED"
+
+        bad2 = _bounded_1d_esm()
+        bad2["models"]["M"]["boundary_conditions"]["right"]["value"] = 2.5
+        err = try discretize(bad2; lift_1d_arrayop=true); nothing catch e; e end
+        @test err isa RuleEngineError
+        @test err.code == "E_BC_UNSUPPORTED"
+    end
+
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
         esm = _heat_1d_esm(; with_rule=true)
         a = discretize(esm)

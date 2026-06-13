@@ -233,11 +233,9 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
         end
     end
 
-    # Arrayop lifting: wrap array-variable differential equations in arrayop
-    # after the rule engine rewrites PDE ops to stencil/index form.
-    _arrayop_lift_equations!(model, ctx.grids, ctx.variables; lift_1d = lift_1d_arrayop)
-
-    # Boundary conditions (model-level).
+    # Boundary conditions (model-level). Processed BEFORE arrayop lifting so
+    # the lift can consume the rewritten BC values when emitting boundary-cell
+    # equations on non-periodic dimensions (ess-gp3).
     bcs = get(model, "boundary_conditions", nothing)
     if bcs isa AbstractDict
         for (bc_name, bc_any) in bcs
@@ -248,6 +246,13 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
             bcs[bc_name] = bc
         end
     end
+
+    # Arrayop lifting: wrap array-variable differential equations in arrayop
+    # after the rule engine rewrites PDE ops to stencil/index form. On
+    # non-periodic dimensions with declared dirichlet/neumann BCs, the
+    # interior arrayop range shrinks by the stencil reach and per-cell
+    # boundary equations are emitted (ess-gp3).
+    _arrayop_lift_equations!(model, ctx.grids, ctx.variables; lift_1d = lift_1d_arrayop)
 end
 
 function _lookup_max_passes(model::Dict{String,Any}, default::Int)::Int
@@ -272,12 +277,19 @@ function _arrayop_lift_equations!(model::Dict{String,Any},
                                    lift_1d::Bool = false)
     eqns = get(model, "equations", nothing)
     eqns isa AbstractVector || return
-    for (i, eqn_any) in enumerate(eqns)
+    bcs = get(model, "boundary_conditions", nothing)
+    new_eqns = Any[]
+    for eqn_any in eqns
         eqn = eqn_any isa Dict{String,Any} ? eqn_any :
             Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
-        _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
-        eqns[i] = eqn
+        info = _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
+        push!(new_eqns, eqn)
+        if info !== nothing && bcs isa AbstractDict && !isempty(bcs)
+            append!(new_eqns,
+                    _apply_nonperiodic_bcs!(eqn, info, bcs, grids, variables))
+        end
     end
+    model["equations"] = new_eqns
 end
 
 # Lift a scalar-LHS differential equation for an N-dimensional array variable to
@@ -360,6 +372,10 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     # behaviour for periodic BCs.
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
+    # Keep a pre-fold copy: boundary-cell emission (ess-gp3) instantiates the
+    # stencil at literal indices and must see raw i±k offsets, not the
+    # periodic ifelse wrappers.
+    rhs_prefold = _deep_native(rhs_raw)
 
     periodic_dims = get(gmeta, "periodic_dims", nothing)
     if periodic_dims isa AbstractVector && !isempty(periodic_dims)
@@ -398,6 +414,247 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
         "expr"       => rhs_raw,
         "ranges"     => ranges,
     )
+
+    wrt = lhs_expr.wrt === nothing ? "t" : lhs_expr.wrt
+    return (var_name = var_name,
+            shape = String[String(s) for s in shape],
+            grid_name = String(grid_name),
+            output_idx = String[String(ix) for ix in output_idx],
+            rhs_prefold = rhs_prefold,
+            wrt = wrt)
+end
+
+# ============================================================================
+# Non-periodic boundary conditions on lifted arrayop equations (ess-gp3)
+# ============================================================================
+#
+# For a lifted equation whose variable has declared dirichlet/neumann BCs on
+# a non-periodic dimension, shrink the interior arrayop range on that side by
+# the stencil reach and emit one scalar equation per excluded boundary cell
+# (the tests/fixtures/arrayop/15_discretized_1d_heat.esm pattern): the
+# stencil is instantiated at the literal cell indices, with out-of-range
+# (ghost) reads resolved per the read variable's BC —
+#
+#   dirichlet  → the ghost read is replaced by the BC `value` expression
+#   neumann 0  → the ghost read mirrors back in range (zero-flux:
+#                u[1-k] := u[k], u[2N+1-e] := u[e])
+#
+# Reads of periodic dimensions wrap numerically. Ghost reads with no
+# declared BC keep the zero-ghost convention (current behavior), so models
+# without BC declarations are byte-identical to before. Nonzero-Neumann and
+# other BC kinds on a lifted bounded dimension raise E_BC_UNSUPPORTED rather
+# than being silently ignored.
+function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
+                                  bcs::AbstractDict,
+                                  grids::Dict{String,Dict{String,Any}},
+                                  variables::Dict{String,Dict{String,Any}})
+    gmeta = get(grids, info.grid_name, nothing)
+    gmeta isa AbstractDict || return Any[]
+    dim_sizes = get(gmeta, "dim_sizes", nothing)
+    dim_sizes isa AbstractDict || return Any[]
+    periodic = Set{String}(String.(get(gmeta, "periodic_dims", Any[])))
+
+    # BC map: (variable, dim_name, :min|:max) → (kind, value). Side names
+    # follow the "<dim>min"/"<dim>max" convention.
+    bc_map = Dict{Tuple{String,String,Symbol},Tuple{String,Any}}()
+    for bcname in sort!(collect(String.(keys(bcs))))
+        bc = bcs[bcname]
+        bc isa AbstractDict || continue
+        v = get(bc, "variable", nothing)
+        k = get(bc, "kind", nothing)
+        s = get(bc, "side", nothing)
+        (v isa AbstractString && k isa AbstractString && s isa AbstractString) || continue
+        for dn_any in keys(dim_sizes)
+            dn = String(dn_any)
+            if String(s) == dn * "min"
+                bc_map[(String(v), dn, :min)] = (String(k), get(bc, "value", 0))
+            elseif String(s) == dn * "max"
+                bc_map[(String(v), dn, :max)] = (String(k), get(bc, "value", 0))
+            end
+        end
+    end
+    isempty(bc_map) && return Any[]
+
+    var    = info.var_name
+    shape  = info.shape
+    idxs   = info.output_idx
+    nd     = length(shape)
+    sizes  = Int[Int(dim_sizes[shape[d]]) for d in 1:nd]
+
+    # Stencil reach per canonical index variable (max |offset| across every
+    # index read in the pre-fold RHS).
+    reach = Dict{String,Int}(ix => 0 for ix in idxs)
+    _scan_stencil_reach!(reach, info.rhs_prefold)
+
+    lo = ones(Int, nd)
+    hi = copy(sizes)
+    bounded = falses(nd)
+    for d in 1:nd
+        dn = shape[d]
+        dn in periodic && continue
+        r = get(reach, idxs[d], 0)
+        for (sym, isback) in ((:min, false), (:max, true))
+            entry = get(bc_map, (var, dn, sym), nothing)
+            entry === nothing && continue
+            kind, value = entry
+            _check_bc_supported(kind, value, var, dn)
+            r == 0 && continue   # no ghost reads on this dim; nothing to emit
+            if isback
+                hi[d] = sizes[d] - r
+            else
+                lo[d] = 1 + r
+            end
+            bounded[d] = true
+        end
+    end
+    any(bounded) || return Any[]
+    for d in 1:nd
+        lo[d] <= hi[d] || throw(RuleEngineError("E_BC_GRID_TOO_SMALL",
+            "dimension '$(shape[d])' (size $(sizes[d])) is too small for the " *
+            "stencil reach $(get(reach, idxs[d], 0)) with boundary conditions " *
+            "on both sides"))
+    end
+
+    # Shrink the interior arrayop on the bounded dims (lhs + rhs wrappers).
+    for d in 1:nd
+        bounded[d] || continue
+        eqn["lhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
+        eqn["rhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
+    end
+
+    # Emit one scalar equation per excluded boundary cell.
+    extra = Any[]
+    for cell in Iterators.product((1:sizes[d] for d in 1:nd)...)
+        all(d -> lo[d] <= cell[d] <= hi[d], 1:nd) && continue
+        fixed = Dict{String,Int}(idxs[d] => cell[d] for d in 1:nd)
+        rhs_cell = _instantiate_bc_cell(info.rhs_prefold, fixed, variables,
+                                        dim_sizes, periodic, bc_map)
+        lhs_cell = Dict{String,Any}(
+            "op"   => "D",
+            "args" => Any[Dict{String,Any}(
+                "op" => "index", "args" => Any[var, cell...])],
+            "wrt"  => info.wrt,
+        )
+        push!(extra, Dict{String,Any}(
+            "_comment" => "boundary cell $(var)[$(join(cell, ','))] emitted from boundary_conditions (ess-gp3)",
+            "lhs" => lhs_cell,
+            "rhs" => rhs_cell,
+        ))
+    end
+    return extra
+end
+
+function _check_bc_supported(kind::String, value, var::String, dim::String)
+    kind == "dirichlet" && return
+    if kind == "neumann"
+        (value isa Number && iszero(value)) && return
+        throw(RuleEngineError("E_BC_UNSUPPORTED",
+            "nonzero-Neumann boundary condition on '$var' along '$dim' is not " *
+            "yet supported by the arrayop lift (requires grid-spacing-aware " *
+            "ghost extrapolation)"))
+    end
+    throw(RuleEngineError("E_BC_UNSUPPORTED",
+        "boundary condition kind '$kind' on '$var' along '$dim' is not " *
+        "supported by the arrayop lift (supported: dirichlet, zero-flux neumann)"))
+end
+
+# Max |offset| per canonical index variable across every index read.
+function _scan_stencil_reach!(reach::Dict{String,Int}, node)
+    node isa AbstractDict || return
+    if get(node, "op", nothing) == "index"
+        args = get(node, "args", Any[])
+        for a in args[2:end]
+            if a isa AbstractDict && get(a, "op", nothing) in ("+", "-")
+                aa = get(a, "args", Any[])
+                if length(aa) == 2 && aa[1] isa AbstractString && aa[2] isa Number
+                    k = abs(Int(aa[2]))
+                    v = String(aa[1])
+                    haskey(reach, v) && (reach[v] = max(reach[v], k))
+                end
+            end
+        end
+    end
+    for a in get(node, "args", Any[])
+        _scan_stencil_reach!(reach, a)
+    end
+end
+
+# Instantiate a stencil body at literal cell indices: canonical index
+# variables resolve via `fixed`, offset arithmetic folds, periodic reads
+# wrap numerically, and bounded out-of-range reads resolve per the read
+# variable's BC (dirichlet value / neumann-zero mirror / zero-ghost
+# passthrough when undeclared).
+function _instantiate_bc_cell(node, fixed::Dict{String,Int},
+                               variables::Dict{String,Dict{String,Any}},
+                               dim_sizes::AbstractDict,
+                               periodic::Set{String},
+                               bc_map::Dict{Tuple{String,String,Symbol},Tuple{String,Any}})
+    node isa AbstractDict || return node
+    if get(node, "op", nothing) == "index"
+        args = get(node, "args", Any[])
+        if !isempty(args) && args[1] isa AbstractString
+            vname = String(args[1])
+            vmeta = get(variables, vname, nothing)
+            vshape = vmeta === nothing ? nothing : get(vmeta, "shape", nothing)
+            if vshape isa AbstractVector && length(vshape) == length(args) - 1
+                new_args = Any[vname]
+                for (p, a) in enumerate(args[2:end])
+                    e = _fold_index_arg(a, fixed)
+                    if e === nothing
+                        push!(new_args, a)   # unresolvable: keep verbatim
+                        continue
+                    end
+                    dn = String(vshape[p])
+                    N = Int(get(dim_sizes, dn, 0))
+                    if N > 0 && dn in periodic
+                        e = mod(e - 1, N) + 1
+                    elseif N > 0 && (e < 1 || e > N)
+                        side = e < 1 ? :min : :max
+                        entry = get(bc_map, (vname, dn, side), nothing)
+                        if entry !== nothing
+                            kind, value = entry
+                            _check_bc_supported(kind, value, vname, dn)
+                            if kind == "dirichlet"
+                                # Replace the whole read with the BC value.
+                                return _deep_native(value)
+                            else  # zero-flux neumann
+                                e = e < 1 ? 1 - e : 2N + 1 - e   # mirror
+                            end
+                        end
+                        # No BC: keep the literal out-of-range index
+                        # (zero-ghost convention, unchanged behavior).
+                    end
+                    push!(new_args, e)
+                end
+                return Dict{String,Any}("op" => "index", "args" => new_args)
+            end
+        end
+    end
+    out = Dict{String,Any}()
+    for (k, v) in node
+        key = String(k)
+        out[key] = key == "args" && v isa AbstractVector ?
+            Any[_instantiate_bc_cell(a, fixed, variables, dim_sizes, periodic, bc_map)
+                for a in v] : v
+    end
+    return out
+end
+
+# Fold an index-argument expression to a concrete Int given fixed canonical
+# index values; `nothing` when symbols remain.
+function _fold_index_arg(a, fixed::Dict{String,Int})
+    a isa Integer && return Int(a)
+    a isa AbstractFloat && return (isinteger(a) ? Int(a) : nothing)
+    a isa AbstractString && return get(fixed, String(a), nothing)
+    a isa AbstractDict || return nothing
+    op = get(a, "op", nothing)
+    op in ("+", "-") || return nothing
+    args = get(a, "args", Any[])
+    length(args) == 2 || return nothing
+    x = _fold_index_arg(args[1], fixed)
+    y = _fold_index_arg(args[2], fixed)
+    (x === nothing || y === nothing) && return nothing
+    return op == "+" ? x + y : x - y
 end
 
 # Walk a raw JSON-like body Dict and fold stencil index accesses for periodic

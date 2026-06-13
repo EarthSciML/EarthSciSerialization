@@ -111,3 +111,65 @@ end
         @test isapprox(du[var_map["u[$i]"]], expected; rtol=1e-12, atol=1e-12)
     end
 end
+
+@testset "tree_walk e2e: bounded 1D with dirichlet + neumann BCs (ess-gp3)" begin
+    # D(u) = grad(u) → -u[i-1] + u[i+1]; dirichlet 3 at imin, zero-flux at
+    # imax. One f! evaluation must show the ghost-value substitution at the
+    # left boundary and the zero-flux mirror at the right, exactly.
+    n = 8
+    esm = Dict{String,Any}(
+        "esm"      => "0.4.0",
+        "metadata" => Dict{String,Any}("name" => "bounded_1d_bc"),
+        "grids"    => Dict{String,Any}(
+            "gx" => Dict{String,Any}(
+                "family"     => "cartesian",
+                "dimensions" => Any[Dict{String,Any}(
+                    "name" => "i", "size" => n,
+                    "periodic" => false, "spacing" => "uniform")],
+            ),
+        ),
+        "rules" => Any[Dict{String,Any}(
+            "name"    => "centered_grad",
+            "pattern" => Dict{String,Any}("op" => "grad", "args" => Any["\$u"], "dim" => "\$x"),
+            "replacement" => Dict{String,Any}("op" => "+", "args" => Any[
+                Dict{String,Any}("op" => "-", "args" => Any[
+                    Dict{String,Any}("op" => "index", "args" => Any[
+                        "\$u", Dict{String,Any}("op" => "-", "args" => Any["\$x", 1])])]),
+                Dict{String,Any}("op" => "index", "args" => Any[
+                    "\$u", Dict{String,Any}("op" => "+", "args" => Any["\$x", 1])]),
+            ]),
+        )],
+        "models" => Dict{String,Any}(
+            "M" => Dict{String,Any}(
+                "grid" => "gx",
+                "variables" => Dict{String,Any}(
+                    "u" => Dict{String,Any}(
+                        "type" => "state", "default" => 0.0, "units" => "1",
+                        "shape" => Any["i"], "location" => "cell_center")),
+                "equations" => Any[Dict{String,Any}(
+                    "lhs" => Dict{String,Any}("op" => "D", "args" => Any["u"], "wrt" => "t"),
+                    "rhs" => Dict{String,Any}("op" => "grad", "args" => Any["u"], "dim" => "i"))],
+                "boundary_conditions" => Dict{String,Any}(
+                    "left"  => Dict{String,Any}("variable" => "u", "kind" => "dirichlet",
+                                                 "side" => "imin", "value" => 3),
+                    "right" => Dict{String,Any}("variable" => "u", "kind" => "neumann",
+                                                 "side" => "imax", "value" => 0)),
+            ),
+        ),
+    )
+
+    d = discretize(esm; lift_1d_arrayop=true)
+    f!, u0, p, _ts, vm = build_evaluator(d)
+    for i in 1:n
+        u0[vm["u[$i]"]] = Float64(i)^2
+    end
+    du = similar(u0)
+    f!(du, u0, p, 0.0)
+    u(i) = Float64(i)^2
+    expect(i) = i == 1 ? -3.0 + u(2) :
+                i == n ? -u(n - 1) + u(n) :
+                -u(i - 1) + u(i + 1)
+    for i in 1:n
+        @test du[vm["u[$i]"]] == expect(i)
+    end
+end
