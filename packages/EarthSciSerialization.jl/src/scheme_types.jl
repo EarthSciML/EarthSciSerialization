@@ -19,10 +19,8 @@ abstract type AbstractScheme end
     abstract type Selector end
 
 Abstract base for §7.2 neighbor selectors. Concrete subtypes:
-[`CartesianSelector`](@ref). Cubed-sphere `panel`, unstructured
-`indirect`, and unstructured `reduction` selectors are out of scope for
-the cartesian foundation bead and will land in follow-up work
-(esm-57f / esm-bpr).
+[`CartesianSelector`](@ref), [`ReductionSelector`](@ref),
+[`IndirectSelector`](@ref).
 """
 abstract type Selector end
 
@@ -38,6 +36,36 @@ that axis.
 struct CartesianSelector <: Selector
     axis::String
     offset::Int
+end
+
+"""
+    ReductionSelector(table, count_expr, k_bound, combine)
+
+`{kind: "reduction", table, count_expr, k_bound, combine}` per RFC §7.2.
+Lowers to an `arrayop` over the index `k` running `0 .. count_expr - 1`,
+with body `coeff · index(operand, table[target, k])`, reducing via
+`combine`. `count_expr` may reference `\$target` (substituted at expansion
+time). Used for unstructured variable-valence neighbors (e.g. MPAS
+cells_on_cell, edgesOnCell).
+"""
+struct ReductionSelector <: Selector
+    table::String
+    count_expr::Expr
+    k_bound::String
+    combine::String
+end
+
+"""
+    IndirectSelector(table, index_expr)
+
+`{kind: "indirect", table, index_expr}` per RFC §7.2. Emits a direct
+`coeff · index(operand, index_expr)` after `\$target` substitution.
+Used for unstructured fixed-valence neighbors (e.g. edge→cell mapping)
+and self-targeting rows (index_expr = `"\$target"`).
+"""
+struct IndirectSelector <: Selector
+    table::String
+    index_expr::Expr
 end
 
 """

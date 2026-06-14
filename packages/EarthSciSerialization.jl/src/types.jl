@@ -97,7 +97,7 @@ struct OpExpr <: Expr
     output_idx::Union{Vector{Any},Nothing}
     expr_body::Union{Expr,Nothing}
     reduce::Union{String,Nothing}
-    ranges::Union{Dict{String,Vector{Int}},Nothing}
+    ranges::Union{Dict{String,Any},Nothing}
     regions::Union{Vector{Vector{Vector{Int}}},Nothing}
     values::Union{Vector{Expr},Nothing}
     shape::Union{Vector{Any},Nothing}

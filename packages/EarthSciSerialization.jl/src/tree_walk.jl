@@ -282,7 +282,7 @@ function build_evaluator(model::Model;
                     push!(idx_names, String(sym))
             end
             ranges_dict = lhs_op.ranges === nothing ?
-                          Dict{String,Vector{Int}}() : lhs_op.ranges
+                          Dict{String,Any}() : lhs_op.ranges
             lhs_body = lhs_op.expr_body::OpExpr  # D(index(var, ...))
             rhs_body = _extract_arrayop_body(eq.rhs)
 
@@ -903,10 +903,15 @@ function _cell_key(var_name::String, indices)
 end
 
 # Expand a ranges entry to the concrete list of integer values.
-# `r` is [lo, hi] or [lo, step, hi].
-function _expand_int_range(r::Vector{Int})
-    length(r) == 2 && return r[1]:r[2]
-    length(r) == 3 && return r[1]:r[2]:r[3]
+# `r` is [lo, hi] or [lo, step, hi] (elements may be Int or Any, but must all
+# be concrete integers — expression-valued bounds (from reduction selectors) are
+# not supported by the tree-walk evaluator).
+function _expand_int_range(r::AbstractVector)
+    all(x -> x isa Integer, r) || throw(TreeWalkError("E_TREEWALK_DYNAMIC_RANGE",
+        "expression-valued range bounds are not supported in the tree-walk " *
+        "evaluator; use a structured-grid discretization or ESD build_evaluator"))
+    length(r) == 2 && return Int(r[1]):Int(r[2])
+    length(r) == 3 && return Int(r[1]):Int(r[2]):Int(r[3])
     throw(TreeWalkError("E_TREEWALK_RANGE_ARITY",
           "range entry must have 2 or 3 entries, got $(length(r))"))
 end
@@ -1139,7 +1144,7 @@ function _scan_lhs_cells!(cells, lhs::Expr, array_var_names::Set{String})
         for sym in (lhs.output_idx === nothing ? Any[] : lhs.output_idx)
             (sym isa String || sym isa AbstractString) && push!(idx_names, String(sym))
         end
-        ranges_dict = lhs.ranges === nothing ? Dict{String,Vector{Int}}() : lhs.ranges
+        ranges_dict = lhs.ranges === nothing ? Dict{String,Any}() : lhs.ranges
         range_iters = [collect(_expand_int_range(ranges_dict[n])) for n in idx_names]
 
         if !haskey(cells, vname); cells[vname] = Set{Vector{Int}}(); end

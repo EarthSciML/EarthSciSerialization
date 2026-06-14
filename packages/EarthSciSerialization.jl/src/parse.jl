@@ -195,9 +195,15 @@ end
 
 function _coerce_ranges(data)
     data === nothing && return nothing
-    result = Dict{String,Vector{Int}}()
+    result = Dict{String,Any}()
     for (k, v) in pairs(data)
-        result[string(k)] = Vector{Int}([Int(x) for x in v])
+        sv = string(k)
+        v isa AbstractVector || throw(ArgumentError("ranges entry `$sv` must be an array"))
+        if all(x -> x isa Number, v)
+            result[sv] = Any[Int(x) for x in v]
+        else
+            result[sv] = Any[x isa Number ? Int(x) : parse_expression(x) for x in v]
+        end
     end
     return result
 end

@@ -560,11 +560,13 @@ function _merge_lhs_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
 end
 
 # Decode a range field `[lo, hi]` or `[lo, step, hi]` to integer bounds.
-function _range_bounds_int(r::Vector{Int})
+function _range_bounds_int(r::AbstractVector)
+    all(x -> x isa Integer, r) || error(
+        "expression-valued range bounds are not supported by the MTK evaluator path")
     if length(r) == 2
-        return r[1], r[2]
+        return Int(r[1]), Int(r[2])
     elseif length(r) == 3
-        return r[1], r[3]
+        return Int(r[1]), Int(r[3])
     end
     error("range must have 2 or 3 entries, got $(length(r))")
 end

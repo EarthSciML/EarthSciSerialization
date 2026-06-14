@@ -1358,6 +1358,7 @@ function _scan_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
         if expr.ranges !== nothing
             for (name, r) in expr.ranges
                 lo, hi = _range_bounds(r)
+                lo === nothing && continue  # expression-valued bounds — skip for static shape analysis
                 new_env[name] = lo:hi
             end
         end
@@ -1390,11 +1391,12 @@ function _scan_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
     end
 end
 
-function _range_bounds(r::Vector{Int})
+function _range_bounds(r::AbstractVector)
+    all(x -> x isa Integer, r) || return nothing, nothing  # expression-valued stop — skip for static analysis
     if length(r) == 2
-        return r[1], r[2]
+        return Int(r[1]), Int(r[2])
     elseif length(r) == 3
-        return r[1], r[3]  # [start, step, stop]
+        return Int(r[1]), Int(r[3])  # [start, step, stop]
     end
     throw(ArgumentError("range must have 2 or 3 entries, got $(length(r))"))
 end

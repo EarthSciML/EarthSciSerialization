@@ -68,7 +68,10 @@ function serialize_expression(expr::Expr)
             result["reduce"] = expr.reduce
         end
         if expr.ranges !== nothing
-            result["ranges"] = Dict{String,Any}(k => v for (k, v) in expr.ranges)
+            result["ranges"] = Dict{String,Any}(
+                k => [x isa Expr ? serialize_expression(x) : x for x in v]
+                for (k, v) in expr.ranges
+            )
         end
         if expr.regions !== nothing
             result["regions"] = expr.regions

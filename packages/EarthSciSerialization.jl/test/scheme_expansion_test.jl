@@ -1466,4 +1466,217 @@ end
         @test occursin("q_R__q__i", da_json)
         @test occursin("q_L__q__i", da_json)
     end
+
+    # =========================================================================
+    # Unstructured selector parsing + expansion (ess-t0z)
+    # =========================================================================
+
+    # Minimal MPAS-style cell-divergence scheme: one reduction stencil entry.
+    _mpas_cell_div_obj() = Dict{String,Any}(
+        "applies_to"       => Dict("op" => "div", "args" => Any["\$u"], "dim" => "cell"),
+        "grid_family"      => "unstructured",
+        "emits_location"   => "cell_center",
+        "combine"          => "+",
+        "stencil"          => Any[
+            Dict(
+                "selector" => Dict(
+                    "kind"       => "reduction",
+                    "table"      => "edgesOnCell",
+                    "count_expr" => Dict("op" => "index", "args" => Any["nEdgesOnCell", "\$target"]),
+                    "k_bound"    => "k",
+                    "combine"    => "+",
+                ),
+                "coeff" => Dict("op" => "/", "args" => Any[
+                    Dict("op" => "index", "args" => Any[
+                        "dvEdge",
+                        Dict("op" => "index", "args" => Any["edgesOnCell", "\$target", "k"]),
+                    ]),
+                    Dict("op" => "index", "args" => Any["areaCell", "\$target"]),
+                ]),
+            ),
+        ],
+    )
+
+    # Minimal two-row scheme: reduction + indirect (nn-diffusion shape).
+    _nn_diff_obj() = Dict{String,Any}(
+        "applies_to"     => Dict("op" => "laplacian", "args" => Any["\$u"], "dim" => "cell"),
+        "grid_family"    => "unstructured",
+        "emits_location" => "cell_center",
+        "combine"        => "+",
+        "stencil"        => Any[
+            Dict(
+                "selector" => Dict(
+                    "kind"       => "reduction",
+                    "table"      => "cells_on_cell",
+                    "count_expr" => Dict("op" => "index", "args" => Any["n_edges_on_cell", "\$target"]),
+                    "k_bound"    => "k",
+                    "combine"    => "+",
+                ),
+                "coeff" => Dict("op" => "*", "args" => Any[
+                    Dict("op" => "index", "args" => Any["dc_edge",
+                        Dict("op" => "index", "args" => Any["cells_on_cell", "\$target", "k"])]),
+                    1,
+                ]),
+            ),
+            Dict(
+                "selector" => Dict(
+                    "kind"        => "indirect",
+                    "table"       => "cells_on_cell",
+                    "index_expr"  => "\$target",
+                ),
+                "coeff" => Dict("op" => "-", "args" => Any[0, 1]),
+            ),
+        ],
+    )
+
+    function _make_unstruct_ctx(operand_name)
+        grids = Dict{String,Dict{String,Any}}(
+            "mpas_grid" => Dict{String,Any}(
+                "grid_family" => "unstructured",
+                "spatial_dims" => Any["cell"],
+            ),
+        )
+        variables = Dict{String,Dict{String,Any}}(
+            operand_name => Dict{String,Any}("grid" => "mpas_grid"),
+        )
+        EarthSciSerialization.RuleContext(grids, variables)
+    end
+
+    @testset "parse_schemes accepts reduction + indirect selectors" begin
+        schemes = parse_schemes(Dict("mpas_cell_div" => _mpas_cell_div_obj()))
+        @test haskey(schemes, "mpas_cell_div")
+        sch = schemes["mpas_cell_div"]
+        @test sch isa Scheme
+        @test sch.grid_family == "unstructured"
+        @test sch.emits_location == "cell_center"
+        @test length(sch.stencil) == 1
+
+        sel = sch.stencil[1].selector
+        @test sel isa ReductionSelector
+        @test sel.table == "edgesOnCell"
+        @test sel.k_bound == "k"
+        @test sel.combine == "+"
+        @test sel.count_expr isa OpExpr
+        @test sel.count_expr.op == "index"
+
+        # indirect
+        sch2 = parse_schemes(Dict("nn_diff" => _nn_diff_obj()))["nn_diff"]
+        @test sch2.stencil[1].selector isa ReductionSelector
+        @test sch2.stencil[2].selector isa IndirectSelector
+        @test sch2.stencil[2].selector.index_expr == VarExpr("\$target")
+    end
+
+    @testset "expand_scheme / reduction: arrayop with dynamic ranges" begin
+        schemes = parse_schemes(Dict("mpas_cell_div" => _mpas_cell_div_obj()))
+        sch = schemes["mpas_cell_div"]
+        ctx = _make_unstruct_ctx("F")
+        bindings = Dict{String,ESM_Expr}("\$u" => VarExpr("F"))
+
+        result = EarthSciSerialization.expand_scheme(sch, bindings, ctx)
+
+        # Top level must be arrayop
+        @test result isa OpExpr
+        @test result.op == "arrayop"
+
+        # output_idx = [] (scalar reduction at each cell c)
+        @test result.output_idx == Any[]
+
+        # reduce = "+"
+        @test result.reduce == "+"
+
+        # ranges has key "k" with dynamic stop bound
+        @test result.ranges !== nothing
+        @test haskey(result.ranges, "k")
+        k_range = result.ranges["k"]
+        @test length(k_range) == 2
+        @test k_range[1] == IntExpr(0)
+        @test k_range[2] isa OpExpr           # stop = nEdgesOnCell[c] - 1
+        @test k_range[2].op == "-"
+
+        # body = coeff * operand_ref; target "$target" substituted with "c"
+        body = result.expr_body
+        @test body isa OpExpr
+        @test body.op == "*"
+        body_json = EarthSciSerialization.serialize_expression(body)
+        bj = JSON3.write(body_json)
+        @test occursin("\"c\"", bj)          # target resolved to "c"
+        @test !occursin("\"\$target\"", bj)   # no unsubstituted $target
+        @test occursin("edgesOnCell", bj)     # connectivity table present
+        @test occursin("\"F\"", bj)           # operand variable present
+
+        # serialized ranges stop is an expression dict, not a plain int
+        ranges_json = EarthSciSerialization.serialize_expression(result)
+        rj = JSON3.write(ranges_json)
+        @test occursin("nEdgesOnCell", rj)
+    end
+
+    @testset "expand_scheme / indirect: direct operand reference" begin
+        sch2 = parse_schemes(Dict("nn_diff" => _nn_diff_obj()))["nn_diff"]
+        ctx = _make_unstruct_ctx("phi")
+        bindings = Dict{String,ESM_Expr}("\$u" => VarExpr("phi"))
+
+        result = EarthSciSerialization.expand_scheme(sch2, bindings, ctx)
+
+        # combine of the two terms
+        @test result isa OpExpr
+        @test result.op == "+"
+
+        # second term is coeff * index(phi, c)   (indirect)
+        indirect_term = result.args[2]
+        @test indirect_term isa OpExpr
+        @test indirect_term.op == "*"
+        inner_ref = indirect_term.args[2]   # index(phi, c)
+        @test inner_ref isa OpExpr
+        @test inner_ref.op == "index"
+        @test inner_ref.args[1] == VarExpr("phi")
+        @test inner_ref.args[2] == VarExpr("c")   # $target → c
+    end
+
+    @testset "discretize mpas_cell_div: produces arrayop equations" begin
+        esm = Dict{String,Any}(
+            "esm"  => "0.1.0",
+            "grids" => Dict{String,Any}(
+                "mpas_grid" => Dict{String,Any}(
+                    "family"     => "unstructured",
+                    "dimensions" => Any[Dict{String,Any}("name" => "cell", "size" => 10)],
+                ),
+            ),
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid" => "mpas_grid",
+                    "variables" => Dict{String,Any}(
+                        "F" => Dict{String,Any}("type" => "state", "default" => 0.0, "units" => "1",
+                                                "shape" => Any["cell"], "location" => "edge_normal"),
+                    ),
+                    "equations" => Any[
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op" => "D", "args" => Any["F"], "wrt" => "t"),
+                            "rhs" => Dict{String,Any}("op" => "div", "args" => Any["F"], "dim" => "cell"),
+                        ),
+                    ],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}("mpas_cell_div" => _mpas_cell_div_obj()),
+            "rules" => Any[
+                Dict{String,Any}(
+                    "name"    => "apply_div",
+                    "pattern" => Dict{String,Any}("op" => "div", "args" => Any["\$u"], "dim" => "cell"),
+                    "use"     => "mpas_cell_div",
+                ),
+            ],
+        )
+        out = discretize(esm; strict_unrewritten=true)
+        eqs = out["models"]["M"]["equations"]
+        @test !isempty(eqs)
+        rhs = eqs[1]["rhs"]
+        @test rhs isa Dict
+        @test rhs["op"] == "arrayop"
+        @test haskey(rhs, "ranges")
+        @test haskey(rhs["ranges"], "k")
+        k_range = rhs["ranges"]["k"]
+        @test k_range[1] == 0                # start = 0
+        @test k_range[2] isa Dict             # stop = expression dict
+        @test k_range[2]["op"] == "-"
+        @test rhs["reduce"] == "+"
+    end
 end
