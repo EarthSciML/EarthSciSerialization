@@ -30,6 +30,7 @@ FIXTURES = [
     "mpas_cell_div",
     "cross_metric_cartesian",
     "grid_dispatch_ppm",
+    "multi_output_ppm_reconstruction",
 ]
 
 
@@ -96,3 +97,32 @@ def test_grid_dispatch_structure() -> None:
     # Each variant carries its own body (per §7.8 mutual-exclusion contract).
     assert len(scheme["grid_dispatch"][0]["stencil"]) == 4
     assert len(scheme["grid_dispatch"][1]["stencil"]) == 2
+
+
+def test_multi_output_stencil_structure() -> None:
+    """RFC §7.9 multi_output_stencil entries parse with the correct shape."""
+    fixture_path = DISC_DIR / "multi_output_ppm_reconstruction.esm"
+    esm = load(fixture_path)
+
+    # Provider: ppm_reconstruction
+    assert "ppm_reconstruction" in esm.discretizations
+    provider = esm.discretizations["ppm_reconstruction"]
+    assert provider["kind"] == "multi_output_stencil"
+    assert provider["outputs"] == ["q_left_edge", "q_right_edge"]
+    # stencil is an object (dict), not a flat list
+    assert isinstance(provider["stencil"], dict), (
+        "multi_output_stencil.stencil must be a dict keyed by output name"
+    )
+    assert set(provider["stencil"].keys()) == {"q_left_edge", "q_right_edge"}
+    assert len(provider["stencil"]["q_left_edge"]) == 2
+    assert len(provider["stencil"]["q_right_edge"]) == 2
+    assert provider["emits_location"] == "face"
+    assert provider.get("primary") is None
+
+    # Consumer: ppm_flux
+    assert "ppm_flux" in esm.discretizations
+    consumer = esm.discretizations["ppm_flux"]
+    assert consumer["kind"] == "stencil"
+    assert isinstance(consumer["requires"], dict)
+    assert consumer["requires"]["q_left_edge"] == "ppm_reconstruction#q_left_edge"
+    assert consumer["requires"]["q_right_edge"] == "ppm_reconstruction#q_right_edge"

@@ -58,4 +58,40 @@ describe('§7 discretizations — round-trip', () => {
     expect((composite.terms as unknown[]).length).toBe(2)
     expect(composite.stencil).toBeUndefined()
   })
+
+  it('preserves the multi-output PPM reconstruction fixture (§7.9)', () => {
+    const { before, after } = roundTrip('multi_output_ppm_reconstruction.esm')
+    expect(after).toBeDefined()
+    expect(after).toEqual(before)
+
+    type DiscMap = Record<string, Record<string, unknown>>
+    const afterDiscs = after as DiscMap
+
+    // Provider: ppm_reconstruction — stencil is an object, not an array
+    const provider = afterDiscs['ppm_reconstruction']
+    expect(provider).toBeDefined()
+    expect(provider.kind).toBe('multi_output_stencil')
+    expect(Array.isArray(provider.outputs)).toBe(true)
+    expect(provider.outputs as string[]).toEqual(['q_left_edge', 'q_right_edge'])
+    // stencil must be an object (not array)
+    expect(typeof provider.stencil).toBe('object')
+    expect(Array.isArray(provider.stencil)).toBe(false)
+    const stencilObj = provider.stencil as Record<string, unknown[]>
+    expect(Array.isArray(stencilObj['q_left_edge'])).toBe(true)
+    expect((stencilObj['q_left_edge'] as unknown[]).length).toBe(2)
+    expect(Array.isArray(stencilObj['q_right_edge'])).toBe(true)
+    expect((stencilObj['q_right_edge'] as unknown[]).length).toBe(2)
+    expect(provider.emits_location).toBe('face')
+    // primary is explicitly null
+    expect(provider.primary).toBeNull()
+
+    // Consumer: ppm_flux — carries a requires map
+    const consumer = afterDiscs['ppm_flux']
+    expect(consumer).toBeDefined()
+    expect(consumer.kind).toBe('stencil')
+    expect(typeof consumer.requires).toBe('object')
+    const req = consumer.requires as Record<string, string>
+    expect(req['q_left_edge']).toBe('ppm_reconstruction#q_left_edge')
+    expect(req['q_right_edge']).toBe('ppm_reconstruction#q_right_edge')
+  })
 })

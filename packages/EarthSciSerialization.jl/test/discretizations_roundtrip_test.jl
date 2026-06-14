@@ -37,7 +37,8 @@ end
                 "periodic_bc.esm",
                 "mpas_cell_div.esm",
                 "cross_metric_cartesian.esm",
-                "grid_dispatch_ppm.esm"]
+                "grid_dispatch_ppm.esm",
+                "multi_output_ppm_reconstruction.esm"]
 
     for fname in fixtures
         @testset "Round-trip $(fname)" begin
@@ -109,4 +110,32 @@ end
     # Each variant carries its own stencil body.
     @test length(scheme["grid_dispatch"][1]["stencil"]) == 4
     @test length(scheme["grid_dispatch"][2]["stencil"]) == 2
+end
+
+@testset "RFC §7.9 multi_output_stencil structure" begin
+    path = joinpath(_DISC_FIXTURES_DIR, "multi_output_ppm_reconstruction.esm")
+    esm = EarthSciSerialization.load(path)
+
+    # Provider: ppm_reconstruction
+    @test haskey(esm.discretizations, "ppm_reconstruction")
+    provider = esm.discretizations["ppm_reconstruction"]
+    @test provider["kind"] == "multi_output_stencil"
+    @test provider["outputs"] == ["q_left_edge", "q_right_edge"]
+    # stencil is an object (Dict), not a flat array
+    @test provider["stencil"] isa AbstractDict
+    @test haskey(provider["stencil"], "q_left_edge")
+    @test haskey(provider["stencil"], "q_right_edge")
+    @test length(provider["stencil"]["q_left_edge"]) == 2
+    @test length(provider["stencil"]["q_right_edge"]) == 2
+    @test provider["emits_location"] == "face"
+    # primary is explicitly null
+    @test isnothing(get(provider, "primary", :missing)) || provider["primary"] === nothing
+
+    # Consumer: ppm_flux
+    @test haskey(esm.discretizations, "ppm_flux")
+    consumer = esm.discretizations["ppm_flux"]
+    @test consumer["kind"] == "stencil"
+    @test haskey(consumer, "requires")
+    @test consumer["requires"]["q_left_edge"] == "ppm_reconstruction#q_left_edge"
+    @test consumer["requires"]["q_right_edge"] == "ppm_reconstruction#q_right_edge"
 end

@@ -885,6 +885,8 @@ type Discretization struct {
 	//   "flux_form_semi_lagrangian" = FFSL advection rule (§7.7); activates
 	//                                 Reconstruction / Remap / Limiter /
 	//                                 CflPolicy / Dimensions.
+	//   "multi_output_stencil"      = multi-output stencil rule (§7.9); activates
+	//                                 Outputs / MultiOutputStencil / Primary.
 	Kind               string            `json:"kind,omitempty"`
 	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
 	// this scheme discretizes. Preserved as raw JSON because the pattern may
@@ -894,7 +896,7 @@ type Discretization struct {
 	GridFamily         string            `json:"grid_family"`
 	Combine            string            `json:"combine,omitempty"`
 	// Stencil is the per-neighbor contribution list for a standard
-	// discretization (RFC §7.1). Mutually exclusive with Terms.
+	// discretization (RFC §7.1). Mutually exclusive with Terms and MultiOutputStencil.
 	Stencil            []StencilEntry    `json:"stencil,omitempty"`
 
 	// Axes is the ordered coordinate-axis list shared by both composite
@@ -948,6 +950,83 @@ type Discretization struct {
 	// (Stencil / Axes / InnerRule / etc.) MUST be empty; the loader picks the
 	// variant whose GridFamily matches the active grid at expansion time.
 	GridDispatch       []DiscretizationVariant `json:"grid_dispatch,omitempty"`
+
+	// Outputs is the ordered list of named outputs for a "multi_output_stencil"
+	// scheme (RFC §7.9). Key set MUST equal the keys of MultiOutputStencil.
+	Outputs            []string                     `json:"outputs,omitempty"`
+	// MultiOutputStencil is the object-valued stencil for kind="multi_output_stencil"
+	// (RFC §7.9): keyed by output name → stencil-entry list. Mutually exclusive
+	// with the flat Stencil slice. Marshaled / unmarshaled under the JSON key
+	// "stencil" via custom JSON methods.
+	MultiOutputStencil map[string][]StencilEntry    `json:"-"`
+	// Primary is the name of the output to substitute at the matched expression
+	// site in the consumed-directly trigger path (RFC §7.9). json.RawMessage
+	// preserves the JSON null literal verbatim; a nil/empty RawMessage is omitted.
+	Primary            json.RawMessage              `json:"primary,omitempty"`
+	// Requires is the RFC §7.9 consumer demand map. Maps local names used inside
+	// this scheme's stencil coefficient expressions to outputs of sibling
+	// MultiOutputStencilRule providers in the form "<sibling-scheme>#<output-name>".
+	Requires           map[string]string            `json:"requires,omitempty"`
+}
+
+// MarshalJSON serializes Discretization, routing MultiOutputStencil to the
+// "stencil" JSON key as an object when the scheme is a multi_output_stencil.
+func (d Discretization) MarshalJSON() ([]byte, error) {
+	type DiscAlias Discretization
+	alias := DiscAlias(d)
+	raw, err := json.Marshal(alias)
+	if err != nil {
+		return nil, err
+	}
+	if len(d.MultiOutputStencil) == 0 {
+		return raw, nil
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	stencilBytes, err := json.Marshal(d.MultiOutputStencil)
+	if err != nil {
+		return nil, err
+	}
+	m["stencil"] = json.RawMessage(stencilBytes)
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON deserializes Discretization, routing the "stencil" JSON key
+// to either Stencil (array form) or MultiOutputStencil (object form, §7.9).
+func (d *Discretization) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	stencilRaw, hasStencil := raw["stencil"]
+	if hasStencil {
+		delete(raw, "stencil")
+	}
+	remaining, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	type DiscAlias Discretization
+	alias := &DiscAlias{}
+	if err := json.Unmarshal(remaining, alias); err != nil {
+		return err
+	}
+	*d = Discretization(*alias)
+	if hasStencil {
+		trimmed := bytes.TrimSpace(stencilRaw)
+		if len(trimmed) > 0 && trimmed[0] == '{' {
+			if err := json.Unmarshal(stencilRaw, &d.MultiOutputStencil); err != nil {
+				return err
+			}
+		} else {
+			if err := json.Unmarshal(stencilRaw, &d.Stencil); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // DiscretizationVariant (RFC §7.8) is one entry of a Discretization's
@@ -976,6 +1055,12 @@ type DiscretizationVariant struct {
 // composite (RFC §7.6) rather than a standard stencil template.
 func (d *Discretization) IsCrossMetric() bool {
 	return len(d.Terms) > 0
+}
+
+// IsMultiOutput reports whether this Discretization is a multi-output stencil
+// rule (RFC §7.9): kind="multi_output_stencil" or MultiOutputStencil is populated.
+func (d *Discretization) IsMultiOutput() bool {
+	return d.Kind == "multi_output_stencil" || len(d.MultiOutputStencil) > 0
 }
 
 // CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.6).
