@@ -133,18 +133,40 @@ function _parse_selector(scheme_name::String, grid_family::String, raw)::Selecto
 end
 
 """
-    parse_schemes(raw) -> Dict{String,Scheme}
+    parse_schemes(raw, base_path="", visited=nothing) -> Dict{String,Scheme}
 
 Parse the top-level `discretizations` block into a name-keyed registry
 of [`Scheme`](@ref). Accepts the JSON-object-keyed-by-name form. Returns
 an empty dict for `nothing` / empty / missing input.
+
+When `base_path` is provided, entries of the form `{ref: "<path-or-URL>"}`
+are resolved by loading the external ESD rule file and splicing its
+`discretizations` block in place of the ref. `visited` is a cycle-detection
+guard (a `Set{String}` of canonical references already on the call stack).
 """
-function parse_schemes(raw)::Dict{String,Scheme}
+function parse_schemes(raw, base_path::String = "",
+                       visited::Union{Nothing,Set{String}} = nothing)::Dict{String,Scheme}
     out = Dict{String,Scheme}()
     raw === nothing && return out
     _is_dict_like(raw) || return out
     for (k, v) in _iterate_dict(raw)
         sk = String(k)
+        # Resolve {ref} entries: load the target file, extract its single scheme
+        # definition, and parse it under the parent key (§4.7.1 "spliced in place").
+        if _is_dict_like(v) && _getkey(v, "ref"; default=nothing) !== nothing
+            ref_val = String(_getkey(v, "ref"))
+            if isempty(base_path)
+                throw(RuleEngineError("E_SCHEME_REF",
+                    "discretizations entry '$sk': {ref} resolution requires a " *
+                    "base path — pass `source_path` to discretize()"))
+            end
+            if visited === nothing
+                visited = Set{String}()
+            end
+            scheme_def = _resolve_discretization_ref(sk, ref_val, base_path, visited)
+            out[sk] = parse_scheme(sk, scheme_def)
+            continue
+        end
         # Skip non-stencil entries (e.g. dimensional_split composites under §7.5)
         # for the cartesian foundation. They land on a follow-up bead.
         kind_raw = _is_dict_like(v) ? _getkey(v, "kind"; default=nothing) : nothing
@@ -154,6 +176,46 @@ function parse_schemes(raw)::Dict{String,Scheme}
         out[sk] = parse_scheme(sk, v)
     end
     return out
+end
+
+"""
+    _resolve_discretization_ref(scheme_name, ref, base_path, visited) -> raw scheme dict
+
+Load the ESM file at `ref` (local path or URL) via the subsystem `_load_ref`
+machinery, extract its `discretizations` block, and return the single raw scheme
+definition dict. The returned dict is parsed by the caller under `scheme_name`.
+
+If the single entry in the loaded file is itself a `{ref}`, it is resolved
+recursively (supports indirection chains; cycle detection is shared via `visited`).
+
+Raises `RuleEngineError` if the file has no `discretizations` block or if it
+does not contain exactly one scheme (§4.7.1 requires a single scheme per file).
+"""
+function _resolve_discretization_ref(scheme_name::String, ref::String,
+                                      base_path::String, visited::Set{String})
+    local loaded::EsmFile
+    try
+        loaded = _load_ref(ref, base_path, visited)
+    catch e
+        if e isa SubsystemRefError
+            throw(RuleEngineError("E_SCHEME_REF",
+                "discretization ref '$ref': $(e.message)"))
+        end
+        rethrow(e)
+    end
+    disc_raw = loaded.discretizations
+    if disc_raw === nothing || isempty(disc_raw)
+        throw(RuleEngineError("E_SCHEME_REF",
+            "discretization ref '$ref' (for scheme '$scheme_name') resolved to a " *
+            "file with no `discretizations` block"))
+    end
+    if length(disc_raw) != 1
+        throw(RuleEngineError("E_SCHEME_REF",
+            "discretization ref '$ref' (for scheme '$scheme_name') must contain " *
+            "exactly one scheme definition, found $(length(disc_raw))"))
+    end
+    _, scheme_def = first(disc_raw)
+    return scheme_def
 end
 
 # ============================================================================

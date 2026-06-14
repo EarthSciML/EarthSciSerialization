@@ -81,7 +81,7 @@
     },
     "discretizations": {
       "type": "object",
-      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1) or a CrossMetricStencilRule composite (\u00a77.4) that combines per-axis stencils and metric components for covariant operators on curvilinear grids.",
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1), a CrossMetricStencilRule composite (\u00a77.4), or a DiscretizationRef (\u00a74.7.1) \u2014 a {ref} pointer to an external ESD rule file whose single scheme is loaded and spliced in place at load time.",
       "additionalProperties": {
         "oneOf": [
           {
@@ -89,6 +89,9 @@
           },
           {
             "$ref": "#/$defs/CrossMetricStencilRule"
+          },
+          {
+            "$ref": "#/$defs/DiscretizationRef"
           }
         ]
       }
@@ -1201,6 +1204,20 @@
         "ref": {
           "type": "string",
           "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition."
+        }
+      }
+    },
+    "DiscretizationRef": {
+      "type": "object",
+      "description": "A reference to an external ESD rule file containing a single discretization scheme definition (§4.7.1). The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file. At load time the referenced file's single scheme is spliced in place of this {ref} object.",
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Local file path or URL pointing to an ESD rule file (an ESM file whose discretizations block contains exactly one scheme definition). The scheme is loaded and used as the inline definition for this discretizations entry."
         }
       }
     },
