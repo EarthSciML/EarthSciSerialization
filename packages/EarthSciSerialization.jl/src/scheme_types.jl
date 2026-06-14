@@ -81,7 +81,7 @@ end
 
 """
     MultiOutputStencilScheme(name, applies_to, grid_family, outputs, stencil,
-                             primary, emits_location, accuracy, order,
+                             derived, primary, emits_location, accuracy, order,
                              requires_locations, target_binding)
 
 A `discretizations.<name>` entry with `kind: "multi_output_stencil"` per RFC §7.9.
@@ -89,8 +89,13 @@ Emits multiple named output fields from one stencil application (e.g. PPM
 reconstruction producing `q_left_edge` and `q_right_edge`).
 
 Fields:
-- `outputs`: ordered list of output names; equals the key set of `stencil`.
+- `outputs`: ordered list of output names; equals the union of `stencil` keys and
+  `derived` keys (RFC §7.9 OQ3).
 - `stencil`: Dict keyed by output name; each value is a §7.1 stencil-entry list.
+- `derived`: Dict mapping output names to ExpressionNode ASTs that are expressions
+  over other stencil outputs. Derived outputs are emitted as pointwise arrayop
+  equations referencing the stencil outputs by their mangled names. Empty dict when
+  no `derived` block is present.
 - `primary`: output name substituted at the match site; `nothing` for provider-only.
 """
 struct MultiOutputStencilScheme <: AbstractScheme
@@ -99,6 +104,7 @@ struct MultiOutputStencilScheme <: AbstractScheme
     grid_family::String
     outputs::Vector{String}
     stencil::Dict{String,Vector{StencilEntry}}
+    derived::Dict{String,Expr}
     primary::Union{String,Nothing}
     emits_location::Union{String,Nothing}
     accuracy::Union{String,Nothing}

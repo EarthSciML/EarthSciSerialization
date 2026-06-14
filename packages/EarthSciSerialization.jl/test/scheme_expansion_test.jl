@@ -1179,3 +1179,223 @@ end
         @test occursin("q_right_edge__q__i", all_eqn_json)
     end
 end
+
+# ============================================================================
+# §7.9 OQ3 — derived (non-stencil) outputs (ess-qxs)
+# ============================================================================
+
+@testset "multi_output_stencil derived outputs (RFC §7.9 OQ3, ess-qxs)" begin
+
+    # Base multi-output stencil: two stencil outputs, one derived output.
+    # da = q_R - q_L (difference of right and left edge values).
+    function _derived_raw(; primary="q_L",
+                            derived=Dict("da" => Dict("op"=>"-","args"=>Any["q_R","q_L"])))
+        obj = Dict{String,Any}(
+            "kind"        => "multi_output_stencil",
+            "applies_to"  => Dict("op"=>"reconstruct","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "outputs"     => ["q_L", "q_R", "da"],
+            "stencil"     => Dict{String,Any}(
+                "q_L" => Any[
+                    Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>-1),"coeff"=>0.5),
+                    Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),"coeff"=>0.5),
+                ],
+                "q_R" => Any[
+                    Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),"coeff"=>0.5),
+                    Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 1),"coeff"=>0.5),
+                ],
+            ),
+            "derived"  => derived,
+            "emits_location" => "face",
+        )
+        if primary !== nothing
+            obj["primary"] = primary
+        end
+        return obj
+    end
+
+    function _make_derived_ctx()
+        ctx = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims" => ["i"],
+                "periodic_dims" => ["i"],
+                "dim_sizes" => Dict{String,Any}("i" => 4),
+            )),
+            Dict("q" => Dict{String,Any}("grid" => "gx",
+                                          "shape" => Any["i"],
+                                          "location" => "cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            parse_schemes(Dict("recon" => _derived_raw())),
+        )
+        return ctx
+    end
+
+    @testset "valid parse: derived block produces MultiOutputStencilScheme with derived field" begin
+        sch = parse_multi_output_stencil_scheme("recon", _derived_raw())
+        @test sch isa MultiOutputStencilScheme
+        @test sch.outputs == ["q_L", "q_R", "da"]
+        @test haskey(sch.stencil, "q_L")
+        @test haskey(sch.stencil, "q_R")
+        @test !haskey(sch.stencil, "da")
+        @test haskey(sch.derived, "da")
+        @test sch.derived["da"] isa OpExpr
+        @test sch.derived["da"].op == "-"
+    end
+
+    @testset "valid parse: no derived block → empty derived dict" begin
+        raw = Dict{String,Any}(
+            "kind"        => "multi_output_stencil",
+            "applies_to"  => Dict("op"=>"reconstruct","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "outputs"     => ["q_L", "q_R"],
+            "stencil"     => Dict{String,Any}(
+                "q_L" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+                "q_R" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>1),"coeff"=>1.0)],
+            ),
+        )
+        sch = parse_multi_output_stencil_scheme("recon", raw)
+        @test isempty(sch.derived)
+    end
+
+    @testset "E_DERIVED_STENCIL_OVERLAP: same name in stencil and derived" begin
+        raw = _derived_raw(
+            derived=Dict("q_R" => Dict("op"=>"-","args"=>Any["q_R","q_L"])))  # q_R in both
+        # outputs has q_L, q_R, da but stencil also has q_R
+        raw["outputs"] = ["q_L", "q_R", "da"]
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("recon", raw)
+        end
+        @test ex.value.code == "E_DERIVED_STENCIL_OVERLAP"
+    end
+
+    @testset "E_OUTPUTS_STENCIL_MISMATCH: derived name not in outputs" begin
+        # outputs = [q_L, q_R, da] but derived has extra key "x" not in outputs
+        raw = _derived_raw(
+            derived=Dict("da" => Dict("op"=>"-","args"=>Any["q_R","q_L"]),
+                         "x"  => Dict("op"=>"*","args"=>Any["q_R", 2])))
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("recon", raw)
+        end
+        @test ex.value.code == "E_OUTPUTS_STENCIL_MISMATCH"
+    end
+
+    @testset "E_OUTPUTS_STENCIL_MISMATCH: derived name in outputs but missing from both blocks" begin
+        raw = Dict{String,Any}(
+            "kind"        => "multi_output_stencil",
+            "applies_to"  => Dict("op"=>"reconstruct","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "outputs"     => ["q_L", "q_R", "da"],  # da in outputs
+            "stencil"     => Dict{String,Any}(       # but not in stencil
+                "q_L" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+                "q_R" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>1),"coeff"=>1.0)],
+            ),
+            # no derived block either
+        )
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("recon", raw)
+        end
+        @test ex.value.code == "E_OUTPUTS_STENCIL_MISMATCH"
+    end
+
+    @testset "trigger 1: derived equation emitted with indexed substitution" begin
+        ctx = _make_derived_ctx()
+        sch = ctx.schemes["recon"]::MultiOutputStencilScheme
+        bindings = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        result = EarthSciSerialization.expand_multi_output_scheme_direct(sch, bindings, ctx)
+
+        # Primary (q_L) substituted at match site.
+        @test result isa OpExpr && result.op == "index"
+        @test result.args[1] isa VarExpr && result.args[1].name == "q_L__q__i"
+
+        # Three observed equations: q_L, q_R, da.
+        @test length(ctx.emitted_equations) == 3
+        emitted_lhs_names = [eq["lhs"]["expr"]["args"][1]
+                             for eq in ctx.emitted_equations]
+        @test "q_L__q__i" in emitted_lhs_names
+        @test "q_R__q__i" in emitted_lhs_names
+        @test "da__q__i"  in emitted_lhs_names
+
+        # da equation RHS is a difference of indexed stencil outputs.
+        da_eq = ctx.emitted_equations[findfirst(e -> e["lhs"]["expr"]["args"][1] == "da__q__i",
+                                                 ctx.emitted_equations)]
+        da_rhs_expr = da_eq["rhs"]["expr"]
+        da_rhs_str = string(da_rhs_expr)
+        @test occursin("q_R__q__i", da_rhs_str)
+        @test occursin("q_L__q__i", da_rhs_str)
+        @test da_rhs_expr["op"] == "-"
+
+        # Three auto-declared variables.
+        @test haskey(ctx.emitted_variables, "q_L__q__i")
+        @test haskey(ctx.emitted_variables, "q_R__q__i")
+        @test haskey(ctx.emitted_variables, "da__q__i")
+        @test ctx.emitted_variables["da__q__i"]["type"] == "observed"
+        @test ctx.emitted_variables["da__q__i"]["location"] == "face"
+    end
+
+    @testset "trigger 1: memoization — second call emits no additional equations" begin
+        ctx = _make_derived_ctx()
+        sch = ctx.schemes["recon"]::MultiOutputStencilScheme
+        bindings = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_multi_output_scheme_direct(sch, bindings, ctx)
+        n_after_first = length(ctx.emitted_equations)
+        EarthSciSerialization.expand_multi_output_scheme_direct(sch, bindings, ctx)
+        @test length(ctx.emitted_equations) == n_after_first
+    end
+
+    @testset "trigger 1: end-to-end discretize with derived outputs" begin
+        esm = Dict{String,Any}(
+            "esm" => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "derived_e2e"),
+            "grids" => Dict{String,Any}(
+                "gx" => Dict{String,Any}(
+                    "family" => "cartesian",
+                    "dimensions" => Any[
+                        Dict{String,Any}("name"=>"i","size"=>4,"periodic"=>true,"spacing"=>"uniform"),
+                    ],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}("recon" => _derived_raw()),
+            "rules" => Any[
+                Dict{String,Any}(
+                    "name"    => "recon_rule",
+                    "pattern" => Dict{String,Any}("op"=>"reconstruct","args"=>Any["\$q"],"dim"=>"\$x"),
+                    "use"     => "recon",
+                ),
+            ],
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid" => "gx",
+                    "variables" => Dict{String,Any}(
+                        "q" => Dict{String,Any}("type"=>"state","default"=>0.0,"units"=>"1",
+                                                "shape"=>Any["i"],"location"=>"cell_center"),
+                    ),
+                    "equations" => Any[
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op"=>"D","args"=>Any["q"],"wrt"=>"t"),
+                            "rhs" => Dict{String,Any}("op"=>"reconstruct","args"=>Any["q"],"dim"=>"i"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+        out = discretize(esm)
+        model_out = out["models"]["M"]
+
+        # Four equations total: 1 model + 3 observed (q_L, q_R, da).
+        @test length(model_out["equations"]) == 4
+        observed = [e for e in model_out["equations"] if get(e, "observed", false) == true]
+        @test length(observed) == 3
+
+        # All three outputs auto-declared.
+        @test haskey(model_out["variables"], "q_L__q__i")
+        @test haskey(model_out["variables"], "q_R__q__i")
+        @test haskey(model_out["variables"], "da__q__i")
+
+        # da equation references mangled stencil output names.
+        da_eq = observed[findfirst(e -> e["lhs"]["expr"]["args"][1] == "da__q__i", observed)]
+        da_json = JSON3.write(da_eq["rhs"]["expr"])
+        @test occursin("q_R__q__i", da_json)
+        @test occursin("q_L__q__i", da_json)
+    end
+end

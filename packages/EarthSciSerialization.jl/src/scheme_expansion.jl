@@ -197,9 +197,31 @@ function parse_multi_output_stencil_scheme(name::AbstractString, raw)::MultiOutp
         "scheme $sname: `stencil` must be an object (keyed by output name)"))
 
     stencil_keys = Set{String}(String(k) for (k, _) in _iterate_dict(stencil_raw))
-    stencil_keys == seen_outputs || throw(RuleEngineError("E_OUTPUTS_STENCIL_MISMATCH",
+
+    # Parse optional `derived` block (RFC §7.9 OQ3).
+    derived_raw = _getkey(raw, "derived"; default=nothing)
+    derived = Dict{String,Expr}()
+    derived_keys = Set{String}()
+    if derived_raw !== nothing
+        _is_dict_like(derived_raw) || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `derived` must be an object (keyed by output name)"))
+        for (dk, dv) in _iterate_dict(derived_raw)
+            sdk = String(dk)
+            derived[sdk] = _parse_expr(dv)
+            push!(derived_keys, sdk)
+        end
+        # Overlap: a name cannot appear in both stencil and derived.
+        overlap = stencil_keys ∩ derived_keys
+        isempty(overlap) || throw(RuleEngineError("E_DERIVED_STENCIL_OVERLAP",
+            "scheme $sname: output names $(sort(collect(overlap))) appear in both " *
+            "`stencil` and `derived`; each output must be defined in exactly one block"))
+    end
+
+    all_scheme_outputs = stencil_keys ∪ derived_keys
+    all_scheme_outputs == seen_outputs || throw(RuleEngineError("E_OUTPUTS_STENCIL_MISMATCH",
         "scheme $sname: `outputs` $(sort(collect(seen_outputs))) does not match " *
-        "`stencil` key set $(sort(collect(stencil_keys)))"))
+        "the union of `stencil` keys $(sort(collect(stencil_keys))) and `derived` " *
+        "keys $(sort(collect(derived_keys)))"))
 
     stencil = Dict{String,Vector{StencilEntry}}()
     for (ok, ov) in _iterate_dict(stencil_raw)
@@ -252,7 +274,7 @@ function parse_multi_output_stencil_scheme(name::AbstractString, raw)::MultiOutp
     target_binding = String(target_binding_raw)
 
     return MultiOutputStencilScheme(sname, applies_to, grid_family, outputs,
-                                    stencil, primary, emits_location,
+                                    stencil, derived, primary, emits_location,
                                     accuracy, order, requires_locations,
                                     target_binding)
 end
@@ -741,8 +763,9 @@ function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
             ranges[output_idx[d]] = Any[1, Int(sz)]
         end
 
-        # 7. Emit one observed arrayop equation per output.
+        # 7. Emit one observed arrayop equation per stencil output.
         for out_name in scheme.outputs
+            haskey(scheme.stencil, out_name) || continue
             entries    = scheme.stencil[out_name]
             terms      = Expr[_expand_stencil_entry_multi(scheme, out_name, e,
                                    operand_expr, target, spatial_dims, bindings,
@@ -791,6 +814,57 @@ function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
                 "location" => emit_loc,
             )
         end
+
+        # 7b. Emit one observed arrayop equation per derived output (RFC §7.9 OQ3).
+        # Derived expressions reference stencil output names; substitute each with
+        # index(mangled_name, target...) so the RHS is a pointwise scalar expression.
+        if !isempty(scheme.derived)
+            stencil_subs = Dict{String,String}(
+                o => mangled[o] for o in scheme.outputs if haskey(scheme.stencil, o))
+            operand_meta  = get(ctx.variables, operand_name, Dict{String,Any}())
+            operand_shape = get(operand_meta, "shape", Any[String(d) for d in spatial_dims])
+            emit_loc      = scheme.emits_location === nothing ? "cell_center" :
+                            scheme.emits_location
+            for d_name in scheme.outputs
+                haskey(scheme.derived, d_name) || continue
+                d_expr = scheme.derived[d_name]
+                d_mn   = mangled[d_name]
+                rhs_scalar = _apply_derived_substitution(
+                    apply_bindings(d_expr, bindings), stencil_subs, target)
+                rhs_canon  = canonicalize(rhs_scalar)
+                rhs_dict   = serialize_expression(rhs_canon)
+                lhs_index_args = Any[d_mn]
+                for idx in output_idx; push!(lhs_index_args, idx); end
+                eqn = Dict{String,Any}(
+                    "lhs" => Dict{String,Any}(
+                        "op"         => "arrayop",
+                        "args"       => Any[],
+                        "output_idx" => output_idx,
+                        "expr"       => Dict{String,Any}(
+                            "op"   => "index",
+                            "args" => lhs_index_args,
+                        ),
+                        "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                    ),
+                    "rhs" => Dict{String,Any}(
+                        "op"         => "arrayop",
+                        "args"       => Any[],
+                        "output_idx" => output_idx,
+                        "expr"       => rhs_dict,
+                        "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                    ),
+                    "observed"   => true,
+                    "emitted_by" => scheme.name,
+                )
+                push!(ctx.emitted_equations, eqn)
+                ctx.emitted_variables[d_mn] = Dict{String,Any}(
+                    "type"     => "observed",
+                    "units"    => "1",
+                    "shape"    => operand_shape,
+                    "location" => emit_loc,
+                )
+            end
+        end
     end
 
     # 8. Return index(primary_mangled, i[, j, …]) as the replacement Expr.
@@ -820,6 +894,40 @@ function _apply_requires_substitution(expr::Expr,
         new_args = Expr[]
         for a in expr.args
             na = _apply_requires_substitution(a, subs)
+            push!(new_args, na)
+            na !== a && (changed = true)
+        end
+        changed || return expr
+        return OpExpr(expr.op, new_args;
+                      wrt=expr.wrt, dim=expr.dim,
+                      output_idx=expr.output_idx,
+                      expr_body=expr.expr_body,
+                      reduce=expr.reduce, ranges=expr.ranges,
+                      regions=expr.regions, values=expr.values,
+                      shape=expr.shape, perm=expr.perm,
+                      axis=expr.axis, fn=expr.fn,
+                      name=expr.name, value=expr.value)
+    end
+    return expr
+end
+
+# Replace bare VarExpr names found in `subs` with `index(mangled_name, target...)`.
+# Used to expand derived output expressions, where each stencil output name is
+# replaced by an indexed reference at the current arrayop target indices.
+# Pattern variables ($-prefixed) are untouched — apply_bindings handles those first.
+function _apply_derived_substitution(expr::Expr,
+                                      subs::Dict{String,String},
+                                      target::Vector{Expr})::Expr
+    isempty(subs) && return expr
+    if expr isa VarExpr && !_is_pvar(expr) && haskey(subs, expr.name)
+        mn = subs[expr.name]
+        return OpExpr("index", Expr[VarExpr(mn), target...])
+    end
+    if expr isa OpExpr
+        changed = false
+        new_args = Expr[]
+        for a in expr.args
+            na = _apply_derived_substitution(a, subs, target)
             push!(new_args, na)
             na !== a && (changed = true)
         end
@@ -919,7 +1027,14 @@ function _demand_resolve_provider(provider::MultiOutputStencilScheme,
             ranges[output_idx[d]] = Any[1, Int(sz)]
         end
 
+        operand_meta  = get(ctx.variables, operand_name, Dict{String,Any}())
+        operand_shape = get(operand_meta, "shape", Any[String(d) for d in spatial_dims])
+        emit_loc      = provider.emits_location === nothing ? "cell_center" :
+                        provider.emits_location
+
+        # Emit stencil outputs first (derived outputs may reference their mangled names).
         for out_name in provider.outputs
+            haskey(provider.stencil, out_name) || continue
             mn = mangled[out_name]
 
             # Pre-declared variable: author supplied it in the document; skip emission.
@@ -966,18 +1081,63 @@ function _demand_resolve_provider(provider::MultiOutputStencilScheme,
                 "emitted_by" => provider.name,
             )
             push!(ctx.emitted_equations, eqn)
-
-            # Auto-declare the output variable.
-            operand_meta  = get(ctx.variables, operand_name, Dict{String,Any}())
-            operand_shape = get(operand_meta, "shape", Any[String(d) for d in spatial_dims])
-            emit_loc      = provider.emits_location === nothing ? "cell_center" :
-                            provider.emits_location
             ctx.emitted_variables[mn] = Dict{String,Any}(
                 "type"     => "observed",
                 "units"    => "1",
                 "shape"    => operand_shape,
                 "location" => emit_loc,
             )
+        end
+
+        # Emit derived outputs (RFC §7.9 OQ3).
+        if !isempty(provider.derived)
+            stencil_subs = Dict{String,String}(
+                o => mangled[o] for o in provider.outputs if haskey(provider.stencil, o))
+            for d_name in provider.outputs
+                haskey(provider.derived, d_name) || continue
+                d_mn = mangled[d_name]
+                d_mn in keys(ctx.variables) && continue
+                if d_mn in keys(ctx.emitted_variables)
+                    throw(RuleEngineError("E_PROVIDER_NAME_CLASH",
+                        "scheme $(provider.name): mangled derived output name '$d_mn' " *
+                        "was already emitted by a different provider instantiation"))
+                end
+                d_expr     = provider.derived[d_name]
+                rhs_scalar = _apply_derived_substitution(
+                    apply_bindings(d_expr, bindings), stencil_subs, target)
+                rhs_canon  = canonicalize(rhs_scalar)
+                rhs_dict   = serialize_expression(rhs_canon)
+                lhs_index_args = Any[d_mn]
+                for idx in output_idx; push!(lhs_index_args, idx); end
+                eqn = Dict{String,Any}(
+                    "lhs" => Dict{String,Any}(
+                        "op"         => "arrayop",
+                        "args"       => Any[],
+                        "output_idx" => output_idx,
+                        "expr"       => Dict{String,Any}(
+                            "op"   => "index",
+                            "args" => lhs_index_args,
+                        ),
+                        "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                    ),
+                    "rhs" => Dict{String,Any}(
+                        "op"         => "arrayop",
+                        "args"       => Any[],
+                        "output_idx" => output_idx,
+                        "expr"       => rhs_dict,
+                        "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                    ),
+                    "observed"   => true,
+                    "emitted_by" => provider.name,
+                )
+                push!(ctx.emitted_equations, eqn)
+                ctx.emitted_variables[d_mn] = Dict{String,Any}(
+                    "type"     => "observed",
+                    "units"    => "1",
+                    "shape"    => operand_shape,
+                    "location" => emit_loc,
+                )
+            end
         end
     finally
         delete!(ctx.provider_resolution_stack, provider.name)

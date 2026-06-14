@@ -5355,7 +5355,7 @@
     },
     "MultiOutputStencilRule": {
       "type": "object",
-      "description": "Multi-output stencil rule (RFC §7.9). A scheme kind that emits multiple named output fields from one stencil application — the canonical use case is PPM reconstruction, which produces q_left_edge and q_right_edge from a single reconstruct(q, dim=x) operator match.\n\nExpansion has two trigger paths:\n1. Consumed directly — a `use:` rule matches the scheme's `applies_to` pattern; the engine emits one observed arrayop equation per declared output into the enclosing model and rewrites the matched expression to the output named by `primary`.\n2. Demanded by a consumer — a sibling Discretization's `requires` map names one or more of this scheme's outputs (as '<this-scheme>#<output>'); the engine instantiates the provider with the consumer's inherited bindings and emits the observed equations.\n\nLoader contract (all enforced at parse time, before any expansion):\n- `outputs` MUST equal the set of keys in `stencil`. Violation: E_OUTPUTS_STENCIL_MISMATCH.\n- `primary`, when non-null, MUST name an entry of `outputs`. Violation: E_PRIMARY_NOT_AN_OUTPUT.\n- Every value in a consumer's `requires` map that references this scheme MUST match '<this-scheme>#<output>' where <output> is in this scheme's `outputs` array. Violation: E_OUTPUT_NOT_FOUND.\n- Provider instantiations are memoized by (scheme name, canonical bindings) — diamond dependencies emit one set of observed equations.\n- Emitted variable names are mangled per instantiation as <output>__<operand>__<axis> unless the author pre-declares the variable, in which case the declared name wins and a conflicting second instantiation is E_PROVIDER_NAME_CLASH.\n\nV1 scope: periodic dimensions only (face extent == cell extent n). Bounded/staggered extents and the `derived:` block are deferred to follow-on beads.",
+      "description": "Multi-output stencil rule (RFC §7.9). A scheme kind that emits multiple named output fields from one stencil application — the canonical use case is PPM reconstruction, which produces q_left_edge and q_right_edge from a single reconstruct(q, dim=x) operator match.\n\nExpansion has two trigger paths:\n1. Consumed directly — a `use:` rule matches the scheme's `applies_to` pattern; the engine emits one observed arrayop equation per declared output into the enclosing model and rewrites the matched expression to the output named by `primary`.\n2. Demanded by a consumer — a sibling Discretization's `requires` map names one or more of this scheme's outputs (as '<this-scheme>#<output>'); the engine instantiates the provider with the consumer's inherited bindings and emits the observed equations.\n\nLoader contract (all enforced at parse time, before any expansion):\n- `outputs` MUST equal the union of `stencil` keys and `derived` keys. Violation: E_OUTPUTS_STENCIL_MISMATCH.\n- No output name may appear in both `stencil` and `derived`. Violation: E_DERIVED_STENCIL_OVERLAP.\n- `primary`, when non-null, MUST name an entry of `outputs`. Violation: E_PRIMARY_NOT_AN_OUTPUT.\n- Every value in a consumer's `requires` map that references this scheme MUST match '<this-scheme>#<output>' where <output> is in this scheme's `outputs` array. Violation: E_OUTPUT_NOT_FOUND.\n- Provider instantiations are memoized by (scheme name, canonical bindings) — diamond dependencies emit one set of observed equations.\n- Emitted variable names are mangled per instantiation as <output>__<operand>__<axis> unless the author pre-declares the variable, in which case the declared name wins and a conflicting second instantiation is E_PROVIDER_NAME_CLASH.\n\nV1 scope: periodic dimensions only (face extent == cell extent n). Bounded/staggered extents are deferred to OQ1 follow-on bead.",
       "required": [
         "applies_to",
         "outputs",
@@ -5388,7 +5388,7 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "Ordered list of named outputs emitted by this scheme. MUST equal the set of keys in `stencil` (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH on violation). Names must be unique within the array. Consumers reference these names in their `requires` map as '<this-scheme>#<output>'."
+          "description": "Ordered list of named outputs emitted by this scheme. MUST equal the union of keys in `stencil` and keys in `derived` (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH on violation). Names must be unique within the array. Consumers reference these names in their `requires` map as '<this-scheme>#<output>'."
         },
         "stencil": {
           "type": "object",
@@ -5401,7 +5401,15 @@
             },
             "description": "§7.1 stencil-entry list for this output. Each entry is a {selector, coeff} pair following the same rules as Discretization.stencil entries."
           },
-          "description": "Object keyed by output name (vs §7.1's flat array). Each value is a list of §7.1 stencil entries ({selector, coeff}) that expand at $target to produce the named output. Key set MUST equal the `outputs` array (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH)."
+          "description": "Object keyed by output name (vs §7.1's flat array). Each value is a list of §7.1 stencil entries ({selector, coeff}) that expand at $target to produce the named output. Key set MUST be a subset of the `outputs` array; the remaining outputs must appear in `derived` (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH)."
+        },
+        "derived": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ExpressionNode",
+            "description": "An ExpressionNode over other stencil output names and the operand. Each bare output-name reference is replaced at expansion time by an indexed reference to the mangled emitted variable."
+          },
+          "description": "RFC §7.9 OQ3 — derived (non-stencil) outputs. Object keyed by output name; each value is an ExpressionNode whose free variables are names declared in `stencil` (the stencil outputs). Derived outputs are emitted as pointwise arrayop equations where the RHS references the stencil outputs by their mangled names. No name may appear in both `stencil` and `derived` (loader-enforced: E_DERIVED_STENCIL_OVERLAP). The union of `stencil` keys and `derived` keys MUST equal the `outputs` array (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH)."
         },
         "emits_location": {
           "type": "string",
