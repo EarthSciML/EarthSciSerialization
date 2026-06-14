@@ -2045,6 +2045,145 @@ trajectory of §7.7). The conformance manifest adds
 Cartesian and cubed-sphere variants — as the cross-binding fixture.
 
 
+### 7.9 Multi-output stencil schemes (`multi_output_stencil`, resolves ess-7hb)
+
+Several authoritative catalog rules emit **multiple named outputs** from one
+stencil application. `ppm_reconstruction` produces `q_left_edge` and
+`q_right_edge` from a single `reconstruct(q, dim=x)` match; `weno5_advection_2d`
+produces four edge values. The §7.2 rewrite contract cannot express these: one
+rule match replaces one expression occurrence with one expression, and two rules
+with the same pattern cannot both fire on a single occurrence.
+
+`kind: "multi_output_stencil"` adds a new top-level scheme shape (a sibling of
+`Discretization` and `CrossMetricStencilRule` in the `discretizations` value
+space). It shares the `applies_to` / `grid_family` / `emits_location` /
+`accuracy` / `free_variables` / `target_binding` fields with §7.1 but replaces
+the flat `stencil` array with a **stencil object keyed by output name**, plus an
+explicit `outputs` array and a nullable `primary` field.
+
+**Schema shape (§7.9 normative):**
+
+```jsonc
+{
+  "discretizations": {
+    "ppm_reconstruction": {
+      "kind": "multi_output_stencil",
+      "applies_to": { "op": "reconstruct", "args": ["$q"], "dim": "$x" },
+      "grid_family": "cartesian",
+      "outputs": ["q_left_edge", "q_right_edge"],
+      "emits_location": "face",
+      "primary": null,                // provider-only: fire only via consumer requires
+      "stencil": {
+        "q_left_edge":  [ { "selector": { "kind": "cartesian", "axis": "$x", "offset": -1 }, "coeff": 0.5 },
+                          { "selector": { "kind": "cartesian", "axis": "$x", "offset":  0 }, "coeff": 0.5 } ],
+        "q_right_edge": [ { "selector": { "kind": "cartesian", "axis": "$x", "offset":  0 }, "coeff": 0.5 },
+                          { "selector": { "kind": "cartesian", "axis": "$x", "offset":  1 }, "coeff": 0.5 } ]
+      }
+    },
+    "ppm_flux": {
+      "kind": "stencil",
+      "applies_to": { "op": "flux", "args": ["$q", "$c"], "dim": "$x" },
+      "requires": {
+        "q_left_edge":  "ppm_reconstruction#q_left_edge",
+        "q_right_edge": "ppm_reconstruction#q_right_edge"
+      },
+      "stencil": [
+        { "selector": { "kind": "cartesian", "axis": "$x", "offset": 0 },
+          "coeff": { "op": "-", "args": [
+            { "op": "*", "args": ["$c", "q_right_edge"] },
+            { "op": "*", "args": ["$c", "q_left_edge"] }
+          ] }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Field reference:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `kind` | optional | `"multi_output_stencil"` — discriminator for statically-typed bindings |
+| `applies_to` | ✓ | Shallow AST pattern (guard only, per §7.2.1) |
+| `outputs` | ✓ | Ordered array of output names; MUST equal the `stencil` object key set |
+| `stencil` | ✓ | Object keyed by output name; each value is a §7.1 stencil-entry list |
+| `primary` | | Name of the output substituted at the matched expression site; `null` for provider-only schemes |
+| `emits_location` | | Default staggered-grid location for all emitted output variables |
+| `grid_family` | | Grid family constraint (same values as §7.1) |
+| `accuracy`, `order`, `requires_locations`, `target_binding`, `free_variables`, `description`, `reference` | | Same semantics as §7.1 |
+
+**Consumer side — `requires` on a sibling Discretization:**
+
+A standard `Discretization` (kind `"stencil"`, `"dimensional_split"`, etc.) may
+carry a `requires` map:
+
+```jsonc
+"requires": {
+  "<local-name>": "<sibling-scheme>#<declared-output>",
+  ...
+}
+```
+
+The engine instantiates the referenced provider with the consumer's inherited
+bindings (the same §7.2.1 name-flow used by `dimensional_split.inner_rule` and
+`cross_metric.axis_stencil`) and emits the observed equations on first reference.
+The local names are ordinary shaped variables after emission — the consumer's own
+stencil/coeff expressions reference them by name.
+
+**Trigger paths:**
+
+1. **Consumed directly** — a `use:` rule matches the provider's `applies_to`;
+   the engine emits one observed arrayop equation per declared output and rewrites
+   the matched expression to the output named by `primary`.
+
+2. **Demanded by a consumer** — the provider's `applies_to` has no occurrence in
+   any model equation; a downstream scheme's `requires` map names one or more of
+   its outputs. The engine instantiates the provider with the consumer's bindings
+   on first demand, emits the observed equations, and memoizes the instantiation
+   by `(scheme name, canonical bindings)` so diamond dependencies emit once.
+
+**Loader contract (parse-time checks):**
+
+- `outputs` MUST equal the key set of `stencil`. Violation: `E_OUTPUTS_STENCIL_MISMATCH`.
+- `primary`, when non-null, MUST name a declared output. Violation: `E_PRIMARY_NOT_AN_OUTPUT`.
+- Every `requires` value MUST resolve to `<sibling scheme>#<declared output>` where the
+  sibling is a `multi_output_stencil` and the output is in its `outputs` array.
+  Violations: `E_PROVIDER_NOT_FOUND`, `E_OUTPUT_NOT_FOUND`.
+- Resolution is static (at load time) — binding compatibility is a runtime check.
+- Provider instantiations are memoized by `(scheme name, canonical bindings)`.
+  A conflicting second instantiation (same provider, same bindings, author-declared
+  name collision) is `E_PROVIDER_NAME_CLASH`.
+- Providers nobody demands never emit (lazy instantiation).
+- Emitted variable names are mangled as `<output>__<operand>__<axis>` per
+  instantiation unless the author pre-declares the variable (pre-declared name wins).
+
+**V1 scope:** Periodic dimensions only (RFC open question 1: face extent equals
+cell extent `n`). Bounded/staggered extents (OQ1) and the `derived:` block for
+non-stencil outputs (OQ3) are deferred to follow-on beads.
+
+**Relationship to §7.5/§7.6.** The `requires` binding name-flow is the fourth
+instance of the sibling-scheme reference pattern (after §7.5 `inner_rule`, §7.6
+`axis_stencil`, and §7.8 `grid_dispatch` inner rules). Provider chains are
+recursive with cycle detection (`E_SCHEME_CYCLE`). `grid_dispatch` and
+`multi_output_stencil` are orthogonal: a `DiscretizationVariant` body does not
+accept `outputs`/`stencil`-object; authors who need per-family multi-output
+schemes declare separate top-level entries.
+
+**Binding contract.** All five bindings (Julia, TypeScript, Python, Rust, Go)
+parse and round-trip `multi_output_stencil` entries losslessly and reject the
+four structural violations listed in the loader contract above. Runtime expansion
+(demand-driven instantiation and observed-equation emission) is out of scope for
+the v0.7.0 schema bump and is tracked as follow-on beads (mirroring the FFSL
+§7.7 trajectory). The conformance manifest adds
+`tests/discretizations/multi_output_ppm_reconstruction.esm` — a PPM
+reconstruction provider with a flux consumer — as the cross-binding fixture.
+
+*Draft source: `docs/content/rfcs/multi-output-discretizations-draft.md` (Option B,
+demand-driven provider resolution, open question 2 resolved 2026-06-13). That
+document is now superseded by this normative section.*
+
+
 ## 8. Amendments to §8 (`data_loaders`) — inline (resolves C4)
 
 v0.2.0 extends `data_loaders` with a new `kind: "mesh"` that covers MPAS-

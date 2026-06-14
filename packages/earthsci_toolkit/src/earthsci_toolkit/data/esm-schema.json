@@ -81,7 +81,7 @@
     },
     "discretizations": {
       "type": "object",
-      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1) or a CrossMetricStencilRule composite (\u00a77.4) that combines per-axis stencils and metric components for covariant operators on curvilinear grids.",
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1) or a CrossMetricStencilRule composite (\u00a77.6) that combines per-axis stencils and metric components for covariant operators on curvilinear grids, or a MultiOutputStencilRule (\u00a77.9) that emits multiple named output fields from one stencil application.",
       "additionalProperties": {
         "oneOf": [
           {
@@ -89,6 +89,9 @@
           },
           {
             "$ref": "#/$defs/CrossMetricStencilRule"
+          },
+          {
+            "$ref": "#/$defs/MultiOutputStencilRule"
           }
         ]
       }
@@ -4418,6 +4421,15 @@
         "reference": {
           "$ref": "#/$defs/Reference"
         },
+        "requires": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[^#]+#[^#]+$",
+            "description": "Provider reference in the form '<sibling-scheme>#<output-name>'. The sibling scheme must be a MultiOutputStencilRule (RFC \u00a77.9) declared in the same discretizations block, and the output name must appear in that scheme's declared outputs array. Both constraints are enforced by the loader at parse time (static resolvability); binding compatibility is a runtime check."
+          },
+          "description": "RFC \u00a77.9 consumer demand map. Maps local names used inside this scheme's stencil/coeff expressions to outputs from sibling MultiOutputStencilRule providers. Each value MUST have the form '<sibling-scheme>#<declared-output>'. The loader resolves all references statically at load time (E_PROVIDER_NOT_FOUND if the sibling is absent or is not a multi_output_stencil; E_OUTPUT_NOT_FOUND if the named output is not in the sibling's outputs array). Absent means this scheme has no provider dependencies."
+        },
         "grid_dispatch": {
           "type": "array",
           "minItems": 2,
@@ -5321,6 +5333,108 @@
             "type": "number"
           },
           "minItems": 2
+        }
+      }
+    },
+    "MultiOutputStencilRule": {
+      "type": "object",
+      "description": "Multi-output stencil rule (RFC §7.9). A scheme kind that emits multiple named output fields from one stencil application — the canonical use case is PPM reconstruction, which produces q_left_edge and q_right_edge from a single reconstruct(q, dim=x) operator match.\n\nExpansion has two trigger paths:\n1. Consumed directly — a `use:` rule matches the scheme's `applies_to` pattern; the engine emits one observed arrayop equation per declared output into the enclosing model and rewrites the matched expression to the output named by `primary`.\n2. Demanded by a consumer — a sibling Discretization's `requires` map names one or more of this scheme's outputs (as '<this-scheme>#<output>'); the engine instantiates the provider with the consumer's inherited bindings and emits the observed equations.\n\nLoader contract (all enforced at parse time, before any expansion):\n- `outputs` MUST equal the set of keys in `stencil`. Violation: E_OUTPUTS_STENCIL_MISMATCH.\n- `primary`, when non-null, MUST name an entry of `outputs`. Violation: E_PRIMARY_NOT_AN_OUTPUT.\n- Every value in a consumer's `requires` map that references this scheme MUST match '<this-scheme>#<output>' where <output> is in this scheme's `outputs` array. Violation: E_OUTPUT_NOT_FOUND.\n- Provider instantiations are memoized by (scheme name, canonical bindings) — diamond dependencies emit one set of observed equations.\n- Emitted variable names are mangled per instantiation as <output>__<operand>__<axis> unless the author pre-declares the variable, in which case the declared name wins and a conflicting second instantiation is E_PROVIDER_NAME_CLASH.\n\nV1 scope: periodic dimensions only (face extent == cell extent n). Bounded/staggered extents and the `derived:` block are deferred to follow-on beads.",
+      "required": [
+        "applies_to",
+        "outputs",
+        "stencil"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "multi_output_stencil",
+          "description": "Discriminator for bindings that need to distinguish this rule type from a standard Discretization or CrossMetricStencilRule. Optional (presence of `outputs` plus an object-valued `stencil` is sufficient), but recommended for statically-typed bindings."
+        },
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes (e.g. reconstruct($q, dim=$x)). Guard only — bindings flow from the triggering rule by name (RFC §7.2.1). Same shape as Discretization.applies_to.",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "cubed_sphere",
+            "unstructured"
+          ],
+          "description": "Grid family this scheme targets. When present, the stencil selectors must be compatible with this family."
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Ordered list of named outputs emitted by this scheme. MUST equal the set of keys in `stencil` (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH on violation). Names must be unique within the array. Consumers reference these names in their `requires` map as '<this-scheme>#<output>'."
+        },
+        "stencil": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/StencilEntry"
+            },
+            "description": "§7.1 stencil-entry list for this output. Each entry is a {selector, coeff} pair following the same rules as Discretization.stencil entries."
+          },
+          "description": "Object keyed by output name (vs §7.1's flat array). Each value is a list of §7.1 stencil entries ({selector, coeff}) that expand at $target to produce the named output. Key set MUST equal the `outputs` array (loader-enforced: E_OUTPUTS_STENCIL_MISMATCH)."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Default staggered-grid location for all emitted output variables (e.g. 'face', 'cell_center', 'edge_normal'). Individual outputs may override this via a per-output location declaration (v2 extension, deferred). When absent, location defaults to the triggering operand's location."
+        },
+        "primary": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the output to substitute at the matched expression site in the consumed-directly trigger path. MUST be null or absent for provider-only schemes (those with no `applies_to` match in any model equation — they fire only via consumer `requires`). When non-null, MUST name a declared output (loader-enforced: E_PRIMARY_NOT_AN_OUTPUT)."
+        },
+        "accuracy": {
+          "type": "string",
+          "description": "Informational: truncation order (e.g. 'O(dx^4)')."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional scalar order selector (mirrors Discretization.order)."
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "If set, the operand variable must carry one of these staggered-grid locations (mirrors Discretization.requires_locations)."
+        },
+        "target_binding": {
+          "type": "string",
+          "default": "$target",
+          "description": "Reserved name for the target index binding (mirrors Discretization.target_binding)."
+        },
+        "free_variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of free pattern-variable names (e.g. ['$q', '$x']) that the scheme expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
         }
       }
     }
