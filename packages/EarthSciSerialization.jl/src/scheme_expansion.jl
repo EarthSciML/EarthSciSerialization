@@ -86,9 +86,24 @@ function parse_scheme(name::AbstractString, raw)::Scheme
     target_binding_raw = _getkey(raw, "target_binding"; default="\$target")
     target_binding = String(target_binding_raw)
 
+    requires_raw = _getkey(raw, "requires"; default=nothing)
+    requires = Dict{String,String}()
+    if requires_raw !== nothing
+        _is_dict_like(requires_raw) || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `requires` must be an object"))
+        for (k, v) in _iterate_dict(requires_raw)
+            sk = String(k)
+            sv = String(v)
+            occursin('#', sv) || throw(RuleEngineError("E_SCHEME_PARSE",
+                "scheme $sname: `requires.$sk` must have the form " *
+                "'<scheme>#<output>', got: $sv"))
+            requires[sk] = sv
+        end
+    end
+
     return Scheme(sname, applies_to, grid_family, combine, stencil,
                   accuracy, order, requires_locations,
-                  emits_location, target_binding)
+                  emits_location, target_binding, requires)
 end
 
 function _parse_stencil_entry(scheme_name::String, grid_family::String, raw)::StencilEntry
@@ -133,26 +148,169 @@ function _parse_selector(scheme_name::String, grid_family::String, raw)::Selecto
 end
 
 """
-    parse_schemes(raw) -> Dict{String,Scheme}
+    parse_multi_output_stencil_scheme(name, raw) -> MultiOutputStencilScheme
 
-Parse the top-level `discretizations` block into a name-keyed registry
-of [`Scheme`](@ref). Accepts the JSON-object-keyed-by-name form. Returns
-an empty dict for `nothing` / empty / missing input.
+Build a [`MultiOutputStencilScheme`](@ref) from a decoded JSON object per RFC §7.9.
+Validates:
+- `outputs` equals the key set of `stencil` (E_OUTPUTS_STENCIL_MISMATCH).
+- Each per-output stencil entry list is non-empty and valid per §7.1.
+- `primary`, when non-null, names a declared output (E_PRIMARY_NOT_AN_OUTPUT).
+- `outputs` contains no duplicate names (E_PROVIDER_NAME_CLASH).
 """
-function parse_schemes(raw)::Dict{String,Scheme}
-    out = Dict{String,Scheme}()
+function parse_multi_output_stencil_scheme(name::AbstractString, raw)::MultiOutputStencilScheme
+    sname = String(name)
+    _is_dict_like(raw) || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: must be an object"))
+
+    applies_to_raw = _getkey(raw, "applies_to"; default=nothing)
+    applies_to_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: missing required field `applies_to`"))
+    applies_to = _parse_expr(applies_to_raw)
+
+    grid_family_raw = _getkey(raw, "grid_family"; default=nothing)
+    grid_family = grid_family_raw === nothing ? "cartesian" : String(grid_family_raw)
+    grid_family in ("cartesian", "cubed_sphere", "unstructured") ||
+        throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: unknown grid_family `$grid_family` " *
+            "(closed set: cartesian, cubed_sphere, unstructured)"))
+
+    outputs_raw = _getkey(raw, "outputs"; default=nothing)
+    outputs_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: missing required field `outputs`"))
+    outputs_raw isa AbstractVector || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: `outputs` must be an array"))
+    outputs = String[String(o) for o in outputs_raw]
+    isempty(outputs) && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: `outputs` must contain at least one entry"))
+
+    seen_outputs = Set{String}()
+    for o in outputs
+        o in seen_outputs && throw(RuleEngineError("E_PROVIDER_NAME_CLASH",
+            "scheme $sname: duplicate output name `$o` in `outputs`"))
+        push!(seen_outputs, o)
+    end
+
+    stencil_raw = _getkey(raw, "stencil"; default=nothing)
+    stencil_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: missing required field `stencil`"))
+    _is_dict_like(stencil_raw) || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $sname: `stencil` must be an object (keyed by output name)"))
+
+    stencil_keys = Set{String}(String(k) for (k, _) in _iterate_dict(stencil_raw))
+    stencil_keys == seen_outputs || throw(RuleEngineError("E_OUTPUTS_STENCIL_MISMATCH",
+        "scheme $sname: `outputs` $(sort(collect(seen_outputs))) does not match " *
+        "`stencil` key set $(sort(collect(stencil_keys)))"))
+
+    stencil = Dict{String,Vector{StencilEntry}}()
+    for (ok, ov) in _iterate_dict(stencil_raw)
+        sok = String(ok)
+        ov isa AbstractVector || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: stencil entry for output `$sok` must be an array"))
+        isempty(ov) && throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: stencil entry list for output `$sok` must be non-empty"))
+        stencil[sok] = StencilEntry[_parse_stencil_entry(sname, grid_family, e)
+                                    for e in ov]
+    end
+
+    primary_raw = _getkey(raw, "primary"; default=nothing)
+    primary = nothing
+    if primary_raw !== nothing && !isnothing(primary_raw) &&
+            !(primary_raw isa Nothing)
+        pstr = String(primary_raw)
+        pstr in seen_outputs || throw(RuleEngineError("E_PRIMARY_NOT_AN_OUTPUT",
+            "scheme $sname: `primary` value `$pstr` is not a declared output " *
+            "(declared: $(sort(collect(seen_outputs))))"))
+        primary = pstr
+    end
+
+    emits_location_raw = _getkey(raw, "emits_location"; default=nothing)
+    emits_location = emits_location_raw === nothing ? nothing : String(emits_location_raw)
+
+    accuracy_raw = _getkey(raw, "accuracy"; default=nothing)
+    accuracy = accuracy_raw === nothing ? nothing : String(accuracy_raw)
+
+    order_raw = _getkey(raw, "order"; default=nothing)
+    order = nothing
+    if order_raw !== nothing
+        order_raw isa Integer || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `order` must be an integer"))
+        order = Int(order_raw)
+        order > 0 || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `order` must be a positive integer, got $order"))
+    end
+
+    requires_locations_raw = _getkey(raw, "requires_locations"; default=nothing)
+    requires_locations = String[]
+    if requires_locations_raw !== nothing
+        requires_locations_raw isa AbstractVector || throw(RuleEngineError(
+            "E_SCHEME_PARSE",
+            "scheme $sname: `requires_locations` must be an array of strings"))
+        requires_locations = String[String(s) for s in requires_locations_raw]
+    end
+
+    target_binding_raw = _getkey(raw, "target_binding"; default="\$target")
+    target_binding = String(target_binding_raw)
+
+    return MultiOutputStencilScheme(sname, applies_to, grid_family, outputs,
+                                    stencil, primary, emits_location,
+                                    accuracy, order, requires_locations,
+                                    target_binding)
+end
+
+"""
+    parse_schemes(raw) -> Dict{String,AbstractScheme}
+
+Parse the top-level `discretizations` block into a name-keyed registry of
+[`AbstractScheme`](@ref) entries. Handles both §7.1 flat stencil schemes
+([`Scheme`](@ref)) and §7.9 multi-output stencil schemes
+([`MultiOutputStencilScheme`](@ref)). Accepts the JSON-object-keyed-by-name
+form. Returns an empty dict for `nothing` / empty / missing input.
+
+After parsing all entries, validates consumer `requires` references:
+each value must resolve to a `<sibling-scheme>#<output>` where the sibling
+is a `MultiOutputStencilScheme` and the output is in its `outputs` array
+(E_PROVIDER_NOT_FOUND, E_OUTPUT_NOT_FOUND per RFC §7.9).
+"""
+function parse_schemes(raw)::Dict{String,AbstractScheme}
+    out = Dict{String,AbstractScheme}()
     raw === nothing && return out
     _is_dict_like(raw) || return out
     for (k, v) in _iterate_dict(raw)
         sk = String(k)
-        # Skip non-stencil entries (e.g. dimensional_split composites under §7.5)
-        # for the cartesian foundation. They land on a follow-up bead.
         kind_raw = _is_dict_like(v) ? _getkey(v, "kind"; default=nothing) : nothing
-        if kind_raw !== nothing && String(kind_raw) != "stencil"
+        kind = kind_raw === nothing ? "stencil" : String(kind_raw)
+        if kind == "multi_output_stencil"
+            out[sk] = parse_multi_output_stencil_scheme(sk, v)
+        elseif kind == "stencil"
+            out[sk] = parse_scheme(sk, v)
+        else
+            # Defer other kinds (cross_metric, dimensional_split, grid_dispatch, …).
             continue
         end
-        out[sk] = parse_scheme(sk, v)
     end
+
+    # Cross-scheme validation: resolve all consumer `requires` references.
+    for (_, sch) in out
+        sch isa Scheme || continue
+        isempty(sch.requires) && continue
+        for (local_name, ref) in sch.requires
+            parts = split(ref, '#'; limit=2)
+            provider_name = String(parts[1])
+            output_name   = String(parts[2])
+            if !haskey(out, provider_name) || !(out[provider_name] isa MultiOutputStencilScheme)
+                throw(RuleEngineError("E_PROVIDER_NOT_FOUND",
+                    "scheme $(sch.name): `requires.$local_name` references " *
+                    "provider `$provider_name` which is not a multi_output_stencil " *
+                    "scheme in the same discretizations block"))
+            end
+            provider = out[provider_name]::MultiOutputStencilScheme
+            output_name in provider.outputs || throw(RuleEngineError("E_OUTPUT_NOT_FOUND",
+                "scheme $(sch.name): `requires.$local_name` references output " *
+                "`$output_name` which is not declared in provider `$provider_name` " *
+                "(declared outputs: $(provider.outputs))"))
+        end
+    end
+
     return out
 end
 

@@ -129,9 +129,11 @@ export
     check_guards, check_guard, check_scope,
     with_query_point,
     parse_rule, parse_rules, check_unrewritten_pde_ops,
-    # Scheme expansion (RFC §7, esm-j1u)
-    Scheme, StencilEntry, Selector, CartesianSelector,
-    parse_scheme, parse_schemes, materialize, expand_scheme,
+    # Scheme expansion (RFC §7 / §7.9, esm-j1u / ess-494)
+    AbstractScheme, Scheme, MultiOutputStencilScheme,
+    StencilEntry, Selector, CartesianSelector,
+    parse_scheme, parse_schemes, parse_multi_output_stencil_scheme,
+    materialize, expand_scheme,
     # Discretization pipeline (RFC §11, gt-gbs2)
     discretize,
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)

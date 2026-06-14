@@ -441,3 +441,198 @@ const ESM_Expr = EarthSciSerialization.Expr
         end
     end
 end
+
+# ============================================================================
+# §7.9 Multi-output stencil scheme — parse + loader validation (ess-494)
+# ============================================================================
+
+@testset "multi_output_stencil parse + loader validation (RFC §7.9, ess-494)" begin
+
+    # Helper: build a minimal multi-output stencil raw object with two outputs.
+    function _ppm_raw(; outputs=["q_left", "q_right"],
+                        stencil_keys=["q_left", "q_right"],
+                        primary=nothing,
+                        extra_outputs=String[])
+        stencil = Dict{String,Any}()
+        for k in stencil_keys
+            stencil[k] = Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff" => 0.5)
+            ]
+        end
+        obj = Dict{String,Any}(
+            "kind"       => "multi_output_stencil",
+            "applies_to" => Dict("op" => "reconstruct", "args" => Any["\$q"], "dim" => "\$x"),
+            "grid_family"=> "cartesian",
+            "outputs"    => vcat(outputs, extra_outputs),
+            "stencil"    => stencil,
+        )
+        if primary !== nothing
+            obj["primary"] = primary
+        end
+        return obj
+    end
+
+    @testset "valid parse: two-output stencil" begin
+        raw = _ppm_raw()
+        sch = parse_multi_output_stencil_scheme("ppm", raw)
+        @test sch isa MultiOutputStencilScheme
+        @test sch.name == "ppm"
+        @test sch.outputs == ["q_left", "q_right"]
+        @test haskey(sch.stencil, "q_left")
+        @test haskey(sch.stencil, "q_right")
+        @test length(sch.stencil["q_left"]) == 1
+        @test sch.primary === nothing
+        @test sch.emits_location === nothing
+    end
+
+    @testset "valid parse: primary names a declared output" begin
+        raw = _ppm_raw(primary="q_left")
+        sch = parse_multi_output_stencil_scheme("ppm", raw)
+        @test sch.primary == "q_left"
+    end
+
+    @testset "valid parse: parse_schemes dispatches multi_output_stencil" begin
+        schemes = parse_schemes(Dict("ppm" => _ppm_raw()))
+        @test haskey(schemes, "ppm")
+        @test schemes["ppm"] isa MultiOutputStencilScheme
+    end
+
+    @testset "E_OUTPUTS_STENCIL_MISMATCH: outputs ≠ stencil keys" begin
+        raw = _ppm_raw(outputs=["q_left", "q_right"],
+                       stencil_keys=["q_left"])           # missing q_right in stencil
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("ppm", raw)
+        end
+        @test ex.value.code == "E_OUTPUTS_STENCIL_MISMATCH"
+    end
+
+    @testset "E_OUTPUTS_STENCIL_MISMATCH: extra stencil key not in outputs" begin
+        raw = _ppm_raw(outputs=["q_left"],
+                       stencil_keys=["q_left", "q_right"])  # q_right not in outputs
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("ppm", raw)
+        end
+        @test ex.value.code == "E_OUTPUTS_STENCIL_MISMATCH"
+    end
+
+    @testset "E_PRIMARY_NOT_AN_OUTPUT: primary not in declared outputs" begin
+        raw = _ppm_raw(primary="q_center")   # q_center is not declared
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("ppm", raw)
+        end
+        @test ex.value.code == "E_PRIMARY_NOT_AN_OUTPUT"
+    end
+
+    @testset "E_PROVIDER_NAME_CLASH: duplicate output names" begin
+        raw = _ppm_raw(outputs=["q_left", "q_left"],  # duplicate
+                       stencil_keys=["q_left"])
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_multi_output_stencil_scheme("ppm", raw)
+        end
+        @test ex.value.code == "E_PROVIDER_NAME_CLASH"
+    end
+
+    @testset "valid consumer requires: resolves to sibling multi_output_stencil" begin
+        provider_raw = _ppm_raw()
+        consumer_raw = Dict{String,Any}(
+            "applies_to"  => Dict("op"=>"flux","args"=>Any["\$q","\$c"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "stencil"     => Any[
+                Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"=>Dict("op"=>"*","args"=>Any["\$c","q_left"]))
+            ],
+            "requires"    => Dict("q_left" => "ppm#q_left",
+                                  "q_right" => "ppm#q_right"),
+        )
+        schemes = parse_schemes(Dict("ppm" => provider_raw, "flux" => consumer_raw))
+        @test schemes["flux"] isa Scheme
+        @test schemes["flux"].requires == Dict("q_left"=>"ppm#q_left",
+                                               "q_right"=>"ppm#q_right")
+    end
+
+    @testset "E_PROVIDER_NOT_FOUND: requires references absent scheme" begin
+        consumer_raw = Dict{String,Any}(
+            "applies_to" => Dict("op"=>"flux","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family"=> "cartesian",
+            "stencil"    => Any[
+                Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"=>1.0)
+            ],
+            "requires"   => Dict("ql" => "nonexistent_scheme#q_left"),
+        )
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_schemes(Dict("flux" => consumer_raw))
+        end
+        @test ex.value.code == "E_PROVIDER_NOT_FOUND"
+    end
+
+    @testset "E_PROVIDER_NOT_FOUND: requires references a plain stencil (not multi_output)" begin
+        plain_raw = Dict{String,Any}(
+            "applies_to" => Dict("op"=>"grad","args"=>Any["\$u"],"dim"=>"\$x"),
+            "grid_family"=> "cartesian",
+            "stencil"    => Any[
+                Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"=>1.0)
+            ],
+        )
+        consumer_raw = Dict{String,Any}(
+            "applies_to" => Dict("op"=>"flux","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family"=> "cartesian",
+            "stencil"    => Any[
+                Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"=>1.0)
+            ],
+            "requires"   => Dict("ql" => "plain_grad#some_output"),
+        )
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_schemes(Dict("plain_grad" => plain_raw, "flux" => consumer_raw))
+        end
+        @test ex.value.code == "E_PROVIDER_NOT_FOUND"
+    end
+
+    @testset "E_OUTPUT_NOT_FOUND: requires references undeclared output in provider" begin
+        provider_raw = _ppm_raw()
+        consumer_raw = Dict{String,Any}(
+            "applies_to" => Dict("op"=>"flux","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family"=> "cartesian",
+            "stencil"    => Any[
+                Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"=>1.0)
+            ],
+            "requires"   => Dict("ql" => "ppm#q_center"),  # q_center not in outputs
+        )
+        ex = @test_throws EarthSciSerialization.RuleEngineError begin
+            parse_schemes(Dict("ppm" => provider_raw, "flux" => consumer_raw))
+        end
+        @test ex.value.code == "E_OUTPUT_NOT_FOUND"
+    end
+
+    @testset "fixture round-trip: multi_output_ppm_reconstruction.esm" begin
+        path = joinpath(@__DIR__, "..", "..", "..", "tests",
+                        "discretizations", "multi_output_ppm_reconstruction.esm")
+        @test isfile(path)
+        esm = EarthSciSerialization.load(path)
+        @test esm isa EsmFile
+        @test esm.discretizations !== nothing
+        @test haskey(esm.discretizations, "ppm_reconstruction")
+        @test haskey(esm.discretizations, "ppm_flux")
+        @test esm.discretizations["ppm_reconstruction"]["kind"] == "multi_output_stencil"
+        @test esm.discretizations["ppm_flux"]["kind"] == "stencil"
+
+        schemes = parse_schemes(esm.discretizations)
+        @test schemes["ppm_reconstruction"] isa MultiOutputStencilScheme
+        @test schemes["ppm_flux"] isa Scheme
+        ppm = schemes["ppm_reconstruction"]::MultiOutputStencilScheme
+        @test ppm.outputs == ["q_left_edge", "q_right_edge"]
+        @test ppm.primary === nothing
+        @test ppm.emits_location == "face"
+        @test haskey(ppm.stencil, "q_left_edge")
+        @test haskey(ppm.stencil, "q_right_edge")
+        @test length(ppm.stencil["q_left_edge"]) == 2
+        @test length(ppm.stencil["q_right_edge"]) == 2
+        flux = schemes["ppm_flux"]::Scheme
+        @test flux.requires["q_left_edge"] == "ppm_reconstruction#q_left_edge"
+        @test flux.requires["q_right_edge"] == "ppm_reconstruction#q_right_edge"
+    end
+end

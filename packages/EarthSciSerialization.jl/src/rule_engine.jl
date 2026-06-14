@@ -453,7 +453,8 @@ struct RuleContext
     # esm-j1u: registry of `discretizations.<name>` schemes referenced by
     # `use:` rules (RFC §5.2 / §7.2.1). Empty when no schemes are declared
     # or when only inline-`replacement` rules are in play.
-    schemes::Dict{String,Scheme}
+    # Holds both Scheme (§7.1) and MultiOutputStencilScheme (§7.9) entries.
+    schemes::Dict{String,AbstractScheme}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
@@ -461,12 +462,12 @@ RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
                             Dict{String,Int}(),
                             nothing,
                             Dict{String,Vector{Dict{String,Int}}}(),
-                            Dict{String,Scheme}())
+                            Dict{String,AbstractScheme}())
 
 RuleContext(grids, variables) = RuleContext(grids, variables,
                                             Dict{String,Int}(), nothing,
                                             Dict{String,Vector{Dict{String,Int}}}(),
-                                            Dict{String,Scheme}())
+                                            Dict{String,AbstractScheme}())
 
 # Backward-compatible 4-arg constructor (pre-mask_field callers).
 RuleContext(grids::Dict{String,Dict{String,Any}},
@@ -475,7 +476,7 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
             grid_name::Union{String,Nothing}) =
     RuleContext(grids, variables, query_point, grid_name,
                 Dict{String,Vector{Dict{String,Int}}}(),
-                Dict{String,Scheme}())
+                Dict{String,AbstractScheme}())
 
 # Backward-compatible 5-arg constructor (pre-esm-j1u schemes callers).
 RuleContext(grids::Dict{String,Dict{String,Any}},
@@ -484,7 +485,7 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
             grid_name::Union{String,Nothing},
             mask_fields::Dict{String,Vector{Dict{String,Int}}}) =
     RuleContext(grids, variables, query_point, grid_name, mask_fields,
-                Dict{String,Scheme}())
+                Dict{String,AbstractScheme}())
 
 """
     with_query_point(ctx, point; grid=nothing) -> RuleContext
@@ -722,6 +723,11 @@ function _apply_rule_rhs(rule::Rule, bindings::Dict{String,Expr},
             "rule $(rule.name): `use: $sname` references a scheme not " *
             "declared in `discretizations`"))
         scheme = ctx.schemes[sname]
+        scheme isa Scheme || throw(RuleEngineError("E_SCHEME_MISMATCH",
+            "rule $(rule.name): `use: $sname` references a " *
+            "$(typeof(scheme)) scheme; direct `use:` expansion of " *
+            "multi_output_stencil schemes is not supported in this release " *
+            "(RFC §7.9 demand-driven path is a follow-on bead)"))
         # `applies_to` guard check (RFC §7.2.1 step 3): re-match the scheme's
         # depth-1 pattern against the rule-matched subtree's reconstruction
         # via `bindings`. The scheme's pattern variables must already appear
