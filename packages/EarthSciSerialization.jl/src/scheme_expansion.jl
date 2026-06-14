@@ -729,13 +729,7 @@ function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
     periodic_dims = String.(get(gmeta, "periodic_dims", String[]))
     dim_sizes    = get(gmeta, "dim_sizes", Dict{String,Any}())
 
-    # 3. v1 scope: all spatial dims must be periodic (OQ1 deferred).
-    for d in spatial_dims
-        d in periodic_dims || throw(RuleEngineError("E_SCHEME_BOUNDED_DIM",
-            "scheme $(scheme.name): dimension '$d' of grid '$grid_name' is not " *
-            "periodic; multi_output_stencil v1 supports periodic dimensions only " *
-            "(bounded/staggered extents deferred to OQ1 follow-on bead)"))
-    end
+    # 3. (OQ1 resolved) Bounded dimensions are now supported; no restriction.
 
     # 4. Compute mangled output names.
     axis_name = _scheme_axis_name(scheme, bindings)
@@ -754,13 +748,19 @@ function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
         nonuniform  = String.(get(gmeta, "nonuniform_dims", String[]))
         metric_arr  = String.(get(gmeta, "metric_array_names", String[]))
         output_idx  = String[_CARTESIAN_CANONICAL_NAMES[d] for d in 1:nd]
+        is_face     = !isnothing(scheme.emits_location) &&
+                      scheme.emits_location == "face"
         ranges      = Dict{String,Any}()
         for d in 1:nd
-            sz = get(dim_sizes, spatial_dims[d], nothing)
+            dim_name = spatial_dims[d]
+            sz = get(dim_sizes, dim_name, nothing)
             sz === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
                 "scheme $(scheme.name): grid '$grid_name' missing size for " *
-                "dim '$(spatial_dims[d])'"))
-            ranges[output_idx[d]] = Any[1, Int(sz)]
+                "dim '$dim_name'"))
+            # Face-located output on a bounded axis has n+1 faces (OQ1, RFC §7.9).
+            face_staggered = is_face && !(dim_name in periodic_dims) &&
+                             !isnothing(axis_name) && dim_name == axis_name
+            ranges[output_idx[d]] = Any[1, face_staggered ? Int(sz) + 1 : Int(sz)]
         end
 
         # 7. Emit one observed arrayop equation per stencil output.
@@ -983,12 +983,7 @@ function _demand_resolve_provider(provider::MultiOutputStencilScheme,
     gmeta        = ctx.grids[grid_name]
     periodic_dims = String.(get(gmeta, "periodic_dims", String[]))
 
-    # 3. v1 scope: all spatial dims must be periodic.
-    for d in spatial_dims
-        d in periodic_dims || throw(RuleEngineError("E_SCHEME_BOUNDED_DIM",
-            "scheme $(provider.name): dimension '$d' of grid '$grid_name' is not " *
-            "periodic; multi_output_stencil v1 supports periodic dimensions only"))
-    end
+    # 3. (OQ1 resolved) Bounded dimensions are now supported; no restriction.
 
     # 4. Compute mangled output names.
     axis_name = _scheme_axis_name(provider, bindings)
@@ -1018,13 +1013,19 @@ function _demand_resolve_provider(provider::MultiOutputStencilScheme,
         nonuniform  = String.(get(gmeta, "nonuniform_dims", String[]))
         metric_arr  = String.(get(gmeta, "metric_array_names", String[]))
         output_idx  = String[_CARTESIAN_CANONICAL_NAMES[d] for d in 1:nd]
+        is_face     = !isnothing(provider.emits_location) &&
+                      provider.emits_location == "face"
         ranges      = Dict{String,Any}()
         for d in 1:nd
-            sz = get(dim_sizes, spatial_dims[d], nothing)
+            dim_name = spatial_dims[d]
+            sz = get(dim_sizes, dim_name, nothing)
             sz === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
                 "scheme $(provider.name): grid '$grid_name' missing size for " *
-                "dim '$(spatial_dims[d])'"))
-            ranges[output_idx[d]] = Any[1, Int(sz)]
+                "dim '$dim_name'"))
+            # Face-located output on a bounded axis has n+1 faces (OQ1, RFC §7.9).
+            face_staggered = is_face && !(dim_name in periodic_dims) &&
+                             !isnothing(axis_name) && dim_name == axis_name
+            ranges[output_idx[d]] = Any[1, face_staggered ? Int(sz) + 1 : Int(sz)]
         end
 
         operand_meta  = get(ctx.variables, operand_name, Dict{String,Any}())

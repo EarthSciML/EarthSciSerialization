@@ -54,6 +54,12 @@
       "input":  "inputs/multi_output_derived.esm",
       "golden": "golden/multi_output_derived.json",
       "tags": ["step2", "pde", "multi-output-stencil", "derived-outputs", "trigger-1", "section-7.9", "ess-qxs"]
+    },
+    {
+      "id": "multi_output_bounded_face",
+      "input":  "inputs/multi_output_bounded_face.esm",
+      "golden": "golden/multi_output_bounded_face.json",
+      "tags": ["step2", "pde", "multi-output-stencil", "trigger-2", "demand-driven", "bounded-dim", "face-stagger", "section-7.9", "ess-z31"]
     }
   ]
 }

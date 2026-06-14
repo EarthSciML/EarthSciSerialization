@@ -768,16 +768,57 @@ end
         @test r2.args[1].name == "q_lo__v__i"
     end
 
-    @testset "E_SCHEME_BOUNDED_DIM for non-periodic dimension" begin
+    @testset "OQ1: face-located output on bounded dimension gets n+1 range" begin
         ctx = _make_ctx(periodic=false)
         sch = schemes_with_recon["recon1d"]::MultiOutputStencilScheme
         b   = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
-        ex  = try
-            EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx)
-            nothing
-        catch e; e end
-        @test ex isa EarthSciSerialization.RuleEngineError
-        @test ex.code == "E_SCHEME_BOUNDED_DIM"
+        result = EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx)
+        # Expansion must succeed (no E_SCHEME_BOUNDED_DIM any more).
+        @test result isa OpExpr
+        # The emitted equations must use n+1=9 on the bounded axis (face stagger).
+        @test length(ctx.emitted_equations) == 2
+        for eqn in ctx.emitted_equations
+            @test eqn["lhs"]["ranges"] == Dict("i" => Any[1, 9])
+            @test eqn["rhs"]["ranges"] == Dict("i" => Any[1, 9])
+        end
+    end
+
+    @testset "OQ1: cell-center-located output on bounded dimension keeps n range" begin
+        cell_raw = Dict{String,Any}(
+            "kind"           => "multi_output_stencil",
+            "applies_to"     => Dict("op" => "recon", "args" => Any["\$q"], "dim" => "\$x"),
+            "grid_family"    => "cartesian",
+            "outputs"        => Any["q_lo", "q_hi"],
+            "emits_location" => "cell_center",
+            "primary"        => "q_lo",
+            "stencil"        => Dict{String,Any}(
+                "q_lo" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+                "q_hi" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+            ),
+        )
+        cell_schemes = parse_schemes(Dict("cell_recon" => cell_raw))
+        ctx = _make_ctx(periodic=false)
+        # Re-build ctx with cell_recon scheme.
+        ctx2 = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"  => ["i"],
+                "periodic_dims" => String[],
+                "nonuniform_dims" => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"     => Dict{String,Any}("i" => 8),
+            )),
+            Dict("q" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(cell_schemes...),
+        )
+        sch = cell_schemes["cell_recon"]::MultiOutputStencilScheme
+        b   = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx2)
+        # cell_center location on bounded dim: range stays n=8, no +1.
+        for eqn in ctx2.emitted_equations
+            @test eqn["lhs"]["ranges"] == Dict("i" => Any[1, 8])
+        end
     end
 
     @testset "provider-only (primary=null) raises E_SCHEME_MISMATCH via use:-rule" begin
@@ -1034,6 +1075,33 @@ end
         EarthSciSerialization.expand_scheme(schemes2["ppm_flux"]::Scheme, b_flux, ctx)
         EarthSciSerialization.expand_scheme(schemes2["flux2"]::Scheme, b_flux2, ctx)
         @test length(ctx.emitted_equations) == 2  # provider emitted exactly once
+    end
+
+    @testset "OQ1 trigger-2: face-located output on bounded dimension gets n+1 range" begin
+        ctx_bounded = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"       => ["i"],
+                "periodic_dims"      => String[],   # bounded, not periodic
+                "nonuniform_dims"    => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"          => Dict{String,Any}("i" => 8),
+            )),
+            Dict("q" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+                 "c" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes...),
+        )
+        sch = schemes["ppm_flux"]::Scheme
+        b   = Dict{String,ESM_Expr}(
+            "\$q" => VarExpr("q"), "\$c" => VarExpr("c"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_scheme(sch, b, ctx_bounded)
+        # Provider emitted two observed equations with n+1=9 ranges on bounded axis.
+        @test length(ctx_bounded.emitted_equations) == 2
+        for eqn in ctx_bounded.emitted_equations
+            @test eqn["lhs"]["ranges"] == Dict("i" => Any[1, 9])
+            @test eqn["rhs"]["ranges"] == Dict("i" => Any[1, 9])
+        end
     end
 
     @testset "E_SCHEME_CYCLE: provider already on resolution stack" begin

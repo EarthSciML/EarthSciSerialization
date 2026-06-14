@@ -2158,9 +2158,13 @@ stencil/coeff expressions reference them by name.
 - Emitted variable names are mangled as `<output>__<operand>__<axis>` per
   instantiation unless the author pre-declares the variable (pre-declared name wins).
 
-**V1 scope:** Periodic dimensions only (RFC open question 1: face extent equals
-cell extent `n`). Bounded/staggered extents (OQ1) and the `derived:` block for
-non-stencil outputs (OQ3) are deferred to follow-on beads.
+**Staggered extents (OQ1 resolved):** For a face-located output
+(`emits_location: "face"`) on a bounded (non-periodic) dimension, the emitted
+arrayop `ranges` along the stencil axis extend to `n+1` (bounded dimension with
+`n` cells has `n+1` faces). Periodic dimensions retain `n` faces (face extent
+equals cell extent). All other output locations keep `n` on bounded dimensions.
+The `derived:` block for non-stencil outputs (OQ3) is deferred to a follow-on
+bead.
 
 **Relationship to §7.5/§7.6.** The `requires` binding name-flow is the fourth
 instance of the sibling-scheme reference pattern (after §7.5 `inner_rule`, §7.6
