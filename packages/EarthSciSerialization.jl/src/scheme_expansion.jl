@@ -446,9 +446,26 @@ function expand_scheme(scheme::Scheme,
     _nonuniform_dims = _gm !== nothing ? get(_gm, "nonuniform_dims", String[]) : String[]
     _metric_names = _gm !== nothing ? get(_gm, "metric_array_names", String[]) : String[]
 
+    # RFC §7.9 trigger 2: demand-driven provider resolution.
+    # For each requires entry, instantiate the provider with the consumer's
+    # inherited bindings and collect the mangled output names for coefficient
+    # substitution (local alias → mangled name, e.g. q_left_edge → q_left_edge__q__i).
+    requires_subs = Dict{String,String}()
+    if !isempty(scheme.requires)
+        for (local_name, ref) in scheme.requires
+            parts = split(ref, '#'; limit=2)
+            provider_name = String(parts[1])
+            output_name   = String(parts[2])
+            provider = ctx.schemes[provider_name]::MultiOutputStencilScheme
+            mangled = _demand_resolve_provider(provider, bindings, ctx)
+            requires_subs[local_name] = mangled[output_name]
+        end
+    end
+
     terms = Expr[_expand_stencil_entry(scheme, e, operand_var, target,
                                        spatial_dims, bindings,
-                                       _nonuniform_dims, _metric_names)
+                                       _nonuniform_dims, _metric_names,
+                                       requires_subs)
                  for e in scheme.stencil]
 
     if length(terms) == 1
@@ -516,7 +533,8 @@ function _expand_stencil_entry(scheme::Scheme, entry::StencilEntry,
                                spatial_dims::Vector{String},
                                bindings::Dict{String,Expr},
                                nonuniform_dims::Vector{String}=String[],
-                               metric_array_names::Vector{String}=String[])::Expr
+                               metric_array_names::Vector{String}=String[],
+                               requires_subs::Dict{String,String}=Dict{String,String}())::Expr
     sel = entry.selector
     sel isa CartesianSelector || throw(RuleEngineError("E_SCHEME_MATERIALIZE",
         "scheme $(scheme.name): non-cartesian selectors not supported in this " *
@@ -531,6 +549,11 @@ function _expand_stencil_entry(scheme::Scheme, entry::StencilEntry,
     operand_ref = OpExpr("index", Expr[operand_var, indices...])
 
     coeff = apply_bindings(entry.coeff, bindings)
+
+    # Substitute provider-emitted names for their local aliases in coefficients.
+    if !isempty(requires_subs)
+        coeff = _apply_requires_substitution(coeff, requires_subs)
+    end
 
     # §6.2.1 — auto-index rewrite: bare metric-array names → index(name, target_idx)
     if !isempty(metric_array_names) && axis_name in nonuniform_dims
@@ -777,6 +800,190 @@ function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
         push!(idx_args, VarExpr(idx))
     end
     return OpExpr("index", idx_args)
+end
+
+# ============================================================================
+# Multi-output stencil — trigger 2 (demand-driven provider, RFC §7.9, ess-699)
+# ============================================================================
+
+# Walk `expr` and replace bare VarExpr names found in `subs` with the
+# corresponding mangled name. Pattern variables ($-prefixed) are untouched —
+# apply_bindings handles those before this runs.
+function _apply_requires_substitution(expr::Expr,
+                                       subs::Dict{String,String})::Expr
+    isempty(subs) && return expr
+    if expr isa VarExpr && !_is_pvar(expr) && haskey(subs, expr.name)
+        return VarExpr(subs[expr.name])
+    end
+    if expr isa OpExpr
+        changed = false
+        new_args = Expr[]
+        for a in expr.args
+            na = _apply_requires_substitution(a, subs)
+            push!(new_args, na)
+            na !== a && (changed = true)
+        end
+        changed || return expr
+        return OpExpr(expr.op, new_args;
+                      wrt=expr.wrt, dim=expr.dim,
+                      output_idx=expr.output_idx,
+                      expr_body=expr.expr_body,
+                      reduce=expr.reduce, ranges=expr.ranges,
+                      regions=expr.regions, values=expr.values,
+                      shape=expr.shape, perm=expr.perm,
+                      axis=expr.axis, fn=expr.fn,
+                      name=expr.name, value=expr.value)
+    end
+    return expr
+end
+
+"""
+    _demand_resolve_provider(provider, bindings, ctx) -> Dict{String,String}
+
+RFC §7.9 trigger 2 — demand-driven provider instantiation. Called from
+`expand_scheme` when a consumer `Scheme` carries a non-empty `requires` map.
+
+Uses the consumer's inherited `bindings` to determine the provider's operand
+and axis (§7.2.1 name-flow, same mechanism as sibling-scheme refs in
+`dimensional_split` and `cross_metric`). Emits one observed arrayop equation
+per declared output into `ctx.emitted_equations` and auto-declares the output
+variables into `ctx.emitted_variables`.
+
+Memoized by `(provider.name, mangled_output_names)` via `ctx.emitted_scheme_keys`
+so that diamond deps (two consumers sharing a provider) emit exactly once.
+
+Returns `Dict{String,String}` mapping each declared output name to its
+mangled variable name (`<output>__<operand>[__<axis>]`).
+
+Throws:
+- `E_SCHEME_CYCLE` if `provider.name` is already on `ctx.provider_resolution_stack`.
+- `E_SCHEME_BOUNDED_DIM` for non-periodic spatial dimensions (v1 scope).
+- `E_PROVIDER_NAME_CLASH` if a mangled name is already owned by a different provider.
+"""
+function _demand_resolve_provider(provider::MultiOutputStencilScheme,
+                                   bindings::Dict{String,Expr},
+                                   ctx::RuleContext)::Dict{String,String}
+    # 1. Recover operand from consumer's inherited bindings.
+    operand_expr = _scheme_operand_multi(provider, bindings)
+    operand_expr isa VarExpr || throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+        "scheme $(provider.name): provider operand must be a bare variable reference"))
+    operand_name = operand_expr.name
+
+    # 2. Grid metadata.
+    grid_name    = _operand_grid(operand_expr, ctx)
+    spatial_dims = _grid_spatial_dims(grid_name, ctx)
+    gmeta        = ctx.grids[grid_name]
+    periodic_dims = String.(get(gmeta, "periodic_dims", String[]))
+
+    # 3. v1 scope: all spatial dims must be periodic.
+    for d in spatial_dims
+        d in periodic_dims || throw(RuleEngineError("E_SCHEME_BOUNDED_DIM",
+            "scheme $(provider.name): dimension '$d' of grid '$grid_name' is not " *
+            "periodic; multi_output_stencil v1 supports periodic dimensions only"))
+    end
+
+    # 4. Compute mangled output names.
+    axis_name = _scheme_axis_name(provider, bindings)
+    mangled = Dict{String,String}(
+        o => _mangle_output_name(o, operand_name, axis_name)
+        for o in provider.outputs)
+
+    # 5. Memoization: if already instantiated with this binding set, return cached result.
+    memo_key = _emit_memokey(provider.name, mangled)
+    memo_key in ctx.emitted_scheme_keys && return mangled
+
+    # 6. Cycle detection (only relevant for not-yet-memoized instantiation).
+    if provider.name in ctx.provider_resolution_stack
+        stack_list = join(sort!(collect(ctx.provider_resolution_stack)), ", ")
+        throw(RuleEngineError("E_SCHEME_CYCLE",
+            "demand-driven provider resolution cycle: scheme '$(provider.name)' is " *
+            "already being resolved (stack: $stack_list)"))
+    end
+
+    # 7. Mark in-progress: add to resolution stack and memo set before emitting.
+    push!(ctx.provider_resolution_stack, provider.name)
+    push!(ctx.emitted_scheme_keys, memo_key)
+    try
+        dim_sizes   = get(gmeta, "dim_sizes", Dict{String,Any}())
+        nd          = length(spatial_dims)
+        target      = _cartesian_target(spatial_dims)
+        nonuniform  = String.(get(gmeta, "nonuniform_dims", String[]))
+        metric_arr  = String.(get(gmeta, "metric_array_names", String[]))
+        output_idx  = String[_CARTESIAN_CANONICAL_NAMES[d] for d in 1:nd]
+        ranges      = Dict{String,Any}()
+        for d in 1:nd
+            sz = get(dim_sizes, spatial_dims[d], nothing)
+            sz === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+                "scheme $(provider.name): grid '$grid_name' missing size for " *
+                "dim '$(spatial_dims[d])'"))
+            ranges[output_idx[d]] = Any[1, Int(sz)]
+        end
+
+        for out_name in provider.outputs
+            mn = mangled[out_name]
+
+            # Pre-declared variable: author supplied it in the document; skip emission.
+            mn in keys(ctx.variables) && continue
+
+            # Clash: a different instantiation already emitted this mangled name.
+            if mn in keys(ctx.emitted_variables)
+                throw(RuleEngineError("E_PROVIDER_NAME_CLASH",
+                    "scheme $(provider.name): mangled output name '$mn' was already " *
+                    "emitted by a different provider instantiation"))
+            end
+
+            entries    = provider.stencil[out_name]
+            terms      = Expr[_expand_stencil_entry_multi(provider, out_name, e,
+                                   operand_expr, target, spatial_dims, bindings,
+                                   nonuniform, metric_arr)
+                               for e in entries]
+            rhs_scalar = length(terms) == 1 ? terms[1] : OpExpr("+", terms)
+            rhs_canon  = canonicalize(rhs_scalar)
+            rhs_dict   = serialize_expression(rhs_canon)
+
+            lhs_index_args = Any[mn]
+            for idx in output_idx; push!(lhs_index_args, idx); end
+
+            eqn = Dict{String,Any}(
+                "lhs" => Dict{String,Any}(
+                    "op"         => "arrayop",
+                    "args"       => Any[],
+                    "output_idx" => output_idx,
+                    "expr"       => Dict{String,Any}(
+                        "op"   => "index",
+                        "args" => lhs_index_args,
+                    ),
+                    "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                ),
+                "rhs" => Dict{String,Any}(
+                    "op"         => "arrayop",
+                    "args"       => Any[],
+                    "output_idx" => output_idx,
+                    "expr"       => rhs_dict,
+                    "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                ),
+                "observed"   => true,
+                "emitted_by" => provider.name,
+            )
+            push!(ctx.emitted_equations, eqn)
+
+            # Auto-declare the output variable.
+            operand_meta  = get(ctx.variables, operand_name, Dict{String,Any}())
+            operand_shape = get(operand_meta, "shape", Any[String(d) for d in spatial_dims])
+            emit_loc      = provider.emits_location === nothing ? "cell_center" :
+                            provider.emits_location
+            ctx.emitted_variables[mn] = Dict{String,Any}(
+                "type"     => "observed",
+                "units"    => "1",
+                "shape"    => operand_shape,
+                "location" => emit_loc,
+            )
+        end
+    finally
+        delete!(ctx.provider_resolution_stack, provider.name)
+    end
+
+    return mangled
 end
 
 # ============================================================================

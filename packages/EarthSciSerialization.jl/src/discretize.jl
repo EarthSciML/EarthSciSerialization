@@ -220,6 +220,7 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
     empty!(ctx.emitted_equations)
     empty!(ctx.emitted_variables)
     empty!(ctx.emitted_scheme_keys)
+    empty!(ctx.provider_resolution_stack)
 
     # Collect rules: model-local overrides/extends top-level.
     local_rules_raw = get(model, "rules", nothing)

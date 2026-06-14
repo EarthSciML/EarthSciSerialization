@@ -464,6 +464,10 @@ struct RuleContext
     emitted_equations::Vector{Dict{String,Any}}
     emitted_variables::Dict{String,Dict{String,Any}}
     emitted_scheme_keys::Set{String}
+    # ess-699: resolution stack for demand-driven provider expansion (trigger 2,
+    # RFC §7.9). Tracks which MultiOutputStencilScheme names are currently being
+    # instantiated so that circular requires chains throw E_SCHEME_CYCLE.
+    provider_resolution_stack::Set{String}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
@@ -474,6 +478,7 @@ RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
                             Dict{String,AbstractScheme}(),
                             Dict{String,Any}[],
                             Dict{String,Dict{String,Any}}(),
+                            Set{String}(),
                             Set{String}())
 
 RuleContext(grids, variables) = RuleContext(grids, variables,
@@ -482,6 +487,7 @@ RuleContext(grids, variables) = RuleContext(grids, variables,
                                             Dict{String,AbstractScheme}(),
                                             Dict{String,Any}[],
                                             Dict{String,Dict{String,Any}}(),
+                                            Set{String}(),
                                             Set{String}())
 
 # Backward-compatible 4-arg constructor (pre-mask_field callers).
@@ -494,6 +500,7 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
                 Dict{String,AbstractScheme}(),
                 Dict{String,Any}[],
                 Dict{String,Dict{String,Any}}(),
+                Set{String}(),
                 Set{String}())
 
 # Backward-compatible 5-arg constructor (pre-esm-j1u schemes callers).
@@ -506,6 +513,7 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
                 Dict{String,AbstractScheme}(),
                 Dict{String,Any}[],
                 Dict{String,Dict{String,Any}}(),
+                Set{String}(),
                 Set{String}())
 
 # Backward-compatible 6-arg constructor (pre-ess-ebe emission-buffer callers).
@@ -521,6 +529,7 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
                 Dict{String,AbstractScheme}(k => v for (k, v) in schemes),
                 Dict{String,Any}[],
                 Dict{String,Dict{String,Any}}(),
+                Set{String}(),
                 Set{String}())
 
 """
@@ -533,8 +542,9 @@ supplied, names which grid entry in `ctx.grids` the point refers to —
 used to resolve `region.boundary.side` against grid dim bounds.
 
 The emission buffers (`emitted_equations`, `emitted_variables`,
-`emitted_scheme_keys`) are shared with the original context so that
-emissions from any derived context accumulate in the same place.
+`emitted_scheme_keys`, `provider_resolution_stack`) are shared with the
+original context so that emissions from any derived context accumulate in
+the same place.
 """
 with_query_point(ctx::RuleContext, point::Dict{String,Int};
                  grid::Union{String,Nothing}=nothing) =
@@ -543,7 +553,8 @@ with_query_point(ctx::RuleContext, point::Dict{String,Int};
                 ctx.mask_fields, ctx.schemes,
                 ctx.emitted_equations,
                 ctx.emitted_variables,
-                ctx.emitted_scheme_keys)
+                ctx.emitted_scheme_keys,
+                ctx.provider_resolution_stack)
 
 """
     check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
@@ -779,9 +790,9 @@ function _apply_rule_rhs(rule::Rule, bindings::Dict{String,Expr},
             # expression to index(primary_output, i, ...).
             scheme.primary !== nothing || throw(RuleEngineError("E_SCHEME_MISMATCH",
                 "rule $(rule.name): `use: $sname` references a provider-only " *
-                "multi_output_stencil scheme (primary=null); direct `use:` of " *
-                "provider-only schemes requires the demand-driven path (trigger 2, " *
-                "not yet implemented)"))
+                "multi_output_stencil scheme (primary=null); direct `use:` is not " *
+                "allowed for provider-only schemes — use a consumer Scheme with a " *
+                "`requires` entry instead (RFC §7.9 trigger 2)"))
             return expand_multi_output_scheme_direct(scheme, bindings, ctx)
         else
             throw(RuleEngineError("E_SCHEME_MISMATCH",

@@ -42,6 +42,12 @@
       "input":  "inputs/multi_output_direct_consumed.esm",
       "golden": "golden/multi_output_direct_consumed.json",
       "tags": ["step2", "pde", "multi-output-stencil", "trigger-1", "section-7.9", "ess-ebe"]
+    },
+    {
+      "id": "multi_output_demand_driven",
+      "input":  "inputs/multi_output_demand_driven.esm",
+      "golden": "golden/multi_output_demand_driven.json",
+      "tags": ["step2", "pde", "multi-output-stencil", "trigger-2", "demand-driven", "section-7.9", "ess-699"]
     }
   ]
 }

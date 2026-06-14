@@ -875,3 +875,307 @@ end
         @test model_out["variables"]["q_lo__q__i"]["type"] == "observed"
     end
 end
+
+# ============================================================================
+# §7.9 Multi-output stencil scheme — trigger 2 expansion (ess-699)
+# ============================================================================
+
+@testset "multi_output_stencil trigger 2 expansion (RFC §7.9, ess-699)" begin
+
+    # Provider: two-output reconstruction scheme with primary=null.
+    recon_provider_raw = Dict{String,Any}(
+        "kind"           => "multi_output_stencil",
+        "applies_to"     => Dict("op" => "reconstruct", "args" => Any["\$q"], "dim" => "\$x"),
+        "grid_family"    => "cartesian",
+        "outputs"        => Any["q_left_edge", "q_right_edge"],
+        "emits_location" => "face",
+        "stencil"        => Dict{String,Any}(
+            "q_left_edge" => Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>-1),
+                     "coeff"    => 0.5),
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),
+                     "coeff"    => 0.5),
+            ],
+            "q_right_edge" => Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),
+                     "coeff"    => 0.5),
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 1),
+                     "coeff"    => 0.5),
+            ],
+        ),
+    )
+
+    # Consumer: stencil scheme with requires referencing the provider.
+    # Coefficient uses the local alias names (q_left_edge, q_right_edge).
+    flux_consumer_raw = Dict{String,Any}(
+        "kind"        => "stencil",
+        "applies_to"  => Dict("op" => "flux", "args" => Any["\$q", "\$c"], "dim" => "\$x"),
+        "grid_family" => "cartesian",
+        "requires"    => Dict{String,Any}(
+            "q_left_edge"  => "ppm_recon#q_left_edge",
+            "q_right_edge" => "ppm_recon#q_right_edge",
+        ),
+        "stencil"     => Any[
+            Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                 "coeff"    => Dict{String,Any}(
+                     "op"   => "-",
+                     "args" => Any[
+                         Dict("op"=>"*","args"=>Any["\$c","q_right_edge"]),
+                         Dict("op"=>"*","args"=>Any["\$c","q_left_edge"]),
+                     ],
+                 )),
+        ],
+    )
+
+    all_schemes_raw = Dict{String,Any}(
+        "ppm_recon" => recon_provider_raw,
+        "ppm_flux"  => flux_consumer_raw,
+    )
+    schemes = parse_schemes(all_schemes_raw)
+
+    function _make_demand_ctx(; extra_vars=Dict{String,Dict{String,Any}}())
+        base_vars = Dict{String,Dict{String,Any}}(
+            "q" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+            "c" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+        )
+        for (k, v) in extra_vars; base_vars[k] = v; end
+        EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"       => ["i"],
+                "periodic_dims"      => ["i"],
+                "nonuniform_dims"    => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"          => Dict{String,Any}("i" => 8),
+            )),
+            base_vars,
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes...),
+        )
+    end
+
+    @testset "demand path emits provider equations and rewrites coefficient" begin
+        ctx = _make_demand_ctx()
+        sch = schemes["ppm_flux"]::Scheme
+        b   = Dict{String,ESM_Expr}(
+            "\$q" => VarExpr("q"), "\$c" => VarExpr("c"), "\$x" => VarExpr("i"))
+
+        result = EarthSciSerialization.expand_scheme(sch, b, ctx)
+
+        # Provider emitted two observed equations.
+        @test length(ctx.emitted_equations) == 2
+        for eqn in ctx.emitted_equations
+            @test get(eqn, "observed", false) == true
+            @test get(eqn, "emitted_by", "") == "ppm_recon"
+        end
+
+        # Two auto-declared variables.
+        @test haskey(ctx.emitted_variables, "q_left_edge__q__i")
+        @test haskey(ctx.emitted_variables, "q_right_edge__q__i")
+        @test ctx.emitted_variables["q_left_edge__q__i"]["location"] == "face"
+
+        # Consumer result: the stencil coefficient must reference mangled names,
+        # not the bare local aliases.
+        result_str = EarthSciSerialization.serialize_expression(result)
+        rhs_json = JSON3.write(result_str)
+        @test occursin("q_left_edge__q__i", rhs_json)
+        @test occursin("q_right_edge__q__i", rhs_json)
+        @test !occursin("\"q_left_edge\"", rhs_json)
+        @test !occursin("\"q_right_edge\"", rhs_json)
+    end
+
+    @testset "second expand_scheme call is memoized (no duplicate provider emission)" begin
+        ctx = _make_demand_ctx()
+        sch = schemes["ppm_flux"]::Scheme
+        b   = Dict{String,ESM_Expr}(
+            "\$q" => VarExpr("q"), "\$c" => VarExpr("c"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_scheme(sch, b, ctx)
+        EarthSciSerialization.expand_scheme(sch, b, ctx)
+        @test length(ctx.emitted_equations) == 2  # still 2, not 4
+    end
+
+    @testset "diamond dedup: two consumers sharing one provider emit once" begin
+        # A second consumer that also requires ppm_recon.
+        flux2_raw = Dict{String,Any}(
+            "kind"        => "stencil",
+            "applies_to"  => Dict("op" => "flux2", "args" => Any["\$q"], "dim" => "\$x"),
+            "grid_family" => "cartesian",
+            "requires"    => Dict{String,Any}(
+                "q_left_edge" => "ppm_recon#q_left_edge",
+            ),
+            "stencil" => Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),
+                     "coeff"    => "q_left_edge"),
+            ],
+        )
+        schemes2 = parse_schemes(Dict{String,Any}(
+            "ppm_recon" => recon_provider_raw,
+            "ppm_flux"  => flux_consumer_raw,
+            "flux2"     => flux2_raw,
+        ))
+        ctx = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"       => ["i"],
+                "periodic_dims"      => ["i"],
+                "nonuniform_dims"    => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"          => Dict{String,Any}("i" => 8),
+            )),
+            Dict("q" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+                 "c" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes2...),
+        )
+        b_flux  = Dict{String,ESM_Expr}(
+            "\$q" => VarExpr("q"), "\$c" => VarExpr("c"), "\$x" => VarExpr("i"))
+        b_flux2 = Dict{String,ESM_Expr}(
+            "\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_scheme(schemes2["ppm_flux"]::Scheme, b_flux, ctx)
+        EarthSciSerialization.expand_scheme(schemes2["flux2"]::Scheme, b_flux2, ctx)
+        @test length(ctx.emitted_equations) == 2  # provider emitted exactly once
+    end
+
+    @testset "E_SCHEME_CYCLE: provider already on resolution stack" begin
+        ctx = _make_demand_ctx()
+        provider = schemes["ppm_recon"]::MultiOutputStencilScheme
+        # Simulate a cycle by manually pushing the provider name.
+        push!(ctx.provider_resolution_stack, "ppm_recon")
+        b = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        ex = try
+            EarthSciSerialization.expand_scheme(schemes["ppm_flux"]::Scheme,
+                Dict{String,ESM_Expr}(
+                    "\$q" => VarExpr("q"), "\$c" => VarExpr("c"), "\$x" => VarExpr("i")),
+                ctx)
+            nothing
+        catch e; e end
+        @test ex isa EarthSciSerialization.RuleEngineError
+        @test ex.code == "E_SCHEME_CYCLE"
+        @test occursin("ppm_recon", ex.message)
+    end
+
+    @testset "E_PROVIDER_NAME_CLASH: different provider emits same mangled name" begin
+        # A second provider that happens to emit the same output name.
+        clash_raw = Dict{String,Any}(
+            "kind"           => "multi_output_stencil",
+            "applies_to"     => Dict("op"=>"reconstruct","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family"    => "cartesian",
+            "outputs"        => Any["q_left_edge", "q_right_edge"],
+            "emits_location" => "face",
+            "stencil"        => Dict{String,Any}(
+                "q_left_edge"  => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+                "q_right_edge" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+            ),
+        )
+        clash_consumer_raw = Dict{String,Any}(
+            "kind"        => "stencil",
+            "applies_to"  => Dict("op"=>"flux2","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "requires"    => Dict{String,Any}("q_left_edge" => "clash_provider#q_left_edge"),
+            "stencil"     => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>"q_left_edge")],
+        )
+        schemes_clash = parse_schemes(Dict{String,Any}(
+            "ppm_recon"      => recon_provider_raw,
+            "clash_provider" => clash_raw,
+            "ppm_flux"       => flux_consumer_raw,
+            "clash_consumer" => clash_consumer_raw,
+        ))
+        ctx_clash = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"=>["i"],"periodic_dims"=>["i"],
+                "nonuniform_dims"=>String[],"metric_array_names"=>String[],
+                "dim_sizes"=>Dict{String,Any}("i"=>8))),
+            Dict("q"=>Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+                 "c"=>Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes_clash...),
+        )
+        b_flux  = Dict{String,ESM_Expr}(
+            "\$q"=>VarExpr("q"),"\$c"=>VarExpr("c"),"\$x"=>VarExpr("i"))
+        b_clash = Dict{String,ESM_Expr}("\$q"=>VarExpr("q"),"\$x"=>VarExpr("i"))
+        # First consumer succeeds.
+        EarthSciSerialization.expand_scheme(schemes_clash["ppm_flux"]::Scheme, b_flux, ctx_clash)
+        # Second consumer (clash_consumer) tries to emit q_left_edge__q__i again.
+        ex = try
+            EarthSciSerialization.expand_scheme(
+                schemes_clash["clash_consumer"]::Scheme, b_clash, ctx_clash)
+            nothing
+        catch e; e end
+        @test ex isa EarthSciSerialization.RuleEngineError
+        @test ex.code == "E_PROVIDER_NAME_CLASH"
+        @test occursin("q_left_edge__q__i", ex.message)
+    end
+
+    @testset "discretize() end-to-end: demand path emits provider + rewrites consumer" begin
+        esm = Dict{String,Any}(
+            "esm"      => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "multi_output_demand"),
+            "grids"    => Dict{String,Any}(
+                "gx" => Dict{String,Any}(
+                    "family"     => "cartesian",
+                    "dimensions" => Any[
+                        Dict{String,Any}("name"=>"i","size"=>8,
+                                          "periodic"=>true,"spacing"=>"uniform"),
+                    ],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}(
+                "ppm_recon" => recon_provider_raw,
+                "ppm_flux"  => flux_consumer_raw,
+            ),
+            "rules" => Any[
+                Dict{String,Any}(
+                    "name"    => "flux_rule",
+                    "pattern" => Dict{String,Any}(
+                        "op"=>"flux","args"=>Any["\$q","\$c"],"dim"=>"\$x"),
+                    "use"     => "ppm_flux",
+                ),
+            ],
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid" => "gx",
+                    "variables" => Dict{String,Any}(
+                        "q" => Dict{String,Any}("type"=>"state","default"=>0.0,
+                                                 "units"=>"1","shape"=>Any["i"],
+                                                 "location"=>"cell_center"),
+                        "c" => Dict{String,Any}("type"=>"parameter","default"=>1.0,
+                                                 "units"=>"1","shape"=>Any["i"],
+                                                 "location"=>"cell_center"),
+                    ),
+                    "equations" => Any[
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op"=>"D","args"=>Any["q"],"wrt"=>"t"),
+                            "rhs" => Dict{String,Any}(
+                                "op"=>"flux","args"=>Any["q","c"],"dim"=>"i"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+        out = discretize(esm)
+        model_out = out["models"]["M"]
+
+        # 1. Original equation RHS no longer mentions "flux".
+        orig_rhs = JSON3.write(model_out["equations"][1]["rhs"])
+        @test !occursin("\"flux\"", orig_rhs)
+
+        # 2. Two provider-emitted observed equations.
+        observed = [e for e in model_out["equations"] if get(e, "observed", false) == true]
+        @test length(observed) == 2
+        for e in observed
+            @test get(e, "emitted_by", "") == "ppm_recon"
+        end
+
+        # 3. Provider output variables auto-declared.
+        @test haskey(model_out["variables"], "q_left_edge__q__i")
+        @test haskey(model_out["variables"], "q_right_edge__q__i")
+        @test model_out["variables"]["q_left_edge__q__i"]["type"] == "observed"
+
+        # 4. Consumer result references mangled provider output names.
+        all_eqn_json = JSON3.write(model_out["equations"])
+        @test occursin("q_left_edge__q__i", all_eqn_json)
+        @test occursin("q_right_edge__q__i", all_eqn_json)
+    end
+end
