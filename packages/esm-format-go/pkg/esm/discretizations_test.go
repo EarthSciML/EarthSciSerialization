@@ -1,6 +1,7 @@
 package esm
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -283,4 +284,99 @@ func TestGridDispatchScheme(t *testing.T) {
 		t.Fatalf("unmarshal round-trip: %v", err)
 	}
 	assertJSONEqual(t, parsed.Discretizations, reparsed.Discretizations, "discretizations (grid_dispatch)")
+}
+
+// TestMultiOutputStencilScheme exercises the RFC §7.9 multi_output_stencil
+// fixture: the provider scheme (ppm_reconstruction) carries an object-valued
+// stencil and an outputs list; the consumer (ppm_flux) carries a requires map.
+func TestMultiOutputStencilScheme(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "tests/discretizations/multi_output_ppm_reconstruction.esm"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed EsmFile
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// ── Provider (ppm_reconstruction) ──────────────────────────────────────
+	provider, ok := parsed.Discretizations["ppm_reconstruction"]
+	if !ok {
+		t.Fatal("ppm_reconstruction not found")
+	}
+	if provider.Kind != "multi_output_stencil" {
+		t.Errorf("Kind = %q, want \"multi_output_stencil\"", provider.Kind)
+	}
+	if !provider.IsMultiOutput() {
+		t.Error("IsMultiOutput() should return true for kind=multi_output_stencil")
+	}
+	if got, want := provider.Outputs, []string{"q_left_edge", "q_right_edge"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Outputs = %v, want %v", got, want)
+	}
+	if len(provider.MultiOutputStencil) != 2 {
+		t.Errorf("MultiOutputStencil key count = %d, want 2", len(provider.MultiOutputStencil))
+	}
+	for _, key := range []string{"q_left_edge", "q_right_edge"} {
+		entries, exists := provider.MultiOutputStencil[key]
+		if !exists {
+			t.Errorf("MultiOutputStencil missing key %q", key)
+		}
+		if len(entries) != 2 {
+			t.Errorf("MultiOutputStencil[%q] len = %d, want 2", key, len(entries))
+		}
+	}
+	if len(provider.Stencil) != 0 {
+		t.Errorf("multi_output_stencil provider must have empty Stencil; got %d entries", len(provider.Stencil))
+	}
+	if provider.EmitsLocation != "face" {
+		t.Errorf("EmitsLocation = %q, want \"face\"", provider.EmitsLocation)
+	}
+	// primary: null must survive as a json.RawMessage holding "null"
+	if string(bytes.TrimSpace(provider.Primary)) != "null" {
+		t.Errorf("Primary raw = %q, want \"null\"", string(provider.Primary))
+	}
+
+	// ── Consumer (ppm_flux) ────────────────────────────────────────────────
+	consumer, ok := parsed.Discretizations["ppm_flux"]
+	if !ok {
+		t.Fatal("ppm_flux not found")
+	}
+	if consumer.Kind != "stencil" {
+		t.Errorf("consumer Kind = %q, want \"stencil\"", consumer.Kind)
+	}
+	if consumer.IsMultiOutput() {
+		t.Error("IsMultiOutput() should return false for a consumer stencil scheme")
+	}
+	if len(consumer.Requires) != 2 {
+		t.Errorf("consumer Requires len = %d, want 2", len(consumer.Requires))
+	}
+	if got := consumer.Requires["q_left_edge"]; got != "ppm_reconstruction#q_left_edge" {
+		t.Errorf("Requires[q_left_edge] = %q, want %q", got, "ppm_reconstruction#q_left_edge")
+	}
+	if got := consumer.Requires["q_right_edge"]; got != "ppm_reconstruction#q_right_edge" {
+		t.Errorf("Requires[q_right_edge] = %q, want %q", got, "ppm_reconstruction#q_right_edge")
+	}
+
+	// ── Round-trip ────────────────────────────────────────────────────────
+	out, err := json.Marshal(&parsed)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var reparsed EsmFile
+	if err := json.Unmarshal(out, &reparsed); err != nil {
+		t.Fatalf("unmarshal round-trip: %v", err)
+	}
+	assertJSONEqual(t, parsed.Discretizations, reparsed.Discretizations, "discretizations (multi_output)")
+
+	// Second hop.
+	out2, err := json.Marshal(&reparsed)
+	if err != nil {
+		t.Fatalf("second marshal: %v", err)
+	}
+	var reparsed2 EsmFile
+	if err := json.Unmarshal(out2, &reparsed2); err != nil {
+		t.Fatalf("second unmarshal: %v", err)
+	}
+	assertJSONEqual(t, reparsed.Discretizations, reparsed2.Discretizations, "discretizations (multi_output second hop)")
 }

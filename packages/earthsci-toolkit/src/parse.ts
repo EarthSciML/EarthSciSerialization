@@ -154,7 +154,7 @@ const schema = {
     },
     "discretizations": {
       "type": "object",
-      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1) or a CrossMetricStencilRule composite (\u00a77.4) that combines per-axis stencils and metric components for covariant operators on curvilinear grids.",
+      "description": "Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (\u00a77.1), a CrossMetricStencilRule composite (\u00a77.6) that combines per-axis stencils and metric components for covariant operators on curvilinear grids, or a MultiOutputStencilRule (\u00a77.9) that emits multiple named output fields from one stencil application.",
       "additionalProperties": {
         "oneOf": [
           {
@@ -162,6 +162,9 @@ const schema = {
           },
           {
             "$ref": "#/$defs/CrossMetricStencilRule"
+          },
+          {
+            "$ref": "#/$defs/MultiOutputStencilRule"
           }
         ]
       }
@@ -4491,6 +4494,15 @@ const schema = {
         "reference": {
           "$ref": "#/$defs/Reference"
         },
+        "requires": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[^#]+#[^#]+$",
+            "description": "Provider reference in the form '<sibling-scheme>#<output-name>'."
+          },
+          "description": "RFC \u00a77.9 consumer demand map. Maps local names used inside this scheme's stencil/coeff expressions to outputs of sibling MultiOutputStencilRule providers in the form '<sibling-scheme>#<output-name>'."
+        },
         "grid_dispatch": {
           "type": "array",
           "minItems": 2,
@@ -5294,6 +5306,92 @@ const schema = {
             "type": "string"
           },
           "description": "Optional list of free pattern-variable names (e.g. ['$u']) that the composite expects the triggering rule to bind; informational / for validator use."
+        },
+        "description": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      }
+    },
+    "MultiOutputStencilRule": {
+      "type": "object",
+      "description": "Multi-output stencil rule (RFC §7.9). A scheme kind that emits multiple named output fields from one stencil application — the canonical use case is PPM reconstruction, which produces q_left_edge and q_right_edge from a single reconstruct(q, dim=x) operator match.",
+      "required": [
+        "applies_to",
+        "outputs",
+        "stencil"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "multi_output_stencil",
+          "description": "Discriminator for bindings that need to distinguish this rule type from a standard Discretization or CrossMetricStencilRule."
+        },
+        "applies_to": {
+          "description": "Shallow (depth-1) AST pattern identifying the operator this scheme discretizes.",
+          "$ref": "#/$defs/PatternNode"
+        },
+        "grid_family": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "cubed_sphere",
+            "unstructured"
+          ],
+          "description": "Grid family this scheme targets."
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Ordered list of named outputs emitted by this scheme. MUST equal the set of keys in `stencil`."
+        },
+        "stencil": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/StencilEntry"
+            }
+          },
+          "description": "Object keyed by output name; each value is a list of §7.1 stencil entries ({selector, coeff})."
+        },
+        "emits_location": {
+          "type": "string",
+          "description": "Default staggered-grid location for all emitted output variables (e.g. 'face', 'cell_center')."
+        },
+        "primary": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ],
+          "description": "Name of the output to substitute at the matched expression site. MUST be null or absent for provider-only schemes."
+        },
+        "accuracy": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requires_locations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "target_binding": {
+          "type": "string"
+        },
+        "free_variables": {
+          "type": "array",
+          "items": { "type": "string" }
         },
         "description": {
           "type": "string"
