@@ -213,6 +213,11 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
                              top_rules::Vector{Rule}, ctx::RuleContext,
                              max_passes::Int, strict_unrewritten::Bool,
                              lift_1d_arrayop::Bool = false)
+    # Clear emission buffers from any previous model (ctx is shared per document).
+    empty!(ctx.emitted_equations)
+    empty!(ctx.emitted_variables)
+    empty!(ctx.emitted_scheme_keys)
+
     # Collect rules: model-local overrides/extends top-level.
     local_rules_raw = get(model, "rules", nothing)
     local_rules = _load_rules(local_rules_raw)
@@ -244,6 +249,33 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
             _discretize_bc!("models.$mname.boundary_conditions.$bc_name",
                              bc, rules, ctx, mp, strict_unrewritten)
             bcs[bc_name] = bc
+        end
+    end
+
+    # Inject observed equations and auto-declared variables emitted by
+    # multi_output_stencil trigger 1 expansion (RFC §7.9, ess-ebe).
+    # These are appended before arrayop lifting so the lift sees the full
+    # equation list. Observed arrayop equations have a non-D(…) LHS and
+    # are skipped by _try_arrayop_lift_equation! (which only lifts D(v,wrt=t)).
+    if !isempty(ctx.emitted_equations)
+        existing = get(model, "equations", Any[])
+        model["equations"] = vcat(existing, ctx.emitted_equations)
+    end
+    if !isempty(ctx.emitted_variables)
+        vars = _ensure_dict!(model, "variables")
+        for (vname, vmeta) in ctx.emitted_variables
+            haskey(vars, vname) && continue  # author pre-declared: don't overwrite
+            vars[vname] = vmeta
+            # Register in ctx.variables so guard checks and subsequent rewrite
+            # passes (if any) can resolve the new variable's metadata.
+            vgrid = get(model, "grid", nothing)
+            vmeta_ctx = Dict{String,Any}()
+            vgrid !== nothing && (vmeta_ctx["grid"] = String(vgrid))
+            shape = get(vmeta, "shape", nothing)
+            shape !== nothing && (vmeta_ctx["shape"] = shape)
+            loc   = get(vmeta, "location", nothing)
+            loc   !== nothing && (vmeta_ctx["location"] = String(loc))
+            ctx.variables[vname] = vmeta_ctx
         end
     end
 

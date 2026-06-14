@@ -455,6 +455,15 @@ struct RuleContext
     # or when only inline-`replacement` rules are in play.
     # Holds both Scheme (§7.1) and MultiOutputStencilScheme (§7.9) entries.
     schemes::Dict{String,AbstractScheme}
+    # ess-ebe: emission buffers for multi_output_stencil trigger 1
+    # (directly-consumed path, RFC §7.9). Populated by
+    # expand_multi_output_scheme_direct during rewrite; injected into
+    # the enclosing model by _discretize_model! after equation processing.
+    # Mutable containers in an otherwise-immutable struct: mutation is safe
+    # because we never reassign the fields, only call push!/setindex!.
+    emitted_equations::Vector{Dict{String,Any}}
+    emitted_variables::Dict{String,Dict{String,Any}}
+    emitted_scheme_keys::Set{String}
 end
 
 RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
@@ -462,12 +471,18 @@ RuleContext() = RuleContext(Dict{String,Dict{String,Any}}(),
                             Dict{String,Int}(),
                             nothing,
                             Dict{String,Vector{Dict{String,Int}}}(),
-                            Dict{String,AbstractScheme}())
+                            Dict{String,AbstractScheme}(),
+                            Dict{String,Any}[],
+                            Dict{String,Dict{String,Any}}(),
+                            Set{String}())
 
 RuleContext(grids, variables) = RuleContext(grids, variables,
                                             Dict{String,Int}(), nothing,
                                             Dict{String,Vector{Dict{String,Int}}}(),
-                                            Dict{String,AbstractScheme}())
+                                            Dict{String,AbstractScheme}(),
+                                            Dict{String,Any}[],
+                                            Dict{String,Dict{String,Any}}(),
+                                            Set{String}())
 
 # Backward-compatible 4-arg constructor (pre-mask_field callers).
 RuleContext(grids::Dict{String,Dict{String,Any}},
@@ -476,7 +491,10 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
             grid_name::Union{String,Nothing}) =
     RuleContext(grids, variables, query_point, grid_name,
                 Dict{String,Vector{Dict{String,Int}}}(),
-                Dict{String,AbstractScheme}())
+                Dict{String,AbstractScheme}(),
+                Dict{String,Any}[],
+                Dict{String,Dict{String,Any}}(),
+                Set{String}())
 
 # Backward-compatible 5-arg constructor (pre-esm-j1u schemes callers).
 RuleContext(grids::Dict{String,Dict{String,Any}},
@@ -485,7 +503,25 @@ RuleContext(grids::Dict{String,Dict{String,Any}},
             grid_name::Union{String,Nothing},
             mask_fields::Dict{String,Vector{Dict{String,Int}}}) =
     RuleContext(grids, variables, query_point, grid_name, mask_fields,
-                Dict{String,AbstractScheme}())
+                Dict{String,AbstractScheme}(),
+                Dict{String,Any}[],
+                Dict{String,Dict{String,Any}}(),
+                Set{String}())
+
+# Backward-compatible 6-arg constructor (pre-ess-ebe emission-buffer callers).
+# Accepts Dict{String,<:AbstractScheme} (covariant) so callers that built a
+# Dict{String,Scheme} (before MultiOutputStencilScheme existed) still compile.
+RuleContext(grids::Dict{String,Dict{String,Any}},
+            variables::Dict{String,Dict{String,Any}},
+            query_point::Dict{String,Int},
+            grid_name::Union{String,Nothing},
+            mask_fields::Dict{String,Vector{Dict{String,Int}}},
+            schemes::Dict{String,<:AbstractScheme}) =
+    RuleContext(grids, variables, query_point, grid_name, mask_fields,
+                Dict{String,AbstractScheme}(k => v for (k, v) in schemes),
+                Dict{String,Any}[],
+                Dict{String,Dict{String,Any}}(),
+                Set{String}())
 
 """
     with_query_point(ctx, point; grid=nothing) -> RuleContext
@@ -495,12 +531,19 @@ Return a copy of `ctx` with the given per-point index bindings (e.g.
 `region` / `where`-expression scopes per RFC §5.2.7. `grid`, when
 supplied, names which grid entry in `ctx.grids` the point refers to —
 used to resolve `region.boundary.side` against grid dim bounds.
+
+The emission buffers (`emitted_equations`, `emitted_variables`,
+`emitted_scheme_keys`) are shared with the original context so that
+emissions from any derived context accumulate in the same place.
 """
 with_query_point(ctx::RuleContext, point::Dict{String,Int};
                  grid::Union{String,Nothing}=nothing) =
     RuleContext(ctx.grids, ctx.variables, point,
                 grid === nothing ? ctx.grid_name : grid,
-                ctx.mask_fields, ctx.schemes)
+                ctx.mask_fields, ctx.schemes,
+                ctx.emitted_equations,
+                ctx.emitted_variables,
+                ctx.emitted_scheme_keys)
 
 """
     check_guards(guards, bindings, ctx) -> Union{Dict{String,Expr}, Nothing}
@@ -723,20 +766,28 @@ function _apply_rule_rhs(rule::Rule, bindings::Dict{String,Expr},
             "rule $(rule.name): `use: $sname` references a scheme not " *
             "declared in `discretizations`"))
         scheme = ctx.schemes[sname]
-        scheme isa Scheme || throw(RuleEngineError("E_SCHEME_MISMATCH",
-            "rule $(rule.name): `use: $sname` references a " *
-            "$(typeof(scheme)) scheme; direct `use:` expansion of " *
-            "multi_output_stencil schemes is not supported in this release " *
-            "(RFC §7.9 demand-driven path is a follow-on bead)"))
         # `applies_to` guard check (RFC §7.2.1 step 3): re-match the scheme's
         # depth-1 pattern against the rule-matched subtree's reconstruction
         # via `bindings`. The scheme's pattern variables must already appear
-        # in the rule's bindings — name-aligned per §7.2.1 step 4. We verify
-        # that every pattern variable referenced in the scheme's `applies_to`
-        # is bound; mismatch on the operator class (op name / dim sibling)
-        # is caught by the same name-alignment check.
+        # in the rule's bindings — name-aligned per §7.2.1 step 4.
         _check_applies_to(rule, scheme, bindings)
-        return expand_scheme(scheme, bindings, ctx)
+        if scheme isa Scheme
+            return expand_scheme(scheme, bindings, ctx)
+        elseif scheme isa MultiOutputStencilScheme
+            # RFC §7.9 trigger 1 (directly-consumed): emit one observed
+            # arrayop equation per named output and rewrite the matched
+            # expression to index(primary_output, i, ...).
+            scheme.primary !== nothing || throw(RuleEngineError("E_SCHEME_MISMATCH",
+                "rule $(rule.name): `use: $sname` references a provider-only " *
+                "multi_output_stencil scheme (primary=null); direct `use:` of " *
+                "provider-only schemes requires the demand-driven path (trigger 2, " *
+                "not yet implemented)"))
+            return expand_multi_output_scheme_direct(scheme, bindings, ctx)
+        else
+            throw(RuleEngineError("E_SCHEME_MISMATCH",
+                "rule $(rule.name): `use: $sname` references an unsupported " *
+                "scheme type $(typeof(scheme))"))
+        end
     end
     rule.replacement === nothing && throw(RuleEngineError(
         "E_RULE_REPLACEMENT_MISSING",
@@ -745,7 +796,7 @@ function _apply_rule_rhs(rule::Rule, bindings::Dict{String,Expr},
     return apply_bindings(rule.replacement, bindings)
 end
 
-function _check_applies_to(rule::Rule, scheme::Scheme,
+function _check_applies_to(rule::Rule, scheme::AbstractScheme,
                             bindings::Dict{String,Expr})
     pat = scheme.applies_to
     pat isa OpExpr || throw(RuleEngineError("E_SCHEME_MISMATCH",
@@ -759,7 +810,7 @@ function _check_applies_to(rule::Rule, scheme::Scheme,
     # Verify any pvar referenced by the scheme's applies_to (and any pvar in
     # `dim`) is bound by the rule. Scheme's `applies_to` is a guard only —
     # it does not introduce new bindings (§7.2.1).
-    _check_pvars_bound(scheme, pat, bindings)
+    _check_pvars_bound(scheme.name, pat, bindings)
     if pat.dim !== nothing && _is_pvar_string(pat.dim)
         haskey(bindings, pat.dim) || throw(RuleEngineError("E_SCHEME_MISMATCH",
             "rule $(rule.name) / scheme $(scheme.name): pattern variable " *
@@ -767,14 +818,14 @@ function _check_applies_to(rule::Rule, scheme::Scheme,
     end
 end
 
-function _check_pvars_bound(scheme::Scheme, e::Expr, bindings::Dict{String,Expr})
+function _check_pvars_bound(scheme_name::String, e::Expr, bindings::Dict{String,Expr})
     if e isa VarExpr && _is_pvar(e)
         haskey(bindings, e.name) || throw(RuleEngineError("E_SCHEME_MISMATCH",
-            "scheme $(scheme.name): pattern variable `$(e.name)` referenced in " *
+            "scheme $scheme_name: pattern variable `$(e.name)` referenced in " *
             "applies_to is not bound by the triggering rule (RFC §7.2.1)"))
     elseif e isa OpExpr
         for a in e.args
-            _check_pvars_bound(scheme, a, bindings)
+            _check_pvars_bound(scheme_name, a, bindings)
         end
     end
 end

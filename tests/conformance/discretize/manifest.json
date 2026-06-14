@@ -36,6 +36,12 @@
       "input":  "inputs/nonuniform_1d_diffusion.esm",
       "golden": "golden/nonuniform_1d_diffusion.json",
       "tags": ["step2", "pde", "use-scheme", "metric-array", "nonuniform-grid", "section-6.2.1"]
+    },
+    {
+      "id": "multi_output_direct_consumed",
+      "input":  "inputs/multi_output_direct_consumed.esm",
+      "golden": "golden/multi_output_direct_consumed.json",
+      "tags": ["step2", "pde", "multi-output-stencil", "trigger-1", "section-7.9", "ess-ebe"]
     }
   ]
 }

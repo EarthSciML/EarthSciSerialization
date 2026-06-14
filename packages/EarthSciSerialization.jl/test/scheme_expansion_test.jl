@@ -636,3 +636,242 @@ end
         @test flux.requires["q_right_edge"] == "ppm_reconstruction#q_right_edge"
     end
 end
+
+# ============================================================================
+# §7.9 Multi-output stencil scheme — trigger 1 expansion (ess-ebe)
+# ============================================================================
+
+@testset "multi_output_stencil trigger 1 expansion (RFC §7.9, ess-ebe)" begin
+
+    # Minimal two-output reconstruction scheme with primary = "q_lo".
+    # Stencil: q_lo = avg(i-1, i), q_hi = avg(i, i+1).
+    recon_raw = Dict{String,Any}(
+        "kind"        => "multi_output_stencil",
+        "applies_to"  => Dict("op" => "recon", "args" => Any["\$q"], "dim" => "\$x"),
+        "grid_family" => "cartesian",
+        "outputs"     => Any["q_lo", "q_hi"],
+        "emits_location" => "face",
+        "primary"     => "q_lo",
+        "stencil"     => Dict{String,Any}(
+            "q_lo" => Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>-1),
+                     "coeff"    => 0.5),
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),
+                     "coeff"    => 0.5),
+            ],
+            "q_hi" => Any[
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 0),
+                     "coeff"    => 0.5),
+                Dict("selector" => Dict("kind"=>"cartesian","axis"=>"\$x","offset"=> 1),
+                     "coeff"    => 0.5),
+            ],
+        ),
+    )
+    schemes_with_recon = parse_schemes(Dict("recon1d" => recon_raw))
+
+    function _make_ctx(; periodic=true)
+        EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"  => ["i"],
+                "periodic_dims" => periodic ? ["i"] : String[],
+                "nonuniform_dims" => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"     => Dict{String,Any}("i" => 8),
+            )),
+            Dict("q" => Dict{String,Any}("grid" => "gx",
+                                          "shape" => Any["i"],
+                                          "location" => "cell_center")),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes_with_recon...),
+        )
+    end
+
+    @testset "expand emits two observed equations and returns index(primary, i)" begin
+        ctx = _make_ctx()
+        sch = schemes_with_recon["recon1d"]::MultiOutputStencilScheme
+        bindings = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+
+        result = EarthSciSerialization.expand_multi_output_scheme_direct(sch, bindings, ctx)
+
+        # Replacement is index(q_lo__q__i, i).
+        @test result isa OpExpr
+        @test result.op == "index"
+        @test length(result.args) == 2
+        @test result.args[1] isa VarExpr
+        @test result.args[1].name == "q_lo__q__i"
+        @test result.args[2] isa VarExpr
+        @test result.args[2].name == "i"
+
+        # Two observed equations emitted (one per output).
+        @test length(ctx.emitted_equations) == 2
+
+        # Both marked observed with correct emitted_by.
+        for eqn in ctx.emitted_equations
+            @test get(eqn, "observed", false) == true
+            @test get(eqn, "emitted_by", "") == "recon1d"
+            lhs = eqn["lhs"]
+            @test lhs["op"] == "arrayop"
+            @test lhs["output_idx"] == ["i"]
+            @test lhs["ranges"] == Dict("i" => Any[1, 8])
+            rhs = eqn["rhs"]
+            @test rhs["op"] == "arrayop"
+            @test rhs["output_idx"] == ["i"]
+        end
+
+        # LHS expressions reference the mangled output names.
+        lhs_names = [eqn["lhs"]["expr"]["args"][1] for eqn in ctx.emitted_equations]
+        @test Set(lhs_names) == Set(["q_lo__q__i", "q_hi__q__i"])
+
+        # Two auto-declared variables.
+        @test length(ctx.emitted_variables) == 2
+        @test haskey(ctx.emitted_variables, "q_lo__q__i")
+        @test haskey(ctx.emitted_variables, "q_hi__q__i")
+        @test ctx.emitted_variables["q_lo__q__i"]["type"] == "observed"
+        @test ctx.emitted_variables["q_lo__q__i"]["location"] == "face"
+    end
+
+    @testset "second call with same bindings is memoized (no duplicate emission)" begin
+        ctx = _make_ctx()
+        sch = schemes_with_recon["recon1d"]::MultiOutputStencilScheme
+        b   = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx)
+        EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx)
+        @test length(ctx.emitted_equations) == 2  # still 2, not 4
+    end
+
+    @testset "different operand binding produces distinct mangled names" begin
+        ctx = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}(
+                "spatial_dims"   => ["i"],
+                "periodic_dims"  => ["i"],
+                "nonuniform_dims" => String[],
+                "metric_array_names" => String[],
+                "dim_sizes"      => Dict{String,Any}("i" => 8),
+            )),
+            Dict(
+                "u" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+                "v" => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"],"location"=>"cell_center"),
+            ),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes_with_recon...),
+        )
+        sch = schemes_with_recon["recon1d"]::MultiOutputStencilScheme
+        b1  = Dict{String,ESM_Expr}("\$q" => VarExpr("u"), "\$x" => VarExpr("i"))
+        b2  = Dict{String,ESM_Expr}("\$q" => VarExpr("v"), "\$x" => VarExpr("i"))
+        r1 = EarthSciSerialization.expand_multi_output_scheme_direct(sch, b1, ctx)
+        r2 = EarthSciSerialization.expand_multi_output_scheme_direct(sch, b2, ctx)
+        # 4 equations total: 2 for u, 2 for v
+        @test length(ctx.emitted_equations) == 4
+        @test r1.args[1].name == "q_lo__u__i"
+        @test r2.args[1].name == "q_lo__v__i"
+    end
+
+    @testset "E_SCHEME_BOUNDED_DIM for non-periodic dimension" begin
+        ctx = _make_ctx(periodic=false)
+        sch = schemes_with_recon["recon1d"]::MultiOutputStencilScheme
+        b   = Dict{String,ESM_Expr}("\$q" => VarExpr("q"), "\$x" => VarExpr("i"))
+        ex  = try
+            EarthSciSerialization.expand_multi_output_scheme_direct(sch, b, ctx)
+            nothing
+        catch e; e end
+        @test ex isa EarthSciSerialization.RuleEngineError
+        @test ex.code == "E_SCHEME_BOUNDED_DIM"
+    end
+
+    @testset "provider-only (primary=null) raises E_SCHEME_MISMATCH via use:-rule" begin
+        provider_only_raw = Dict{String,Any}(
+            "kind"        => "multi_output_stencil",
+            "applies_to"  => Dict("op"=>"recon","args"=>Any["\$q"],"dim"=>"\$x"),
+            "grid_family" => "cartesian",
+            "outputs"     => Any["q_lo", "q_hi"],
+            "stencil"     => Dict{String,Any}(
+                "q_lo" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+                "q_hi" => Any[Dict("selector"=>Dict("kind"=>"cartesian","axis"=>"\$x","offset"=>0),"coeff"=>1.0)],
+            ),
+        )
+        schemes_null_primary = parse_schemes(Dict("provider" => provider_only_raw))
+        rule = parse_rule("r", Dict("pattern" => Dict("op"=>"recon","args"=>Any["\$q"],"dim"=>"\$x"),
+                                    "use"     => "provider"))
+        ctx = EarthSciSerialization.RuleContext(
+            Dict("gx" => Dict{String,Any}("spatial_dims"=>["i"],"periodic_dims"=>["i"],
+                                           "nonuniform_dims"=>String[],"metric_array_names"=>String[],
+                                           "dim_sizes"=>Dict{String,Any}("i"=>8))),
+            Dict("q"  => Dict{String,Any}("grid"=>"gx","shape"=>Any["i"])),
+            Dict{String,Int}(), nothing,
+            Dict{String,Vector{Dict{String,Int}}}(),
+            Dict{String,AbstractScheme}(schemes_null_primary...),
+        )
+        seed = OpExpr("recon", ESM_Expr[VarExpr("q")]; dim="i")
+        ex = try rewrite(seed, Rule[rule], ctx); nothing catch e; e end
+        @test ex isa EarthSciSerialization.RuleEngineError
+        @test ex.code == "E_SCHEME_MISMATCH"
+        @test occursin("provider-only", ex.message)
+    end
+
+    @testset "discretize() end-to-end: emits observed equations + rewrites primary" begin
+        esm = Dict{String,Any}(
+            "esm"      => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "multi_output_direct"),
+            "grids"    => Dict{String,Any}(
+                "gx" => Dict{String,Any}(
+                    "family"     => "cartesian",
+                    "dimensions" => Any[
+                        Dict{String,Any}("name"=>"i","size"=>8,
+                                          "periodic"=>true,"spacing"=>"uniform"),
+                    ],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}("recon1d" => recon_raw),
+            "rules"    => Any[
+                Dict{String,Any}(
+                    "name"    => "recon1d_rule",
+                    "pattern" => Dict{String,Any}("op"=>"recon","args"=>Any["\$q"],"dim"=>"\$x"),
+                    "use"     => "recon1d",
+                ),
+            ],
+            "models"   => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid"      => "gx",
+                    "variables" => Dict{String,Any}(
+                        "q" => Dict{String,Any}("type"=>"state","default"=>0.0,
+                                                 "units"=>"1","shape"=>Any["i"],
+                                                 "location"=>"cell_center"),
+                    ),
+                    "equations" => Any[
+                        Dict{String,Any}(
+                            "lhs" => Dict{String,Any}("op"=>"D","args"=>Any["q"],"wrt"=>"t"),
+                            "rhs" => Dict{String,Any}("op"=>"recon","args"=>Any["q"],"dim"=>"i"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+        out = discretize(esm)
+        model_out = out["models"]["M"]
+
+        # 1. Original equation RHS should no longer mention "recon".
+        orig_rhs = JSON3.write(model_out["equations"][1]["rhs"])
+        @test !occursin("\"recon\"", orig_rhs)
+        # It should mention the primary mangled name.
+        @test occursin("q_lo__q__i", orig_rhs)
+
+        # 2. Two additional observed equations were injected (may be wrapped in arrayop
+        #    by the arrayop lift for D(q,...), and the emitted ones have arrayop LHS already).
+        eqns = model_out["equations"]
+        observed_eqns = [e for e in eqns if get(e, "observed", false) == true]
+        @test length(observed_eqns) == 2
+
+        # 3. Both observed equations carry emitted_by = "recon1d".
+        for e in observed_eqns
+            @test get(e, "emitted_by", "") == "recon1d"
+        end
+
+        # 4. Auto-declared variables appear in model.variables.
+        @test haskey(model_out["variables"], "q_lo__q__i")
+        @test haskey(model_out["variables"], "q_hi__q__i")
+        @test model_out["variables"]["q_lo__q__i"]["type"] == "observed"
+    end
+end

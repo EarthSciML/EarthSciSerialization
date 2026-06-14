@@ -496,6 +496,231 @@ function _resolve_axis_pvar(scheme::Scheme, axis::String,
     return axis
 end
 
+# ============================================================================
+# Multi-output stencil — trigger 1 (directly-consumed path, RFC §7.9, ess-ebe)
+# ============================================================================
+
+# Extract the bound operand expression from a MultiOutputStencilScheme's
+# applies_to. The first arg of applies_to must be a pattern variable.
+function _scheme_operand_multi(scheme::MultiOutputStencilScheme,
+                                bindings::Dict{String,Expr})::Expr
+    pat = scheme.applies_to
+    pat isa OpExpr || throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "scheme $(scheme.name): applies_to must be an op node"))
+    isempty(pat.args) && throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "scheme $(scheme.name): applies_to has no args; cannot identify operand"))
+    operand_pat = pat.args[1]
+    operand_pat isa VarExpr && _is_pvar(operand_pat) || throw(RuleEngineError(
+        "E_SCHEME_MISMATCH",
+        "scheme $(scheme.name): applies_to first arg must be a pattern variable"))
+    pname = operand_pat.name
+    haskey(bindings, pname) || throw(RuleEngineError("E_SCHEME_MISMATCH",
+        "scheme $(scheme.name): operand pattern variable $pname not bound by rule"))
+    return bindings[pname]
+end
+
+# Return the string value of the bound axis dimension (from applies_to.dim),
+# or nothing if the scheme has no dim pvar.
+function _scheme_axis_name(scheme::AbstractScheme,
+                            bindings::Dict{String,Expr})::Union{String,Nothing}
+    pat = scheme.applies_to
+    pat isa OpExpr || return nothing
+    pat.dim === nothing && return nothing
+    if _is_pvar_string(pat.dim)
+        haskey(bindings, pat.dim) || return nothing
+        v = bindings[pat.dim]
+        v isa VarExpr || return nothing
+        return v.name
+    end
+    return pat.dim
+end
+
+# Mangle an output name per the RFC §7.9 convention:
+#   <output>__<operand>[__<axis>]
+function _mangle_output_name(output::String, operand::String,
+                              axis::Union{String,Nothing})::String
+    axis === nothing && return "$(output)__$(operand)"
+    return "$(output)__$(operand)__$(axis)"
+end
+
+# Stable memoization key: "<scheme>:<output>=<mangled>, ..." (sorted by output).
+function _emit_memokey(scheme_name::String,
+                        mangled::Dict{String,String})::String
+    parts = sort!(["$(k)=$(v)" for (k, v) in mangled])
+    return scheme_name * ":" * join(parts, ",")
+end
+
+# Expand one stencil entry from a MultiOutputStencilScheme output.
+# Mirrors _expand_stencil_entry but accepts the scheme by its concrete type
+# to allow error messages that name the output.
+function _expand_stencil_entry_multi(scheme::MultiOutputStencilScheme,
+                                      output_name::String,
+                                      entry::StencilEntry,
+                                      operand_var::Expr,
+                                      target::Vector{Expr},
+                                      spatial_dims::Vector{String},
+                                      bindings::Dict{String,Expr},
+                                      nonuniform_dims::Vector{String}=String[],
+                                      metric_array_names::Vector{String}=String[])::Expr
+    sel = entry.selector
+    sel isa CartesianSelector || throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+        "scheme $(scheme.name) output $output_name: " *
+        "non-cartesian selectors not yet supported"))
+    axis_name = if _is_pvar_string(sel.axis)
+        haskey(bindings, sel.axis) || throw(RuleEngineError("E_SCHEME_MISMATCH",
+            "scheme $(scheme.name): axis pvar `$(sel.axis)` not bound"))
+        v = bindings[sel.axis]
+        v isa VarExpr || throw(RuleEngineError("E_SCHEME_MISMATCH",
+            "scheme $(scheme.name): axis pvar `$(sel.axis)` must bind a bare name"))
+        v.name
+    else
+        sel.axis
+    end
+    axis_pos = findfirst(==(axis_name), spatial_dims)
+    axis_pos === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+        "scheme $(scheme.name) output $output_name: selector axis " *
+        "`$axis_name` not in grid spatial_dims $spatial_dims"))
+    indices = materialize(sel, target, axis_pos)
+    operand_ref = OpExpr("index", Expr[operand_var, indices...])
+    coeff = apply_bindings(entry.coeff, bindings)
+    if !isempty(metric_array_names) && axis_name in nonuniform_dims
+        coeff = _rewrite_metric_refs(coeff, metric_array_names, target[axis_pos])
+    end
+    return OpExpr("*", Expr[coeff, operand_ref])
+end
+
+"""
+    expand_multi_output_scheme_direct(scheme, bindings, ctx) -> Expr
+
+Implement RFC §7.9 trigger 1 (directly-consumed path): called by the rule
+engine when a `use:` rule fires on a `MultiOutputStencilScheme` with a
+non-null `primary`.
+
+Emits one observed arrayop equation per declared output into
+`ctx.emitted_equations`, auto-declares the output variables into
+`ctx.emitted_variables`, and returns an `index(primary_output, i, …)` Expr
+that the rule engine substitutes at the matched expression site.
+
+Expansion is memoized by `(scheme, mangled_output_names)` so that if the
+same operand/axis binding fires twice in one document, the observed equations
+are only emitted once.
+
+V1 scope: periodic dimensions only. Throws `E_SCHEME_BOUNDED_DIM` for any
+non-periodic spatial dimension (OQ1 follow-on bead).
+"""
+function expand_multi_output_scheme_direct(scheme::MultiOutputStencilScheme,
+                                            bindings::Dict{String,Expr},
+                                            ctx::RuleContext)::Expr
+    # 1. Recover operand.
+    operand_expr = _scheme_operand_multi(scheme, bindings)
+    operand_expr isa VarExpr || throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+        "scheme $(scheme.name): operand must be a bare variable reference " *
+        "for multi_output_stencil expansion"))
+    operand_name = operand_expr.name
+
+    # 2. Grid metadata.
+    grid_name    = _operand_grid(operand_expr, ctx)
+    spatial_dims = _grid_spatial_dims(grid_name, ctx)
+    gmeta        = ctx.grids[grid_name]
+    periodic_dims = String.(get(gmeta, "periodic_dims", String[]))
+    dim_sizes    = get(gmeta, "dim_sizes", Dict{String,Any}())
+
+    # 3. v1 scope: all spatial dims must be periodic (OQ1 deferred).
+    for d in spatial_dims
+        d in periodic_dims || throw(RuleEngineError("E_SCHEME_BOUNDED_DIM",
+            "scheme $(scheme.name): dimension '$d' of grid '$grid_name' is not " *
+            "periodic; multi_output_stencil v1 supports periodic dimensions only " *
+            "(bounded/staggered extents deferred to OQ1 follow-on bead)"))
+    end
+
+    # 4. Compute mangled output names.
+    axis_name = _scheme_axis_name(scheme, bindings)
+    mangled = Dict{String,String}(
+        o => _mangle_output_name(o, operand_name, axis_name)
+        for o in scheme.outputs)
+
+    # 5. Memoization — skip emission if already done for this instantiation.
+    memo_key = _emit_memokey(scheme.name, mangled)
+    if !(memo_key in ctx.emitted_scheme_keys)
+        push!(ctx.emitted_scheme_keys, memo_key)
+
+        # 6. Shared stencil infrastructure.
+        nd          = length(spatial_dims)
+        target      = _cartesian_target(spatial_dims)
+        nonuniform  = String.(get(gmeta, "nonuniform_dims", String[]))
+        metric_arr  = String.(get(gmeta, "metric_array_names", String[]))
+        output_idx  = String[_CARTESIAN_CANONICAL_NAMES[d] for d in 1:nd]
+        ranges      = Dict{String,Any}()
+        for d in 1:nd
+            sz = get(dim_sizes, spatial_dims[d], nothing)
+            sz === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
+                "scheme $(scheme.name): grid '$grid_name' missing size for " *
+                "dim '$(spatial_dims[d])'"))
+            ranges[output_idx[d]] = Any[1, Int(sz)]
+        end
+
+        # 7. Emit one observed arrayop equation per output.
+        for out_name in scheme.outputs
+            entries    = scheme.stencil[out_name]
+            terms      = Expr[_expand_stencil_entry_multi(scheme, out_name, e,
+                                   operand_expr, target, spatial_dims, bindings,
+                                   nonuniform, metric_arr)
+                               for e in entries]
+            rhs_scalar = length(terms) == 1 ? terms[1] : OpExpr("+", terms)
+            rhs_canon  = canonicalize(rhs_scalar)
+            rhs_dict   = serialize_expression(rhs_canon)
+
+            mn = mangled[out_name]
+            lhs_index_args = Any[mn]
+            for idx in output_idx; push!(lhs_index_args, idx); end
+
+            eqn = Dict{String,Any}(
+                "lhs" => Dict{String,Any}(
+                    "op"         => "arrayop",
+                    "args"       => Any[],
+                    "output_idx" => output_idx,
+                    "expr"       => Dict{String,Any}(
+                        "op"   => "index",
+                        "args" => lhs_index_args,
+                    ),
+                    "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                ),
+                "rhs" => Dict{String,Any}(
+                    "op"         => "arrayop",
+                    "args"       => Any[],
+                    "output_idx" => output_idx,
+                    "expr"       => rhs_dict,
+                    "ranges" => Dict{String,Any}(k => v for (k, v) in ranges),
+                ),
+                "observed"   => true,
+                "emitted_by" => scheme.name,
+            )
+            push!(ctx.emitted_equations, eqn)
+
+            # Auto-declare the output variable.
+            operand_meta   = get(ctx.variables, operand_name, Dict{String,Any}())
+            operand_shape  = get(operand_meta, "shape", Any[String(d) for d in spatial_dims])
+            emit_loc       = scheme.emits_location === nothing ? "cell_center" :
+                             scheme.emits_location
+            ctx.emitted_variables[mn] = Dict{String,Any}(
+                "type"     => "observed",
+                "units"    => "1",
+                "shape"    => operand_shape,
+                "location" => emit_loc,
+            )
+        end
+    end
+
+    # 8. Return index(primary_mangled, i[, j, …]) as the replacement Expr.
+    primary_mn = mangled[scheme.primary]
+    idx_args   = Expr[VarExpr(primary_mn)]
+    for idx in String[_CARTESIAN_CANONICAL_NAMES[d] for d in 1:length(spatial_dims)]
+        push!(idx_args, VarExpr(idx))
+    end
+    return OpExpr("index", idx_args)
+end
+
+# ============================================================================
 # §6.2.1 — rewrite bare metric-array VarExpr nodes to indexed form.
 # Bare name "dz" in a nonuniform dimension → OpExpr("index", [VarExpr("dz"), target_idx]).
 # Existing index nodes (already-explicit array accesses) are passed through unchanged,
