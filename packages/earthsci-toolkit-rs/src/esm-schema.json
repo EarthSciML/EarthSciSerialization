@@ -1224,20 +1224,6 @@
         }
       }
     },
-    "DiscretizationRef": {
-      "type": "object",
-      "description": "A reference to an external ESD rule file containing a single discretization scheme definition (§4.7.1). The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file. At load time the referenced file's single scheme is spliced in place of this {ref} object.",
-      "required": [
-        "ref"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "ref": {
-          "type": "string",
-          "description": "Local file path or URL pointing to an ESD rule file (an ESM file whose discretizations block contains exactly one scheme definition). The scheme is loaded and used as the inline definition for this discretizations entry."
-        }
-      }
-    },
     "Species": {
       "type": "object",
       "description": "A reactive species in a reaction system.",
@@ -5526,6 +5512,20 @@
               }
             ]
           }
+        }
+      }
+    },
+    "DiscretizationRef": {
+      "type": "object",
+      "description": "A reference to an external ESD rule file containing a single discretization scheme definition (§4.7.1). The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file. At load time the referenced file's single scheme is spliced in place of this {ref} object.",
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Local file path or URL pointing to an ESD rule file (an ESM file whose discretizations block contains exactly one scheme definition). The scheme is loaded and used as the inline definition for this discretizations entry."
         }
       }
     }
