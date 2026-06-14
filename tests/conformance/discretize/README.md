@@ -10,10 +10,11 @@ category intentionally does not require.
 
 ## Status
 
-**Step 1** (this bead, gt-l3dg): Julia-only. The §11 pipeline has landed
-in Julia (gt-gbs2); parallel ports to Python / Go / Rust / TypeScript are
-tracked separately. As each binding lands its port, it MUST add an
-adapter that satisfies the contract below and passes against the
+Julia-only (gt-l3dg). Seven fixtures covering ODE, PDE, boundary
+canonicalization, CFL advection, nonuniform diffusion, and multi-output
+stencil §7.9 triggers 1 and 2. Parallel ports to Python / Go / Rust /
+TypeScript are tracked separately. As each binding lands its port, it MUST
+add an adapter that satisfies the contract below and passes against the
 committed goldens — no fixture forks, no per-binding goldens.
 
 ## Directory layout
@@ -25,11 +26,19 @@ tests/conformance/discretize/
 ├── inputs/                # input ESM documents (parse-only; hand-written)
 │   ├── scalar_ode.esm
 │   ├── heat_1d_centered_grad.esm
-│   └── bc_value_canonicalization.esm
+│   ├── bc_value_canonicalization.esm
+│   ├── cfl_sine_advection.esm
+│   ├── nonuniform_1d_diffusion.esm
+│   ├── multi_output_direct_consumed.esm    # §7.9 trigger-1 (ess-ebe)
+│   └── multi_output_demand_driven.esm      # §7.9 trigger-2 demand-driven (ess-qs2)
 └── golden/                # expected canonical-JSON output per fixture
     ├── scalar_ode.json
     ├── heat_1d_centered_grad.json
-    └── bc_value_canonicalization.json
+    ├── bc_value_canonicalization.json
+    ├── cfl_sine_advection.json
+    ├── nonuniform_1d_diffusion.json
+    ├── multi_output_direct_consumed.json   # §7.9 trigger-1 (ess-ebe)
+    └── multi_output_demand_driven.json     # §7.9 trigger-2 demand-driven (ess-qs2)
 ```
 
 Paths inside `manifest.json` (`input`, `golden`) are relative to the
@@ -105,8 +114,12 @@ implements the float rules; other bindings have equivalent helpers
    visible test label in every binding.
 3. Regenerate the golden: run the Julia reference adapter with
    `UPDATE_DISCRETIZE_GOLDEN=1` (the adapter writes the golden and
-   passes instead of failing on mismatch). Commit the golden.
-4. Every other binding that has landed a discretize port must then
+   passes instead of failing on mismatch).
+4. **Hand-verify the golden for correctness** — inspect the emitted
+   equations, variable names, name mangling, and DAE counts against the
+   expected ESM spec behaviour. Do not just regenerate until green.
+5. Commit the input, golden, and manifest entry together.
+6. Every other binding that has landed a discretize port must then
    re-run its adapter to confirm byte-identity. A binding that cannot
    reproduce the Julia golden is a legitimate cross-binding bug — file
    a bead, do not fork the golden.
