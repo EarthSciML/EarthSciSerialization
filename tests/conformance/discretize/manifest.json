@@ -66,6 +66,12 @@
       "input":  "inputs/interface_bc_schema.esm",
       "golden": "golden/interface_bc_schema.json",
       "tags": ["step1", "boundary_conditions", "interface_bc", "multi_variable"]
+    },
+    {
+      "id": "stencil_gen_fornberg",
+      "input":  "inputs/stencil_gen_fornberg.esm",
+      "golden": "golden/stencil_gen_fornberg.json",
+      "tags": ["step2", "pde", "stencil-gen", "fornberg", "centered", "uniform", "use-scheme", "section-7.1.3", "ess-bq1"]
     }
   ]
 }

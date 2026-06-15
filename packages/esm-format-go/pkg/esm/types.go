@@ -904,6 +904,9 @@ type Discretization struct {
 	// Stencil is the per-neighbor contribution list for a standard
 	// discretization (RFC §7.1). Mutually exclusive with Terms and MultiOutputStencil.
 	Stencil            []StencilEntry    `json:"stencil,omitempty"`
+	// StencilGen is a declarative stencil-weight generator (RFC §7.1.3).
+	// Mutually exclusive with Stencil; expanded by the Julia loader at parse time.
+	StencilGen         *StencilGen       `json:"stencil_gen,omitempty"`
 
 	// Axes is the ordered coordinate-axis list shared by both composite
 	// kinds: "dimensional_split" (§7.5) and "cross_metric" (§7.6).
@@ -1103,6 +1106,19 @@ type FfslRemap struct {
 type StencilEntry struct {
 	Selector NeighborSelector `json:"selector"`
 	Coeff    json.RawMessage  `json:"coeff"`
+}
+
+// StencilGen is a declarative finite-difference weight generator (RFC §7.1.3).
+// The Julia loader expands it into an equivalent StencilEntry list at parse time
+// using the Fornberg recurrence in exact rational arithmetic.
+// Go preserves StencilGen for round-trip fidelity; it does not evaluate it.
+type StencilGen struct {
+	Method        string `json:"method"`
+	DerivOrder    int    `json:"deriv_order"`
+	AccuracyOrder int    `json:"accuracy_order"`
+	Stagger       string `json:"stagger"`
+	Axis          string `json:"axis"`
+	Spacing       string `json:"spacing"`
 }
 
 // NeighborSelector selects a neighbor (or neighbor set) in a stencil entry.

@@ -1679,4 +1679,143 @@ end
         @test k_range[2]["op"] == "-"
         @test rhs["reduce"] == "+"
     end
+
+    # =========================================================================
+    # stencil_gen / Fornberg recurrence (ess-bq1)
+    # =========================================================================
+
+    @testset "_fornberg_centered_weights_int: order 2 → [-1/2, +1/2] with denom=2" begin
+        triples = EarthSciSerialization._fornberg_centered_weights_int(2)
+        @test length(triples) == 2
+        @test triples == [(-1, -1, 2), (1, 1, 2)]
+    end
+
+    @testset "_fornberg_centered_weights_int: order 4 → [+1,-8,+8,-1] with denom=12" begin
+        triples = EarthSciSerialization._fornberg_centered_weights_int(4)
+        @test length(triples) == 4
+        @test triples == [(-2, 1, 12), (-1, -8, 12), (1, 8, 12), (2, -1, 12)]
+    end
+
+    @testset "_fornberg_centered_weights_int: order 6 → [-1,9,-45,45,-9,1] with denom=60" begin
+        triples = EarthSciSerialization._fornberg_centered_weights_int(6)
+        @test length(triples) == 6
+        # Tabulated 6th-order centered weights: [-1/60, 3/20, -3/4, 3/4, -3/20, 1/60]
+        # = [-1, 9, -45, 45, -9, 1] / 60
+        @test triples == [(-3, -1, 60), (-2, 9, 60), (-1, -45, 60), (1, 45, 60), (2, -9, 60), (3, 1, 60)]
+    end
+
+    @testset "_fornberg_centered_weights_int: order 8 → 8 offsets, sum=0" begin
+        triples = EarthSciSerialization._fornberg_centered_weights_int(8)
+        @test length(triples) == 8
+        # Antisymmetry: w_{-k} = -w_{+k}
+        for k in 1:4
+            neg_entry = triples[findfirst(t -> t[1] == -k, triples)]
+            pos_entry = triples[findfirst(t -> t[1] ==  k, triples)]
+            @test neg_entry[2] == -pos_entry[2]
+            @test neg_entry[3] == pos_entry[3]
+        end
+    end
+
+    @testset "_fornberg_centered_weights_int: odd accuracy_order throws" begin
+        @test_throws Exception EarthSciSerialization._fornberg_centered_weights_int(3)
+        @test_throws Exception EarthSciSerialization._fornberg_centered_weights_int(0)
+        @test_throws Exception EarthSciSerialization._fornberg_centered_weights_int(-2)
+    end
+
+    @testset "_expand_stencil_gen: order-4 produces byte-identical stencil to hand-authored" begin
+        gen_raw = Dict{String,Any}(
+            "method"        => "fornberg",
+            "deriv_order"   => 1,
+            "accuracy_order" => 4,
+            "stagger"       => "centered",
+            "axis"          => "\$x",
+            "spacing"       => "dx",
+        )
+        entries = EarthSciSerialization._expand_stencil_gen("test_scheme", "cartesian", gen_raw)
+        @test length(entries) == 4
+
+        # Offsets: -2, -1, +1, +2
+        offsets = [e.selector.offset for e in entries]
+        @test offsets == [-2, -1, 1, 2]
+
+        # Check coefficients match hand-authored form: num / (denom * dx)
+        # order-4: [1, -8, 8, -1] / (12 * dx)
+        expected_nums = [1, -8, 8, -1]
+        for (i, entry) in enumerate(entries)
+            coeff = entry.coeff
+            @test coeff isa OpExpr
+            @test coeff.op == "/"
+            @test coeff.args[1] isa IntExpr
+            @test coeff.args[1].value == expected_nums[i]
+            @test coeff.args[2] isa OpExpr
+            @test coeff.args[2].op == "*"
+            @test coeff.args[2].args[1] isa IntExpr
+            @test coeff.args[2].args[1].value == 12
+            @test coeff.args[2].args[2] isa VarExpr
+            @test coeff.args[2].args[2].name == "dx"
+        end
+    end
+
+    @testset "_expand_stencil_gen: order-2 produces byte-identical stencil to hand-authored" begin
+        gen_raw = Dict{String,Any}(
+            "method"        => "fornberg",
+            "deriv_order"   => 1,
+            "accuracy_order" => 2,
+            "stagger"       => "centered",
+            "axis"          => "\$x",
+            "spacing"       => "dx",
+        )
+        entries = EarthSciSerialization._expand_stencil_gen("test_scheme", "cartesian", gen_raw)
+        @test length(entries) == 2
+        @test [e.selector.offset for e in entries] == [-1, 1]
+        @test entries[1].coeff.args[1].value == -1
+        @test entries[2].coeff.args[1].value ==  1
+        @test entries[1].coeff.args[2].args[1].value == 2
+    end
+
+    @testset "parse_schemes: stencil_gen accepted as alternative to stencil" begin
+        gen_scheme = Dict{String,Any}(
+            "applies_to"    => Dict("op" => "grad", "args" => Any["\$u"], "dim" => "\$x"),
+            "grid_family"   => "cartesian",
+            "combine"       => "+",
+            "stencil_gen"   => Dict{String,Any}(
+                "method"         => "fornberg",
+                "deriv_order"    => 1,
+                "accuracy_order" => 2,
+                "stagger"        => "centered",
+                "axis"           => "\$x",
+                "spacing"        => "dx",
+            ),
+        )
+        schemes = parse_schemes(Dict("gen_test" => gen_scheme))
+        sch = schemes["gen_test"]
+        @test sch isa Scheme
+        @test length(sch.stencil) == 2
+        @test sch.stencil[1].selector.offset == -1
+        @test sch.stencil[2].selector.offset ==  1
+    end
+
+    @testset "parse_schemes: stencil and stencil_gen mutually exclusive" begin
+        both_scheme = Dict{String,Any}(
+            "applies_to"  => Dict("op" => "grad", "args" => Any["\$u"], "dim" => "\$x"),
+            "grid_family" => "cartesian",
+            "combine"     => "+",
+            "stencil"     => Any[Dict("selector" => Dict("kind" => "cartesian", "axis" => "\$x", "offset" => 1),
+                                      "coeff" => 1)],
+            "stencil_gen" => Dict{String,Any}("method" => "fornberg",
+                                               "deriv_order" => 1, "accuracy_order" => 2,
+                                               "stagger" => "centered", "axis" => "\$x", "spacing" => "dx"),
+        )
+        @test_throws EarthSciSerialization.RuleEngineError parse_schemes(Dict("bad" => both_scheme))
+    end
+
+    @testset "_expand_stencil_gen: non-cartesian grid_family throws" begin
+        gen_raw = Dict{String,Any}(
+            "method"         => "fornberg", "deriv_order" => 1,
+            "accuracy_order" => 2, "stagger" => "centered",
+            "axis" => "\$x", "spacing" => "dx",
+        )
+        @test_throws EarthSciSerialization.RuleEngineError EarthSciSerialization._expand_stencil_gen(
+            "s", "unstructured", gen_raw)
+    end
 end

@@ -46,15 +46,27 @@ function parse_scheme(name::AbstractString, raw)::Scheme
     combine in ("+", "*", "min", "max") || throw(RuleEngineError("E_SCHEME_PARSE",
         "scheme $sname: combine `$combine` must be one of +, *, min, max"))
 
-    stencil_raw = _getkey(raw, "stencil"; default=nothing)
-    stencil_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-        "scheme $sname: missing required field `stencil`"))
-    stencil_raw isa AbstractVector || throw(RuleEngineError("E_SCHEME_PARSE",
-        "scheme $sname: `stencil` must be an array"))
-    stencil = StencilEntry[_parse_stencil_entry(sname, grid_family, e)
-                           for e in stencil_raw]
-    isempty(stencil) && throw(RuleEngineError("E_SCHEME_PARSE",
-        "scheme $sname: `stencil` must contain at least one entry"))
+    stencil_raw     = _getkey(raw, "stencil";     default=nothing)
+    stencil_gen_raw = _getkey(raw, "stencil_gen"; default=nothing)
+
+    stencil_raw !== nothing && stencil_gen_raw !== nothing &&
+        throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `stencil` and `stencil_gen` are mutually exclusive"))
+
+    stencil = if stencil_gen_raw !== nothing
+        _expand_stencil_gen(sname, grid_family, stencil_gen_raw)
+    elseif stencil_raw !== nothing
+        stencil_raw isa AbstractVector || throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `stencil` must be an array"))
+        entries = StencilEntry[_parse_stencil_entry(sname, grid_family, e)
+                               for e in stencil_raw]
+        isempty(entries) && throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: `stencil` must contain at least one entry"))
+        entries
+    else
+        throw(RuleEngineError("E_SCHEME_PARSE",
+            "scheme $sname: one of `stencil` or `stencil_gen` is required"))
+    end
 
     accuracy_raw = _getkey(raw, "accuracy"; default=nothing)
     accuracy = accuracy_raw === nothing ? nothing : String(accuracy_raw)
@@ -1328,4 +1340,146 @@ function _rewrite_metric_refs(expr::Expr, metric_names::Vector{String},
                       axis=expr.axis, fn=expr.fn, name=expr.name, value=expr.value)
     end
     return expr
+end
+
+# ============================================================================
+# stencil_gen — declarative FD weight generation via Fornberg recurrence
+# ============================================================================
+
+"""
+    _fornberg_centered_weights_int(accuracy_order) -> Vector{Tuple{Int,Int,Int}}
+
+Exact integer representation of centered finite-difference weights for the
+1st derivative on a uniform grid, using a common-denominator (LCM) form.
+
+Returns a list of `(offset, numerator, denominator)` triples sorted by offset,
+where `weight_at_offset = numerator / (denominator * h)` and `denominator` is
+the LCM of all individual weights' denominators. This produces the same canonical
+numerator/denominator pairs as hand-authored stencil files for orders 2, 4, 6, 8, …
+
+Formula for k = 1, …, m (where m = accuracy_order ÷ 2):
+  w_k = (-1)^(k+1) · (m!)² / [k · (m+k)! · (m-k)!]
+  w_{-k} = -w_k  (antisymmetry of the 1st derivative)
+
+Verified against tabulated values (Abramowitz & Stegun Table 25.2, Wikipedia).
+"""
+function _fornberg_centered_weights_int(accuracy_order::Int)::Vector{Tuple{Int,Int,Int}}
+    iseven(accuracy_order) && accuracy_order >= 2 || error(
+        "accuracy_order must be a positive even integer, got $accuracy_order")
+    m = accuracy_order ÷ 2
+    mfact = factorial(Int64(m))
+
+    # Compute reduced rational weights for positive offsets
+    weights_pos = Rational{Int64}[]
+    for k in 1:m
+        sgn = isodd(k) ? Int64(1) : Int64(-1)
+        num = sgn * mfact * mfact
+        den = Int64(k) * factorial(Int64(m + k)) * factorial(Int64(m - k))
+        push!(weights_pos, Rational{Int64}(num, den))  # auto-reduces via gcd
+    end
+
+    # Common denominator: LCM of all reduced denominators
+    denom_lcm = Int64(1)
+    for w in weights_pos
+        denom_lcm = lcm(denom_lcm, denominator(w))
+    end
+
+    # Build sorted (offset, int_numerator, denom_lcm) tuples
+    result = Tuple{Int,Int,Int}[]
+    for k in 1:m
+        w   = weights_pos[k]
+        int_num = Int64(numerator(w)) * div(denom_lcm, denominator(w))
+        push!(result, (-k, -int_num, denom_lcm))   # negative offset
+        push!(result, ( k,  int_num, denom_lcm))   # positive offset
+    end
+    sort!(result, by=first)
+    return result
+end
+
+"""
+    _expand_stencil_gen(scheme_name, grid_family, raw) -> Vector{StencilEntry}
+
+Expand a `stencil_gen` descriptor into explicit [`StencilEntry`](@ref) objects at
+parse time. The generated stencil entries are byte-identical in canonical JSON
+to hand-authored stencils for the same family and accuracy order.
+
+Supported: `method="fornberg"`, `deriv_order=1`, `stagger="centered"` (uniform
+cartesian grid). One-sided stagger and higher derivative orders land in
+follow-on bead ess-5b.
+"""
+function _expand_stencil_gen(scheme_name::String, grid_family::String,
+                              raw)::Vector{StencilEntry}
+    _is_dict_like(raw) || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen must be an object"))
+
+    # method
+    method_raw = _getkey(raw, "method"; default=nothing)
+    method_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `method`"))
+    method = String(method_raw)
+    method == "fornberg" || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.method `$method` not supported " *
+        "(supported: fornberg)"))
+
+    # deriv_order
+    deriv_raw = _getkey(raw, "deriv_order"; default=nothing)
+    deriv_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `deriv_order`"))
+    deriv_raw isa Integer || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.deriv_order must be an integer"))
+    deriv_order = Int(deriv_raw)
+    deriv_order == 1 || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.deriv_order=$deriv_order not yet supported " *
+        "(only 1 is implemented; higher orders land in follow-on bead ess-5b)"))
+
+    # accuracy_order
+    acc_raw = _getkey(raw, "accuracy_order"; default=nothing)
+    acc_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `accuracy_order`"))
+    acc_raw isa Integer || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.accuracy_order must be an integer"))
+    accuracy_order = Int(acc_raw)
+    (iseven(accuracy_order) && accuracy_order >= 2) || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.accuracy_order must be a positive even integer, " *
+        "got $accuracy_order"))
+
+    # stagger
+    stagger_raw = _getkey(raw, "stagger"; default=nothing)
+    stagger_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `stagger`"))
+    stagger = String(stagger_raw)
+    stagger == "centered" || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen.stagger `$stagger` not supported " *
+        "(supported: centered; onesided lands in follow-on bead ess-5b)"))
+
+    # grid_family must be cartesian for stencil_gen (uniform grid)
+    grid_family == "cartesian" || throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen requires grid_family=cartesian " *
+        "(got $grid_family); non-uniform grids land in follow-on bead ess-5b"))
+
+    # axis
+    axis_raw = _getkey(raw, "axis"; default=nothing)
+    axis_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `axis`"))
+    axis = String(axis_raw)
+
+    # spacing
+    spacing_raw = _getkey(raw, "spacing"; default=nothing)
+    spacing_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
+        "scheme $scheme_name: stencil_gen missing required field `spacing`"))
+    spacing = String(spacing_raw)
+
+    # Generate Fornberg weights in LCM-denominator integer form
+    weight_triples = _fornberg_centered_weights_int(accuracy_order)
+
+    # Build StencilEntry objects with coeff = num / (den * spacing)
+    entries = StencilEntry[]
+    for (offset, int_num, int_den) in weight_triples
+        coeff = OpExpr("/", Expr[
+            IntExpr(Int64(int_num)),
+            OpExpr("*", Expr[IntExpr(Int64(int_den)), VarExpr(spacing)])
+        ])
+        push!(entries, StencilEntry(CartesianSelector(axis, offset), coeff))
+    end
+    return entries
 end

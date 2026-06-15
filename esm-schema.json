@@ -4275,7 +4275,44 @@
           "items": {
             "$ref": "#/$defs/StencilEntry"
           },
-          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\"."
+          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC §7.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\". Mutually exclusive with stencil_gen."
+        },
+        "stencil_gen": {
+          "type": "object",
+          "description": "Declarative stencil-weight generator (RFC §7.1.3). Replaces the hand-authored `stencil` array with a compact descriptor that the loader expands at parse time using the Fornberg recurrence in exact rational arithmetic. The generated stencil entries are byte-identical in canonical JSON to hand-authored stencils. Mutually exclusive with `stencil`. Scope: uniform cartesian grids (grid_family=\"cartesian\"), first derivative (deriv_order=1), centered stagger. Non-uniform grids and higher derivative orders land in follow-on bead ess-5b.",
+          "required": ["method", "deriv_order", "accuracy_order", "stagger", "axis", "spacing"],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fornberg",
+              "description": "Weight-generation algorithm. Only \"fornberg\" is supported (Fornberg 1988 recurrence, exact rational arithmetic)."
+            },
+            "deriv_order": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Derivative order (1 = first derivative / gradient). Only 1 is currently supported; higher orders land in follow-on bead ess-5b."
+            },
+            "accuracy_order": {
+              "type": "integer",
+              "minimum": 2,
+              "multipleOf": 2,
+              "description": "Truncation error order for centered differences (must be a positive even integer: 2, 4, 6, 8, …). Determines stencil width: accuracy_order/2 points on each side of the evaluation point."
+            },
+            "stagger": {
+              "type": "string",
+              "enum": ["centered"],
+              "description": "Stencil symmetry. Only \"centered\" is currently supported (symmetric about the evaluation point, zero-weight center). One-sided / upwind stagger lands in follow-on bead ess-5b."
+            },
+            "axis": {
+              "type": "string",
+              "description": "Cartesian axis along which the stencil is applied. May be a literal dimension name or a pattern variable (e.g. \"$x\") resolved against the triggering rule's bindings at expansion time."
+            },
+            "spacing": {
+              "type": "string",
+              "description": "Uniform grid spacing symbol (e.g. \"dx\"). Used as the denominator variable in the generated coefficient AST: coeff = numerator / (denominator * spacing)."
+            }
+          }
         },
         "axes": {
           "type": "array",
