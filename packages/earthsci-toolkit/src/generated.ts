@@ -265,9 +265,9 @@ export type ExpressionNode = {
     [k: string]: unknown;
   };
   /**
-   * For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC §9.2.
+   * For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib', 'interface'). See RFC §9.2.
    */
-  kind?: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
+  kind?: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib" | "interface";
   /**
    * For the 'bc' pattern-match op: the BC side to match (e.g., 'xmin', 'xmax', 'ymin', 'panel_seam', 'mesh_boundary'). See RFC §9.2.
    */
@@ -1708,9 +1708,9 @@ export interface BoundaryCondition {
    */
   side: string;
   /**
-   * BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n-based; robin = αu + β∂u/∂n = γ; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template.
+   * BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = ∂u/∂n-based; robin = αu + β∂u/∂n = γ; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template; interface = value-continuity coupling between two model variables at a shared boundary point (u(x*) = v(x*)), ghost-cell resolved using coupled_variable.
    */
-  kind: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib";
+  kind: "constant" | "dirichlet" | "neumann" | "robin" | "zero_gradient" | "periodic" | "flux_contrib" | "interface";
   /**
    * BC value: numeric literal, variable/parameter reference string, or expression AST. Required for kind='constant' and kind='dirichlet'; semantics for other kinds per RFC §9.2.
    */
@@ -1727,6 +1727,14 @@ export interface BoundaryCondition {
    * Robin BC RHS value γ in αu + β∂u/∂n = γ.
    */
   robin_gamma?: number | string | ExpressionNode;
+  /**
+   * For kind='interface': the name of the model variable at the other side of the shared boundary point. Required when kind='interface'.
+   */
+  coupled_variable?: string;
+  /**
+   * For kind='interface': if true, enforce normal-flux continuity in addition to value continuity. Default false.
+   */
+  flux_match?: boolean;
   /**
    * Reduced face-coordinate index names used when `value` contains an `index` op into a loader-provided time-varying field (§9.2 / §8.A.3). E.g., for side='zmin' on a 3D grid, face_coords: ['i', 'j']. Omit when `value` does not index into a time-varying loader field.
    */

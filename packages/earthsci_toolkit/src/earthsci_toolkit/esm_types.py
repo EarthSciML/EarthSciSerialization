@@ -636,6 +636,7 @@ class BoundaryConditionKind(Enum):
     ZERO_GRADIENT = "zero_gradient"
     PERIODIC = "periodic"
     FLUX_CONTRIB = "flux_contrib"
+    INTERFACE = "interface"
 
 
 @dataclass
@@ -660,6 +661,8 @@ class BoundaryCondition:
     robin_alpha: Optional[Union[float, Expr]] = None
     robin_beta: Optional[Union[float, Expr]] = None
     robin_gamma: Optional[Union[float, Expr]] = None
+    coupled_variable: Optional[str] = None
+    flux_match: bool = False
     face_coords: Optional[List[str]] = None
     contributed_by: Optional[BCContributedBy] = None
     description: Optional[str] = None

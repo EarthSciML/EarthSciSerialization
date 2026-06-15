@@ -621,6 +621,8 @@ def _parse_boundary_condition(bc_id: str, bc_data: Dict[str, Any]) -> BoundaryCo
         robin_alpha=bc_data.get("robin_alpha"),
         robin_beta=bc_data.get("robin_beta"),
         robin_gamma=bc_data.get("robin_gamma"),
+        coupled_variable=bc_data.get("coupled_variable"),
+        flux_match=bool(bc_data.get("flux_match", False)),
         face_coords=bc_data.get("face_coords"),
         contributed_by=contributed_by,
         description=bc_data.get("description"),

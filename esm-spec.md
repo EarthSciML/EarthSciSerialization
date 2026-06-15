@@ -2919,6 +2919,7 @@ The discriminated union is the canonical JSON Schema pattern for variant records
 | `dirichlet` | Fixed value at boundaries (equivalent to `constant`) |
 | `neumann` | ∂u/∂n = 0 at boundaries (equivalent to `zero_gradient`) |
 | `robin` | Mixed boundary condition: αu + β∂u/∂n = γ |
+| `interface` | Value-continuity coupling: u(x\*) = v(x\*) at a shared boundary point |
 
 #### Additional Boundary Condition Fields
 
@@ -2929,8 +2930,12 @@ The discriminated union is the canonical JSON Schema pattern for variant records
 | `robin_alpha` | number | Robin BC coefficient α for u term in αu + β∂u/∂n = γ |
 | `robin_beta` | number | Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ |
 | `robin_gamma` | number | Robin BC RHS value γ in αu + β∂u/∂n = γ |
+| `coupled_variable` | string | For `interface` kind: name of the model variable at the other side of the shared point (required) |
+| `flux_match` | boolean | For `interface` kind: also enforce ∂u/∂n = ∂v/∂n (default false) |
 
 **Note:** `dirichlet` and `neumann` are alternative names for `constant` and `zero_gradient` respectively. The Robin boundary condition provides a general mixed formulation where appropriate coefficients can recover Dirichlet (α=1, β=0) or Neumann (α=0, β=1) conditions as special cases.
+
+The `interface` BC couples two variables at a shared domain boundary using the ghost-cell approach: ghost reads of `u` beyond its declared side are replaced by index accesses into `coupled_variable`. For `xmax`: u[N+k] → v[k]; for `xmin`: u[1-k] → v[N+1-k]. Both variables must occupy the same grid dimension. The user declares a matching `interface` BC on both variables (one at `xmax`, the other at `xmin`).
 
 ### 11.6 Shared Temporal Domain
 

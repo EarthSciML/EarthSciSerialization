@@ -629,6 +629,10 @@ def _serialize_boundary_condition(bc: BoundaryCondition) -> Dict[str, Any]:
         bc_dict["robin_beta"] = bc.robin_beta
     if bc.robin_gamma is not None:
         bc_dict["robin_gamma"] = bc.robin_gamma
+    if bc.coupled_variable is not None:
+        bc_dict["coupled_variable"] = bc.coupled_variable
+    if bc.flux_match:
+        bc_dict["flux_match"] = bc.flux_match
     if bc.face_coords is not None:
         bc_dict["face_coords"] = list(bc.face_coords)
     if bc.contributed_by is not None:

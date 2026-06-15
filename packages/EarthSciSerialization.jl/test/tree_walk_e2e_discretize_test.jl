@@ -173,3 +173,88 @@ end
         @test du[vm["u[$i]"]] == expect(i)
     end
 end
+
+@testset "tree_walk e2e: two-domain interface BC value-continuity (ess-x76)" begin
+    # Two 1D heat domains (u on [0,1], v on [1,2]) joined at x=1 by an
+    # interface BC. Both read a diffusion stencil u[i-1] - 2*u[i] + u[i+1]
+    # where the ghost outside the domain reads from the coupled variable.
+    # N=4 cells each, D=1, dx=0.25 → D/dx²=16. The interface coupling
+    # means the combined 8-cell system is equivalent to a single 8-cell heat
+    # equation with Dirichlet BCs at both outer ends.
+    n = 4
+    dx = 0.25
+    alpha = 1.0 / (dx * dx)   # D/dx² = 16
+    esm = Dict{String,Any}(
+        "esm"      => "0.4.0",
+        "metadata" => Dict{String,Any}("name" => "interface_bc_e2e"),
+        "grids"    => Dict{String,Any}(
+            "g" => Dict{String,Any}(
+                "family"     => "cartesian",
+                "dimensions" => Any[Dict{String,Any}(
+                    "name" => "i", "size" => n,
+                    "periodic" => false, "spacing" => "uniform")],
+            ),
+        ),
+        "models" => Dict{String,Any}(
+            "M" => Dict{String,Any}(
+                "grid" => "g",
+                "variables" => Dict{String,Any}(
+                    "u" => Dict{String,Any}(
+                        "type" => "state", "default" => 0.0, "units" => "1",
+                        "shape" => Any["i"], "location" => "cell_center"),
+                    "v" => Dict{String,Any}(
+                        "type" => "state", "default" => 0.0, "units" => "1",
+                        "shape" => Any["i"], "location" => "cell_center")),
+                "equations" => Any[
+                    Dict{String,Any}(
+                        "lhs" => Dict{String,Any}("op" => "D", "args" => Any["u"], "wrt" => "t"),
+                        "rhs" => Dict{String,Any}("op" => "*", "args" => Any[
+                            alpha,
+                            Dict{String,Any}("op" => "+", "args" => Any[
+                                Dict{String,Any}("op" => "index", "args" => Any["u", Dict{String,Any}("op" => "-", "args" => Any["i", 1])]),
+                                Dict{String,Any}("op" => "*", "args" => Any[-2, Dict{String,Any}("op" => "index", "args" => Any["u", "i"])]),
+                                Dict{String,Any}("op" => "index", "args" => Any["u", Dict{String,Any}("op" => "+", "args" => Any["i", 1])])])])),
+                    Dict{String,Any}(
+                        "lhs" => Dict{String,Any}("op" => "D", "args" => Any["v"], "wrt" => "t"),
+                        "rhs" => Dict{String,Any}("op" => "*", "args" => Any[
+                            alpha,
+                            Dict{String,Any}("op" => "+", "args" => Any[
+                                Dict{String,Any}("op" => "index", "args" => Any["v", Dict{String,Any}("op" => "-", "args" => Any["i", 1])]),
+                                Dict{String,Any}("op" => "*", "args" => Any[-2, Dict{String,Any}("op" => "index", "args" => Any["v", "i"])]),
+                                Dict{String,Any}("op" => "index", "args" => Any["v", Dict{String,Any}("op" => "+", "args" => Any["i", 1])])])])),
+                ],
+                "boundary_conditions" => Dict{String,Any}(
+                    "u_left"  => Dict{String,Any}("variable" => "u", "kind" => "dirichlet",
+                                                   "side" => "imin", "value" => 0),
+                    "u_right" => Dict{String,Any}("variable" => "u", "kind" => "interface",
+                                                   "side" => "imax", "coupled_variable" => "v"),
+                    "v_left"  => Dict{String,Any}("variable" => "v", "kind" => "interface",
+                                                   "side" => "imin", "coupled_variable" => "u"),
+                    "v_right" => Dict{String,Any}("variable" => "v", "kind" => "dirichlet",
+                                                   "side" => "imax", "value" => 0)),
+            ),
+        ),
+    )
+
+    d = discretize(esm; lift_1d_arrayop=true)
+    f!, u0, p, _ts, vm = build_evaluator(d)
+
+    # IC: mode-1 sinusoid of the combined 8-cell system (cells i=1..8).
+    # sin(i*π/9) for i=1..4 → u; i=5..8 → v.
+    for i in 1:n
+        u0[vm["u[$i]"]] = sin(i * π / 9)
+        u0[vm["v[$i]"]] = sin((i + 4) * π / 9)
+    end
+
+    prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, (0.0, 0.1), p)
+    sol  = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                     reltol=1e-6, abstol=1e-8)
+
+    # At t=0.1 the mode-1 eigenvalue λ₁=16*(2cos(π/9)-2) ≈ -1.9298 gives
+    # decay factor exp(λ₁·0.1) ≈ 0.82450.
+    decay = exp(16 * (2cos(π / 9) - 2) * 0.1)
+    for i in 1:n
+        @test isapprox(sol(0.1)[vm["u[$i]"]], sin(i * π / 9) * decay; rtol=1e-3)
+        @test isapprox(sol(0.1)[vm["v[$i]"]], sin((i + 4) * π / 9) * decay; rtol=1e-3)
+    end
+end

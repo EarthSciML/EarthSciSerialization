@@ -659,7 +659,7 @@ type BoundaryCondition struct {
 	// Side identifies the boundary side (e.g. "xmin", "xmax", "panel_seam").
 	Side string `json:"side"`
 	// Kind is the BC kind: "constant", "dirichlet", "neumann", "robin",
-	// "zero_gradient", "periodic", or "flux_contrib".
+	// "zero_gradient", "periodic", "flux_contrib", or "interface".
 	Kind string `json:"kind"`
 	// Value is the BC value (numeric literal, variable reference, or Expression
 	// AST). Required for kind="constant" or "dirichlet"; see RFC §9.2.
@@ -674,6 +674,12 @@ type BoundaryCondition struct {
 	// ContributedBy identifies the component providing a flux contribution
 	// (kind="flux_contrib"). See RFC §9.3.
 	ContributedBy *BCContributedBy `json:"contributed_by,omitempty"`
+	// CoupledVariable is the name of the model variable at the other side of a
+	// shared boundary point. Required when kind="interface"; ignored otherwise.
+	CoupledVariable *string `json:"coupled_variable,omitempty"`
+	// FluxMatch enforces normal-flux continuity in addition to value continuity
+	// when kind="interface". Default false. See RFC §9.2.
+	FluxMatch *bool `json:"flux_match,omitempty"`
 	// Description is a human-readable description.
 	Description *string `json:"description,omitempty"`
 }

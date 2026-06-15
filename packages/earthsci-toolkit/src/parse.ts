@@ -473,7 +473,7 @@ const schema = {
         },
         "kind": {
           "type": "string",
-          "description": "For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib'). See RFC \u00a79.2.",
+          "description": "For the 'bc' pattern-match op: the BC kind to match (one of 'constant', 'dirichlet', 'neumann', 'robin', 'zero_gradient', 'periodic', 'flux_contrib', 'interface'). See RFC \u00a79.2.",
           "enum": [
             "constant",
             "dirichlet",
@@ -481,7 +481,8 @@ const schema = {
             "robin",
             "zero_gradient",
             "periodic",
-            "flux_contrib"
+            "flux_contrib",
+            "interface"
           ]
         },
         "side": {
@@ -3098,9 +3099,10 @@ const schema = {
             "robin",
             "zero_gradient",
             "periodic",
-            "flux_contrib"
+            "flux_contrib",
+            "interface"
           ],
-          "description": "BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = \u2202u/\u2202n-based; robin = \u03b1u + \u03b2\u2202u/\u2202n = \u03b3; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template."
+          "description": "BC kind. constant/dirichlet = fixed value; zero_gradient/neumann = \u2202u/\u2202n-based; robin = \u03b1u + \u03b2\u2202u/\u2202n = \u03b3; periodic = pair-side wraparound (declare once per periodic pair on either min or max side); flux_contrib = a component-contributed flux summand that the rewrite engine aggregates with other flux_contrib entries for the same (variable, side) pair before applying the enclosing neumann/robin template; interface = value-continuity coupling between two model variables at a shared boundary point (u(x*) = v(x*)), ghost-cell resolved using coupled_variable."
         },
         "value": {
           "description": "BC value: numeric literal, variable/parameter reference string, or expression AST. Required for kind='constant' and kind='dirichlet'; semantics for other kinds per RFC \u00a79.2.",
@@ -3157,6 +3159,15 @@ const schema = {
               "$ref": "#/$defs/ExpressionNode"
             }
           ]
+        },
+        "coupled_variable": {
+          "type": "string",
+          "description": "For kind='interface': the name of the model variable at the other side of the shared boundary point. Ghost reads of this variable's boundary are resolved as index accesses into `coupled_variable`. Required when kind='interface'; ignored for all other kinds. Both variables must occupy the same grid dimension."
+        },
+        "flux_match": {
+          "type": "boolean",
+          "description": "For kind='interface': if true, enforce normal-flux continuity (\u2202u/\u2202n = \u2202v/\u2202n) in addition to value continuity at the interface. Default false. Currently only value continuity is handled by the arrayop-lift ghost-cell path; flux_match=true emits E_BC_UNSUPPORTED until a one-sided-difference stencil rule is registered.",
+          "default": false
         },
         "face_coords": {
           "type": "array",

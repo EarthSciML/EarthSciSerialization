@@ -464,16 +464,21 @@ end
 # Non-periodic boundary conditions on lifted arrayop equations (ess-gp3)
 # ============================================================================
 #
-# For a lifted equation whose variable has declared dirichlet/neumann BCs on
-# a non-periodic dimension, shrink the interior arrayop range on that side by
-# the stencil reach and emit one scalar equation per excluded boundary cell
-# (the tests/fixtures/arrayop/15_discretized_1d_heat.esm pattern): the
+# For a lifted equation whose variable has declared dirichlet/neumann/interface
+# BCs on a non-periodic dimension, shrink the interior arrayop range on that
+# side by the stencil reach and emit one scalar equation per excluded boundary
+# cell (the tests/fixtures/arrayop/15_discretized_1d_heat.esm pattern): the
 # stencil is instantiated at the literal cell indices, with out-of-range
 # (ghost) reads resolved per the read variable's BC —
 #
 #   dirichlet  → the ghost read is replaced by the BC `value` expression
 #   neumann 0  → the ghost read mirrors back in range (zero-flux:
 #                u[1-k] := u[k], u[2N+1-e] := u[e])
+#   interface  → the ghost read is replaced by an index into the coupled
+#                variable: u[N+k] → coupled[k]; u[1-k] → coupled[N+1-k]
+#                (value continuity at the shared boundary point). Both
+#                variables must occupy the same grid dimension with the same
+#                size N. Declared via `coupled_variable` field on the BC.
 #
 # Reads of periodic dimensions wrap numerically. Ghost reads with no
 # declared BC keep the zero-ghost convention (current behavior), so models
@@ -490,8 +495,11 @@ function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
     dim_sizes isa AbstractDict || return Any[]
     periodic = Set{String}(String.(get(gmeta, "periodic_dims", Any[])))
 
-    # BC map: (variable, dim_name, :min|:max) → (kind, value). Side names
-    # follow the "<dim>min"/"<dim>max" convention.
+    # BC map: (variable, dim_name, :min|:max) → (kind, payload). Side names
+    # follow the "<dim>min"/"<dim>max" convention. Payload is:
+    #   dirichlet/constant: the BC `value` expression
+    #   neumann (zero-flux): 0 (the value field, checked by _check_bc_supported)
+    #   interface: the coupled_variable name String
     bc_map = Dict{Tuple{String,String,Symbol},Tuple{String,Any}}()
     for bcname in sort!(collect(String.(keys(bcs))))
         bc = bcs[bcname]
@@ -500,12 +508,18 @@ function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
         k = get(bc, "kind", nothing)
         s = get(bc, "side", nothing)
         (v isa AbstractString && k isa AbstractString && s isa AbstractString) || continue
+        payload = if String(k) == "interface"
+            cv = get(bc, "coupled_variable", nothing)
+            cv isa AbstractString ? String(cv) : ""
+        else
+            get(bc, "value", 0)
+        end
         for dn_any in keys(dim_sizes)
             dn = String(dn_any)
             if String(s) == dn * "min"
-                bc_map[(String(v), dn, :min)] = (String(k), get(bc, "value", 0))
+                bc_map[(String(v), dn, :min)] = (String(k), payload)
             elseif String(s) == dn * "max"
-                bc_map[(String(v), dn, :max)] = (String(k), get(bc, "value", 0))
+                bc_map[(String(v), dn, :max)] = (String(k), payload)
             end
         end
     end
@@ -589,9 +603,14 @@ function _check_bc_supported(kind::String, value, var::String, dim::String)
             "yet supported by the arrayop lift (requires grid-spacing-aware " *
             "ghost extrapolation)"))
     end
+    if kind == "interface"
+        value isa AbstractString && !isempty(String(value)) && return
+        throw(RuleEngineError("E_BC_UNSUPPORTED",
+            "interface BC on '$var' along '$dim' requires a non-empty 'coupled_variable' field"))
+    end
     throw(RuleEngineError("E_BC_UNSUPPORTED",
         "boundary condition kind '$kind' on '$var' along '$dim' is not " *
-        "supported by the arrayop lift (supported: dirichlet, zero-flux neumann)"))
+        "supported by the arrayop lift (supported: dirichlet, zero-flux neumann, interface)"))
 end
 
 # Max |offset| per canonical index variable across every index read.
@@ -653,6 +672,15 @@ function _instantiate_bc_cell(node, fixed::Dict{String,Int},
                             if kind == "dirichlet"
                                 # Replace the whole read with the BC value.
                                 return _deep_native(value)
+                            elseif kind == "interface"
+                                # Replace the ghost read with an index into the
+                                # coupled variable at the matching boundary cell.
+                                # xmax ghost: u[N+k] → coupled[k] (k = e - N)
+                                # xmin ghost: u[1-k] → coupled[N+1-k] = coupled[N+e]
+                                coupled = String(value)
+                                new_e = e > N ? e - N : N + e
+                                return Dict{String,Any}("op" => "index",
+                                    "args" => Any[coupled, new_e])
                             else  # zero-flux neumann
                                 e = e < 1 ? 1 - e : 2N + 1 - e   # mirror
                             end
