@@ -4719,8 +4719,9 @@
             ]
           },
           "then": {
-            "required": [
-              "stencil"
+            "oneOf": [
+              {"required": ["stencil"]},
+              {"required": ["stencil_gen"]}
             ],
             "not": {
               "anyOf": [

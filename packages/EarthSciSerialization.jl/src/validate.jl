@@ -61,6 +61,10 @@ end
 
 # Load schema at module initialization from bundled package data
 const SCHEMA_PATH = joinpath(pkgdir(@__MODULE__), "data", "esm-schema.json")
+# Track data file so precompile cache invalidates when schema changes.
+@static if ccall(:jl_generating_output, Cint, ()) == 1
+    include_dependency(SCHEMA_PATH)
+end
 
 # Global schema validator
 const ESM_SCHEMA = if isfile(SCHEMA_PATH)
