@@ -79,7 +79,8 @@ function build_evaluator(model::Model;
                          initial_conditions::AbstractDict=Dict{String,Float64}(),
                          parameter_overrides::AbstractDict=Dict{String,Float64}(),
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
-                         registered_functions::AbstractDict=Dict{String,Function}())
+                         registered_functions::AbstractDict=Dict{String,Function}(),
+                         const_arrays::AbstractDict=Dict{String,Vector{Float64}}())
     # ---- Partition variables ----
     scalar_state_names = String[]
     param_names = String[]
@@ -229,6 +230,10 @@ function build_evaluator(model::Model;
     reg_funcs = Dict{String,Any}(String(k) => v
                                  for (k, v) in registered_functions)
 
+    # ---- Pre-computed constant arrays (e.g. __stgfw_ Fornberg weight arrays) ----
+    _const_arrays = Dict{String,Vector{Float64}}(
+        String(k) => Vector{Float64}(v) for (k, v) in const_arrays)
+
     # ---- Build per-derivative compiled-IR list ----
     # Each entry is (state_index, compiled-node). The RHS is inlined with
     # observed variables, index ops are resolved to flat-slot references,
@@ -248,7 +253,7 @@ function build_evaluator(model::Model;
             covered[idx] = true
             rhs = isempty(resolved_obs) ? eq.rhs :
                   _sub_preserving(eq.rhs, resolved_obs)
-            rhs_r = _resolve_indices(rhs, array_var_info, var_map)
+            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays)
             push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
 
         elseif _is_indexed_D_lhs(eq.lhs)
@@ -269,7 +274,7 @@ function build_evaluator(model::Model;
             covered[idx] = true
             rhs = isempty(resolved_obs) ? eq.rhs :
                   _sub_preserving(eq.rhs, resolved_obs)
-            rhs_r = _resolve_indices(rhs, array_var_info, var_map)
+            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays)
             push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
 
         elseif _is_arrayop_D_lhs(eq.lhs)
@@ -343,7 +348,7 @@ function build_evaluator(model::Model;
                     # No contracted indices — standard unrolled-body path.
                     sub_rhs = isempty(resolved_obs) ? sub_rhs_outer :
                               _sub_preserving(sub_rhs_outer, resolved_obs)
-                    rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map)
+                    rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays)
                     push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 else
                     # Generalized einsum: unroll contracted indices at build time,
@@ -360,7 +365,7 @@ function build_evaluator(model::Model;
                     end
                     combined = length(terms) == 1 ? terms[1] :
                                OpExpr(rhs_reduce::String, terms)
-                    rhs_r = _resolve_indices(combined, array_var_info, var_map)
+                    rhs_r = _resolve_indices(combined, array_var_info, var_map, _const_arrays)
                     push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 end
             end
@@ -399,6 +404,11 @@ end
 Parse a raw ESM dict, then delegate. This is the signature from the
 bead description; the typed entry point is faster for callers that
 already have a parsed `Model`.
+
+`const_arrays` (forwarded via kwargs) accepts pre-computed 1D float arrays
+keyed by name. `index(name, i)` references in the equations are inlined as
+literal values. Used to inject `__stgfw_` Fornberg weight arrays for
+`stencil_gen` models with `spacing="from_grid"`.
 """
 function build_evaluator(esm::AbstractDict;
                          model_name::Union{Nothing,AbstractString}=nothing,
@@ -1015,27 +1025,34 @@ function _eval_const_int(expr::OpExpr, idx_env::Dict{String,Int})
 end
 
 # Replace index(var, k1, k2, ...) nodes:
-#   - In-bounds → VarExpr(cell_key) referencing the flat state slot.
-#   - Out-of-bounds → NumExpr(0.0) (ghost-cell convention).
+#   - In-bounds state/array var → VarExpr(cell_key) referencing the flat state slot.
+#   - In-bounds const_array entry → NumExpr(literal) inlining the pre-computed value.
+#   - Out-of-bounds → NumExpr(0.0) (ghost-cell convention for state arrays).
 # array_var_info: var_name → (lo::Vector{Int}, hi::Vector{Int})
+# const_arrays: pre-computed 1D float arrays (e.g. __stgfw_ Fornberg weight arrays)
+#   keyed by array name; index(name, i) → NumExpr(const_arrays[name][i])
 function _resolve_indices(expr::NumExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
-                          var_map::Dict{String,Int})
+                          var_map::Dict{String,Int},
+                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
     return expr
 end
 function _resolve_indices(expr::IntExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
-                          var_map::Dict{String,Int})
+                          var_map::Dict{String,Int},
+                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
     return expr
 end
 function _resolve_indices(expr::VarExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
-                          var_map::Dict{String,Int})
+                          var_map::Dict{String,Int},
+                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
     return expr
 end
 function _resolve_indices(expr::OpExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
-                          var_map::Dict{String,Int})
+                          var_map::Dict{String,Int},
+                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
     if expr.op == "index"
         isempty(expr.args) &&
             throw(TreeWalkError("E_TREEWALK_INDEX_EMPTY", "index op requires at least one arg"))
@@ -1058,8 +1075,23 @@ function _resolve_indices(expr::OpExpr,
                 throw(TreeWalkError("E_TREEWALK_MISSING_CELL", cname))
             return VarExpr(cname)
         end
+        # Pre-computed constant arrays (e.g. __stgfw_ Fornberg weight arrays):
+        # inline the value as a NumExpr literal.
+        if first_arg isa VarExpr && haskey(const_arrays, first_arg.name)
+            vals = const_arrays[first_arg.name]
+            idx_args = expr.args[2:end]
+            length(idx_args) == 1 ||
+                throw(TreeWalkError("E_TREEWALK_CONSTARRAY_NDIM",
+                      "const_arrays only supports 1D arrays; '$(first_arg.name)' " *
+                      "has $(length(idx_args)) indices"))
+            i = _eval_const_int(idx_args[1], Dict{String,Int}())
+            (i >= 1 && i <= length(vals)) ||
+                throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
+                      "const array '$(first_arg.name)' index $i out of range 1..$(length(vals))"))
+            return NumExpr(vals[i])
+        end
         # scalar or unknown variable inside index — recurse on sub-exprs only
-        new_args = Expr[_resolve_indices(a, array_var_info, var_map) for a in expr.args]
+        new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays) for a in expr.args]
         return OpExpr(expr.op, new_args;
                       wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                       lower=expr.lower, upper=expr.upper,
@@ -1099,11 +1131,11 @@ function _resolve_indices(expr::OpExpr,
             return OpExpr("*", Expr[VarExpr("d$(iv)"), OpExpr("+", cells)])
         end
     end
-    new_args = Expr[_resolve_indices(a, array_var_info, var_map) for a in expr.args]
+    new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays) for a in expr.args]
     new_body = expr.expr_body === nothing ? nothing :
-               _resolve_indices(expr.expr_body, array_var_info, var_map)
+               _resolve_indices(expr.expr_body, array_var_info, var_map, const_arrays)
     new_values = expr.values === nothing ? nothing :
-                 Expr[_resolve_indices(v, array_var_info, var_map) for v in expr.values]
+                 Expr[_resolve_indices(v, array_var_info, var_map, const_arrays) for v in expr.values]
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                   lower=expr.lower, upper=expr.upper,

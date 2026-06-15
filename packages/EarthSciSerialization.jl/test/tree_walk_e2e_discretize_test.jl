@@ -258,3 +258,100 @@ end
         @test isapprox(sol(0.1)[vm["v[$i]"]], sin((i + 4) * π / 9) * decay; rtol=1e-3)
     end
 end
+
+@testset "tree_walk e2e: from_grid non-uniform stencil → build_evaluator with const_arrays (ess-d0a)" begin
+    # 1D periodic domain [0, 2π) with smooth exponential stretching.
+    # Equation: D(u)/Dt = ∂u/∂z discretized with stencil_gen spacing=from_grid.
+    # Exact solution: u(z, t) = sin(z + t) (wave moving with unit speed).
+    # Verify that const_arrays injection works and achieves 2nd-order convergence.
+    function run_nonuniform(N)
+        # Periodic smooth stretch: z_k = 2π*k/N + ε*sin(2π*k/N), k=0..N-1 (0-based)
+        epsilon = 0.3
+        z = [2π * k / N + epsilon * sin(2π * k / N) for k in 0:N-1]
+
+        # Fornberg weights for each cell (1-based): 2-node stencil {i-1, i+1}
+        stgfw_n1 = Vector{Float64}(undef, N)
+        stgfw_p1 = Vector{Float64}(undef, N)
+        for i in 1:N
+            im1 = mod1(i - 1, N)
+            ip1 = mod1(i + 1, N)
+            z_im1 = z[im1] - (i == 1 ? 2π : 0.0)  # periodic left-boundary wrap
+            z_ip1 = z[ip1] + (i == N ? 2π : 0.0)  # periodic right-boundary wrap
+            w = EarthSciSerialization._fornberg_weights_float(z[i], [z_im1, z_ip1], 1)
+            stgfw_n1[i] = w[1]
+            stgfw_p1[i] = w[2]
+        end
+
+        esm = Dict{String,Any}(
+            "esm"      => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "nonuniform_conv_$N"),
+            "grids"    => Dict{String,Any}(
+                "gz" => Dict{String,Any}(
+                    "family"     => "cartesian",
+                    "dimensions" => Any[Dict{String,Any}(
+                        "name" => "z", "size" => N,
+                        "periodic" => true, "spacing" => "nonuniform")],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}(
+                "ng_grad" => Dict{String,Any}(
+                    "applies_to"  => Dict{String,Any}(
+                        "op" => "grad", "args" => Any["\$u"], "dim" => "\$z"),
+                    "grid_family" => "cartesian",
+                    "combine"     => "+",
+                    "stencil_gen" => Dict{String,Any}(
+                        "method"         => "fornberg",
+                        "deriv_order"    => 1,
+                        "accuracy_order" => 2,
+                        "stagger"        => "centered",
+                        "axis"           => "\$z",
+                        "spacing"        => "from_grid",
+                    ),
+                ),
+            ),
+            "rules"  => Any[Dict{String,Any}(
+                "name"    => "r",
+                "pattern" => Dict{String,Any}("op" => "grad", "args" => Any["\$u"], "dim" => "\$z"),
+                "use"     => "ng_grad",
+            )],
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid"      => "gz",
+                    "variables" => Dict{String,Any}(
+                        "u" => Dict{String,Any}(
+                            "type"     => "state",
+                            "default"  => 0.0,
+                            "units"    => "1",
+                            "shape"    => Any["z"],
+                            "location" => "cell_center",
+                        ),
+                    ),
+                    "equations" => Any[Dict{String,Any}(
+                        "lhs" => Dict{String,Any}("op" => "D", "args" => Any["u"], "wrt" => "t"),
+                        "rhs" => Dict{String,Any}("op" => "grad", "args" => Any["u"], "dim" => "z"),
+                    )],
+                ),
+            ),
+        )
+
+        disc = EarthSciSerialization.discretize(esm; lift_1d_arrayop=true)
+        f!, u0, _, _, var_map = EarthSciSerialization.build_evaluator(disc;
+            const_arrays=Dict("__stgfw_z_2_n1" => stgfw_n1, "__stgfw_z_2_p1" => stgfw_p1))
+
+        for i in 1:N
+            u0[var_map["u[$i]"]] = sin(z[i])
+        end
+
+        prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, (0.0, 0.1), nothing)
+        sol  = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                         reltol=1e-9, abstol=1e-11)
+        # Exact: u(z, 0.1) = sin(z + 0.1)
+        return maximum(abs(sol.u[end][var_map["u[$i]"]] - sin(z[i] + 0.1)) for i in 1:N)
+    end
+
+    err16 = run_nonuniform(16)
+    err32 = run_nonuniform(32)
+    @test err16 < 1e-2          # sanity: non-trivial accuracy at N=16
+    # 2nd-order: halving h → ~4× error reduction
+    @test err16 / err32 > 3.0
+end
