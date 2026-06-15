@@ -200,6 +200,10 @@ run_typescript_tests() {
         return 1
     fi
 
+    # Build the TypeScript package so the conformance runner can import dist/esm/index.js
+    log "Building TypeScript package for conformance runner..."
+    npm run build
+
     # Generate conformance outputs
     log "Generating TypeScript conformance outputs..."
     node "$SCRIPT_DIR/run-typescript-conformance.js" "$TYPESCRIPT_OUTPUT"

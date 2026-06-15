@@ -72,9 +72,9 @@ async function runValidationTests(testsDir) {
                 const result = await esmFormat.validate(esmData);
 
                 validResults[filename] = {
-                    is_valid: result.isValid,
-                    schema_errors: result.schemaErrors || [],
-                    structural_errors: result.structuralErrors || [],
+                    is_valid: result.is_valid,
+                    schema_errors: result.schema_errors || [],
+                    structural_errors: result.structural_errors || [],
                     parsed_successfully: true
                 };
             } catch (error) {
@@ -102,9 +102,9 @@ async function runValidationTests(testsDir) {
                 const result = await esmFormat.validate(esmData);
 
                 invalidResults[filename] = {
-                    is_valid: result.isValid,
-                    schema_errors: result.schemaErrors || [],
-                    structural_errors: result.structuralErrors || [],
+                    is_valid: result.is_valid,
+                    schema_errors: result.schema_errors || [],
+                    structural_errors: result.structural_errors || [],
                     parsed_successfully: true
                 };
             } catch (error) {
