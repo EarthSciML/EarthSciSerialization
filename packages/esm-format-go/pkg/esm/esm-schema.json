@@ -4279,7 +4279,7 @@
         },
         "stencil_gen": {
           "type": "object",
-          "description": "Declarative stencil-weight generator (RFC §7.1.3). Replaces the hand-authored `stencil` array with a compact descriptor that the loader expands at parse time using the Fornberg recurrence in exact rational arithmetic. The generated stencil entries are byte-identical in canonical JSON to hand-authored stencils. Mutually exclusive with `stencil`. Scope: uniform cartesian grids (grid_family=\"cartesian\"), first derivative (deriv_order=1), centered stagger. Non-uniform grids and higher derivative orders land in follow-on bead ess-5b.",
+          "description": "Declarative stencil-weight generator (RFC §7.1.3). Replaces the hand-authored `stencil` array with a compact descriptor the loader expands at parse time. Two modes: (1) spacing=<symbol> (uniform grid) — runs the Fornberg recurrence in exact rational arithmetic, emitting byte-identical integer coefficients; (2) spacing=\"from_grid\" (non-uniform grid) — generates symbolic references to per-location float weight arrays (__stgfw_*) that are computed from actual grid node coordinates at ODE-build time. Mutually exclusive with `stencil`. Scope: cartesian grids (grid_family=\"cartesian\"), first derivative (deriv_order=1), centered stagger.",
           "required": ["method", "deriv_order", "accuracy_order", "stagger", "axis", "spacing"],
           "additionalProperties": false,
           "properties": {
@@ -4310,7 +4310,7 @@
             },
             "spacing": {
               "type": "string",
-              "description": "Uniform grid spacing symbol (e.g. \"dx\"). Used as the denominator variable in the generated coefficient AST: coeff = numerator / (denominator * spacing)."
+              "description": "Spacing mode. For uniform grids: a symbol name (e.g. \"dx\") used as the denominator variable in the rational coefficient AST — coeff = numerator / (denominator * spacing). For non-uniform grids: the literal string \"from_grid\", which causes the loader to generate symbolic references to per-location float weight arrays (__stgfw_{axis}_{accuracy_order}_{offset}) that are computed from actual grid node coordinates at ODE-build time."
             }
           }
         },

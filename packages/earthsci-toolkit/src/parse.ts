@@ -4335,7 +4335,7 @@ const schema = {
         },
         "stencil_gen": {
           "type": "object",
-          "description": "Declarative stencil-weight generator (RFC \u00a77.1.3). Replaces the hand-authored `stencil` array with a compact descriptor that the loader expands at parse time using the Fornberg recurrence in exact rational arithmetic. Mutually exclusive with `stencil`. Scope: uniform cartesian grids, first derivative (deriv_order=1), centered stagger.",
+          "description": "Declarative stencil-weight generator (RFC \u00a77.1.3). Two modes: (1) spacing=<symbol> (uniform grid) \u2014 runs the Fornberg recurrence in exact rational arithmetic; (2) spacing=\"from_grid\" (non-uniform grid) \u2014 generates symbolic __stgfw_* weight array references computed at ODE-build time. Mutually exclusive with `stencil`. Scope: cartesian grids, first derivative (deriv_order=1), centered stagger.",
           "required": ["method", "deriv_order", "accuracy_order", "stagger", "axis", "spacing"],
           "additionalProperties": false,
           "properties": {
@@ -4366,7 +4366,7 @@ const schema = {
             },
             "spacing": {
               "type": "string",
-              "description": "Uniform grid spacing symbol (e.g. \"dx\")."
+              "description": "Spacing mode: a symbol name (e.g. \"dx\") for uniform grids, or the literal \"from_grid\" for non-uniform grids (generates __stgfw_* weight arrays)."
             }
           }
         },

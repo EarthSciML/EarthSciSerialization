@@ -1818,4 +1818,116 @@ end
         @test_throws EarthSciSerialization.RuleEngineError EarthSciSerialization._expand_stencil_gen(
             "s", "unstructured", gen_raw)
     end
+
+    # Non-uniform / from_grid path (ess-d0a)
+    @testset "_fornberg_weights_float: uniform 3-node centred → [-0.5, 0, 0.5]" begin
+        # For equally-spaced nodes [-1, 0, 1], 1st derivative at z=0 gives:
+        # w[-1] = -0.5,  w[0] = 0.0,  w[+1] = +0.5
+        w = EarthSciSerialization._fornberg_weights_float(0.0, [-1.0, 0.0, 1.0], 1)
+        @test length(w) == 3
+        @test isapprox(w[1], -0.5; atol=1e-14)
+        @test isapprox(w[2],  0.0; atol=1e-14)
+        @test isapprox(w[3],  0.5; atol=1e-14)
+    end
+
+    @testset "_fornberg_weights_float: uniform 4-node → [1/12, -8/12, 8/12, -1/12]" begin
+        # For nodes [-2, -1, 1, 2] (4-point stencil, spacing h=1), 1st derivative at 0
+        nodes = [-2.0, -1.0, 1.0, 2.0]
+        w = EarthSciSerialization._fornberg_weights_float(0.0, nodes, 1)
+        @test isapprox(w[1],  1.0/12; atol=1e-14)
+        @test isapprox(w[2], -8.0/12; atol=1e-14)
+        @test isapprox(w[3],  8.0/12; atol=1e-14)
+        @test isapprox(w[4], -1.0/12; atol=1e-14)
+    end
+
+    @testset "_fornberg_weights_float: non-uniform 3-node first deriv" begin
+        # nodes at [0, 1, 3], derivative at x=1 (middle node)
+        nodes = [0.0, 1.0, 3.0]
+        w = EarthSciSerialization._fornberg_weights_float(1.0, nodes, 1)
+        @test isapprox(sum(w), 0.0; atol=1e-14)   # weights sum to 0 for derivative
+        # Verify via polynomial: p(x)=x → p'(x)=1
+        @test isapprox(sum(w[i]*nodes[i] for i in eachindex(w)), 1.0; atol=1e-12)
+    end
+
+    @testset "_fornberg_weights_float: m >= N throws" begin
+        @test_throws Exception EarthSciSerialization._fornberg_weights_float(0.0, [0.0, 1.0], 2)
+    end
+
+    @testset "_expand_stencil_gen: spacing=from_grid produces __stgfw_ VarExpr entries" begin
+        gen_raw = Dict{String,Any}(
+            "method"         => "fornberg", "deriv_order" => 1,
+            "accuracy_order" => 2, "stagger" => "centered",
+            "axis" => "\$z", "spacing" => "from_grid",
+        )
+        entries = EarthSciSerialization._expand_stencil_gen("s", "cartesian", gen_raw)
+        @test length(entries) == 2
+        offsets  = [e.selector.offset for e in entries]
+        coeffs   = [e.coeff.name      for e in entries]
+        @test sort(offsets) == [-1, 1]
+        @test "__stgfw_\$z_2_n1" in coeffs
+        @test "__stgfw_\$z_2_p1" in coeffs
+    end
+
+    @testset "expand_scheme: from_grid → __stgfw_ arrays auto-indexed in output" begin
+        # Minimal ESM dict with a nonuniform grid + stencil_gen spacing=from_grid
+        raw = Dict{String,Any}(
+            "esm"      => "0.2.0",
+            "metadata" => Dict{String,Any}("name" => "test_nonuniform"),
+            "grids"    => Dict{String,Any}(
+                "gz" => Dict{String,Any}(
+                    "family"     => "cartesian",
+                    "dimensions" => Any[Dict{String,Any}("name" => "z", "size" => 4,
+                                                         "periodic" => true,
+                                                         "spacing" => "nonuniform")],
+                ),
+            ),
+            "discretizations" => Dict{String,Any}(
+                "d" => Dict{String,Any}(
+                    "applies_to"   => Dict{String,Any}("op" => "grad", "args" => ["\$u"],
+                                                       "dim" => "\$z"),
+                    "grid_family"  => "cartesian",
+                    "combine"      => "+",
+                    "stencil_gen"  => Dict{String,Any}(
+                        "method"         => "fornberg", "deriv_order" => 1,
+                        "accuracy_order" => 2, "stagger" => "centered",
+                        "axis" => "\$z", "spacing" => "from_grid",
+                    ),
+                ),
+            ),
+            "rules"  => Any[Dict{String,Any}("name" => "r",
+                                             "pattern" => Dict{String,Any}("op" => "grad",
+                                                                           "args" => ["\$u"],
+                                                                           "dim" => "\$z"),
+                                             "use" => "d")],
+            "models" => Dict{String,Any}(
+                "M" => Dict{String,Any}(
+                    "grid" => "gz",
+                    "variables" => Dict{String,Any}(
+                        "u" => Dict{String,Any}("type" => "state", "default" => 0.0,
+                                                "units" => "1", "shape" => ["i"],
+                                                "location" => "cell_center"),
+                    ),
+                    "equations" => Any[Dict{String,Any}(
+                        "lhs" => Dict{String,Any}("op" => "D", "args" => ["u"], "wrt" => "t"),
+                        "rhs" => Dict{String,Any}("op" => "grad", "args" => ["u"], "dim" => "z"),
+                    )],
+                ),
+            ),
+        )
+        out = EarthSciSerialization.discretize(raw)
+        eqs = out["models"]["M"]["equations"]
+        @test length(eqs) == 1
+        rhs = eqs[1]["rhs"]
+        # rhs should be (+) of two (*) terms
+        @test rhs["op"] == "+"
+        @test length(rhs["args"]) == 2
+        # each term: (* (index __stgfw_z_2_nX i) (index u i±1))
+        for term in rhs["args"]
+            @test term["op"] == "*"
+            coeff_node = term["args"][1]
+            @test coeff_node["op"] == "index"
+            @test startswith(String(coeff_node["args"][1]), "__stgfw_z_2_")
+            @test coeff_node["args"][2] == "i"
+        end
+    end
 end

@@ -72,6 +72,12 @@
       "input":  "inputs/stencil_gen_fornberg.esm",
       "golden": "golden/stencil_gen_fornberg.json",
       "tags": ["step2", "pde", "stencil-gen", "fornberg", "centered", "uniform", "use-scheme", "section-7.1.3", "ess-bq1"]
+    },
+    {
+      "id": "stencil_gen_fornberg_nonuniform",
+      "input":  "inputs/stencil_gen_fornberg_nonuniform.esm",
+      "golden": "golden/stencil_gen_fornberg_nonuniform.json",
+      "tags": ["step2", "pde", "stencil-gen", "fornberg", "centered", "nonuniform", "from-grid", "use-scheme", "section-7.1.3", "ess-d0a"]
     }
   ]
 }
