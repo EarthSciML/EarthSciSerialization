@@ -10,13 +10,14 @@ category intentionally does not require.
 
 ## Status
 
-Julia-only (gt-l3dg). Nine fixtures covering ODE, PDE, boundary
+Julia-only (gt-l3dg). Ten fixtures covering ODE, PDE, boundary
 canonicalization, CFL advection, nonuniform diffusion, multi-output
-stencil §7.9 triggers 1 and 2, OQ1 bounded-dim face stagger, and OQ3
-derived outputs. Parallel ports to Python / Go / Rust / TypeScript are
-tracked separately. As each binding lands its port, it MUST add an adapter
-that satisfies the contract below and passes against the committed goldens —
-no fixture forks, no per-binding goldens.
+stencil §7.9 triggers 1 and 2, OQ1 bounded-dim face stagger, OQ3
+derived outputs, and interface/continuity BC schema (ess-x76). Parallel
+ports to Python / Go / Rust / TypeScript are tracked separately. As each
+binding lands its port, it MUST add an adapter that satisfies the contract
+below and passes against the committed goldens — no fixture forks, no
+per-binding goldens.
 
 ## Directory layout
 
@@ -33,7 +34,8 @@ tests/conformance/discretize/
 │   ├── multi_output_direct_consumed.esm    # §7.9 trigger-1 (ess-ebe)
 │   ├── multi_output_demand_driven.esm      # §7.9 trigger-2 demand-driven (ess-qs2)
 │   ├── multi_output_bounded_face.esm      # §7.9 OQ1 bounded-dim face stagger (ess-z31)
-│   └── multi_output_derived.esm           # §7.9 OQ3 derived outputs (ess-qxs)
+│   ├── multi_output_derived.esm           # §7.9 OQ3 derived outputs (ess-qxs)
+│   └── interface_bc_schema.esm            # interface/continuity BC schema (ess-x76)
 └── golden/                # expected canonical-JSON output per fixture
     ├── scalar_ode.json
     ├── heat_1d_centered_grad.json
@@ -43,7 +45,8 @@ tests/conformance/discretize/
     ├── multi_output_direct_consumed.json   # §7.9 trigger-1 (ess-ebe)
     ├── multi_output_demand_driven.json     # §7.9 trigger-2 demand-driven (ess-qs2)
     ├── multi_output_bounded_face.json     # §7.9 OQ1 bounded-dim face stagger (ess-z31)
-    └── multi_output_derived.json          # §7.9 OQ3 derived outputs (ess-qxs)
+    ├── multi_output_derived.json          # §7.9 OQ3 derived outputs (ess-qxs)
+    └── interface_bc_schema.json           # interface/continuity BC schema (ess-x76)
 ```
 
 Paths inside `manifest.json` (`input`, `golden`) are relative to the
