@@ -272,6 +272,12 @@ fn arrayop_fixture_16_discretized_2d_heat() {
     run_fixture(&p);
 }
 
+#[test]
+fn arrayop_fixture_19_einsum_1d_stencil() {
+    let p = find_fixture("19_einsum_1d_stencil.esm");
+    run_fixture(&p);
+}
+
 fn find_fixture(name: &str) -> PathBuf {
     for p in fixture_paths() {
         if p.file_name().and_then(|n| n.to_str()) == Some(name) {

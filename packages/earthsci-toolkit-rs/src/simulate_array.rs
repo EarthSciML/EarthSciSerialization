@@ -105,12 +105,18 @@ enum RhsRule {
     /// Array-op derivative. The body expression is evaluated once per tuple
     /// of `output_idx` values (the tuple drawn from `output_ranges`) and the
     /// resulting scalar is written into `var_name[idx...]`.
+    /// If `contract_names` is non-empty the body also contains contracted
+    /// (reduction) indices that are unrolled at eval time and combined via
+    /// `reduce_op`.
     ArrayLoop {
         var_name: String,
         output_idx_names: Vec<String>,
         output_ranges: Vec<(i64, i64)>,
         lhs_idx_exprs: Vec<Expr>,
         body: Box<Expr>,
+        contract_names: Vec<String>,
+        contract_ranges: Vec<(i64, i64)>,
+        reduce_op: String,
     },
 }
 
@@ -512,7 +518,8 @@ impl ArrayCompiled {
         let mut covered_slots: HashSet<usize> = HashSet::new();
 
         for eq in &model.equations {
-            if let Some((var, idx_names, ranges, lhs_idx_exprs, body)) =
+            if let Some((var, idx_names, ranges, lhs_idx_exprs, body,
+                          contract_names, contract_ranges, reduce_op)) =
                 extract_derivative_arrayop(&eq.lhs, &eq.rhs)
             {
                 // Array-op derivative over (idx_names, ranges).
@@ -543,6 +550,9 @@ impl ArrayCompiled {
                     output_ranges: ranges,
                     lhs_idx_exprs,
                     body: Box::new(body),
+                    contract_names,
+                    contract_ranges,
+                    reduce_op,
                 });
                 continue;
             }
@@ -947,6 +957,9 @@ fn evaluate_rhs(
                 output_ranges,
                 lhs_idx_exprs,
                 body,
+                contract_names,
+                contract_ranges,
+                reduce_op,
             } => {
                 let vs = &var_shapes[var_name];
                 for tuple in cartesian_range(output_ranges) {
@@ -961,7 +974,31 @@ fn evaluate_rhs(
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
                     }
-                    let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
+                    // Generalized einsum: if contracted indices are present, unroll
+                    // them at eval time and combine terms with the reduce operator.
+                    let v = if contract_names.is_empty() {
+                        eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN)
+                    } else {
+                        let mut acc: f64 = match reduce_op.as_str() {
+                            "*" => 1.0,
+                            "max" => f64::NEG_INFINITY,
+                            "min" => f64::INFINITY,
+                            _ => 0.0,
+                        };
+                        for k_tuple in cartesian_range(contract_ranges) {
+                            for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
+                                ctx.loop_binds.insert(kn.clone(), *kv);
+                            }
+                            let term = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
+                            acc = match reduce_op.as_str() {
+                                "*" => acc * term,
+                                "max" => f64::max(acc, term),
+                                "min" => f64::min(acc, term),
+                                _ => acc + term,
+                            };
+                        }
+                        acc
+                    };
                     let actual_multi: Vec<i64> = lhs_idx_exprs.iter()
                         .map(|e| eval_simple_index(e, &ctx.loop_binds))
                         .collect();
@@ -1040,6 +1077,24 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         // arithmetic combiner so array operands broadcast through the same
         // ndarray path as `+`/`*`.
         "min" | "max" => eval_arith(&node.op, &node.args, ctx),
+
+        // Scalar comparison operators — return 1.0 (true) or 0.0 (false).
+        "==" | "!=" | "<" | "<=" | ">" | ">=" => {
+            if node.args.len() != 2 {
+                return Value::Scalar(f64::NAN);
+            }
+            let a = eval(&node.args[0], ctx).as_scalar().unwrap_or(f64::NAN);
+            let b = eval(&node.args[1], ctx).as_scalar().unwrap_or(f64::NAN);
+            Value::Scalar(match node.op.as_str() {
+                "==" => if (a - b).abs() == 0.0 { 1.0 } else { 0.0 },
+                "!=" => if (a - b).abs() != 0.0 { 1.0 } else { 0.0 },
+                "<"  => if a < b  { 1.0 } else { 0.0 },
+                "<=" => if a <= b { 1.0 } else { 0.0 },
+                ">"  => if a > b  { 1.0 } else { 0.0 },
+                ">=" => if a >= b { 1.0 } else { 0.0 },
+                _ => f64::NAN,
+            })
+        }
 
         "ifelse" => {
             let c = eval(&node.args[0], ctx).as_scalar().unwrap_or(0.0);
@@ -1514,7 +1569,7 @@ fn collect_derivative_targets(equations: &[crate::types::Equation]) -> HashSet<S
         if let Some((name, _)) = extract_derivative_scalar(&eq.lhs) {
             out.insert(name);
         }
-        if let Some((name, _, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
+        if let Some((name, _, _, _, _, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
             out.insert(name);
         }
     }
@@ -1559,13 +1614,15 @@ fn extract_derivative_scalar(lhs: &Expr) -> Option<(String, Option<Vec<i64>>)> {
 }
 
 /// If `lhs` is `arrayop(expr=D(index(var, idx...)), ...)`, extract
-/// `(var_name, output_idx_names, output_ranges, lhs_idx_exprs, rhs_body)`.
-/// The RHS is extracted from `rhs` under the assumption that it's an
-/// arrayop with matching output_idx; if not, an error is raised elsewhere.
+/// `(var_name, output_idx_names, output_ranges, lhs_idx_exprs, rhs_body,
+///  contract_names, contract_ranges, reduce_op)`.
+/// `contract_names`/`contract_ranges` are indices present in the RHS ranges
+/// but absent from `output_idx` (generalized-einsum contracted indices).
+/// `reduce_op` defaults to "+" per the ESM spec.
 fn extract_derivative_arrayop(
     lhs: &Expr,
     rhs: &Expr,
-) -> Option<(String, Vec<String>, Vec<(i64, i64)>, Vec<Expr>, Expr)> {
+) -> Option<(String, Vec<String>, Vec<(i64, i64)>, Vec<Expr>, Expr, Vec<String>, Vec<(i64, i64)>, String)> {
     let Expr::Operator(node) = lhs else {
         return None;
     };
@@ -1603,13 +1660,29 @@ fn extract_derivative_arrayop(
         .collect();
     // RHS body: assume rhs is also arrayop with body, or pass through as
     // scalar-valued expr that evaluates at each tuple.
-    let rhs_body = match rhs {
+    // Also extract contracted (reduction) indices and reduce_op.
+    let (rhs_body, contract_names, contract_ranges, reduce_op) = match rhs {
         Expr::Operator(rnode) if rnode.op == "arrayop" => {
-            rnode.expr.as_ref().map(|b| b.as_ref().clone())?
+            let b = rnode.expr.as_ref().map(|b| b.as_ref().clone())?;
+            let rop = rnode.reduce.clone().unwrap_or_else(|| "+".to_string());
+            let mut c_names: Vec<String> = Vec::new();
+            let mut c_ranges: Vec<(i64, i64)> = Vec::new();
+            if let Some(rhs_ranges) = &rnode.ranges {
+                let mut sorted_keys: Vec<&String> = rhs_ranges.keys().collect();
+                sorted_keys.sort();
+                for n in sorted_keys {
+                    if !idx_names.contains(n) {
+                        let r = rhs_ranges[n];
+                        c_names.push(n.clone());
+                        c_ranges.push((r[0], r[1]));
+                    }
+                }
+            }
+            (b, c_names, c_ranges, rop)
         }
-        other => other.clone(),
+        other => (other.clone(), Vec::new(), Vec::new(), "+".to_string()),
     };
-    Some((var_name, idx_names, ranges, lhs_idx_exprs, rhs_body))
+    Some((var_name, idx_names, ranges, lhs_idx_exprs, rhs_body, contract_names, contract_ranges, reduce_op))
 }
 
 /// Extract an algebraic `arrayop(expr=index(var, idx...)) = arrayop(...)`

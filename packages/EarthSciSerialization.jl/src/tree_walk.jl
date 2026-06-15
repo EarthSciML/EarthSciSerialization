@@ -286,6 +286,28 @@ function build_evaluator(model::Model;
             lhs_body = lhs_op.expr_body::OpExpr  # D(index(var, ...))
             rhs_body = _extract_arrayop_body(eq.rhs)
 
+            # Generalized einsum: detect contracted (reduction) indices in the RHS.
+            # Contracted indices are keys in rhs.ranges that are NOT in output_idx.
+            # Default reduce operator is "+" per ESM spec.
+            contract_names = String[]
+            contract_iters = Vector{Int}[]
+            rhs_reduce = "+"
+            if eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop"
+                rhs_op = eq.rhs::OpExpr
+                if rhs_op.reduce !== nothing
+                    rhs_reduce = rhs_op.reduce::String
+                end
+                rhs_ranges = rhs_op.ranges === nothing ?
+                             Dict{String,Any}() : rhs_op.ranges
+                for n in sort!(collect(keys(rhs_ranges)))
+                    if !(n in idx_names)
+                        push!(contract_names, n)
+                        push!(contract_iters,
+                              collect(_expand_int_range(rhs_ranges[n])))
+                    end
+                end
+            end
+
             range_iters = [collect(_expand_int_range(ranges_dict[n])) for n in idx_names]
             for idx_tuple in Iterators.product(range_iters...)
                 idx_env  = Dict{String,Int}(idx_names[d] => idx_tuple[d]
@@ -314,12 +336,33 @@ function build_evaluator(model::Model;
                     throw(TreeWalkError("E_TREEWALK_DUPLICATE_DERIVATIVE", cname))
                 covered[idx] = true
 
-                # Substitute loop vars into RHS body, inline observed, resolve indices.
-                sub_rhs = _sub_preserving(rhs_body, idx_exprs)
-                sub_rhs = isempty(resolved_obs) ? sub_rhs :
-                          _sub_preserving(sub_rhs, resolved_obs)
-                rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map)
-                push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
+                # Substitute output loop vars into the RHS body.
+                sub_rhs_outer = _sub_preserving(rhs_body, idx_exprs)
+
+                if isempty(contract_names)
+                    # No contracted indices — standard unrolled-body path.
+                    sub_rhs = isempty(resolved_obs) ? sub_rhs_outer :
+                              _sub_preserving(sub_rhs_outer, resolved_obs)
+                    rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map)
+                    push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
+                else
+                    # Generalized einsum: unroll contracted indices at build time,
+                    # then combine terms with the declared reduce operator.
+                    terms = Expr[]
+                    for k_tuple in Iterators.product(contract_iters...)
+                        k_exprs = Dict{String,Expr}(
+                            contract_names[d] => IntExpr(Int64(k_tuple[d]))
+                            for d in 1:length(contract_names))
+                        term = _sub_preserving(sub_rhs_outer, k_exprs)
+                        term = isempty(resolved_obs) ? term :
+                               _sub_preserving(term, resolved_obs)
+                        push!(terms, term)
+                    end
+                    combined = length(terms) == 1 ? terms[1] :
+                               OpExpr(rhs_reduce::String, terms)
+                    rhs_r = _resolve_indices(combined, array_var_info, var_map)
+                    push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
+                end
             end
         end
     end

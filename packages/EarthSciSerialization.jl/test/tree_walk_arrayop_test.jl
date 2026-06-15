@@ -230,4 +230,28 @@ _arrayop2d(body, i, ilo, ihi, j, jlo, jhi) = OpExpr("arrayop", ESM.Expr[];
         end
     end
 
+    # ------------------------------------------------------------------
+    # 10. Fixture 19 — generalized einsum: contracted stencil index (ess-trq)
+    # ------------------------------------------------------------------
+    @testset "10. Fixture 19: einsum 1D stencil (contracted index)" begin
+        path = joinpath(_REPO_ROOT, "tests", "fixtures", "arrayop",
+                        "19_einsum_1d_stencil.esm")
+        @test isfile(path)
+        file = load(path)
+        model = file.models["Heat1DEinsum"]
+        t = model.tests[1]
+        ics = Dict(String(k) => Float64(v) for (k, v) in t.initial_conditions)
+        f!, u0, p, _, vmap = build_evaluator(model; initial_conditions=ics)
+        ts = (Float64(t.time_span.start), Float64(t.time_span.stop))
+        prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, ts, p)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                        reltol=1e-6, abstol=1e-8)
+        rtol = model.tolerance !== nothing ? model.tolerance.rel : 1e-3
+        for ass in t.assertions
+            var = String(ass.variable)
+            actual = sol(Float64(ass.time))[vmap[var]]
+            @test isapprox(actual, Float64(ass.expected); rtol=rtol)
+        end
+    end
+
 end

@@ -1017,9 +1017,22 @@ def _apply_equation_to_dy(
                     # RHS is typically an arrayop with the same ranges — the
                     # body is what we evaluate point-by-point. Fall through to
                     # plain eval if it's a bare expression.
+                    # Generalized einsum: detect contracted (reduction) indices
+                    # in the RHS — keys in rhs.ranges not in rhs.output_idx.
                     rhs_body: Optional[Expr]
+                    rhs_reduce = "+"
+                    rhs_contract_syms: List[str] = []
+                    rhs_contract_ranges: List[List[int]] = []
                     if isinstance(rhs, ExprNode) and rhs.op == "arrayop":
                         rhs_body = rhs.expr
+                        rhs_reduce = rhs.reduce if rhs.reduce is not None else "+"
+                        rhs_out_syms = {
+                            s for s in (rhs.output_idx or []) if isinstance(s, str)
+                        }
+                        for k_sym, k_rng in sorted((rhs.ranges or {}).items()):
+                            if k_sym not in rhs_out_syms:
+                                rhs_contract_syms.append(k_sym)
+                                rhs_contract_ranges.append(_expand_range(k_rng))
                     else:
                         rhs_body = rhs
                     shape = shapes[head]
@@ -1034,7 +1047,31 @@ def _apply_equation_to_dy(
                                 int(round(float(eval_expr(e, ctx)))) for e in idx_exprs
                             ]
                             flat_pos = layout_start + _linear_pos(shape, idx_vals)
-                            val = float(eval_expr(rhs_body, ctx))
+                            if not rhs_contract_syms:
+                                val = float(eval_expr(rhs_body, ctx))
+                            else:
+                                # Unroll contracted indices and combine with reduce op.
+                                _REDUCE_INIT = {
+                                    "+": 0.0, "*": 1.0,
+                                    "max": float("-inf"), "min": float("inf"),
+                                }
+                                acc = _REDUCE_INIT.get(rhs_reduce, 0.0)
+                                k_it = np.ndindex(*(len(r) for r in rhs_contract_ranges))
+                                for k_multi in k_it:
+                                    for k_s, k_r, k_i in zip(
+                                        rhs_contract_syms, rhs_contract_ranges, k_multi
+                                    ):
+                                        ctx.locals[k_s] = k_r[k_i]
+                                    term = float(eval_expr(rhs_body, ctx))
+                                    if rhs_reduce == "+":
+                                        acc += term
+                                    elif rhs_reduce == "*":
+                                        acc *= term
+                                    elif rhs_reduce == "max":
+                                        acc = max(acc, term)
+                                    else:
+                                        acc = min(acc, term)
+                                val = acc
                             dy[flat_pos] = val
                     finally:
                         ctx.locals = prev_locals
