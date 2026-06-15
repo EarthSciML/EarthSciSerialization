@@ -28,9 +28,10 @@ func TestDiscretizeConformanceFixtures(t *testing.T) {
 			StrictUnrewritten *bool `json:"strict_unrewritten"`
 		} `json:"options"`
 		Fixtures []struct {
-			ID     string `json:"id"`
-			Input  string `json:"input"`
-			Golden string `json:"golden"`
+			ID         string            `json:"id"`
+			Input      string            `json:"input"`
+			Golden     string            `json:"golden"`
+			DeferredIn map[string]string `json:"deferred_in"`
 		} `json:"fixtures"`
 	}
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
@@ -51,6 +52,9 @@ func TestDiscretizeConformanceFixtures(t *testing.T) {
 	for _, f := range manifest.Fixtures {
 		f := f
 		t.Run(f.ID, func(t *testing.T) {
+			if reason, ok := f.DeferredIn["go"]; ok {
+				t.Skip(reason)
+			}
 			raw, err := os.ReadFile(filepath.Join(dir, f.Input))
 			if err != nil {
 				t.Fatalf("read input: %v", err)
