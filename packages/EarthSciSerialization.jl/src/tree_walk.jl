@@ -849,6 +849,7 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                  nothing : Expr[_sub_preserving(v, bindings) for v in expr.values]
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim,
+                  int_var=expr.int_var, lower=expr.lower, upper=expr.upper,
                   output_idx=expr.output_idx, expr_body=new_body,
                   reduce=expr.reduce, ranges=expr.ranges,
                   regions=expr.regions, values=new_values,
@@ -1024,6 +1025,36 @@ function _resolve_indices(expr::OpExpr,
                       regions=expr.regions, values=expr.values,
                       shape=expr.shape, perm=expr.perm, axis=expr.axis,
                       fn=expr.fn, name=expr.name, value=expr.value)
+    end
+    if expr.op == "integral"
+        # Euler/midpoint quadrature: integral(u, var=x) → dx * sum(u[k] for k in lo..hi)
+        # Only expands when the integrand is a 1D array state variable known to
+        # array_var_info. Falls through to generic recurse when integrand is not
+        # an array var (e.g. a scalar parameter expression).
+        isempty(expr.args) &&
+            throw(TreeWalkError("E_TREEWALK_INTEGRAL_EMPTY",
+                  "integral op requires at least one arg"))
+        integrand = expr.args[1]
+        iv = expr.int_var
+        iv === nothing &&
+            throw(TreeWalkError("E_TREEWALK_INTEGRAL_NO_INTVAR",
+                  "integral op requires `var` field (integration variable name)"))
+        if integrand isa VarExpr && haskey(array_var_info, integrand.name)
+            vname = integrand.name
+            lo_vec, hi_vec = array_var_info[vname]
+            length(lo_vec) == 1 ||
+                throw(TreeWalkError("E_TREEWALK_INTEGRAL_NDIM",
+                      "euler_integral supports 1D integration only; " *
+                      "'$vname' has $(length(lo_vec)) dimensions"))
+            lo1 = lo_vec[1]; hi1 = hi_vec[1]
+            cells = Expr[VarExpr(_cell_key(vname, [i])) for i in lo1:hi1]
+            for c in cells
+                cname = (c::VarExpr).name
+                haskey(var_map, cname) ||
+                    throw(TreeWalkError("E_TREEWALK_MISSING_CELL", cname))
+            end
+            return OpExpr("*", Expr[VarExpr("d$(iv)"), OpExpr("+", cells)])
+        end
     end
     new_args = Expr[_resolve_indices(a, array_var_info, var_map) for a in expr.args]
     new_body = expr.expr_body === nothing ? nothing :

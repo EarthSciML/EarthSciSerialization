@@ -50,7 +50,8 @@ function canonicalize(e::OpExpr)
                   expr_body=e.expr_body, reduce=e.reduce, ranges=e.ranges,
                   regions=e.regions, values=e.values, shape=e.shape,
                   perm=e.perm, axis=e.axis, fn=e.fn,
-                  name=e.name, value=e.value)
+                  name=e.name, value=e.value,
+                  int_var=e.int_var, lower=e.lower, upper=e.upper)
     if work.op == "+"
         return _canon_add(work)
     elseif work.op == "*"

@@ -755,6 +755,7 @@ function _rewrite_pass(expr::Expr, rules::Vector{Rule}, ctx::RuleContext,
         # below changed. Here we always allocate; OpExpr is immutable, cheap.
         return OpExpr(expr.op, new_args;
                       wrt=expr.wrt, dim=expr.dim,
+                      int_var=expr.int_var, lower=expr.lower, upper=expr.upper,
                       output_idx=expr.output_idx,
                       expr_body=expr.expr_body,
                       reduce=expr.reduce, ranges=expr.ranges,
