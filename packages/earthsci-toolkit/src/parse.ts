@@ -4331,7 +4331,44 @@ const schema = {
           "items": {
             "$ref": "#/$defs/StencilEntry"
           },
-          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC \u00a77.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\"."
+          "description": "stencil: array of {selector, coeff} entries. Exactly one entry for a reduction selector; one-or-more for the others (RFC \u00a77.1). Required when kind is \"stencil\" or omitted; must be absent when kind is \"dimensional_split\". Mutually exclusive with stencil_gen."
+        },
+        "stencil_gen": {
+          "type": "object",
+          "description": "Declarative stencil-weight generator (RFC \u00a77.1.3). Replaces the hand-authored `stencil` array with a compact descriptor that the loader expands at parse time using the Fornberg recurrence in exact rational arithmetic. Mutually exclusive with `stencil`. Scope: uniform cartesian grids, first derivative (deriv_order=1), centered stagger.",
+          "required": ["method", "deriv_order", "accuracy_order", "stagger", "axis", "spacing"],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "fornberg",
+              "description": "Weight-generation algorithm. Only \"fornberg\" is supported."
+            },
+            "deriv_order": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Derivative order (only 1 currently supported)."
+            },
+            "accuracy_order": {
+              "type": "integer",
+              "minimum": 2,
+              "multipleOf": 2,
+              "description": "Truncation error order for centered differences (positive even integer: 2, 4, 6, 8, \u2026)."
+            },
+            "stagger": {
+              "type": "string",
+              "enum": ["centered"],
+              "description": "Stencil symmetry (only \"centered\" is currently supported)."
+            },
+            "axis": {
+              "type": "string",
+              "description": "Cartesian axis along which the stencil is applied."
+            },
+            "spacing": {
+              "type": "string",
+              "description": "Uniform grid spacing symbol (e.g. \"dx\")."
+            }
+          }
         },
         "axes": {
           "type": "array",
@@ -4738,8 +4775,9 @@ const schema = {
             ]
           },
           "then": {
-            "required": [
-              "stencil"
+            "oneOf": [
+              {"required": ["stencil"]},
+              {"required": ["stencil_gen"]}
             ],
             "not": {
               "anyOf": [

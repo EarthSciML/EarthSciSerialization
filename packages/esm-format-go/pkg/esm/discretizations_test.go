@@ -41,30 +41,33 @@ func assertJSONEqual(t *testing.T, a, b interface{}, name string) {
 func TestDiscretizationsRoundTrip(t *testing.T) {
 	repoRoot := filepath.Join("..", "..", "..", "..")
 	fixtures := []struct {
-		id           string
-		path         string
-		schemeName   string
-		gridFamily   string
-		stencilLen   int
-		wantOrder    *int
+		id              string
+		path            string
+		schemeName      string
+		gridFamily      string
+		stencilLen      int
+		wantOrder       *int
+		wantStencilGen  bool
 	}{
-		{"centered_2nd_uniform", "tests/discretizations/centered_2nd_uniform.esm", "centered_2nd_uniform", "cartesian", 2, nil},
-		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3, nil},
-		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1, nil},
-		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1, nil},
-		{"centered_arbitrary_order_uniform", "tests/discretizations/centered_arbitrary_order_uniform.esm", "centered_arbitrary_order_uniform", "cartesian", 4, intPtr(4)},
+		// centered_2nd_uniform.esm was migrated to stencil_gen (ess-bq1); stencil array is gone.
+		{"centered_2nd_uniform", "tests/discretizations/centered_2nd_uniform.esm", "centered_2nd_uniform", "cartesian", 0, nil, true},
+		{"upwind_1st_advection", "tests/discretizations/upwind_1st_advection.esm", "upwind_1st", "cartesian", 3, nil, false},
+		{"periodic_bc", "tests/discretizations/periodic_bc.esm", "periodic_bc_x", "cartesian", 1, nil, false},
+		{"mpas_cell_div", "tests/discretizations/mpas_cell_div.esm", "mpas_cell_div", "unstructured", 1, nil, false},
+		// centered_arbitrary_order_uniform.esm was migrated to stencil_gen (ess-bq1); stencil array is gone.
+		{"centered_arbitrary_order_uniform", "tests/discretizations/centered_arbitrary_order_uniform.esm", "centered_arbitrary_order_uniform", "cartesian", 0, intPtr(4), true},
 		// dim_split_2d_strang exercises the kind="dimensional_split" branch
 		// (RFC §7.5): its primary scheme (strang_grad_xy) has no stencil body.
 		// The test references the *inner* 1D scheme ("centered_2nd_uniform")
 		// so the generic stencil assertions still apply; TestDimensionalSplitScheme
 		// below checks the dimensional-split fields round-trip.
-		{"dim_split_2d_strang", "tests/discretizations/dim_split_2d_strang.esm", "centered_2nd_uniform", "cartesian", 2, nil},
+		{"dim_split_2d_strang", "tests/discretizations/dim_split_2d_strang.esm", "centered_2nd_uniform", "cartesian", 2, nil, false},
 		// Cross-metric composite (RFC §7.6): the named entry has no stencil
 		// (stencilLen 0 routes into the composite assertion below); the
 		// per-axis schemes referenced via Terms are exercised separately.
-		{"cross_metric_cartesian_composite", "tests/discretizations/cross_metric_cartesian.esm", "laplacian_full_covariant_toy", "cartesian", 0, nil},
-		{"cross_metric_cartesian_dxi2", "tests/discretizations/cross_metric_cartesian.esm", "d2_dxi2_uniform", "cartesian", 3, nil},
-		{"cross_metric_cartesian_deta2", "tests/discretizations/cross_metric_cartesian.esm", "d2_deta2_uniform", "cartesian", 3, nil},
+		{"cross_metric_cartesian_composite", "tests/discretizations/cross_metric_cartesian.esm", "laplacian_full_covariant_toy", "cartesian", 0, nil, false},
+		{"cross_metric_cartesian_dxi2", "tests/discretizations/cross_metric_cartesian.esm", "d2_dxi2_uniform", "cartesian", 3, nil, false},
+		{"cross_metric_cartesian_deta2", "tests/discretizations/cross_metric_cartesian.esm", "d2_deta2_uniform", "cartesian", 3, nil, false},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -86,6 +89,12 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 			if len(scheme.Stencil) != f.stencilLen {
 				t.Errorf("stencil len = %d, want %d", len(scheme.Stencil), f.stencilLen)
 			}
+			if f.wantStencilGen && scheme.StencilGen == nil {
+				t.Errorf("scheme %q: expected stencil_gen to be set", f.schemeName)
+			}
+			if !f.wantStencilGen && scheme.StencilGen != nil {
+				t.Errorf("scheme %q: unexpected stencil_gen present", f.schemeName)
+			}
 			switch {
 			case f.wantOrder == nil && scheme.Order != nil:
 				t.Errorf("order = %d, want absent", *scheme.Order)
@@ -95,11 +104,11 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 				t.Errorf("order = %d, want %d", *scheme.Order, *f.wantOrder)
 			}
 
-			// For cross-metric composite entries (stencilLen == 0 and no
-			// Stencil) we expect a nonempty Terms array and IsCrossMetric()==
-			// true (RFC §7.6). Skip when the scheme is a dimensional_split
-			// composite, which uses InnerRule rather than Terms.
-			if f.stencilLen == 0 && len(scheme.Stencil) == 0 && scheme.Kind != "dimensional_split" {
+			// For cross-metric composite entries (stencilLen == 0, no Stencil, no
+			// StencilGen) we expect a nonempty Terms array and IsCrossMetric()==
+			// true (RFC §7.6). Skip for dimensional_split (uses InnerRule) and
+			// stencil_gen schemes (no stencil by design — the loader expands it).
+			if f.stencilLen == 0 && len(scheme.Stencil) == 0 && scheme.Kind != "dimensional_split" && !f.wantStencilGen {
 				if !scheme.IsCrossMetric() {
 					t.Errorf("scheme %q: expected composite (Terms nonempty), got Terms=%v", f.schemeName, scheme.Terms)
 				}
