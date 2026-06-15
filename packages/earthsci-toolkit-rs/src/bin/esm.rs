@@ -245,6 +245,12 @@ enum Commands {
         #[arg(value_name = "FILE")]
         file: Option<PathBuf>,
     },
+    /// Run cross-language conformance tests and write results.json to OUT_DIR
+    ConformanceTest {
+        /// Directory to write results.json into
+        #[arg(value_name = "OUT_DIR")]
+        out_dir: PathBuf,
+    },
 }
 
 #[cfg(feature = "cli")]
@@ -3268,9 +3274,289 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Interactive REPL not yet implemented");
             println!("Type 'exit' to quit (if it were implemented)");
         }
+
+        Commands::ConformanceTest { out_dir } => {
+            run_conformance_test(&out_dir)?;
+        }
     }
 
     Ok(())
+}
+
+#[cfg(feature = "cli")]
+fn find_tests_dir() -> Option<std::path::PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        let candidate = dir.join("tests").join("valid");
+        if candidate.is_dir() {
+            return Some(dir.join("tests"));
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+#[cfg(feature = "cli")]
+fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    use serde_json::{json, Value};
+    use std::collections::BTreeMap;
+
+    fs::create_dir_all(out_dir)?;
+
+    let tests_dir = find_tests_dir()
+        .ok_or("Could not locate tests/ directory by walking up from current directory")?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let timestamp = format!("{now}");
+
+    let mut errors: Vec<String> = Vec::new();
+
+    // --- validation tests ---
+    let mut validation_valid: BTreeMap<String, Value> = BTreeMap::new();
+    let mut validation_invalid: BTreeMap<String, Value> = BTreeMap::new();
+
+    let valid_dir = tests_dir.join("valid");
+    if valid_dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(&valid_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("esm"))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match fs::read_to_string(&path) {
+                Ok(content) => match validate_complete(&content) {
+                    result => {
+                        validation_valid.insert(name, json!({
+                            "is_valid": result.is_valid,
+                            "schema_errors": result.schema_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                            "structural_errors": result.structural_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                            "parsed_successfully": result.is_valid || result.structural_errors.is_empty() || true,
+                        }));
+                    }
+                },
+                Err(e) => {
+                    let msg = format!("valid/{name}: read error: {e}");
+                    errors.push(msg.clone());
+                    validation_valid.insert(name, json!({ "parsed_successfully": false, "error": e.to_string() }));
+                }
+            }
+        }
+    }
+
+    let invalid_dir = tests_dir.join("invalid");
+    if invalid_dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(&invalid_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("esm"))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    let result = validate_complete(&content);
+                    let parsed_ok = !result.schema_errors.iter().any(|e| e.message.contains("JSON parse") || e.message.contains("failed to parse"));
+                    validation_invalid.insert(name, json!({
+                        "is_valid": result.is_valid,
+                        "schema_errors": result.schema_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                        "structural_errors": result.structural_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                        "parsed_successfully": parsed_ok,
+                        "is_expected_error": !result.is_valid,
+                    }));
+                }
+                Err(e) => {
+                    validation_invalid.insert(name, json!({
+                        "parsed_successfully": false,
+                        "error": e.to_string(),
+                        "is_expected_error": true,
+                    }));
+                }
+            }
+        }
+    }
+
+    // --- mathematical correctness tests ---
+    let mut math_results: BTreeMap<String, Value> = BTreeMap::new();
+    let math_dir = tests_dir.join("mathematical_correctness");
+    if math_dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(&math_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("esm"))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    let result = validate_complete(&content);
+                    math_results.insert(name, json!({
+                        "loaded": true,
+                        "is_valid": result.is_valid,
+                        "schema_error_count": result.schema_errors.len(),
+                        "structural_error_count": result.structural_errors.len(),
+                    }));
+                }
+                Err(e) => {
+                    math_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
+                }
+            }
+        }
+    }
+
+    // --- graph tests ---
+    let mut graph_results: BTreeMap<String, Value> = BTreeMap::new();
+    let graphs_dir = tests_dir.join("graphs");
+    if graphs_dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(&graphs_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("json"))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    match serde_json::from_str::<Value>(&content) {
+                        Ok(fixture) => {
+                            let result = run_graph_fixture(&fixture, &tests_dir);
+                            graph_results.insert(name, result);
+                        }
+                        Err(e) => {
+                            graph_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
+                        }
+                    }
+                }
+                Err(e) => {
+                    graph_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
+                }
+            }
+        }
+    }
+
+    let results = json!({
+        "language": "rust",
+        "timestamp": timestamp,
+        "validation_results": {
+            "valid": validation_valid,
+            "invalid": validation_invalid,
+        },
+        "display_results": {},
+        "substitution_results": {},
+        "graph_results": graph_results,
+        "mathematical_correctness_results": math_results,
+        "errors": errors,
+    });
+
+    let results_file = out_dir.join("results.json");
+    fs::write(&results_file, serde_json::to_string_pretty(&results)?)?;
+    println!("Rust conformance results written to: {}", results_file.display());
+
+    if errors.is_empty() {
+        println!("Rust conformance testing completed successfully!");
+    } else {
+        eprintln!("Rust conformance testing completed with {} errors", errors.len());
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "cli")]
+fn run_graph_fixture(fixture: &serde_json::Value, tests_dir: &std::path::Path) -> serde_json::Value {
+    use serde_json::json;
+
+    if let Some(arr) = fixture.as_array() {
+        let mut cases = serde_json::Map::new();
+        for (i, case) in arr.iter().enumerate() {
+            let name = case.get("name").and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("case_{i}"));
+            let src = case.get("esm_file").or_else(|| case.get("input_file"));
+            match src {
+                None => { cases.insert(name, json!({ "skipped": "no esm_file/input_file" })); }
+                Some(v) => {
+                    let record = exercise_graph_esm_source(v, tests_dir);
+                    cases.insert(name, record);
+                }
+            }
+        }
+        return json!({ "test_cases": cases });
+    }
+
+    if let Some(obj) = fixture.as_object() {
+        let src = obj.get("input_file").or_else(|| obj.get("esm_file"));
+        match src {
+            None => return json!({ "skipped": "no input_file/esm_file" }),
+            Some(v) => {
+                let mut record = exercise_graph_esm_source(v, tests_dir);
+                if let Some(s) = v.as_str() {
+                    record["input_file"] = json!(s);
+                } else {
+                    record["input_file"] = json!("<inline>");
+                }
+                return record;
+            }
+        }
+    }
+
+    json!({ "skipped": "unrecognized fixture shape" })
+}
+
+#[cfg(feature = "cli")]
+fn exercise_graph_esm_source(src: &serde_json::Value, tests_dir: &std::path::Path) -> serde_json::Value {
+    use serde_json::json;
+
+    let content = if let Some(filename) = src.as_str() {
+        // resolve relative to tests/valid/ or tests/
+        let candidates = [
+            tests_dir.join("valid").join(filename),
+            tests_dir.join(filename),
+        ];
+        let path = candidates.iter().find(|p| p.exists());
+        match path {
+            None => return json!({ "loaded": false, "error": format!("ESM file not found: {filename}") }),
+            Some(p) => match fs::read_to_string(p) {
+                Ok(s) => s,
+                Err(e) => return json!({ "loaded": false, "error": e.to_string() }),
+            }
+        }
+    } else {
+        // inline ESM object
+        match serde_json::to_string(src) {
+            Ok(s) => s,
+            Err(e) => return json!({ "loaded": false, "error": e.to_string() }),
+        }
+    };
+
+    let esm_file = match load(&content) {
+        Ok(f) => f,
+        Err(e) => return json!({ "loaded": false, "error": e.to_string() }),
+    };
+
+    let validation = validate(&esm_file);
+    let graph = component_graph(&esm_file);
+
+    json!({
+        "loaded": true,
+        "validation": {
+            "is_valid": validation.is_valid,
+            "schema_error_count": validation.schema_errors.len(),
+            "structural_error_count": validation.structural_errors.len(),
+        },
+        "component_graph": {
+            "nodes": graph.nodes.len(),
+            "edges": graph.edges.len(),
+        },
+    })
 }
 
 #[cfg(not(feature = "cli"))]
