@@ -389,17 +389,66 @@ function apply_bindings(template::Expr, b::Dict{String,Expr})::Expr
         new_args = Expr[apply_bindings(a, b) for a in template.args]
         new_wrt = _apply_name_field(template.wrt, b)
         new_dim = _apply_name_field(template.dim, b)
+        # Recurse pattern-variable substitution into the structural sub-trees
+        # and name-class fields of compound ops (arrayop / integral / select).
+        # The previous version copied expr_body / output_idx / ranges / values /
+        # lower / upper verbatim, so pattern variables ($u, $x, …) inside an
+        # arrayop replacement's body and loop-index fields were never
+        # substituted — they leaked through as literal "$x"/"$u" and crashed the
+        # downstream evaluator (esd-3d7).
+        new_body = template.expr_body === nothing ? nothing :
+                   apply_bindings(template.expr_body, b)
+        new_values = template.values === nothing ? nothing :
+                     Expr[apply_bindings(v, b) for v in template.values]
+        new_lower = template.lower === nothing ? nothing :
+                    apply_bindings(template.lower, b)
+        new_upper = template.upper === nothing ? nothing :
+                    apply_bindings(template.upper, b)
+        new_int_var = _apply_name_field(template.int_var, b)
+        new_output_idx = _apply_idx_names(template.output_idx, b)
+        new_ranges = _apply_ranges_names(template.ranges, b)
         return OpExpr(template.op, new_args;
                       wrt=new_wrt, dim=new_dim,
-                      output_idx=template.output_idx,
-                      expr_body=template.expr_body,
-                      reduce=template.reduce, ranges=template.ranges,
-                      regions=template.regions, values=template.values,
+                      int_var=new_int_var, lower=new_lower, upper=new_upper,
+                      output_idx=new_output_idx,
+                      expr_body=new_body,
+                      reduce=template.reduce, ranges=new_ranges,
+                      regions=template.regions, values=new_values,
                       shape=template.shape, perm=template.perm,
                       axis=template.axis, fn=template.fn,
                       name=template.name, value=template.value)
     end
     return template
+end
+
+# Substitute a pattern variable used as a bare loop-index NAME (e.g. "$x" in an
+# arrayop's `output_idx` or as a `ranges` key). Bindings map "$x" → VarExpr("x");
+# the bare name "x" is what a name-class field needs. Non-pvar names pass through.
+function _apply_idx_name(name::AbstractString, b::Dict{String,Expr})::String
+    s = String(name)
+    _is_pvar_string(s) || return s
+    haskey(b, s) || throw(RuleEngineError(
+        "E_PATTERN_VAR_UNBOUND",
+        "pattern variable $s (loop index) is not bound"))
+    v = b[s]
+    v isa VarExpr || throw(RuleEngineError(
+        "E_PATTERN_VAR_TYPE",
+        "pattern variable $s used as a loop index must bind a bare name"))
+    return v.name
+end
+
+_apply_idx_names(::Nothing, ::Dict{String,Expr}) = nothing
+function _apply_idx_names(idxs, b::Dict{String,Expr})
+    return Any[_apply_idx_name(String(x), b) for x in idxs]
+end
+
+_apply_ranges_names(::Nothing, ::Dict{String,Expr}) = nothing
+function _apply_ranges_names(ranges, b::Dict{String,Expr})
+    out = Dict{String,Any}()
+    for (k, v) in ranges
+        out[_apply_idx_name(String(k), b)] = v
+    end
+    return out
 end
 
 function _apply_name_field(field::Union{String,Nothing}, b::Dict{String,Expr})
@@ -1135,12 +1184,16 @@ function _parse_expr(v)::Expr
     elseif v isa AbstractString
         return VarExpr(String(v))
     elseif _is_dict_like(v)
-        op = String(_getkey(v, "op"))
-        args_raw = _getkey(v, "args"; default=[])
-        args = Expr[_parse_expr(a) for a in args_raw]
-        wrt = _string_or_nothing(_getkey(v, "wrt"; default=nothing))
-        dim = _string_or_nothing(_getkey(v, "dim"; default=nothing))
-        return OpExpr(op, args; wrt=wrt, dim=dim)
+        # Delegate to the canonical expression parser so rule patterns and
+        # `replacement` ASTs carry the FULL op schema — including arrayop
+        # fields (output_idx / expr / ranges / reduce / axis / perm / shape /
+        # values / regions / fn / int_var / lower / upper). The previous
+        # hand-rolled branch only read op/args/wrt/dim, silently dropping every
+        # arrayop-specific field and collapsing an arrayop replacement to a
+        # content-free `arrayop{args:[…]}` marker (root cause of esd-3d7's
+        # E_TREEWALK_UNBOUND_VARIABLE after migrating FD rules to the
+        # arrayop-replacement form).
+        return parse_expression(v)
     end
     throw(RuleEngineError("E_RULE_PARSE",
         "cannot parse expression of type $(typeof(v))"))

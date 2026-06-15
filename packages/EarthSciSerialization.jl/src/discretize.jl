@@ -335,6 +335,92 @@ end
 #   3. The variable's grid carries "dim_sizes" for every shape dimension.
 # When all conditions hold, wraps both LHS and RHS in arrayop nodes with ranges
 # derived from the grid dimension sizes, using canonical index names i, j, k, …
+# Rename per-axis loop-index names inside a dict AST according to `name_map`
+# (dim-name → canonical, e.g. "x" → "i"). A replacement arrayop's loop variable
+# (the literal dim name, e.g. "x") is a pure iteration symbol — it appears only
+# as a `VarExpr` bare-name string inside index expressions (`index(u, x-1)`),
+# inside the `output_idx` list, and as a `ranges` key — never as a real state /
+# parameter variable. We therefore rename every occurrence of a bare string that
+# matches a map key, plus `output_idx` entries and `ranges` keys. Keys are the
+# exact dim names ("x", "y", …), so unrelated symbols ("dx", "u", "v") are
+# untouched (string equality, not substring).
+function _rename_loop_indices(node, name_map::Dict{String,String})
+    node isa AbstractString && return get(name_map, String(node), node)
+    node isa AbstractVector && return Any[_rename_loop_indices(x, name_map) for x in node]
+    node isa AbstractDict || return node
+    out = Dict{String,Any}()
+    for (k, v) in node
+        ks = String(k)
+        if ks == "ranges" && v isa AbstractDict
+            nr = Dict{String,Any}()
+            for (rk, rv) in v
+                nr[get(name_map, String(rk), String(rk))] = _rename_loop_indices(rv, name_map)
+            end
+            out[ks] = nr
+        elseif (ks == "args" || ks == "output_idx") && v isa AbstractVector
+            out[ks] = Any[_rename_loop_indices(x, name_map) for x in v]
+        elseif (ks == "expr" || ks == "lower" || ks == "upper") && v !== nothing
+            out[ks] = _rename_loop_indices(v, name_map)
+        elseif ks in ("op", "fn", "name", "var", "reduce", "wrt", "dim")
+            # Non-index string fields: never a per-axis loop variable.
+            out[ks] = v
+        else
+            out[ks] = v
+        end
+    end
+    return out
+end
+
+# Recursively inline every NON-reduction "replacement" arrayop embedded anywhere
+# in `node` (top-level, or nested inside +, *, /, ifelse, … as in an advection
+# RHS like `(0 - v) * grad(u,x)` → `(0-v) * arrayop{output_idx:["x"], expr:E}`).
+# Each such arrayop is replaced by its `expr` body with its per-axis loop names
+# renamed to the lift's canonical names via `name_map` (dim-name → "i"/"j"/…).
+# Reduction arrayops (those carrying `reduce`) are left intact — they are the
+# scheme-expansion / unstructured contraction nodes handled downstream.
+# Returns (new_node, found::Bool) where `found` is true iff at least one
+# elementwise arrayop was inlined.
+function _inline_elementwise_arrayops(node, name_map::Dict{String,String})
+    if node isa AbstractVector
+        found = false
+        out = Any[]
+        for x in node
+            nx, f = _inline_elementwise_arrayops(x, name_map)
+            found |= f
+            push!(out, nx)
+        end
+        return out, found
+    end
+    node isa AbstractDict || return node, false
+    op = get(node, "op", nothing)
+    if op isa AbstractString && String(op) == "arrayop" &&
+       get(node, "reduce", nothing) === nothing &&
+       get(node, "expr", nothing) !== nothing
+        # Elementwise replacement arrayop: inline its (renamed) body, then keep
+        # descending in case the body itself nests further elementwise arrayops.
+        body = _rename_loop_indices(node["expr"], name_map)
+        inlined, _ = _inline_elementwise_arrayops(body, name_map)
+        return inlined, true
+    end
+    found = false
+    out = Dict{String,Any}()
+    for (k, v) in node
+        ks = String(k)
+        if ks == "args" && v isa AbstractVector
+            nv, f = _inline_elementwise_arrayops(v, name_map)
+            found |= f
+            out[ks] = nv
+        elseif ks == "expr" && v !== nothing
+            nv, f = _inline_elementwise_arrayops(v, name_map)
+            found |= f
+            out[ks] = nv
+        else
+            out[ks] = v
+        end
+    end
+    return out, found
+end
+
 function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
                                       grids::Dict{String,Dict{String,Any}},
                                       variables::Dict{String,Dict{String,Any}};
@@ -371,8 +457,14 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     dim_sizes = get(gmeta, "dim_sizes", nothing)
     dim_sizes isa AbstractDict || return
 
+    # Map each shape dimension name to the lift's canonical loop index
+    # (dim "x" → "i", "y" → "j", …). Replacement arrayops (esd-3d7) declare their
+    # per-axis loop variables using the literal dim names; this map lets the lift
+    # inline their bodies with a unified, canonical loop variable so no free
+    # per-axis index (e.g. "x") survives into the evaluator.
     output_idx = Any[]
     ranges = Dict{String,Any}()
+    dim_to_canon = Dict{String,String}()
     for d in 1:ndims
         dim_name = String(shape[d])
         sz = get(dim_sizes, dim_name, nothing)
@@ -380,6 +472,7 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
         idx = _ARRAYOP_INDEX_NAMES[d]
         push!(output_idx, idx)
         ranges[idx] = Any[1, Int(sz)]
+        dim_to_canon[dim_name] = idx
     end
 
     # Build index args: [var_name, idx1, idx2, ...]
@@ -408,6 +501,14 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     # behaviour for periodic BCs.
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
+    # Inline any NON-reduction replacement arrayops (esd-3d7 rule form) embedded
+    # in the RHS — at the top level (e.g. `d2(u,x)` → arrayop) or nested inside
+    # arithmetic (e.g. `(0-v)*grad(u,x)` → `(0-v)*arrayop`). Each is replaced by
+    # its body with its per-axis loop names (literal dim names) renamed to the
+    # lift's canonical names, so the single wrapping arrayop below has no free
+    # per-axis index. Done BEFORE periodic folding so the folder sees canonical
+    # index args. Reduction arrayops (scheme/unstructured) are left intact.
+    rhs_raw, _ = _inline_elementwise_arrayops(rhs_raw, dim_to_canon)
     # Keep a pre-fold copy: boundary-cell emission (ess-gp3) instantiates the
     # stencil at literal indices and must see raw i±k offsets, not the
     # periodic ifelse wrappers.
