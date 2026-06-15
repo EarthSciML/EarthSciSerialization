@@ -685,6 +685,10 @@ export type Discretization = {
    */
   stencil?: [StencilEntry, ...StencilEntry[]];
   /**
+   * Declarative stencil-weight generator (RFC §7.1.3). Replaces the hand-authored `stencil` array. Mutually exclusive with `stencil`. Supported: method="fornberg", deriv_order=1, stagger="centered", grid_family="cartesian".
+   */
+  stencil_gen?: StencilGen;
+  /**
    * dimensional_split: ordered list of spatial axes (names from the target grid's dimensions) along which the inner scheme is swept. Each axis is visited once per Lie step and twice (symmetrically) per Strang step. See RFC §7.5.
    *
    * @minItems 1
@@ -2328,6 +2332,23 @@ export interface InterfaceConstraint {
    */
   value: ("min" | "max" | "boundary") | number;
   description?: string;
+}
+/**
+ * Declarative stencil-weight generator (RFC §7.1.3). Expanded by the loader at parse time into an equivalent stencil entry list using the Fornberg recurrence in exact rational arithmetic. Mutually exclusive with the `stencil` array on a Discretization.
+ */
+export interface StencilGen {
+  /** Weight-generation algorithm. Only "fornberg" is supported. */
+  method: "fornberg";
+  /** Derivative order (1 = gradient). Only 1 is currently supported. */
+  deriv_order: number;
+  /** Truncation error order; must be a positive even integer (2, 4, 6, 8, …). */
+  accuracy_order: number;
+  /** Stencil symmetry. Only "centered" is currently supported. */
+  stagger: "centered";
+  /** Cartesian axis along which the stencil is applied. */
+  axis: string;
+  /** Uniform grid spacing symbol used as the denominator factor in the generated coefficient AST. */
+  spacing: string;
 }
 /**
  * One neighbor contribution to a discretization stencil: a selector picking out the neighbor(s) and a coefficient expression.
