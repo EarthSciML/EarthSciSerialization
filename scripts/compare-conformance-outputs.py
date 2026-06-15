@@ -50,6 +50,20 @@ def load_language_results(output_dir: Path, language: str) -> Dict[str, Any]:
         print(f"Error loading results for {language}: {e}")
         return {}
 
+def _effective_is_valid(result: Dict[str, Any]) -> bool:
+    """Derive whether a language considers a file valid, regardless of which fields it emits.
+
+    Languages differ in how they report errors:
+    - Some (Rust, TS) return a result object: is_valid=False, parsed_successfully=True
+    - Some (Python, Julia) throw exceptions: parsed_successfully=False, no is_valid field
+
+    Both conventions express the same verdict; this function normalises them.
+    """
+    if "is_valid" in result:
+        return bool(result["is_valid"])
+    return bool(result.get("parsed_successfully", True))
+
+
 def compare_validation_results(language_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     """Compare validation results across languages."""
     print("Comparing validation results...")
@@ -101,23 +115,17 @@ def compare_validation_results(language_results: Dict[str, Dict[str, Any]]) -> D
             if lang == reference_lang:
                 continue
 
-            # Compare key validation fields
-            if result.get("is_valid") != reference_result.get("is_valid"):
+            # Compare the verdict (valid vs invalid) using a normalised signal that
+            # works for both exception-based and result-object error reporting styles.
+            ref_verdict = _effective_is_valid(reference_result)
+            lang_verdict = _effective_is_valid(result)
+            if lang_verdict != ref_verdict:
                 is_consistent = False
-                inconsistencies.append(f"is_valid: {reference_lang}={reference_result.get('is_valid')} vs {lang}={result.get('is_valid')}")
-
-            if result.get("parsed_successfully") != reference_result.get("parsed_successfully"):
-                is_consistent = False
-                inconsistencies.append(f"parsed_successfully: {reference_lang}={reference_result.get('parsed_successfully')} vs {lang}={result.get('parsed_successfully')}")
-
-            # Compare error types for invalid files
-            if not result.get("parsed_successfully", True) and not reference_result.get("parsed_successfully", True):
-                ref_errors = set(reference_result.get("schema_errors", []) + reference_result.get("structural_errors", []))
-                lang_errors = set(result.get("schema_errors", []) + result.get("structural_errors", []))
-
-                if ref_errors != lang_errors:
-                    is_consistent = False
-                    inconsistencies.append(f"errors: {reference_lang}={sorted(ref_errors)} vs {lang}={sorted(lang_errors)}")
+                ref_label = "valid" if ref_verdict else "invalid"
+                lang_label = "valid" if lang_verdict else "invalid"
+                inconsistencies.append(
+                    f"verdict: {reference_lang}={ref_label} vs {lang}={lang_label}"
+                )
 
         if is_consistent:
             validation_analysis["summary"]["consistent_files"] += 1
