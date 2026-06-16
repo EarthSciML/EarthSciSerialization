@@ -232,9 +232,19 @@ function build_evaluator(model::Model;
     reg_funcs = Dict{String,Any}(String(k) => v
                                  for (k, v) in registered_functions)
 
-    # ---- Pre-computed constant arrays (e.g. __stgfw_ Fornberg weight arrays) ----
-    _const_arrays = Dict{String,Vector{Float64}}(
-        String(k) => Vector{Float64}(v) for (k, v) in const_arrays)
+    # ---- Pre-computed constant arrays (Fornberg weights, mesh connectivity, etc.) ----
+    # Supports both 1D (Fornberg weights) and ND (connectivity matrices for
+    # mesh reductions).  1D entries are stored as Vector{Float64}; higher-rank
+    # entries as plain Array{Float64,N}.
+    _const_arrays = Dict{String,AbstractArray{Float64}}()
+    for (k, v) in const_arrays
+        k_str = String(k)
+        if ndims(v) == 1
+            _const_arrays[k_str] = Vector{Float64}(v)
+        else
+            _const_arrays[k_str] = Array{Float64}(v)
+        end
+    end
 
     # ---- Build per-derivative compiled-IR list ----
     # Each entry is (state_index, compiled-node). The RHS is inlined with
@@ -353,9 +363,12 @@ function build_evaluator(model::Model;
                     rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays)
                     push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 else
-                    # Generalized einsum: unroll contracted indices at build time,
-                    # then combine terms with the declared reduce operator.
-                    terms = Expr[]
+                    # Generalized einsum via external Tullio library: compile each
+                    # contracted-index term separately, then accumulate at runtime
+                    # using _NK_CONTRACTION (Tullio for +, loops for */max/min).
+                    # Size-independent: one node per contracted-index tuple (not
+                    # per output-cell × contracted-index tuple).
+                    k_nodes = _Node[]
                     for k_tuple in Iterators.product(contract_iters...)
                         k_exprs = Dict{String,Expr}(
                             contract_names[d] => IntExpr(Int64(k_tuple[d]))
@@ -363,12 +376,12 @@ function build_evaluator(model::Model;
                         term = _sub_preserving(sub_rhs_outer, k_exprs)
                         term = isempty(resolved_obs) ? term :
                                _sub_preserving(term, resolved_obs)
-                        push!(terms, term)
+                        rhs_r = _resolve_indices(term, array_var_info, var_map, _const_arrays)
+                        push!(k_nodes, _compile(rhs_r, var_map, param_sym_set, reg_funcs))
                     end
-                    combined = length(terms) == 1 ? terms[1] :
-                               OpExpr(rhs_reduce::String, terms)
-                    rhs_r = _resolve_indices(combined, array_var_info, var_map, _const_arrays)
-                    push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
+                    push!(rhs_list, (idx, _mknode(kind=_NK_CONTRACTION,
+                                                  op=Symbol(rhs_reduce),
+                                                  children=k_nodes)))
                 end
             end
         end
@@ -486,11 +499,12 @@ end
 
 # _NKind encodes what a node is. Keeping it as a Bare integer (UInt8)
 # gives a fast `kind === K_*` dispatch inside `_eval_node`.
-const _NK_LITERAL = UInt8(1)
-const _NK_STATE   = UInt8(2)   # read u[idx]
-const _NK_PARAM   = UInt8(3)   # read p.<sym>
-const _NK_TIME    = UInt8(4)   # return t
-const _NK_OP      = UInt8(5)   # apply op to children
+const _NK_LITERAL      = UInt8(1)
+const _NK_STATE        = UInt8(2)   # read u[idx]
+const _NK_PARAM        = UInt8(3)   # read p.<sym>
+const _NK_TIME         = UInt8(4)   # return t
+const _NK_OP           = UInt8(5)   # apply op to children
+const _NK_CONTRACTION  = UInt8(6)   # runtime reduction over children via Tullio
 
 struct _Node
     kind::UInt8
@@ -672,8 +686,37 @@ end
         return getfield(p, n.sym)
     elseif k === _NK_TIME
         return t
+    elseif k === _NK_CONTRACTION
+        return _eval_contraction(n, u, p, t)
     else
         return _eval_node_op(n, u, p, t)
+    end
+end
+
+function _eval_contraction(n::_Node, u, p, t)
+    op = n.op
+    children = n.children
+    if op === :+
+        @tullio s = _eval_node(children[k], u, p, t)
+        return s
+    elseif op === :*
+        s = 1.0
+        @inbounds for k in eachindex(children)
+            s *= _eval_node(children[k], u, p, t)
+        end
+        return s
+    elseif op === :max
+        s = -Inf
+        @inbounds for k in eachindex(children)
+            s = max(s, _eval_node(children[k], u, p, t))
+        end
+        return s
+    else  # :min
+        s = Inf
+        @inbounds for k in eachindex(children)
+            s = min(s, _eval_node(children[k], u, p, t))
+        end
+        return s
     end
 end
 
@@ -977,55 +1020,88 @@ function _expand_int_range(r::AbstractVector)
           "range entry must have 2 or 3 entries, got $(length(r))"))
 end
 
-# Evaluate a purely-arithmetic expression (literals + idx_env bindings)
-# to a concrete Int. Used to resolve index(u, i+1) after loop-var substitution.
-function _eval_const_int(expr::NumExpr, idx_env::Dict{String,Int})
+# Evaluate a purely-arithmetic expression (literals + idx_env bindings + const_array
+# lookups) to a concrete Int. Used to resolve index(u, i+1) after loop-var
+# substitution, and for indirect gather: u[index(conn, c, k)] where conn is a
+# 2D const_array holding neighbor indices.
+function _eval_const_int(expr::NumExpr, idx_env::Dict{String,Int},
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     return Int(expr.value)
 end
-function _eval_const_int(expr::IntExpr, idx_env::Dict{String,Int})
+function _eval_const_int(expr::IntExpr, idx_env::Dict{String,Int},
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     return expr.value
 end
-function _eval_const_int(expr::VarExpr, idx_env::Dict{String,Int})
+function _eval_const_int(expr::VarExpr, idx_env::Dict{String,Int},
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     haskey(idx_env, expr.name) ||
         throw(TreeWalkError("E_TREEWALK_UNBOUND_LOOP_VAR", expr.name))
     return idx_env[expr.name]
 end
-function _eval_const_int(expr::OpExpr, idx_env::Dict{String,Int})
+function _eval_const_int(expr::OpExpr, idx_env::Dict{String,Int},
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     op = expr.op
     c = expr.args
     if op == "+"
-        return sum(_eval_const_int(a, idx_env) for a in c)
+        return sum(_eval_const_int(a, idx_env, const_arrays) for a in c)
     elseif op == "-"
-        length(c) == 1 && return -_eval_const_int(c[1], idx_env)
+        length(c) == 1 && return -_eval_const_int(c[1], idx_env, const_arrays)
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "- in index needs 1-2 args"))
-        return _eval_const_int(c[1], idx_env) - _eval_const_int(c[2], idx_env)
+        return _eval_const_int(c[1], idx_env, const_arrays) - _eval_const_int(c[2], idx_env, const_arrays)
     elseif op == "*"
-        return prod(_eval_const_int(a, idx_env) for a in c)
+        return prod(_eval_const_int(a, idx_env, const_arrays) for a in c)
     elseif op == "/"
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "/ in index needs 2 args"))
-        return div(_eval_const_int(c[1], idx_env), _eval_const_int(c[2], idx_env))
+        return div(_eval_const_int(c[1], idx_env, const_arrays), _eval_const_int(c[2], idx_env, const_arrays))
     elseif op == "ifelse"
         length(c) == 3 || throw(TreeWalkError("E_TREEWALK_ARITY", "ifelse in index needs 3 args"))
-        cond = _eval_const_int(c[1], idx_env)
-        return cond != 0 ? _eval_const_int(c[2], idx_env) : _eval_const_int(c[3], idx_env)
+        cond = _eval_const_int(c[1], idx_env, const_arrays)
+        return cond != 0 ? _eval_const_int(c[2], idx_env, const_arrays) : _eval_const_int(c[3], idx_env, const_arrays)
     elseif op == "<"
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "< needs 2 args"))
-        return _eval_const_int(c[1], idx_env) < _eval_const_int(c[2], idx_env) ? 1 : 0
+        return _eval_const_int(c[1], idx_env, const_arrays) < _eval_const_int(c[2], idx_env, const_arrays) ? 1 : 0
     elseif op == "<="
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "<= needs 2 args"))
-        return _eval_const_int(c[1], idx_env) <= _eval_const_int(c[2], idx_env) ? 1 : 0
+        return _eval_const_int(c[1], idx_env, const_arrays) <= _eval_const_int(c[2], idx_env, const_arrays) ? 1 : 0
     elseif op == ">"
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "> needs 2 args"))
-        return _eval_const_int(c[1], idx_env) > _eval_const_int(c[2], idx_env) ? 1 : 0
+        return _eval_const_int(c[1], idx_env, const_arrays) > _eval_const_int(c[2], idx_env, const_arrays) ? 1 : 0
     elseif op == ">="
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", ">= needs 2 args"))
-        return _eval_const_int(c[1], idx_env) >= _eval_const_int(c[2], idx_env) ? 1 : 0
+        return _eval_const_int(c[1], idx_env, const_arrays) >= _eval_const_int(c[2], idx_env, const_arrays) ? 1 : 0
     elseif op == "=="
         length(c) == 2 || throw(TreeWalkError("E_TREEWALK_ARITY", "== needs 2 args"))
-        return _eval_const_int(c[1], idx_env) == _eval_const_int(c[2], idx_env) ? 1 : 0
+        return _eval_const_int(c[1], idx_env, const_arrays) == _eval_const_int(c[2], idx_env, const_arrays) ? 1 : 0
     elseif op == "neg"
         length(c) == 1 || throw(TreeWalkError("E_TREEWALK_ARITY", "neg needs 1 arg"))
-        return -_eval_const_int(c[1], idx_env)
+        return -_eval_const_int(c[1], idx_env, const_arrays)
+    elseif op == "index"
+        # Indirect gather: index(const_array_name, i1, i2, ...) → Int
+        # Used for mesh connectivity: u[index(cells_on_cell, c, k)] resolves the
+        # neighbor index from a pre-computed connectivity array.
+        isempty(c) && throw(TreeWalkError("E_TREEWALK_INDEX_EMPTY",
+                                           "index op in index position requires at least one arg"))
+        first = c[1]
+        first isa VarExpr ||
+            throw(TreeWalkError("E_TREEWALK_INDEX_NOT_CONST",
+                "index op in index position: first arg must be a variable name"))
+        haskey(const_arrays, first.name) ||
+            throw(TreeWalkError("E_TREEWALK_INDEX_NOT_CONST",
+                "non-const array '$(first.name)' used in index position; " *
+                "add it to const_arrays or use a state-variable index"))
+        arr = const_arrays[first.name]
+        idx_args = c[2:end]
+        length(idx_args) == ndims(arr) ||
+            throw(TreeWalkError("E_TREEWALK_INDEX_NOT_CONST",
+                "const array '$(first.name)' is $(ndims(arr))D but got $(length(idx_args)) indices"))
+        int_indices = [_eval_const_int(a, idx_env, const_arrays) for a in idx_args]
+        for d in 1:ndims(arr)
+            (int_indices[d] >= 1 && int_indices[d] <= size(arr, d)) ||
+                throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
+                    "const array '$(first.name)' index $(int_indices[d]) " *
+                    "out of range 1..$(size(arr,d)) in dim $d"))
+        end
+        return Int(round(arr[int_indices...]))
     end
     throw(TreeWalkError("E_TREEWALK_INDEX_NOT_CONST",
           "cannot evaluate '$(op)' as a constant integer index"))
@@ -1082,7 +1158,7 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
     reduce_op = arrayop_expr.reduce === nothing ? "+" : String(arrayop_expr.reduce)
 
     # Substitute concrete output-index values into body.
-    k_vals = [_eval_const_int(a, Dict{String,Int}()) for a in idx_args]
+    k_vals = [_eval_const_int(a, Dict{String,Int}(), const_arrays) for a in idx_args]
     idx_exprs = Dict{String,Expr}(
         output_idx_strs[d] => IntExpr(Int64(k_vals[d]))
         for d in 1:length(output_idx_strs))
@@ -1120,7 +1196,7 @@ function _resolve_index_of_makearray(makearray_expr::OpExpr, idx_args::Vector{Ex
         throw(TreeWalkError("E_TREEWALK_MAKEARRAY_MISMATCH",
               "makearray regions/values length mismatch " *
               "($(length(regions)) vs $(length(values)))"))
-    k_vals = [_eval_const_int(a, Dict{String,Int}()) for a in idx_args]
+    k_vals = [_eval_const_int(a, Dict{String,Int}(), const_arrays) for a in idx_args]
     ndim   = length(k_vals)
     result_expr::Expr = NumExpr(0.0)  # default: 0 if no region covers the point
     for (region, val_expr) in zip(regions, values)
@@ -1165,30 +1241,33 @@ end
 #   - In-bounds const_array entry → NumExpr(literal) inlining the pre-computed value.
 #   - Out-of-bounds → NumExpr(0.0) (ghost-cell convention for state arrays).
 # array_var_info: var_name → (lo::Vector{Int}, hi::Vector{Int})
-# const_arrays: pre-computed 1D float arrays (e.g. __stgfw_ Fornberg weight arrays)
-#   keyed by array name; index(name, i) → NumExpr(const_arrays[name][i])
+# const_arrays: pre-computed float arrays (1D Fornberg weights, or ND mesh connectivity)
+#   keyed by array name; index(name, i1, i2, ...) → NumExpr(const_arrays[name][i1,i2,...])
+#   also used for indirect gather: u[index(conn, c, k)] resolves conn[c,k] as an integer index.
+const _EMPTY_CONST_ARRAYS = Dict{String,AbstractArray{Float64}}()
+
 function _resolve_indices(expr::NumExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     return expr
 end
 function _resolve_indices(expr::IntExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     return expr
 end
 function _resolve_indices(expr::VarExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     return expr
 end
 function _resolve_indices(expr::OpExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::Dict{String,Vector{Float64}}=Dict{String,Vector{Float64}}())
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
     if expr.op == "index"
         isempty(expr.args) &&
             throw(TreeWalkError("E_TREEWALK_INDEX_EMPTY", "index op requires at least one arg"))
@@ -1214,7 +1293,9 @@ function _resolve_indices(expr::OpExpr,
             length(idx_args) == length(lo) ||
                 throw(TreeWalkError("E_TREEWALK_INDEX_NDIM",
                       "$(vname) has $(length(lo))D but got $(length(idx_args)) index args"))
-            indices = [_eval_const_int(a, Dict{String,Int}()) for a in idx_args]
+            # Pass const_arrays so nested index expressions like u[conn[c,k]] can be
+            # resolved: _eval_const_int will look up conn[c,k] as an integer.
+            indices = [_eval_const_int(a, Dict{String,Int}(), const_arrays) for a in idx_args]
             for d in 1:length(indices)
                 if indices[d] < lo[d] || indices[d] > hi[d]
                     return NumExpr(0.0)  # ghost cell
@@ -1225,20 +1306,24 @@ function _resolve_indices(expr::OpExpr,
                 throw(TreeWalkError("E_TREEWALK_MISSING_CELL", cname))
             return VarExpr(cname)
         end
-        # Pre-computed constant arrays (e.g. __stgfw_ Fornberg weight arrays):
+        # Pre-computed constant arrays (1D Fornberg weights, or ND mesh arrays):
         # inline the value as a NumExpr literal.
         if first_arg isa VarExpr && haskey(const_arrays, first_arg.name)
             vals = const_arrays[first_arg.name]
-            idx_args = expr.args[2:end]
-            length(idx_args) == 1 ||
+            idx_args_expr = expr.args[2:end]
+            length(idx_args_expr) == ndims(vals) ||
                 throw(TreeWalkError("E_TREEWALK_CONSTARRAY_NDIM",
-                      "const_arrays only supports 1D arrays; '$(first_arg.name)' " *
-                      "has $(length(idx_args)) indices"))
-            i = _eval_const_int(idx_args[1], Dict{String,Int}())
-            (i >= 1 && i <= length(vals)) ||
-                throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
-                      "const array '$(first_arg.name)' index $i out of range 1..$(length(vals))"))
-            return NumExpr(vals[i])
+                      "const array '$(first_arg.name)' is $(ndims(vals))D " *
+                      "but got $(length(idx_args_expr)) indices"))
+            int_indices = [_eval_const_int(a, Dict{String,Int}(), const_arrays)
+                           for a in idx_args_expr]
+            for d in 1:ndims(vals)
+                (int_indices[d] >= 1 && int_indices[d] <= size(vals, d)) ||
+                    throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
+                          "const array '$(first_arg.name)' index $(int_indices[d]) " *
+                          "out of range 1..$(size(vals,d)) in dim $d"))
+            end
+            return NumExpr(Float64(vals[int_indices...]))
         end
         # scalar or unknown variable inside index — recurse on sub-exprs only
         new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays) for a in expr.args]

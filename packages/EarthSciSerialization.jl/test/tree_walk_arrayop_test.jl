@@ -423,4 +423,76 @@ _arrayop2d(body, i, ilo, ihi, j, jlo, jhi) = OpExpr("arrayop", ESM.Expr[];
         @test isapprox(du[vmap["u[5]"]], 1.0; rtol=1e-12)
     end
 
+    # ------------------------------------------------------------------
+    # 17. Fixture 23 — pure matvec contraction (ess-zmm / ess-6ny)
+    #     D(y[i])/dt = sum_{j=1..3} i*j  →  y[1]=6, y[2]=12 at t=1
+    #     D(w[i])/dt = max_{j=1..3}(i+j) →  w[1]=4, w[2]=5  at t=1
+    #     Flips the ess-zmm tree-walk Julia xfail to pass.
+    # ------------------------------------------------------------------
+    @testset "17. Fixture 23: pure matvec contraction (ess-zmm)" begin
+        path = joinpath(_REPO_ROOT, "tests", "fixtures", "arrayop",
+                        "23_arrayop_pure_matvec_contraction.esm")
+        @test isfile(path)
+        file = load(path)
+        model = file.models["PureMatVecContraction"]
+        t = model.tests[1]
+        ics = Dict(String(k) => Float64(v) for (k, v) in t.initial_conditions)
+        f!, u0, p, _, vmap = build_evaluator(model; initial_conditions=ics)
+        ts = (Float64(t.time_span.start), Float64(t.time_span.stop))
+        prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, ts, p)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                        reltol=1e-6, abstol=1e-8)
+        rtol = model.tolerance !== nothing ? model.tolerance.rel : 1e-3
+        for ass in t.assertions
+            var = String(ass.variable)
+            actual = sol(Float64(ass.time))[vmap[var]]
+            @test isapprox(actual, Float64(ass.expected); rtol=rtol)
+        end
+    end
+
+    # ------------------------------------------------------------------
+    # 18. Mesh reduction: 3-cell nn_diffusion with padded connectivity (ess-6ny)
+    #     D(u[c]) = sum_k coeff[c,k] * (u[cells_on_cell[c,k]] - u[c])
+    #     3-cell fully-connected mesh, coeff=0.5, u=[1,2,3] at t=0.
+    #     Expected: du[1]=1.5, du[2]=0.0, du[3]=-1.5
+    #     Tests indirect gather (u[cells_on_cell[c,k]]) + 2D const_arrays.
+    #     Unblocks EINSUM-5 evaluator gap (esd-agh).
+    # ------------------------------------------------------------------
+    @testset "18. Mesh reduction: 3-cell nn_diffusion (padded connectivity)" begin
+        N_c = 3; max_k = 2
+        # cells_on_cell[c,k]: neighbor of cell c at position k (1-indexed)
+        cells_on_cell_data = [2.0 3.0;   # cell 1 → neighbors 2, 3
+                               1.0 3.0;   # cell 2 → neighbors 1, 3
+                               1.0 2.0]   # cell 3 → neighbors 1, 2
+        coeff_data = fill(0.5, N_c, max_k)
+
+        vars = Dict("u" => ModelVariable(StateVariable))
+        _c  = _v("c"); _k_var = _v("k")
+        coeff_idx  = _op("index", _v("coeff"), _c, _k_var)
+        nb_expr    = _op("index", _v("cells_on_cell"), _c, _k_var)
+        u_nb       = _op("index", _v("u"), nb_expr)
+        u_c        = _op("index", _v("u"), _c)
+        body       = _op("*", coeff_idx, _op("-", u_nb, u_c))
+
+        lhs = OpExpr("arrayop", ESM.Expr[];
+            output_idx=Any["c"],
+            expr_body=_D_idx("u", _c),
+            ranges=Dict("c" => [1, N_c]))
+        rhs = OpExpr("arrayop", ESM.Expr[];
+            output_idx=Any["c"],
+            reduce="+",
+            ranges=Dict("c" => [1, N_c], "k" => [1, max_k]),
+            expr_body=body)
+        model = ESM.Model(vars, [ESM.Equation(lhs, rhs)])
+        ics = Dict("u[$c]" => Float64(c) for c in 1:N_c)
+        f!, u0, p, _, vmap = build_evaluator(model;
+            initial_conditions=ics,
+            const_arrays=Dict("cells_on_cell" => cells_on_cell_data,
+                              "coeff"          => coeff_data))
+        du = similar(u0); f!(du, u0, p, 0.0)
+        @test isapprox(du[vmap["u[1]"]],  1.5; rtol=1e-12)
+        @test isapprox(du[vmap["u[2]"]],  0.0; atol=1e-14)
+        @test isapprox(du[vmap["u[3]"]], -1.5; rtol=1e-12)
+    end
+
 end

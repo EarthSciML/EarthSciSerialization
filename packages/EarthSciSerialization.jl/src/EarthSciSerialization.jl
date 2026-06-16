@@ -18,6 +18,7 @@ module EarthSciSerialization
 using Dates
 using JSON3
 using JSONSchema
+using Tullio
 
 include("types.jl")
 include("error_handling.jl")
