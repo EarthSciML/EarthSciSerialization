@@ -35,6 +35,17 @@
       }
     },
     {
+      "id": "fixtures/arrayop/24_arrayop_makearray_region_dispatch",
+      "path": "fixtures/arrayop/24_arrayop_makearray_region_dispatch.esm",
+      "tags": ["arrayop", "makearray", "region_dispatch", "pin_resolver"],
+      "executing_bindings": ["julia", "python", "rust"],
+      "skip_bindings": {
+        "typescript": "TypeScript binding has no arrayop numeric executor; round-trip only.",
+        "go": "Go binding has no arrayop numeric executor; round-trip only."
+      },
+      "notes": "Pins _resolve_index_of_makearray (ESS tree_walk.jl:1114) in the LHS-arrayop context: the RHS body is index(makearray(regions,values),i,j) where i,j are the arrayop output loop variables. The LHS-arrayop unroller substitutes concrete ints for i,j via _sub_preserving, then _resolve_indices calls the resolver. 3x3 2D domain with two overlapping regions (border=1.0, center=4.0). Python uses the scalar fallback in _eval_arrayop. Rust uses ctx.loop_binds in eval_arrayop/eval_index. (ess-e9l)"
+    },
+    {
       "id": "fixtures/arrayop/20_arrayop_contraction_embedded",
       "path": "fixtures/arrayop/20_arrayop_contraction_embedded.esm",
       "tags": ["arrayop", "contraction", "embedded", "reduce-plus", "reduce-max"],

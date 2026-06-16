@@ -366,6 +366,33 @@ _arrayop2d(body, i, ilo, ihi, j, jlo, jhi) = OpExpr("arrayop", ESM.Expr[];
     end
 
     # ------------------------------------------------------------------
+    # 16. Fixture 24 — makearray region dispatch in arrayop body (ess-e9l)
+    #     Pins _resolve_index_of_makearray (tree_walk.jl:1114) through the
+    #     LHS-arrayop unrolling path: RHS body contains
+    #     index(makearray(regions,values),i,j) where i,j are the loop vars.
+    # ------------------------------------------------------------------
+    @testset "16. Fixture 24: makearray region dispatch in arrayop body (ess-e9l)" begin
+        path = joinpath(_REPO_ROOT, "tests", "fixtures", "arrayop",
+                        "24_arrayop_makearray_region_dispatch.esm")
+        @test isfile(path)
+        file = load(path)
+        model = file.models["MakeArrayLoopRegions"]
+        t = model.tests[1]
+        ics = Dict(String(k) => Float64(v) for (k, v) in t.initial_conditions)
+        f!, u0, p, _, vmap = build_evaluator(model; initial_conditions=ics)
+        ts = (Float64(t.time_span.start), Float64(t.time_span.stop))
+        prob = OrdinaryDiffEqTsit5.ODEProblem(f!, u0, ts, p)
+        sol = OrdinaryDiffEqTsit5.solve(prob, OrdinaryDiffEqTsit5.Tsit5();
+                                        reltol=1e-6, abstol=1e-8)
+        rtol = model.tolerance !== nothing ? model.tolerance.rel : 1e-3
+        for ass in t.assertions
+            var = String(ass.variable)
+            actual = sol(Float64(ass.time))[vmap[var]]
+            @test isapprox(actual, Float64(ass.expected); rtol=rtol)
+        end
+    end
+
+    # ------------------------------------------------------------------
     # 15. makearray interior+boundary regions (later-overwrite, ess-n0w)
     #     A 1D 5-cell domain where:
     #       region 1 [1,5] = 1.0  (border default)

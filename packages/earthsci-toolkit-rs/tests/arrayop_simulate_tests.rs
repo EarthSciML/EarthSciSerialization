@@ -302,6 +302,12 @@ fn arrayop_fixture_23_pure_matvec_contraction() {
     run_fixture(&p);
 }
 
+#[test]
+fn arrayop_fixture_24_makearray_region_dispatch() {
+    let p = find_fixture("24_arrayop_makearray_region_dispatch.esm");
+    run_fixture(&p);
+}
+
 fn find_fixture(name: &str) -> PathBuf {
     for p in fixture_paths() {
         if p.file_name().and_then(|n| n.to_str()) == Some(name) {
