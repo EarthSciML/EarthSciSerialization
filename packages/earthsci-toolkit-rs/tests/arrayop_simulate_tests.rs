@@ -296,6 +296,12 @@ fn arrayop_fixture_22_reduce_min_ode() {
     run_fixture(&p);
 }
 
+#[test]
+fn arrayop_fixture_23_pure_matvec_contraction() {
+    let p = find_fixture("23_arrayop_pure_matvec_contraction.esm");
+    run_fixture(&p);
+}
+
 fn find_fixture(name: &str) -> PathBuf {
     for p in fixture_paths() {
         if p.file_name().and_then(|n| n.to_str()) == Some(name) {

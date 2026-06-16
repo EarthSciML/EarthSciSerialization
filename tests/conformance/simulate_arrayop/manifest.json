@@ -1,0 +1,50 @@
+{
+  "category": "simulate_arrayop",
+  "version": "1.0",
+  "description": "Cross-port numeric conformance fixtures for arrayop contraction (ess-zmm). Executing ports must simulate each fixture and assert that every inline 'tests' assertion matches within the declared tolerance. Non-executing ports explicitly skip with a documented reason. See README.md for the skip contract and adapter notes.",
+  "fixtures": [
+    {
+      "id": "fixtures/arrayop/23_arrayop_pure_matvec_contraction",
+      "path": "fixtures/arrayop/23_arrayop_pure_matvec_contraction.esm",
+      "tags": ["arrayop", "contraction", "einsum", "matvec", "reduce-plus", "reduce-max"],
+      "executing_bindings": ["python", "rust", "julia"],
+      "skip_bindings": {
+        "typescript": "TypeScript binding has no arrayop numeric executor; round-trip only.",
+        "go": "Go binding has no arrayop numeric executor; round-trip only."
+      },
+      "notes": "Julia executes via both the tree-walk path (build_evaluator generalized-einsum unroll, tree_walk.jl:294-370) and the MTK path (EarthSciSerializationMTKExt _build_arrayop_sym). The tree-walk path requires the LHS-arrayop form; the MTK path additionally handles the embedded form. Fixture 23 uses the LHS-arrayop form, which both Julia paths support."
+    },
+    {
+      "id": "fixtures/arrayop/21_reduce_max_min_ode",
+      "path": "fixtures/arrayop/21_reduce_max_min_ode.esm",
+      "tags": ["arrayop", "contraction", "reduce-max", "ode"],
+      "executing_bindings": ["python", "rust", "julia"],
+      "skip_bindings": {
+        "typescript": "TypeScript binding has no arrayop numeric executor.",
+        "go": "Go binding has no arrayop numeric executor."
+      }
+    },
+    {
+      "id": "fixtures/arrayop/22_reduce_min_ode",
+      "path": "fixtures/arrayop/22_reduce_min_ode.esm",
+      "tags": ["arrayop", "contraction", "reduce-min", "ode"],
+      "executing_bindings": ["python", "rust", "julia"],
+      "skip_bindings": {
+        "typescript": "TypeScript binding has no arrayop numeric executor.",
+        "go": "Go binding has no arrayop numeric executor."
+      }
+    },
+    {
+      "id": "fixtures/arrayop/20_arrayop_contraction_embedded",
+      "path": "fixtures/arrayop/20_arrayop_contraction_embedded.esm",
+      "tags": ["arrayop", "contraction", "embedded", "reduce-plus", "reduce-max"],
+      "executing_bindings": ["python", "rust"],
+      "skip_bindings": {
+        "julia": "Julia tree-walk (build_evaluator) rejects arrayop in expression position (E_TREEWALK_UNSUPPORTED_OP). Julia MTK path may handle scalar reduce via _arrayop_scalar_reduce but is not yet validated for the embedded-RHS form; tracked as ess-n0w.",
+        "typescript": "TypeScript binding has no arrayop numeric executor.",
+        "go": "Go binding has no arrayop numeric executor."
+      },
+      "notes": "Exercises the embedded contraction form: arrayop appears as the RHS of a scalar D equation, not as the LHS-arrayop form. This is the form that ess-n0w adds support for in the Julia tree-walk path."
+    }
+  ]
+}
