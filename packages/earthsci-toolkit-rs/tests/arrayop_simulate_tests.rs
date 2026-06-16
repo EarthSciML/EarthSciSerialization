@@ -278,6 +278,12 @@ fn arrayop_fixture_19_einsum_1d_stencil() {
     run_fixture(&p);
 }
 
+#[test]
+fn arrayop_fixture_20_contraction_embedded() {
+    let p = find_fixture("20_arrayop_contraction_embedded.esm");
+    run_fixture(&p);
+}
+
 fn find_fixture(name: &str) -> PathBuf {
     for p in fixture_paths() {
         if p.file_name().and_then(|n| n.to_str()) == Some(name) {

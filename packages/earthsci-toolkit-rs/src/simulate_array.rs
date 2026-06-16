@@ -1402,6 +1402,9 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     // Standalone arrayop (embedded as an expression, not as the top-level
     // of an equation LHS/RHS). Build the output array by iterating
     // ranges, binding loop indices, evaluating the body.
+    //
+    // Supports generalized einsum: indices present in `ranges` but absent
+    // from `output_idx` are contracted (summed/reduced) per `reduce`.
     let idx_names = node.output_idx.clone().unwrap_or_default();
     let ranges_map = node.ranges.clone().unwrap_or_default();
     let body = match &node.expr {
@@ -1415,6 +1418,24 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
             (r[0], r[1])
         })
         .collect();
+
+    // Contracted indices: in ranges_map but not in output_idx.
+    let output_idx_set: std::collections::HashSet<&String> = idx_names.iter().collect();
+    let mut sorted_contract_keys: Vec<&String> = ranges_map
+        .keys()
+        .filter(|k| !output_idx_set.contains(k))
+        .collect();
+    sorted_contract_keys.sort();
+    let contract_names: Vec<String> = sorted_contract_keys.iter().map(|k| (*k).clone()).collect();
+    let contract_ranges: Vec<(i64, i64)> = sorted_contract_keys
+        .iter()
+        .map(|k| {
+            let r = ranges_map[*k];
+            (r[0], r[1])
+        })
+        .collect();
+    let reduce_op = node.reduce.clone().unwrap_or_else(|| "+".to_string());
+
     let shape: Vec<usize> = ranges
         .iter()
         .map(|(lo, hi)| (hi - lo + 1) as usize)
@@ -1424,13 +1445,36 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     let mut buf = vec![0.0f64; total];
     let saved_binds: Vec<(String, Option<i64>)> = idx_names
         .iter()
+        .chain(contract_names.iter())
         .map(|n| (n.clone(), ctx.loop_binds.get(n).copied()))
         .collect();
     for tuple in cartesian_range(&ranges) {
         for (name, val) in idx_names.iter().zip(tuple.iter()) {
             ctx.loop_binds.insert(name.clone(), *val);
         }
-        let v = eval(&body, ctx).as_scalar().unwrap_or(f64::NAN);
+        let v = if contract_names.is_empty() {
+            eval(&body, ctx).as_scalar().unwrap_or(f64::NAN)
+        } else {
+            let mut acc: f64 = match reduce_op.as_str() {
+                "*" => 1.0,
+                "max" => f64::NEG_INFINITY,
+                "min" => f64::INFINITY,
+                _ => 0.0,
+            };
+            for k_tuple in cartesian_range(&contract_ranges) {
+                for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
+                    ctx.loop_binds.insert(kn.clone(), *kv);
+                }
+                let term = eval(&body, ctx).as_scalar().unwrap_or(f64::NAN);
+                acc = match reduce_op.as_str() {
+                    "*" => acc * term,
+                    "max" => f64::max(acc, term),
+                    "min" => f64::min(acc, term),
+                    _ => acc + term,
+                };
+            }
+            acc
+        };
         let flat = multi_to_flat_col_major(&tuple, &shape, &origin);
         buf[flat] = v;
     }
