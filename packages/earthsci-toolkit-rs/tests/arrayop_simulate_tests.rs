@@ -284,6 +284,18 @@ fn arrayop_fixture_20_contraction_embedded() {
     run_fixture(&p);
 }
 
+#[test]
+fn arrayop_fixture_21_reduce_max_ode() {
+    let p = find_fixture("21_reduce_max_min_ode.esm");
+    run_fixture(&p);
+}
+
+#[test]
+fn arrayop_fixture_22_reduce_min_ode() {
+    let p = find_fixture("22_reduce_min_ode.esm");
+    run_fixture(&p);
+}
+
 fn find_fixture(name: &str) -> PathBuf {
     for p in fixture_paths() {
         if p.file_name().and_then(|n| n.to_str()) == Some(name) {
