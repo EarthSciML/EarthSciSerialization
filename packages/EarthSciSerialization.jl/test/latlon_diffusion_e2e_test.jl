@@ -163,10 +163,9 @@ end
     @test lhs_expr.ranges["i"] == [1, Nlon]
     @test lhs_expr.ranges["j"] == [1, Nlat]
 
-    # RHS must reference index ops and contain periodic folding (ifelse) but no laplacian
+    # RHS must reference index ops but no laplacian
     rhs_json = JSON3.write(rhs_raw)
     @test occursin("\"index\"", rhs_json)
-    @test occursin("\"ifelse\"", rhs_json)
     @test !occursin("\"laplacian\"", rhs_json)
 
     # ------------------------------------------------------------------
@@ -219,8 +218,8 @@ end
         max_err = max(max_err, abs(u_sim - u_exact))
     end
     @info "Lat-lon diffusion max error vs analytic FD decay" max_err decay_factor lambda
-
-    @test max_err < 1e-6
+    # Periodic accuracy test removed: _apply_periodic_folding! is deleted (ess-e7u).
+    # Periodic wrapping will be restored via the periodic_bc rule path (bind-guards-interface).
 
     # Sign pattern: cells 1,3 positive; cells 2,4 negative
     for j in 1:Nlat

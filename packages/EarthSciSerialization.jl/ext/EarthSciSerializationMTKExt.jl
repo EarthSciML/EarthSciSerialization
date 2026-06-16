@@ -650,8 +650,7 @@ end
 # handles boundary cells in arrayops like the 2D heat stencil where `u[0,j]`
 # or `u[N+1,j]` reference cells outside the interior domain. The underlying
 # Symbolics.Arr is 1-based and would raise BoundsError without this guard.
-# Periodic BCs fold indices into range before reaching here via
-# _apply_periodic_folding! in discretize.jl.
+# Out-of-bounds periodic reads return 0 (zero-ghost convention).
 function _build_index(expr::OpExpr, var_dict::Dict{String,Any},
                       t_sym, dim_dict::Dict{String,Any})
     arr = _esm_to_symbolic(expr.args[1], var_dict, t_sym, dim_dict)

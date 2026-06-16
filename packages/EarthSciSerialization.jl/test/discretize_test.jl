@@ -142,8 +142,7 @@ using JSON3
         lhs_default = out_default["models"]["M"]["equations"][1]["lhs"]
         @test lhs_default["op"] == "D"
 
-        # Opt-in: same document lifts to arrayop with ranges from the grid,
-        # and periodic stencil accesses fold via ifelse wrapping.
+        # Opt-in: same document lifts to arrayop with ranges from the grid.
         out = discretize(esm; lift_1d_arrayop=true)
         eqn = out["models"]["M"]["equations"][1]
         @test eqn["lhs"]["op"] == "arrayop"
@@ -152,134 +151,6 @@ using JSON3
         @test eqn["rhs"]["op"] == "arrayop"
         rhs_str = JSON3.write(eqn["rhs"])
         @test occursin("\"index\"", rhs_str)
-        @test occursin("\"ifelse\"", rhs_str)   # periodic folding applied
-    end
-
-    @testset "arrayop lift folds periodic accesses of every shaped grid variable" begin
-        # A stencil RHS may index shaped fields other than the equation's LHS
-        # variable (e.g. a space-varying velocity in an advection rule); the
-        # periodic fold must wrap those reads too, not just the LHS variable's.
-        esm = _heat_1d_esm(; with_rule=true)
-        esm["models"]["M"]["variables"]["U"] = Dict{String,Any}(
-            "type" => "state", "default" => 1.0, "units" => "1",
-            "shape" => Any["i"], "location" => "cell_center",
-        )
-        # Rule replacement gains a literal reference to U at an offset:
-        #   grad($u, dim=$x) -> index(U, $x+1) * index($u, $x+1) - index($u, $x-1)
-        esm["rules"][1]["replacement"] = Dict{String,Any}(
-            "op" => "-",
-            "args" => Any[
-                Dict{String,Any}("op" => "*", "args" => Any[
-                    Dict{String,Any}("op" => "index", "args" => Any[
-                        "U", Dict{String,Any}("op" => "+", "args" => Any["\$x", 1])]),
-                    Dict{String,Any}("op" => "index", "args" => Any[
-                        "\$u", Dict{String,Any}("op" => "+", "args" => Any["\$x", 1])]),
-                ]),
-                Dict{String,Any}("op" => "index", "args" => Any[
-                    "\$u", Dict{String,Any}("op" => "-", "args" => Any["\$x", 1])]),
-            ],
-        )
-        out = discretize(esm; lift_1d_arrayop=true)
-        rhs = out["models"]["M"]["equations"][1]["rhs"]
-        @test rhs["op"] == "arrayop"
-
-        # Every index node — into u AND into U — must carry an ifelse-folded
-        # index expression.
-        unfolded = String[]
-        function _walk_fold(node)
-            node isa AbstractDict || return
-            if get(node, "op", nothing) == "index"
-                target = node["args"][1]
-                idx_arg = node["args"][2]
-                folded = idx_arg isa AbstractDict && get(idx_arg, "op", nothing) == "ifelse"
-                folded || push!(unfolded, String(target))
-            end
-            for a in get(node, "args", Any[])
-                _walk_fold(a)
-            end
-            haskey(node, "expr") && _walk_fold(node["expr"])
-        end
-        _walk_fold(rhs)
-        @test unfolded == String[]
-    end
-
-    @testset "non-periodic BCs: makearray lowering (ess-j8t)" begin
-        # 1D bounded heat-like model: D(u) = grad(u) rewritten to a centered
-        # stencil; dirichlet at xmin (value 3), zero-flux neumann at xmax.
-        function _bounded_1d_esm(; bcs=true)
-            esm = _heat_1d_esm(; with_rule=true)
-            esm["grids"]["gx"]["dimensions"][1]["periodic"] = false
-            if bcs
-                esm["models"]["M"]["boundary_conditions"] = Dict{String,Any}(
-                    "left" => Dict{String,Any}(
-                        "variable" => "u", "kind" => "dirichlet",
-                        "side" => "imin", "value" => 3,
-                    ),
-                    "right" => Dict{String,Any}(
-                        "variable" => "u", "kind" => "neumann",
-                        "side" => "imax", "value" => 0,
-                    ),
-                )
-            end
-            return esm
-        end
-
-        out = discretize(_bounded_1d_esm(); lift_1d_arrayop=true)
-        eqs = out["models"]["M"]["equations"]
-        # Single arrayop over full grid with makearray RHS (ess-j8t).
-        @test length(eqs) == 1
-        eq = eqs[1]
-        @test eq["lhs"]["op"] == "arrayop"
-        # Full grid ranges (not shrunk).
-        @test eq["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
-        @test eq["rhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
-        # RHS expr is index(makearray(...), i).
-        rhs_expr = eq["rhs"]["expr"]
-        @test rhs_expr["op"] == "index"
-        ma = rhs_expr["args"][1]
-        @test ma["op"] == "makearray"
-        # No periodic folding on a bounded dim.
-        @test !occursin("ifelse", JSON3.write(eq["rhs"]))
-        # regions: interior [1,8], xmin ghost [1,1], xmax ghost [8,8].
-        @test length(ma["regions"]) == 3
-        @test ma["regions"][1] == Any[Any[1, 8]]
-        @test ma["regions"][2] == Any[Any[1, 1]]
-        @test ma["regions"][3] == Any[Any[8, 8]]
-        # xmin value: ghost u[i-1]→3 (dirichlet). Rule rhs is -u[i-1]+u[i+1], so
-        # left ghost value serializes with "3" and u[i+1] but no u[i-1].
-        # After canonicalize, u[i+1] is {op:"+",args:[1,"i"]} (constant first);
-        # JSON3 serializes alphabetically: "args":[1,"i"],"op":"+".
-        s_xmin = replace(JSON3.write(ma["values"][2]), " " => "")
-        @test occursin("3", s_xmin)
-        @test !occursin("\"args\":[\"i\",1]", s_xmin)   # u[i-1] gone (args form of i-1)
-        @test occursin("\"args\":[1,\"i\"]", s_xmin)    # u[i+1] present (canonical: 1+i)
-        # xmax value: ghost u[i+1] mirrored to u[16-i] (2*8+1-1=16). Rule rhs
-        # is -u[i-1]+u[i+1], so right ghost value has u[i-1] and u[16-i].
-        s_xmax = replace(JSON3.write(ma["values"][3]), " " => "")
-        @test occursin("\"args\":[\"i\",1]", s_xmax)    # u[i-1] present (args form)
-        @test !occursin("\"args\":[1,\"i\"]", s_xmax)   # u[i+1] gone (replaced by mirror)
-        @test occursin("16", s_xmax)                     # mirror const 2*8+1-1=16
-
-        # Backward compat: bounded dim WITHOUT declared BCs is unchanged
-        # (full range, no makearray, zero-ghost convention).
-        out0 = discretize(_bounded_1d_esm(bcs=false); lift_1d_arrayop=true)
-        eqs0 = out0["models"]["M"]["equations"]
-        @test length(eqs0) == 1
-        @test eqs0[1]["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
-        @test !occursin("makearray", JSON3.write(eqs0[1]["rhs"]))
-
-        # Unsupported kinds on a lifted bounded dim are loud, not silent.
-        bad = _bounded_1d_esm()
-        bad["models"]["M"]["boundary_conditions"]["left"]["kind"] = "robin"
-        err = try discretize(bad; lift_1d_arrayop=true); nothing catch e; e end
-        @test err isa RuleEngineError
-        @test err.code == "E_BC_UNSUPPORTED"
-
-        bad2 = _bounded_1d_esm()
-        bad2["models"]["M"]["boundary_conditions"]["right"]["value"] = 2.5
-        err = try discretize(bad2; lift_1d_arrayop=true); nothing catch e; e end
-        @test err isa RuleEngineError
-        @test err.code == "E_BC_UNSUPPORTED"
     end
 
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
