@@ -1,13 +1,12 @@
 # Scheme parsing + expansion per discretization RFC §7 / §7.2 / §7.2.1.
 #
-# Type definitions (`Selector`, `CartesianSelector`, `ReductionSelector`,
-# `IndirectSelector`, `StencilEntry`, `Scheme`) live in `scheme_types.jl`
-# (loaded before `rule_engine.jl`). This file holds the parser for
-# `discretizations.<name>` blocks plus the `materialize` / `expand_scheme`
-# runtime invoked by the rule engine when a rule's replacement is `use: <scheme>`.
+# Type definitions (`Selector`, `CartesianSelector`, `StencilEntry`, `Scheme`)
+# live in `scheme_types.jl` (loaded before `rule_engine.jl`). This file holds
+# the parser for `discretizations.<name>` blocks plus the `materialize` /
+# `expand_scheme` runtime invoked by the rule engine when a rule's replacement
+# is `use: <scheme>`.
 #
-# Supports: cartesian (esm-j1u), unstructured reduction + indirect (ess-t0z).
-# Cubed-sphere `panel` selector lands in a follow-up bead.
+# Supports: cartesian (esm-j1u). Cubed-sphere `panel` selector lands in a follow-up bead.
 
 # ============================================================================
 # Parsing — discretizations.<name>
@@ -151,39 +150,11 @@ function _parse_selector(scheme_name::String, grid_family::String, raw)::Selecto
         offset_raw isa Integer || throw(RuleEngineError("E_SCHEME_PARSE",
             "scheme $scheme_name: cartesian selector `offset` must be integer"))
         return CartesianSelector(String(axis_raw), Int(offset_raw))
-    elseif kind == "reduction"
-        grid_family == "unstructured" || throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: reduction selector requires grid_family=unstructured"))
-        table_raw = _getkey(raw, "table"; default=nothing)
-        table_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: reduction selector missing required field `table`"))
-        count_expr_raw = _getkey(raw, "count_expr"; default=nothing)
-        count_expr_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: reduction selector missing required field `count_expr`"))
-        k_bound_raw = _getkey(raw, "k_bound"; default=nothing)
-        k_bound_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: reduction selector missing required field `k_bound`"))
-        combine_raw = _getkey(raw, "combine"; default="+")
-        combine_str = String(combine_raw)
-        combine_str in ("+", "*", "min", "max") || throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: reduction selector combine `$combine_str` must be one of +, *, min, max"))
-        return ReductionSelector(String(table_raw), _parse_expr(count_expr_raw),
-                                 String(k_bound_raw), combine_str)
-    elseif kind == "indirect"
-        grid_family == "unstructured" || throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: indirect selector requires grid_family=unstructured"))
-        table_raw = _getkey(raw, "table"; default=nothing)
-        table_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: indirect selector missing required field `table`"))
-        index_expr_raw = _getkey(raw, "index_expr"; default=nothing)
-        index_expr_raw === nothing && throw(RuleEngineError("E_SCHEME_PARSE",
-            "scheme $scheme_name: indirect selector missing required field `index_expr`"))
-        return IndirectSelector(String(table_raw), _parse_expr(index_expr_raw))
     end
     # cubed_sphere panel selector: deferred to follow-up bead.
     throw(RuleEngineError("E_SCHEME_PARSE",
         "scheme $scheme_name: selector kind `$kind` not yet supported " *
-        "(supported: cartesian, reduction, indirect; cubed_sphere panel lands later)"))
+        "(supported: cartesian; cubed_sphere panel selector is not yet implemented)"))
 end
 
 """
@@ -494,13 +465,6 @@ function expand_scheme(scheme::Scheme,
                        ctx::RuleContext)::Expr
     operand_var = _scheme_operand(scheme, bindings)
     grid_name = _operand_grid(operand_var, ctx)
-
-    # RFC §7.1.1: dispatch on grid_family — unstructured grids use a scalar
-    # target letter (c/e/v) instead of a cartesian index vector.
-    if scheme.grid_family == "unstructured"
-        return _expand_scheme_unstructured(scheme, bindings, ctx, operand_var)
-    end
-
     spatial_dims = _grid_spatial_dims(grid_name, ctx)
     target = _cartesian_target(spatial_dims)
 
@@ -649,141 +613,6 @@ function _resolve_axis_pvar(scheme::Scheme, axis::String,
         return v.name
     end
     return axis
-end
-
-# ============================================================================
-# Unstructured-grid scheme expansion (RFC §7.1.1 / §7.2 / §7.3)
-# ============================================================================
-
-# Map emits_location → single target letter for unstructured grids (RFC §7.1.1).
-const _UNSTRUCT_LOC_TO_LETTER = Dict{String,String}(
-    "cell_center"  => "c",
-    "cell"         => "c",
-    "edge_midpoint"=> "e",
-    "edge_normal"  => "e",
-    "edge"         => "e",
-    "vertex"       => "v",
-)
-
-function _unstructured_target_letter(scheme::Scheme)::String
-    loc = scheme.emits_location
-    loc === nothing && throw(RuleEngineError("E_SCHEME_MATERIALIZE",
-        "scheme $(scheme.name): unstructured scheme must declare `emits_location`"))
-    letter = get(_UNSTRUCT_LOC_TO_LETTER, loc, nothing)
-    letter !== nothing && return letter
-    throw(RuleEngineError("E_SCHEME_MATERIALIZE",
-        "scheme $(scheme.name): unknown emits_location `$loc` for unstructured grid " *
-        "(expected: cell_center, cell, edge_midpoint, edge_normal, edge, vertex)"))
-end
-
-# Entry point for unstructured grid_family — called from expand_scheme.
-function _expand_scheme_unstructured(scheme::Scheme,
-                                      bindings::Dict{String,Expr},
-                                      ctx::RuleContext,
-                                      operand_var::Expr)::Expr
-    target_letter = _unstructured_target_letter(scheme)
-    target = VarExpr(target_letter)
-
-    # Augment bindings with $target → target letter (RFC §7.1.1 chooser rule).
-    aug_bindings = Dict{String,Expr}(bindings)
-    aug_bindings[scheme.target_binding] = target
-
-    terms = Expr[_expand_unstructured_stencil_entry(scheme, e, operand_var,
-                                                     target, aug_bindings)
-                 for e in scheme.stencil]
-
-    if length(terms) == 1
-        return terms[1]
-    end
-    return OpExpr(scheme.combine, terms)
-end
-
-function _expand_unstructured_stencil_entry(scheme::Scheme, entry::StencilEntry,
-                                             operand_var::Expr, target::VarExpr,
-                                             bindings::Dict{String,Expr})::Expr
-    sel = entry.selector
-    if sel isa ReductionSelector
-        return _expand_reduction_entry(scheme, sel, entry.coeff, operand_var,
-                                       target, bindings)
-    elseif sel isa IndirectSelector
-        return _expand_indirect_entry(scheme, sel, entry.coeff, operand_var,
-                                      target, bindings)
-    else
-        throw(RuleEngineError("E_SCHEME_MATERIALIZE",
-            "scheme $(scheme.name): selector kind $(typeof(sel)) is not supported " *
-            "for unstructured grid_family (expected ReductionSelector or IndirectSelector)"))
-    end
-end
-
-# Collect all VarExpr names reachable from `e` into `acc`.
-function _walk_expr_vars!(acc::Set{String}, e::VarExpr)
-    push!(acc, e.name)
-end
-function _walk_expr_vars!(acc::Set{String}, ::Union{NumExpr,IntExpr})
-end
-function _walk_expr_vars!(acc::Set{String}, e::OpExpr)
-    for arg in e.args
-        _walk_expr_vars!(acc, arg)
-    end
-    e.expr_body !== nothing && _walk_expr_vars!(acc, e.expr_body)
-    e.lower   !== nothing && _walk_expr_vars!(acc, e.lower)
-    e.upper   !== nothing && _walk_expr_vars!(acc, e.upper)
-    if e.ranges !== nothing
-        for v in values(e.ranges)
-            v isa AbstractVector || continue
-            for elem in v
-                elem isa Expr && _walk_expr_vars!(acc, elem)
-            end
-        end
-    end
-end
-
-# Materialize a `reduction` selector per RFC §7.2 / §7.3.
-# Returns: arrayop(output_idx=[], expr=coeff*operand_ref, ranges={k:[0,count-1]}, reduce=combine)
-function _expand_reduction_entry(scheme::Scheme, sel::ReductionSelector, coeff::Expr,
-                                  operand_var::Expr, target::VarExpr,
-                                  bindings::Dict{String,Expr})::Expr
-    k_var = VarExpr(sel.k_bound)
-
-    # Substitute $target in count_expr and coeff.
-    count_expr  = apply_bindings(sel.count_expr, bindings)
-    expanded_coeff = apply_bindings(coeff, bindings)
-
-    # range stop = count_expr - 1  (RFC §7.3 canonical form)
-    range_stop = OpExpr("-", Expr[count_expr, IntExpr(1)])
-
-    # operand reference: index(operand, table[target, k])
-    table_ref   = OpExpr("index", Expr[VarExpr(sel.table), target, k_var])
-    operand_ref = OpExpr("index", Expr[operand_var, table_ref])
-
-    body = OpExpr("*", Expr[expanded_coeff, operand_ref])
-
-    ranges = Dict{String,Any}(sel.k_bound => Any[IntExpr(0), range_stop])
-
-    # args: array names referenced in body + range_stop, excluding index vars
-    idx_var_names = Set{String}([sel.k_bound, target.name])
-    all_vars = Set{String}()
-    _walk_expr_vars!(all_vars, body)
-    _walk_expr_vars!(all_vars, range_stop)
-    setdiff!(all_vars, idx_var_names)
-    args = Expr[VarExpr(n) for n in sort!(collect(all_vars))]
-
-    return OpExpr("arrayop", args;
-                  output_idx = Any[],
-                  expr_body  = body,
-                  ranges     = ranges,
-                  reduce     = sel.combine)
-end
-
-# Materialize an `indirect` selector per RFC §7.2.
-# Returns: coeff * index(operand, index_expr_after_substitution)
-function _expand_indirect_entry(scheme::Scheme, sel::IndirectSelector, coeff::Expr,
-                                 operand_var::Expr, target::VarExpr,
-                                 bindings::Dict{String,Expr})::Expr
-    expanded_coeff = apply_bindings(coeff, bindings)
-    index_expr     = apply_bindings(sel.index_expr, bindings)
-    operand_ref    = OpExpr("index", Expr[operand_var, index_expr])
-    return OpExpr("*", Expr[expanded_coeff, operand_ref])
 end
 
 # ============================================================================

@@ -133,7 +133,7 @@ export
     parse_rule, parse_rules, check_unrewritten_pde_ops,
     # Scheme expansion (RFC §7 / §7.9, esm-j1u / ess-494)
     AbstractScheme, Scheme, MultiOutputStencilScheme,
-    StencilEntry, Selector, CartesianSelector, ReductionSelector, IndirectSelector,
+    StencilEntry, Selector, CartesianSelector,
     parse_scheme, parse_schemes, parse_multi_output_stencil_scheme,
     materialize, expand_scheme,
     # Discretization pipeline (RFC §11, gt-gbs2)

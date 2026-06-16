@@ -1040,8 +1040,8 @@ end
 
 # Expand a ranges entry to the concrete list of integer values.
 # `r` is [lo, hi] or [lo, step, hi] (elements may be Int or Any, but must all
-# be concrete integers — expression-valued bounds (from reduction selectors) are
-# not supported by the tree-walk evaluator).
+# be concrete integers — expression-valued bounds are not supported by the
+# tree-walk evaluator).
 function _expand_int_range(r::AbstractVector)
     all(x -> x isa Integer, r) || throw(TreeWalkError("E_TREEWALK_DYNAMIC_RANGE",
         "expression-valued range bounds are not supported in the tree-walk " *
