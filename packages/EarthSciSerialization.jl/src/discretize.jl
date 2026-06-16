@@ -561,15 +561,23 @@ function _discretize_bc!(path::String, bc::Dict{String,Any},
     # Step 1: try matching a `bc` rule pattern (§9.2 — synthetic wrapper).
     # Rules MAY rewrite the BC into an algebraic equation or other form; if
     # no rule matches, we fall through and treat `value` as the BC payload.
+    #
+    # Encoding: kind → fn field (parsed by parse_expression as OpExpr.fn),
+    # side → dim field (matched by _match_sibling_name), coupled_variable →
+    # second arg so interface rules can bind $coupled in the pattern.
     rewritten_via_bc_rule = false
     if variable !== nothing && kind !== nothing && !isempty(rules)
         wrapper = Dict{String,Any}(
-            "op" => "bc",
+            "op"  => "bc",
             "args" => Any[variable],
-            "kind" => kind,
+            "fn"  => kind,     # kind → fn field for rule pattern matching
         )
         if side !== nothing
-            wrapper["side"] = side
+            wrapper["dim"] = side      # side → dim field for _match_sibling_name
+        end
+        coupled = _string_or_nothing_any(get(bc, "coupled_variable", nothing))
+        if coupled !== nothing
+            push!(wrapper["args"], coupled)   # coupled_var as second arg for interface rules
         end
         if value_raw !== nothing
             push!(wrapper["args"], value_raw)

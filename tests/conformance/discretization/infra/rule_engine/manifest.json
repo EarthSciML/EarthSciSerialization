@@ -19,7 +19,10 @@
     {"id": "region_mask_field_fall_through", "path": "region_mask_field_fall_through.json", "tags": ["region", "mask_field", "fall_through"]},
     {"id": "where_expr_predicate", "path": "where_expr_predicate.json", "tags": ["where_expr", "per_point"]},
     {"id": "boundary_policy_per_axis", "path": "boundary_policy_per_axis.json", "tags": ["boundary_policy", "ghost_width", "per_axis", "panel_dispatch"]},
-    {"id": "ghost_width_uniform", "path": "ghost_width_uniform.json", "tags": ["boundary_policy", "ghost_width", "reflecting", "uniform"]}
+    {"id": "ghost_width_uniform", "path": "ghost_width_uniform.json", "tags": ["boundary_policy", "ghost_width", "reflecting", "uniform"]},
+    {"id": "guard_bind_side_axis", "path": "guard_bind_side_axis.json", "tags": ["guard", "bind_side_axis"]},
+    {"id": "guard_bind_side_spacing", "path": "guard_bind_side_spacing.json", "tags": ["guard", "bind_side_spacing"]},
+    {"id": "guard_bind_side_dim_size", "path": "guard_bind_side_dim_size.json", "tags": ["guard", "bind_side_dim_size"]}
   ],
   "bindings_required": ["julia", "rust"],
   "bindings_optional": ["python", "go", "typescript"],

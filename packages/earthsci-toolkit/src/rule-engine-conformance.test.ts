@@ -82,11 +82,20 @@ function buildContext(fixture: Record<string, unknown>): RuleContext {
           }
         }
       }
+      let dimSizes: Record<string, number> | undefined
+      if (typeof meta.dim_sizes === 'object' && meta.dim_sizes !== null) {
+        dimSizes = {}
+        for (const [dk, dv] of Object.entries(meta.dim_sizes as Record<string, unknown>)) {
+          const n = asInt(dv)
+          if (n !== undefined) dimSizes[dk] = n
+        }
+      }
       ctx.grids[k] = {
         spatial_dims: asStringArray(meta.spatial_dims),
         periodic_dims: asStringArray(meta.periodic_dims),
         nonuniform_dims: asStringArray(meta.nonuniform_dims),
         dim_bounds: dimBounds,
+        dim_sizes: dimSizes,
         panel_connectivity: panelConnectivity,
       }
     }

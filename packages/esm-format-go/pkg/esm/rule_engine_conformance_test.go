@@ -157,6 +157,16 @@ func buildFixtureContext(raw json.RawMessage) (RuleContext, error) {
 				meta.DimBounds[dim] = [2]int64{lo, hi}
 			}
 		}
+		if ds, ok := v["dim_sizes"].(map[string]interface{}); ok {
+			meta.DimSizes = map[string]int64{}
+			for dim, raw := range ds {
+				n, ok := jsonToInt64(raw)
+				if !ok {
+					continue
+				}
+				meta.DimSizes[dim] = n
+			}
+		}
 		ctx.Grids[k] = meta
 	}
 	for k, v := range obj.Variables {

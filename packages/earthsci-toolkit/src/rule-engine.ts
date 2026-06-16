@@ -19,7 +19,7 @@
 
 import { canonicalJson } from './canonicalize.js'
 import type { Expr } from './expression.js'
-import { isIntLit, isNumericLiteral, numericValue, type NumericLiteral } from './numeric-literal.js'
+import { intLit, isIntLit, isNumericLiteral, numericValue, type NumericLiteral } from './numeric-literal.js'
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -227,6 +227,11 @@ export interface GridMeta {
    */
   dim_bounds?: Record<string, [number, number]>
   /**
+   * Optional per-dim cell counts, consumed by bind_side_spacing and
+   * bind_side_dim_size guards.
+   */
+  dim_sizes?: Record<string, number>
+  /**
    * Cubed-sphere panel connectivity table. Presence signals that this grid
    * is a cubed-sphere and unlocks region.panel_boundary scope evaluation.
    */
@@ -336,6 +341,12 @@ function matchOp(pat: ExprNode, expr: ExprNode, b: Bindings): Bindings | null {
   let cur: Bindings | null = matchSiblingName(pat.wrt, expr.wrt, b)
   if (cur === null) return null
   cur = matchSiblingName(pat.dim, expr.dim, cur)
+  if (cur === null) return null
+  cur = matchSiblingName(
+    (pat as Record<string, unknown>).fn as string | undefined,
+    (expr as Record<string, unknown>).fn as string | undefined,
+    cur,
+  )
   if (cur === null) return null
   for (let i = 0; i < pat.args.length; i++) {
     cur = matchInner(pat.args[i]!, expr.args[i]!, cur)
@@ -465,6 +476,12 @@ export function checkGuard(g: Guard, b: Bindings, ctx: RuleContext): Bindings | 
       return guardVarLocationIs(g, b, ctx)
     case 'var_shape_rank':
       return guardVarShapeRank(g, b, ctx)
+    case 'bind_side_axis':
+      return guardBindSideAxis(g, b)
+    case 'bind_side_spacing':
+      return guardBindSideSpacing(g, b, ctx)
+    case 'bind_side_dim_size':
+      return guardBindSideDimSize(g, b, ctx)
     default:
       throw new RuleEngineError(
         E_UNKNOWN_GUARD,
@@ -569,6 +586,83 @@ function guardVarShapeRank(g: Guard, b: Bindings, ctx: RuleContext): Bindings | 
   const meta = ctx.variables[varName]
   if (!meta || !meta.shape) return null
   return meta.shape.length === rank ? b : null
+}
+
+const SIDE_TO_AXIS: Record<string, string> = {
+  xmin: 'x', xmax: 'x', west: 'x', east: 'x',
+  ymin: 'y', ymax: 'y', south: 'y', north: 'y',
+  zmin: 'z', zmax: 'z', bottom: 'z', top: 'z',
+}
+
+const SIDE_TO_AXIS_IDX: Record<string, number> = {
+  xmin: 1, xmax: 1, west: 1, east: 1,
+  ymin: 2, ymax: 2, south: 2, north: 2,
+  zmin: 3, zmax: 3, bottom: 3, top: 3,
+}
+
+function resolveSideOrLiteral(g: Guard, b: Bindings, param: string): string | undefined {
+  const raw = paramStr(g, param)
+  if (raw === undefined) return undefined
+  if (isPvarString(raw)) return resolveName(b, raw)
+  return raw
+}
+
+function guardBindSideAxis(g: Guard, b: Bindings): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const sideName = resolveSideOrLiteral(g, b, 'side')
+  if (sideName === undefined) return null
+  const axis = SIDE_TO_AXIS[sideName]
+  if (axis === undefined) return null
+  return bindPvarName(b, pvar, axis)
+}
+
+function guardBindSideSpacing(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const sideName = resolveSideOrLiteral(g, b, 'side')
+  if (sideName === undefined) return null
+  const gridRaw = paramStr(g, 'grid')
+  if (gridRaw === undefined) return null
+  const gridName = isPvarString(gridRaw) ? resolveName(b, gridRaw) : gridRaw
+  if (gridName === undefined) return null
+  const gridMeta = ctx.grids[gridName]
+  if (!gridMeta) return null
+  const axisIdx = SIDE_TO_AXIS_IDX[sideName]
+  if (axisIdx === undefined) return null
+  const spatialDims = gridMeta.spatial_dims ?? []
+  if (axisIdx > spatialDims.length) return null
+  const dimName = spatialDims[axisIdx - 1]!
+  const dimSizes = gridMeta.dim_sizes ?? {}
+  const N = dimSizes[dimName]
+  if (N === undefined) return null
+  const nb = new Map(b)
+  nb.set(pvar, 1.0 / N)
+  return nb
+}
+
+function guardBindSideDimSize(g: Guard, b: Bindings, ctx: RuleContext): Bindings | null {
+  const pvar = paramStr(g, 'pvar')
+  if (pvar === undefined) return null
+  const sideName = resolveSideOrLiteral(g, b, 'side')
+  if (sideName === undefined) return null
+  const gridRaw = paramStr(g, 'grid')
+  if (gridRaw === undefined) return null
+  const gridName = isPvarString(gridRaw) ? resolveName(b, gridRaw) : gridRaw
+  if (gridName === undefined) return null
+  const gridMeta = ctx.grids[gridName]
+  if (!gridMeta) return null
+  const axisIdx = SIDE_TO_AXIS_IDX[sideName]
+  if (axisIdx === undefined) return null
+  const spatialDims = gridMeta.spatial_dims ?? []
+  if (axisIdx > spatialDims.length) return null
+  const dimName = spatialDims[axisIdx - 1]!
+  const dimSizes = gridMeta.dim_sizes ?? {}
+  const N = dimSizes[dimName]
+  if (N === undefined) return null
+  const nb = new Map(b)
+  nb.set(pvar, intLit(Math.round(N)))
+  return nb
 }
 
 // ---------------------------------------------------------------------------

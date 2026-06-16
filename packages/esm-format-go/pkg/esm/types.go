@@ -18,6 +18,7 @@ type ExprNode struct {
 	Args []interface{} `json:"args"`
 	Wrt   *string      `json:"wrt,omitempty"`   // for derivatives
 	Dim   *string      `json:"dim,omitempty"`   // for grad
+	Fn    *string      `json:"fn,omitempty"`    // for bc wrapper kind encoding
 	Var   *string      `json:"var,omitempty"`   // integration variable name (for integral)
 	Lower interface{}  `json:"lower,omitempty"` // lower integration bound (for integral)
 	Upper interface{}  `json:"upper,omitempty"` // upper integration bound (for integral)

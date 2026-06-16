@@ -67,6 +67,7 @@ fn match_op(
     }
     let b = match_sibling_name(pat.wrt.as_deref(), expr.wrt.as_deref(), b)?;
     let b = match_sibling_name(pat.dim.as_deref(), expr.dim.as_deref(), b)?;
+    let b = match_sibling_name(pat.broadcast_fn.as_deref(), expr.broadcast_fn.as_deref(), b)?;
     let mut cur = b;
     for (pa, ea) in pat.args.iter().zip(expr.args.iter()) {
         cur = match_inner(pa, ea, cur)?;
@@ -201,6 +202,9 @@ pub fn check_guard(
         "dim_is_nonuniform" => Ok(guard_dim_is_nonuniform(g, b, ctx)),
         "var_location_is" => Ok(guard_var_location_is(g, b, ctx)),
         "var_shape_rank" => Ok(guard_var_shape_rank(g, b, ctx)),
+        "bind_side_axis" => Ok(guard_bind_side_axis(g, b)),
+        "bind_side_spacing" => Ok(guard_bind_side_spacing(g, b, ctx)),
+        "bind_side_dim_size" => Ok(guard_bind_side_dim_size(g, b, ctx)),
         other => Err(RuleEngineError::new(
             "E_UNKNOWN_GUARD",
             format!("unknown guard: {other} (§5.2.4 closed set)"),
@@ -354,6 +358,87 @@ fn guard_var_shape_rank(
     } else {
         None
     }
+}
+
+fn side_to_axis(side: &str) -> Option<&'static str> {
+    match side {
+        "xmin" | "xmax" | "west" | "east" => Some("x"),
+        "ymin" | "ymax" | "south" | "north" => Some("y"),
+        "zmin" | "zmax" | "bottom" | "top" => Some("z"),
+        _ => None,
+    }
+}
+
+fn side_to_axis_idx(side: &str) -> Option<usize> {
+    match side {
+        "xmin" | "xmax" | "west" | "east" => Some(0),
+        "ymin" | "ymax" | "south" | "north" => Some(1),
+        "zmin" | "zmax" | "bottom" | "top" => Some(2),
+        _ => None,
+    }
+}
+
+fn resolve_side_or_literal(g: &Guard, b: &HashMap<String, Expr>, field: &str) -> Option<String> {
+    let raw = param_str(g, field)?;
+    if is_pvar_string(raw) {
+        resolve_name(b, raw)
+    } else {
+        Some(raw.to_string())
+    }
+}
+
+fn guard_bind_side_axis(
+    g: &Guard,
+    b: &HashMap<String, Expr>,
+) -> Option<HashMap<String, Expr>> {
+    let pvar = param_str(g, "pvar")?;
+    let side_name = resolve_side_or_literal(g, b, "side")?;
+    let axis = side_to_axis(&side_name)?;
+    Some(bind_pvar_name(b, pvar, axis))
+}
+
+fn guard_bind_side_spacing(
+    g: &Guard,
+    b: &HashMap<String, Expr>,
+    ctx: &RuleContext,
+) -> Option<HashMap<String, Expr>> {
+    let pvar = param_str(g, "pvar")?;
+    let side_name = resolve_side_or_literal(g, b, "side")?;
+    let grid_raw = param_str(g, "grid")?;
+    let grid_name = if is_pvar_string(grid_raw) {
+        resolve_name(b, grid_raw)?
+    } else {
+        grid_raw.to_string()
+    };
+    let meta = ctx.grids.get(&grid_name)?;
+    let axis_idx = side_to_axis_idx(&side_name)?;
+    let dim_name = meta.spatial_dims.get(axis_idx)?;
+    let n = *meta.dim_sizes.get(dim_name)? as f64;
+    let mut nb = b.clone();
+    nb.insert(pvar.to_string(), Expr::Number(1.0 / n));
+    Some(nb)
+}
+
+fn guard_bind_side_dim_size(
+    g: &Guard,
+    b: &HashMap<String, Expr>,
+    ctx: &RuleContext,
+) -> Option<HashMap<String, Expr>> {
+    let pvar = param_str(g, "pvar")?;
+    let side_name = resolve_side_or_literal(g, b, "side")?;
+    let grid_raw = param_str(g, "grid")?;
+    let grid_name = if is_pvar_string(grid_raw) {
+        resolve_name(b, grid_raw)?
+    } else {
+        grid_raw.to_string()
+    };
+    let meta = ctx.grids.get(&grid_name)?;
+    let axis_idx = side_to_axis_idx(&side_name)?;
+    let dim_name = meta.spatial_dims.get(axis_idx)?;
+    let n = *meta.dim_sizes.get(dim_name)?;
+    let mut nb = b.clone();
+    nb.insert(pvar.to_string(), Expr::Integer(n));
+    Some(nb)
 }
 
 // ============================================================================

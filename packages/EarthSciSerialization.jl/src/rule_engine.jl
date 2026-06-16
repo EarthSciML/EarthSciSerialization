@@ -327,6 +327,8 @@ function _match(pat::Expr, expr::Expr, b::Dict{String,Expr})
         b === nothing && return nothing
         b = _match_sibling_name(pat.dim, expr.dim, b)
         b === nothing && return nothing
+        b = _match_sibling_name(pat.fn, expr.fn, b)
+        b === nothing && return nothing
         for (pa, ea) in zip(pat.args, expr.args)
             b = _match(pa, ea, b)
             b === nothing && return nothing
@@ -644,6 +646,12 @@ function check_guard(g::Guard, b::Dict{String,Expr}, ctx::RuleContext)
         return _guard_var_location_is(g, b, ctx)
     elseif g.name == "var_shape_rank"
         return _guard_var_shape_rank(g, b, ctx)
+    elseif g.name == "bind_side_axis"
+        return _guard_bind_side_axis(g, b, ctx)
+    elseif g.name == "bind_side_spacing"
+        return _guard_bind_side_spacing(g, b, ctx)
+    elseif g.name == "bind_side_dim_size"
+        return _guard_bind_side_dim_size(g, b, ctx)
     end
     throw(RuleEngineError("E_UNKNOWN_GUARD",
         "unknown guard: $(g.name) (§5.2.4 closed set)"))
@@ -757,6 +765,84 @@ function _guard_var_shape_rank(g, b, ctx)
     shape = get(meta, "shape", nothing)
     shape === nothing && return nothing
     return (length(shape) == want) ? b : nothing
+end
+
+# Maps BC side names to canonical axis labels ("x", "y", "z").
+const _SIDE_TO_AXIS = Dict{String,String}(
+    "xmin" => "x", "xmax" => "x", "west" => "x", "east" => "x",
+    "ymin" => "y", "ymax" => "y", "south" => "y", "north" => "y",
+    "zmin" => "z", "zmax" => "z", "bottom" => "z", "top" => "z",
+)
+
+# Maps BC side names to the 1-based index into the grid's spatial_dims list.
+const _SIDE_TO_AXIS_IDX = Dict{String,Int}(
+    "xmin" => 1, "xmax" => 1, "west" => 1, "east" => 1,
+    "ymin" => 2, "ymax" => 2, "south" => 2, "north" => 2,
+    "zmin" => 3, "zmax" => 3, "bottom" => 3, "top" => 3,
+)
+
+# Resolve a guard's side param which may be a pvar or literal string.
+function _resolve_side_or_literal(g, b, param::String)::Union{String,Nothing}
+    val = get(g.params, param, nothing)
+    val === nothing && return nothing
+    raw = String(val)
+    _is_pvar_string(raw) ? _resolve_name(b, raw) : raw
+end
+
+function _guard_bind_side_axis(g, b, ctx)
+    pvar      = String(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    side_name === nothing && return nothing
+    axis = get(_SIDE_TO_AXIS, side_name, nothing)
+    axis === nothing && return nothing
+    return _bind_pvar_name(b, pvar, axis)
+end
+
+function _guard_bind_side_spacing(g, b, ctx)
+    pvar      = String(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    side_name === nothing && return nothing
+    grid_raw  = String(g.params["grid"])
+    grid_name = _is_pvar_string(grid_raw) ? _resolve_name(b, grid_raw) : grid_raw
+    grid_name === nothing && return nothing
+    grid_meta = get(ctx.grids, grid_name, nothing)
+    grid_meta === nothing && return nothing
+    axis_idx  = get(_SIDE_TO_AXIS_IDX, side_name, nothing)
+    axis_idx  === nothing && return nothing
+    spatial   = get(grid_meta, "spatial_dims", String[])
+    axis_idx > length(spatial) && return nothing
+    dim_name  = spatial[axis_idx]
+    dim_sizes = get(grid_meta, "dim_sizes", nothing)
+    dim_sizes === nothing && return nothing
+    N_val     = get(dim_sizes, dim_name, nothing)
+    N_val === nothing && return nothing
+    N         = Int(N_val)
+    nb        = copy(b)
+    nb[pvar]  = NumExpr(1.0 / N)
+    return nb
+end
+
+function _guard_bind_side_dim_size(g, b, ctx)
+    pvar      = String(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    side_name === nothing && return nothing
+    grid_raw  = String(g.params["grid"])
+    grid_name = _is_pvar_string(grid_raw) ? _resolve_name(b, grid_raw) : grid_raw
+    grid_name === nothing && return nothing
+    grid_meta = get(ctx.grids, grid_name, nothing)
+    grid_meta === nothing && return nothing
+    axis_idx  = get(_SIDE_TO_AXIS_IDX, side_name, nothing)
+    axis_idx  === nothing && return nothing
+    spatial   = get(grid_meta, "spatial_dims", String[])
+    axis_idx > length(spatial) && return nothing
+    dim_name  = spatial[axis_idx]
+    dim_sizes = get(grid_meta, "dim_sizes", nothing)
+    dim_sizes === nothing && return nothing
+    N_val     = get(dim_sizes, dim_name, nothing)
+    N_val === nothing && return nothing
+    nb        = copy(b)
+    nb[pvar]  = IntExpr(Int(N_val))
+    return nb
 end
 
 # ============================================================================

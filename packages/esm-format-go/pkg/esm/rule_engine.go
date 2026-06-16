@@ -158,6 +158,9 @@ type GridMeta struct {
 	// scope evaluation (RFC §5.2.7). Absence is equivalent to "scope
 	// disabled" (conservative fall-through).
 	DimBounds map[string][2]int64
+	// DimSizes holds the cell count for each named spatial dimension.
+	// Consumed by bind_side_spacing and bind_side_dim_size guards.
+	DimSizes map[string]int64
 	// HasPanelConnectivity is the runtime cubed_sphere marker (RFC §6.4):
 	// true iff the grid carries a panel_connectivity table. Consumed by
 	// region.panel_boundary scope evaluation — applying that scope to a
@@ -288,6 +291,10 @@ func matchOp(pat, expr ExprNode, b map[string]Expression) (map[string]Expression
 	if err != nil || !ok {
 		return nil, ok, err
 	}
+	b, ok, err = matchSiblingName(pat.Fn, expr.Fn, b)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
 	for i := range pat.Args {
 		b, ok, err = matchInner(pat.Args[i], expr.Args[i], b)
 		if err != nil || !ok {
@@ -397,11 +404,16 @@ func applyBindingsNode(node ExprNode, b map[string]Expression) (Expression, erro
 	if err != nil {
 		return nil, err
 	}
+	newFn, err := applyNameField(node.Fn, b)
+	if err != nil {
+		return nil, err
+	}
 	out := ExprNode{
 		Op:    node.Op,
 		Args:  newArgs,
 		Wrt:   newWrt,
 		Dim:   newDim,
+		Fn:    newFn,
 		Name:  node.Name,
 		Value: node.Value,
 	}
@@ -474,6 +486,15 @@ func CheckGuard(g Guard, b map[string]Expression, ctx RuleContext) (map[string]E
 	case "var_shape_rank":
 		nb, ok := guardVarShapeRank(g, b, ctx)
 		return nb, ok, nil
+	case "bind_side_axis":
+		nb, ok := guardBindSideAxis(g, b)
+		return nb, ok, nil
+	case "bind_side_spacing":
+		nb, ok := guardBindSideSpacing(g, b, ctx)
+		return nb, ok, nil
+	case "bind_side_dim_size":
+		nb, ok := guardBindSideDimSize(g, b, ctx)
+		return nb, ok, nil
 	}
 	return nil, false, newRuleErr("E_UNKNOWN_GUARD",
 		fmt.Sprintf("unknown guard: %s (§5.2.4 closed set)", g.Name))
@@ -526,6 +547,14 @@ func bindPvarName(b map[string]Expression, pvar, name string) map[string]Express
 		nb[k] = v
 	}
 	nb[pvar] = name
+	return nb
+}
+
+func copyBindings(b map[string]Expression) map[string]Expression {
+	nb := make(map[string]Expression, len(b)+1)
+	for k, v := range b {
+		nb[k] = v
+	}
 	return nb
 }
 
@@ -635,6 +664,125 @@ func guardVarShapeRank(g Guard, b map[string]Expression, ctx RuleContext) (map[s
 		return b, true
 	}
 	return nil, false
+}
+
+var sideToAxis = map[string]string{
+	"xmin": "x", "xmax": "x", "west": "x", "east": "x",
+	"ymin": "y", "ymax": "y", "south": "y", "north": "y",
+	"zmin": "z", "zmax": "z", "bottom": "z", "top": "z",
+}
+
+var sideToAxisIdx = map[string]int{
+	"xmin": 0, "xmax": 0, "west": 0, "east": 0,
+	"ymin": 1, "ymax": 1, "south": 1, "north": 1,
+	"zmin": 2, "zmax": 2, "bottom": 2, "top": 2,
+}
+
+func resolveSideOrLiteral(g Guard, b map[string]Expression, field string) (string, bool) {
+	raw, ok := paramStr(g, field)
+	if !ok {
+		return "", false
+	}
+	if isPvarString(raw) {
+		return resolveName(b, raw)
+	}
+	return raw, true
+}
+
+func guardBindSideAxis(g Guard, b map[string]Expression) (map[string]Expression, bool) {
+	pvar, ok := paramStr(g, "pvar")
+	if !ok {
+		return nil, false
+	}
+	sideName, ok := resolveSideOrLiteral(g, b, "side")
+	if !ok {
+		return nil, false
+	}
+	axis, ok := sideToAxis[sideName]
+	if !ok {
+		return nil, false
+	}
+	return bindPvarName(b, pvar, axis), true
+}
+
+func guardBindSideSpacing(g Guard, b map[string]Expression, ctx RuleContext) (map[string]Expression, bool) {
+	pvar, ok := paramStr(g, "pvar")
+	if !ok {
+		return nil, false
+	}
+	sideName, ok := resolveSideOrLiteral(g, b, "side")
+	if !ok {
+		return nil, false
+	}
+	gridRaw, ok := paramStr(g, "grid")
+	if !ok {
+		return nil, false
+	}
+	var gridName string
+	if isPvarString(gridRaw) {
+		gridName, ok = resolveName(b, gridRaw)
+		if !ok {
+			return nil, false
+		}
+	} else {
+		gridName = gridRaw
+	}
+	meta, ok := ctx.Grids[gridName]
+	if !ok {
+		return nil, false
+	}
+	axisIdx, ok := sideToAxisIdx[sideName]
+	if !ok || axisIdx >= len(meta.SpatialDims) {
+		return nil, false
+	}
+	dimName := meta.SpatialDims[axisIdx]
+	n, ok := meta.DimSizes[dimName]
+	if !ok {
+		return nil, false
+	}
+	nb := copyBindings(b)
+	nb[pvar] = float64(1) / float64(n)
+	return nb, true
+}
+
+func guardBindSideDimSize(g Guard, b map[string]Expression, ctx RuleContext) (map[string]Expression, bool) {
+	pvar, ok := paramStr(g, "pvar")
+	if !ok {
+		return nil, false
+	}
+	sideName, ok := resolveSideOrLiteral(g, b, "side")
+	if !ok {
+		return nil, false
+	}
+	gridRaw, ok := paramStr(g, "grid")
+	if !ok {
+		return nil, false
+	}
+	var gridName string
+	if isPvarString(gridRaw) {
+		gridName, ok = resolveName(b, gridRaw)
+		if !ok {
+			return nil, false
+		}
+	} else {
+		gridName = gridRaw
+	}
+	meta, ok := ctx.Grids[gridName]
+	if !ok {
+		return nil, false
+	}
+	axisIdx, ok := sideToAxisIdx[sideName]
+	if !ok || axisIdx >= len(meta.SpatialDims) {
+		return nil, false
+	}
+	dimName := meta.SpatialDims[axisIdx]
+	n, ok := meta.DimSizes[dimName]
+	if !ok {
+		return nil, false
+	}
+	nb := copyBindings(b)
+	nb[pvar] = n
+	return nb, true
 }
 
 func toInt(v interface{}) (int, bool) {
@@ -1750,6 +1898,12 @@ func parseExprValue(v interface{}) (Expression, error) {
 			if ds, ok := d.(string); ok {
 				s := ds
 				node.Dim = &s
+			}
+		}
+		if f, has := x["fn"]; has {
+			if fs, ok := f.(string); ok {
+				s := fs
+				node.Fn = &s
 			}
 		}
 		return node, nil

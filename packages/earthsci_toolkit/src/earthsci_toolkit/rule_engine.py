@@ -237,6 +237,9 @@ def _match(pat: Expr, expr: Expr, b: Bindings) -> Optional[Bindings]:
         b2 = _match_sibling_name(pat.dim, expr.dim, b2)
         if b2 is None:
             return None
+        b2 = _match_sibling_name(pat.fn, expr.fn, b2)
+        if b2 is None:
+            return None
         for pa, ea in zip(pat.args, expr.args):
             b2 = _match(pa, ea, b2)
             if b2 is None:
@@ -288,7 +291,8 @@ def apply_bindings(template: Expr, b: Bindings) -> Expr:
         new_args = [apply_bindings(a, b) for a in template.args]
         new_wrt = _apply_name_field(template.wrt, b)
         new_dim = _apply_name_field(template.dim, b)
-        return replace(template, args=new_args, wrt=new_wrt, dim=new_dim)
+        new_fn = _apply_name_field(template.fn, b)
+        return replace(template, args=new_args, wrt=new_wrt, dim=new_dim, fn=new_fn)
     return template
 
 
@@ -344,6 +348,12 @@ def check_guard(g: Guard, b: Bindings, ctx: RuleContext) -> Optional[Bindings]:
         return _guard_var_location_is(g, b, ctx)
     if name == "var_shape_rank":
         return _guard_var_shape_rank(g, b, ctx)
+    if name == "bind_side_axis":
+        return _guard_bind_side_axis(g, b)
+    if name == "bind_side_spacing":
+        return _guard_bind_side_spacing(g, b, ctx)
+    if name == "bind_side_dim_size":
+        return _guard_bind_side_dim_size(g, b, ctx)
     raise RuleEngineError(
         "E_UNKNOWN_GUARD",
         f"unknown guard: {name} (§5.2.4 closed set)",
@@ -474,6 +484,100 @@ def _guard_var_shape_rank(
     if shape is None:
         return None
     return b if len(shape) == want else None
+
+
+_SIDE_TO_AXIS: Dict[str, str] = {
+    "xmin": "x", "xmax": "x", "west": "x", "east": "x",
+    "ymin": "y", "ymax": "y", "south": "y", "north": "y",
+    "zmin": "z", "zmax": "z", "bottom": "z", "top": "z",
+}
+
+_SIDE_TO_AXIS_IDX: Dict[str, int] = {
+    "xmin": 0, "xmax": 0, "west": 0, "east": 0,
+    "ymin": 1, "ymax": 1, "south": 1, "north": 1,
+    "zmin": 2, "zmax": 2, "bottom": 2, "top": 2,
+}
+
+
+def _resolve_side_or_literal(g: Guard, b: Bindings, field: str) -> Optional[str]:
+    raw = g.params.get(field)
+    if raw is None:
+        return None
+    s = str(raw)
+    if _is_pvar_string(s):
+        return _resolve_name(b, s)
+    return s
+
+
+def _guard_bind_side_axis(g: Guard, b: Bindings) -> Optional[Bindings]:
+    pvar = str(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    if side_name is None:
+        return None
+    axis = _SIDE_TO_AXIS.get(side_name)
+    if axis is None:
+        return None
+    return _bind_pvar_name(b, pvar, axis)
+
+
+def _guard_bind_side_spacing(
+    g: Guard, b: Bindings, ctx: RuleContext
+) -> Optional[Bindings]:
+    pvar = str(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    if side_name is None:
+        return None
+    grid_raw = str(g.params["grid"])
+    grid_name = _resolve_name(b, grid_raw) if _is_pvar_string(grid_raw) else grid_raw
+    if grid_name is None:
+        return None
+    meta = ctx.grids.get(grid_name)
+    if meta is None:
+        return None
+    axis_idx = _SIDE_TO_AXIS_IDX.get(side_name)
+    if axis_idx is None:
+        return None
+    spatial = meta.get("spatial_dims", [])
+    if axis_idx >= len(spatial):
+        return None
+    dim_name = spatial[axis_idx]
+    dim_sizes = meta.get("dim_sizes", {})
+    n_val = dim_sizes.get(dim_name)
+    if n_val is None:
+        return None
+    nb = dict(b)
+    nb[pvar] = 1.0 / int(n_val)
+    return nb
+
+
+def _guard_bind_side_dim_size(
+    g: Guard, b: Bindings, ctx: RuleContext
+) -> Optional[Bindings]:
+    pvar = str(g.params["pvar"])
+    side_name = _resolve_side_or_literal(g, b, "side")
+    if side_name is None:
+        return None
+    grid_raw = str(g.params["grid"])
+    grid_name = _resolve_name(b, grid_raw) if _is_pvar_string(grid_raw) else grid_raw
+    if grid_name is None:
+        return None
+    meta = ctx.grids.get(grid_name)
+    if meta is None:
+        return None
+    axis_idx = _SIDE_TO_AXIS_IDX.get(side_name)
+    if axis_idx is None:
+        return None
+    spatial = meta.get("spatial_dims", [])
+    if axis_idx >= len(spatial):
+        return None
+    dim_name = spatial[axis_idx]
+    dim_sizes = meta.get("dim_sizes", {})
+    n_val = dim_sizes.get(dim_name)
+    if n_val is None:
+        return None
+    nb = dict(b)
+    nb[pvar] = int(n_val)
+    return nb
 
 
 # ============================================================================
@@ -783,11 +887,13 @@ def _parse_expr(v: Any) -> Expr:
         args = [_parse_expr(a) for a in args_raw]
         wrt = v.get("wrt")
         dim = v.get("dim")
+        fn = v.get("fn")
         return ExprNode(
             op=op,
             args=args,
             wrt=None if wrt is None else str(wrt),
             dim=None if dim is None else str(dim),
+            fn=None if fn is None else str(fn),
         )
     raise RuleEngineError(
         "E_RULE_PARSE", f"cannot parse expression of type {type(v).__name__}"

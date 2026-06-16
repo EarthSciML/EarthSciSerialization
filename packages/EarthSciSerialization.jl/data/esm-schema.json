@@ -3114,7 +3114,7 @@
         },
         "flux_match": {
           "type": "boolean",
-          "description": "For kind='interface': if true, enforce normal-flux continuity (∂u/∂n = ∂v/∂n) in addition to value continuity at the interface. Default false. Currently only value continuity is handled by the arrayop-lift ghost-cell path; flux_match=true emits E_BC_UNSUPPORTED until a one-sided-difference stencil rule is registered.",
+          "description": "For kind='interface': if true, enforce normal-flux continuity (∂u/∂n = ∂v/∂n) in addition to value continuity at the interface. Default false.",
           "default": false
         },
         "face_coords": {

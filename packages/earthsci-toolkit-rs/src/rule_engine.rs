@@ -330,6 +330,9 @@ pub struct GridMeta {
     /// `region.boundary` scope evaluation (RFC §5.2.7). Absence is
     /// equivalent to "scope disabled" (conservative fall-through).
     pub dim_bounds: HashMap<String, [i64; 2]>,
+    /// Per-dim cell counts (from `dimensions[].size`), used by
+    /// `bind_side_spacing` / `bind_side_dim_size` guards (§5.2.4).
+    pub dim_sizes: HashMap<String, i64>,
     /// Cubed-sphere panel connectivity tables (RFC §6.4). Present only
     /// on `cubed_sphere` grids; its presence is the runtime marker used
     /// by `region.panel_boundary` scope evaluation (RFC §5.2.7) to
@@ -1252,6 +1255,13 @@ mod tests {
                             && let (Some(lo), Some(hi)) = (arr[0].as_i64(), arr[1].as_i64())
                         {
                             meta.dim_bounds.insert(dk.clone(), [lo, hi]);
+                        }
+                    }
+                }
+                if let Some(sizes) = v.get("dim_sizes").and_then(|x| x.as_object()) {
+                    for (dk, dv) in sizes {
+                        if let Some(n) = dv.as_i64() {
+                            meta.dim_sizes.insert(dk.clone(), n);
                         }
                     }
                 }

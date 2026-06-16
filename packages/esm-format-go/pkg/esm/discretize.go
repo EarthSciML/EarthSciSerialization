@@ -162,6 +162,27 @@ func extractGridMeta(graw interface{}) GridMeta {
 		if sp, ok := dobj["spacing"].(string); ok && (sp == "nonuniform" || sp == "stretched") {
 			meta.NonuniformDims = append(meta.NonuniformDims, name)
 		}
+		if sizeRaw, has := dobj["size"]; has {
+			switch sv := sizeRaw.(type) {
+			case int64:
+				if meta.DimSizes == nil {
+					meta.DimSizes = map[string]int64{}
+				}
+				meta.DimSizes[name] = sv
+			case float64:
+				if meta.DimSizes == nil {
+					meta.DimSizes = map[string]int64{}
+				}
+				meta.DimSizes[name] = int64(sv)
+			case json.Number:
+				if n, err := sv.Int64(); err == nil {
+					if meta.DimSizes == nil {
+						meta.DimSizes = map[string]int64{}
+					}
+					meta.DimSizes[name] = n
+				}
+			}
+		}
 	}
 	return meta
 }
