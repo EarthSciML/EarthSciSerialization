@@ -246,11 +246,43 @@ function build_evaluator(model::Model;
         end
     end
 
+    # ---- Evaluate arrayop-valued initialization_equations into u0 ----
+    # When discretize() materializes an IC equation as an arrayop (coord-subst
+    # x→index(coord_x,i)), we evaluate it per-cell here using the same
+    # index-substitution + _resolve_indices + _compile pattern used by the ODE
+    # arrayop path. The coord_<dim> const_array must be provided by the caller.
+    # Explicit initial_conditions values take precedence (already in u0 above).
+    param_sym_set = Set(p_syms)
+    for eq in model.initialization_equations
+        eq.lhs isa VarExpr || continue
+        eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop" || continue
+        var_name = (eq.lhs::VarExpr).name
+        rhs_op   = eq.rhs::OpExpr
+        idx_names_raw = rhs_op.output_idx === nothing ? Any[] : rhs_op.output_idx
+        idx_names = String[String(s) for s in idx_names_raw
+                           if s isa AbstractString || s isa String]
+        ranges_dict = rhs_op.ranges === nothing ? Dict{String,Any}() : rhs_op.ranges
+        body = rhs_op.expr_body
+        body === nothing && continue
+        range_iters = [collect(_expand_int_range(ranges_dict[n])) for n in idx_names]
+        for idx_tuple in Iterators.product(range_iters...)
+            idx_exprs = Dict{String,Expr}(idx_names[d] => IntExpr(Int64(idx_tuple[d]))
+                                          for d in 1:length(idx_names))
+            cname = _cell_key(var_name, [idx_tuple[d] for d in 1:length(idx_names)])
+            slot = get(var_map, cname, 0)
+            slot == 0 && continue
+            haskey(initial_conditions, cname) && continue   # explicit override wins
+            sub_body = _sub_preserving(body, idx_exprs)
+            body_r   = _resolve_indices(sub_body, array_var_info, var_map, _const_arrays)
+            node     = _compile(body_r, var_map, param_sym_set, reg_funcs)
+            u0[slot] = _eval_node(node, u0, isnothing(p) ? NamedTuple() : p, 0.0)
+        end
+    end
+
     # ---- Build per-derivative compiled-IR list ----
     # Each entry is (state_index, compiled-node). The RHS is inlined with
     # observed variables, index ops are resolved to flat-slot references,
     # then compiled to the compact `_Node` form.
-    param_sym_set = Set(p_syms)
     rhs_list = Tuple{Int,_Node}[]
     covered = falses(length(all_state_names))
 

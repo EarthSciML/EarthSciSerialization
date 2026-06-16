@@ -711,10 +711,92 @@ function _discretize_equation_ic!(path::String, eqn::Dict{String,Any},
         # A rule rewrote the ic wrapper — emit the result.
         final = canonicalize(rewrite_out)
         eqn["rhs"] = serialize_expression(final)
-    else
-        # No ic rule matched — fall through to normal interior equation processing.
+    elseif !_try_materialize_ic_arrayop!(eqn, ctx)
+        # No ic rule matched and not array-shaped; fall through to normal processing.
         _discretize_equation!(path, eqn, rules, ctx, max_passes, strict_unrewritten)
     end
+end
+
+# Materialize an IC equation into arrayop form with coordinate substitution
+# x→index(coord_x, i) when the LHS is a shape-d variable. Returns true if
+# materialization succeeded (eqn["rhs"] updated), false otherwise.
+function _try_materialize_ic_arrayop!(eqn::Dict{String,Any}, ctx::RuleContext)::Bool
+    lhs_raw = get(eqn, "lhs", nothing)
+    rhs_raw = get(eqn, "rhs", nothing)
+    (lhs_raw === nothing || rhs_raw === nothing) && return false
+
+    # Only handle plain variable LHS (string).
+    lhs_raw isa AbstractString || return false
+    var_name = String(lhs_raw)
+
+    vmeta = get(ctx.variables, var_name, nothing)
+    vmeta === nothing && return false
+    shape = get(vmeta, "shape", nothing)
+    (shape === nothing || !(shape isa AbstractVector) || isempty(shape)) && return false
+
+    grid_name_raw = get(vmeta, "grid", nothing)
+    grid_name_raw === nothing && return false
+    gmeta = get(ctx.grids, String(grid_name_raw), nothing)
+    gmeta === nothing && return false
+    dim_sizes = get(gmeta, "dim_sizes", nothing)
+    dim_sizes isa AbstractDict || return false
+
+    nd = length(shape)
+    nd > length(_ARRAYOP_INDEX_NAMES) && return false
+
+    output_idx = Any[]
+    ranges     = Dict{String,Any}()
+    coord_subst = Dict{String,Any}()
+
+    for d in 1:nd
+        dim_name = String(shape[d])
+        sz = get(dim_sizes, dim_name, nothing)
+        sz isa Integer || return false
+        idx = _ARRAYOP_INDEX_NAMES[d]
+        push!(output_idx, idx)
+        ranges[idx] = Any[1, Int(sz)]
+        # Spatial coord symbol → index(coord_<dim>, loop_var).
+        # coord_<dim> is a const_array injected at evaluation time (uniform: cell
+        # centers; nonuniform: from metric arrays). This avoids baking in dx or
+        # domain length, which are unknown at discretize time.
+        coord_subst[dim_name] = Dict{String,Any}(
+            "op"   => "index",
+            "args" => Any["coord_$dim_name", idx],
+        )
+    end
+
+    eqn["rhs"] = Dict{String,Any}(
+        "op"         => "arrayop",
+        "args"       => Any[],
+        "output_idx" => output_idx,
+        "expr"       => _substitute_coord_syms(rhs_raw, coord_subst),
+        "ranges"     => ranges,
+    )
+    return true
+end
+
+# Walk a raw JSON node and replace bare dimension-name strings in args
+# positions with their coord-expression counterparts. Only substitutes
+# leaf strings in "args" arrays (VarExpr positions); op/wrt/key names
+# are untouched.
+function _substitute_coord_syms(node, subst::Dict{String,Any})
+    node isa AbstractString && return get(subst, String(node), node)
+    node isa AbstractDict || return node
+    out = Dict{String,Any}()
+    for (k, v) in node
+        key = String(k)
+        if key == "args" && v isa AbstractVector
+            out[key] = Any[_substitute_coord_syms(a, subst) for a in v]
+        elseif v isa AbstractDict
+            out[key] = _substitute_coord_syms(v, subst)
+        elseif v isa AbstractVector
+            out[key] = Any[a isa AbstractDict ?
+                _substitute_coord_syms(a, subst) : a for a in v]
+        else
+            out[key] = v
+        end
+    end
+    return out
 end
 
 function _canonicalize_value(value_raw)

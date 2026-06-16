@@ -91,6 +91,12 @@
       "golden": "golden/stencil_gen_fornberg_nonuniform.json",
       "tags": ["step2", "pde", "stencil-gen", "fornberg", "centered", "nonuniform", "from-grid", "use-scheme", "section-7.1.3", "ess-d0a"],
       "deferred_in": {"go": "use:-form rules not yet implemented (E_RULE_REPLACEMENT_MISSING)"}
+    },
+    {
+      "id": "ic_arrayop",
+      "input":  "inputs/ic_arrayop.esm",
+      "golden": "golden/ic_arrayop.json",
+      "tags": ["step1", "ic", "arrayop", "coord-substitution", "uniform", "nonuniform", "ess-tt6"]
     }
   ]
 }
