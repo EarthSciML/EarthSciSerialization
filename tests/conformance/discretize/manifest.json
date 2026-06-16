@@ -73,6 +73,12 @@
       "tags": ["step1", "boundary_conditions", "interface_bc", "multi_variable"]
     },
     {
+      "id": "interface_bc_lowering",
+      "input":  "inputs/interface_bc_lowering.esm",
+      "golden": "golden/interface_bc_lowering.json",
+      "tags": ["step1", "boundary_conditions", "interface_bc", "bind_side_dim_size", "rules"]
+    },
+    {
       "id": "stencil_gen_fornberg",
       "input":  "inputs/stencil_gen_fornberg.esm",
       "golden": "golden/stencil_gen_fornberg.json",
