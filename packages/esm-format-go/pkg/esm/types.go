@@ -47,10 +47,15 @@ type ExprNode struct {
 // In Go, this is handled by using interface{} and custom unmarshaling
 type Expression interface{}
 
+// RuleRegion is a spatial scope for a rule or equation (discretization RFC §7.2).
+// It can be a string (legacy advisory tag) or an object with a "kind" field.
+type RuleRegion = interface{}
+
 // Equation represents a mathematical equation with LHS and RHS
 type Equation struct {
-	LHS Expression `json:"lhs"`
-	RHS Expression `json:"rhs"`
+	LHS    Expression  `json:"lhs"`
+	RHS    Expression  `json:"rhs"`
+	Region *RuleRegion `json:"region,omitempty"`
 }
 
 // AffectEquation represents an equation that affects a variable (for events)
@@ -1255,8 +1260,9 @@ func UnmarshalExpression(data []byte) (Expression, error) {
 func (e *Equation) UnmarshalJSON(data []byte) error {
 	// Define a temporary struct with the same structure but using json.RawMessage
 	type TempEquation struct {
-		LHS json.RawMessage `json:"lhs"`
-		RHS json.RawMessage `json:"rhs"`
+		LHS    json.RawMessage `json:"lhs"`
+		RHS    json.RawMessage `json:"rhs"`
+		Region json.RawMessage `json:"region,omitempty"`
 	}
 
 	var temp TempEquation
@@ -1277,6 +1283,15 @@ func (e *Equation) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal RHS: %w", err)
 	}
 	e.RHS = rhs
+
+	// Unmarshal region (optional — string or object)
+	if len(temp.Region) > 0 && string(temp.Region) != "null" {
+		var region interface{}
+		if err := json.Unmarshal(temp.Region, &region); err != nil {
+			return fmt.Errorf("failed to unmarshal region: %w", err)
+		}
+		e.Region = &region
+	}
 
 	return nil
 }

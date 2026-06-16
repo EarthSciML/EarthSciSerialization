@@ -69,12 +69,22 @@ class ExprNode:
 Expr = Union[int, float, str, ExprNode]
 
 
+RuleRegion = Union[str, Dict[str, Any]]
+"""
+Spatial scope of a rule or equation (discretization RFC §7.2).
+A string is a legacy advisory tag with no runtime effect.
+A dict with 'kind' is a normative scoping predicate: boundary,
+panel_boundary, mask_field, or index_range.
+"""
+
+
 @dataclass
 class Equation:
     """Mathematical equation with left and right hand sides."""
     lhs: Expr
     rhs: Expr
     _comment: Optional[str] = None
+    region: Optional[RuleRegion] = None
 
 
 @dataclass

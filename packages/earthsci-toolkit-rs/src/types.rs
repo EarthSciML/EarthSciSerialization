@@ -614,6 +614,10 @@ pub enum VariableType {
     Brownian,
 }
 
+/// Spatial scope of a rule or equation (discretization RFC §7.2).
+/// A string is a legacy advisory tag; an object is a normative scoping predicate.
+pub type RuleRegion = serde_json::Value;
+
 /// Differential equation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Equation {
@@ -622,6 +626,21 @@ pub struct Equation {
 
     /// Right-hand side expression
     pub rhs: Expr,
+
+    /// Optional spatial scope (RuleRegion). When present, the discretization
+    /// engine dispatches this equation via a synthetic bc(...) wrapper.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<RuleRegion>,
+}
+
+impl Default for Equation {
+    fn default() -> Self {
+        Equation {
+            lhs: Expr::Integer(0),
+            rhs: Expr::Integer(0),
+            region: None,
+        }
+    }
 }
 
 /// Discrete event that can modify the system

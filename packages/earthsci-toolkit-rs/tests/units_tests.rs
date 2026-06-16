@@ -83,6 +83,7 @@ fn propagate_dh_equals_v() {
     let eq = Equation {
         lhs: dh,
         rhs: Expr::Variable("v".to_string()),
+        ..Default::default()
     };
 
     validate_equation_dimensions(&eq, &env).expect("D(h)/dt should match v (both are m/s)");

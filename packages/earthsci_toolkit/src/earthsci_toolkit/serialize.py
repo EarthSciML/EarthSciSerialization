@@ -110,6 +110,8 @@ def _serialize_equation(equation: Equation) -> Dict[str, Any]:
     }
     if equation._comment is not None:
         result["_comment"] = equation._comment
+    if equation.region is not None:
+        result["region"] = equation.region
     return result
 
 

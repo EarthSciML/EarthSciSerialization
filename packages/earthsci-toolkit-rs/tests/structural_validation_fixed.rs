@@ -37,6 +37,7 @@ fn test_undefined_variable_in_model() {
         equations: vec![Equation {
             lhs: Expr::Variable("y".to_string()), // 'y' is not defined
             rhs: Expr::Number(1.0),
+            ..Default::default()
         }],
         discrete_events: None,
         continuous_events: None,
@@ -143,10 +144,12 @@ fn test_equation_count_mismatch() {
             Equation {
                 lhs: Expr::Variable("x".to_string()),
                 rhs: Expr::Number(1.0),
+                ..Default::default()
             },
             Equation {
                 lhs: Expr::Variable("x".to_string()),
                 rhs: Expr::Number(2.0),
+                ..Default::default()
             },
         ],
         discrete_events: None,

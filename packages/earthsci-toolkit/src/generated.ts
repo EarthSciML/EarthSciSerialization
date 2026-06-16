@@ -1379,12 +1379,34 @@ export interface Model {
   };
 }
 /**
+ * Spatial scope of a rule or equation (discretization RFC §7.2).
+ * A string is a legacy advisory tag with no runtime effect.
+ * An object is a normative scoping predicate: boundary, panel_boundary,
+ * mask_field, or index_range.
+ */
+export type RuleRegion =
+  | string
+  | {
+      kind: "boundary" | "panel_boundary" | "mask_field" | "index_range";
+      side?: "xmin" | "xmax" | "ymin" | "ymax" | "zmin" | "zmax" | "tmin" | "tmax" | "west" | "east" | "south" | "north" | "top" | "bottom" | "panel_seam" | "mesh_boundary";
+      panel?: number;
+      field?: string;
+      axis?: string;
+      lo?: number;
+      hi?: number;
+    };
+/**
  * An equation: lhs = rhs (or lhs ~ rhs in MTK notation).
  */
 export interface Equation {
   lhs: Expression;
   rhs: Expression;
   _comment?: string;
+  /**
+   * Optional spatial scope. When present, marks this equation as scoped to a
+   * region; the discretization engine dispatches it to region-specific rules.
+   */
+  region?: RuleRegion;
 }
 /**
  * An affect equation in an event: lhs is the target variable (string), rhs is an expression.

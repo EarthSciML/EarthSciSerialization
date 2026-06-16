@@ -992,7 +992,9 @@ function coerce_equation(data::Any)::Equation
     lhs = parse_expression(data.lhs)
     rhs = parse_expression(data.rhs)
     comment = haskey(data, :_comment) && data._comment !== nothing ? string(data._comment) : nothing
-    return Equation(lhs, rhs; _comment=comment)
+    region = _has_field(data, :region) && data.region !== nothing ?
+        _deep_native(data.region) : nothing
+    return Equation(lhs, rhs; _comment=comment, region=region)
 end
 
 """

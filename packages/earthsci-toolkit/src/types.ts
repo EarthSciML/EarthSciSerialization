@@ -89,6 +89,7 @@ export type {
   Equation,
   AffectEquation,
   FunctionalAffect,
+  RuleRegion,
 
   // Data handling
   DataLoader,

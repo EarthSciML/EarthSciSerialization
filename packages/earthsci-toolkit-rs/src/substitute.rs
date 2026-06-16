@@ -193,6 +193,7 @@ pub fn substitute_in_model(
         .map(|eq| Equation {
             lhs: substitute(&eq.lhs, substitutions),
             rhs: substitute(&eq.rhs, substitutions),
+            region: eq.region.clone(),
         })
         .collect();
 
@@ -490,6 +491,7 @@ pub fn substitute_in_model_with_context(
         .map(|eq| Equation {
             lhs: substitute_with_context(&eq.lhs, substitutions, context),
             rhs: substitute_with_context(&eq.rhs, substitutions, context),
+            region: eq.region.clone(),
         })
         .collect();
 

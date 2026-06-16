@@ -722,6 +722,10 @@
         },
         "_comment": {
           "type": "string"
+        },
+        "region": {
+          "$ref": "#/$defs/RuleRegion",
+          "description": "Optional spatial scope. When present, marks this equation as scoped to a region (e.g. a boundary or initialization point); the discretization engine dispatches it to region-specific rules rather than the interior rule pass."
         }
       }
     },

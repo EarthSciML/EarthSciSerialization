@@ -466,7 +466,7 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
     for eq in model.equations
         lhs = namespace_expr(eq.lhs, prefix, local_names)
         rhs = namespace_expr(eq.rhs, prefix, local_names)
-        push!(equations, Equation(lhs, rhs; _comment=eq._comment))
+        push!(equations, Equation(lhs, rhs; _comment=eq._comment, region=eq.region))
         if lhs isa VarExpr
             push!(explicit_lhs_names, lhs.name)
         end

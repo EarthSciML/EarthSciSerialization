@@ -302,6 +302,9 @@ function serialize_equation(eq::Equation)::Dict{String,Any}
     if eq._comment !== nothing
         result["_comment"] = eq._comment
     end
+    if eq.region !== nothing
+        result["region"] = eq.region
+    end
     return result
 end
 

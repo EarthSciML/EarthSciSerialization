@@ -747,6 +747,7 @@ mod tests {
         let equation = Equation {
             lhs: Expr::Variable("x".to_string()),
             rhs: Expr::Number(1.0),
+            ..Default::default()
         };
 
         let result = add_equation(&model, equation);
@@ -762,6 +763,7 @@ mod tests {
         model.equations.push(Equation {
             lhs: Expr::Variable("x".to_string()),
             rhs: Expr::Number(1.0),
+            ..Default::default()
         });
 
         let result = remove_equation(&model, 0);

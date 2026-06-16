@@ -490,6 +490,7 @@ mod tests {
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: op("*", vec![op("-", vec![var("k")]), var("x")]),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -518,10 +519,12 @@ mod tests {
         m.equations.push(Equation {
             lhs: var("y"),
             rhs: op("^", vec![var("x"), Expr::Integer(2)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -554,14 +557,17 @@ mod tests {
         m.equations.push(Equation {
             lhs: var("z"),
             rhs: op("+", vec![var("x"), Expr::Integer(1)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: var("y"),
             rhs: op("*", vec![var("z"), Expr::Integer(2)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -582,14 +588,17 @@ mod tests {
         m.equations.push(Equation {
             lhs: var("y"),
             rhs: op("+", vec![var("x"), var("w")]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: var("w"),
             rhs: op("-", vec![var("y"), Expr::Integer(1)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -615,10 +624,12 @@ mod tests {
                 ],
             ),
             rhs: Expr::Integer(1),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -635,10 +646,12 @@ mod tests {
         m.equations.push(Equation {
             lhs: var("y"),
             rhs: op("+", vec![var("y"), Expr::Integer(1)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -654,10 +667,12 @@ mod tests {
         m.equations.push(Equation {
             lhs: var("y"),
             rhs: op("^", vec![var("x"), Expr::Integer(2)]),
+            ..Default::default()
         });
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: var("y"),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -674,6 +689,7 @@ mod tests {
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: op("-", vec![var("x")]),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
 
@@ -689,6 +705,7 @@ mod tests {
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: Expr::Integer(0),
+            ..Default::default()
         });
         let esm = minimal_esm("M", m);
 
@@ -707,6 +724,7 @@ mod tests {
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
             rhs: Expr::Integer(0),
+            ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
         let mut domains = HashMap::new();

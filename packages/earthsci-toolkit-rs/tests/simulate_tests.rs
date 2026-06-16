@@ -125,6 +125,7 @@ fn ddt(state_name: &str, rhs: Expr) -> Equation {
             ..Default::default()
         }),
         rhs,
+        ..Default::default()
     }
 }
 
@@ -847,6 +848,7 @@ fn flat_with_one_state_rhs(rhs: Expr) -> FlattenedSystem {
                 ..Default::default()
             }),
             rhs,
+            ..Default::default()
         }],
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
@@ -935,6 +937,7 @@ fn test_error_grad_in_array_simulator_rejected() {
         vec![Equation {
             lhs,
             rhs: arrayop_body,
+            ..Default::default()
         }],
     );
     let err = match ArrayCompiled::from_model(&model) {

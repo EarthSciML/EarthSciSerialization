@@ -160,19 +160,23 @@ end
 # ========================================
 
 """
-    Equation(lhs::Expr, rhs::Expr, _comment::Union{String,Nothing}=nothing)
+    Equation(lhs::Expr, rhs::Expr; _comment=nothing, region=nothing)
 
 Mathematical equation with left-hand side and right-hand side expressions.
 Used for differential equations and algebraic constraints.
-Optional _comment field provides human-readable description.
+Optional `_comment` provides a human-readable description.
+Optional `region` (RuleRegion) scopes the equation to a spatial region;
+the discretization engine dispatches region-scoped equations via a synthetic
+`bc(...)` wrapper rather than the interior rule pass.
 """
 struct Equation
     lhs::Expr
     rhs::Expr
     _comment::Union{String,Nothing}
+    region::Union{Dict{String,Any},String,Nothing}
 
-    # Constructor with optional comment
-    Equation(lhs::Expr, rhs::Expr; _comment=nothing) = new(lhs, rhs, _comment)
+    Equation(lhs::Expr, rhs::Expr; _comment=nothing, region=nothing) =
+        new(lhs, rhs, _comment, region)
 end
 
 """

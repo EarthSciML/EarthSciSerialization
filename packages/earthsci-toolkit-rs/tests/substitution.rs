@@ -222,6 +222,7 @@ fn test_model_substitution() {
                 dim: None,
                 ..Default::default()
             }),
+            ..Default::default()
         }],
         discrete_events: None,
         continuous_events: None,

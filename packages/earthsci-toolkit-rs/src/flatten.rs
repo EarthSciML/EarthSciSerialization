@@ -459,6 +459,7 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
         .map(|eq| Equation {
             lhs: namespace_expr(&eq.lhs, system_name),
             rhs: namespace_expr(&eq.rhs, system_name),
+            region: eq.region.clone(),
         })
         .collect();
 
@@ -544,6 +545,7 @@ fn build_reaction_block(
         .map(|eq| Equation {
             lhs: namespace_expr(&eq.lhs, system_name),
             rhs: namespace_expr(&eq.rhs, system_name),
+            region: eq.region.clone(),
         })
         .collect();
 
@@ -891,7 +893,7 @@ fn apply_couple(
             .cloned()
             .and_then(|v| serde_json::from_value::<Expr>(v).ok());
         if let (Some(lhs), Some(rhs)) = (lhs, rhs) {
-            new_equations.push(Equation { lhs, rhs });
+            new_equations.push(Equation { lhs, rhs, region: None });
         }
     }
     if !new_equations.is_empty() {
@@ -1058,6 +1060,7 @@ mod tests {
                         ..Default::default()
                     }),
                     rhs: Expr::Variable("k".to_string()),
+                    ..Default::default()
                 }],
                 discrete_events: None,
                 continuous_events: None,

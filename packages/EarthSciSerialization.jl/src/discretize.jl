@@ -230,15 +230,36 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
     # Per-model max_passes override (§5.2.5).
     mp = _lookup_max_passes(model, max_passes)
 
-    # Equations
+    # Equations — with equation-class dispatch (RFC §eqn-region-schema):
+    # equations carrying a `region` field are dispatched via a synthetic bc(…)
+    # wrapper; initialization_equations are dispatched via a synthetic ic(…)
+    # wrapper. Both fall through to normal _discretize_equation! when no rule
+    # matches the wrapper, preserving existing interior-equation semantics.
     eqns = get(model, "equations", nothing)
     if eqns isa AbstractVector
         for (i, eqn_any) in enumerate(eqns)
             eqn = eqn_any isa Dict{String,Any} ? eqn_any :
                 Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
-            _discretize_equation!("models.$mname.equations[$i]", eqn,
-                                   rules, ctx, mp, strict_unrewritten)
+            if get(eqn, "region", nothing) !== nothing
+                _discretize_equation_bc!("models.$mname.equations[$i]", eqn,
+                                          rules, ctx, mp, strict_unrewritten)
+            else
+                _discretize_equation!("models.$mname.equations[$i]", eqn,
+                                       rules, ctx, mp, strict_unrewritten)
+            end
             eqns[i] = eqn
+        end
+    end
+
+    # Initialization equations — dispatched via synthetic ic(…) wrapper.
+    ic_eqns = get(model, "initialization_equations", nothing)
+    if ic_eqns isa AbstractVector
+        for (i, eqn_any) in enumerate(ic_eqns)
+            eqn = eqn_any isa Dict{String,Any} ? eqn_any :
+                Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
+            _discretize_equation_ic!("models.$mname.initialization_equations[$i]",
+                                      eqn, rules, ctx, mp, strict_unrewritten)
+            ic_eqns[i] = eqn
         end
     end
 
@@ -984,6 +1005,84 @@ function _rewrite_or_passthrough!(path::String, value_raw, rules::Vector{Rule},
         set_passthrough(true)
     end
     return serialize_expression(canon1)
+end
+
+# Equation-class dispatch helpers (RFC §eqn-region-schema).
+#
+# _discretize_equation_bc!: for equations with a `region` field.
+# Builds a synthetic bc(lhs, rhs) wrapper carrying the region's kind/side
+# and runs it through the rule engine. If a rule rewrites the wrapper, the
+# result is stored back on the equation dict. If no rule matches the bc
+# wrapper (wrapper is still a bc OpExpr after rewrite), falls through to
+# the normal interior _discretize_equation! path so the rhs is still
+# processed by matching interior rules.
+#
+# _discretize_equation_ic!: for initialization_equations entries.
+# Same pattern but wraps in ic(lhs, rhs) instead of bc(lhs, rhs). The ic
+# op is not in _PDE_OPS so an unmatched ic wrapper never raises
+# E_UNREWRITTEN_PDE_OP; fallthrough runs the rhs through the interior rules.
+function _discretize_equation_bc!(path::String, eqn::Dict{String,Any},
+                                   rules::Vector{Rule}, ctx::RuleContext,
+                                   max_passes::Int, strict_unrewritten::Bool)
+    region = get(eqn, "region", nothing)
+    lhs_raw = get(eqn, "lhs", nothing)
+    rhs_raw = get(eqn, "rhs", nothing)
+    passthrough = _as_bool(get(eqn, "passthrough", false))
+
+    # Build synthetic bc(lhs, rhs) wrapper from the equation's region.
+    wrapper = Dict{String,Any}("op" => "bc", "args" => Any[])
+    lhs_raw !== nothing && push!(wrapper["args"], lhs_raw)
+    rhs_raw !== nothing && push!(wrapper["args"], rhs_raw)
+    if region isa AbstractDict
+        for (k, v) in region
+            wrapper[String(k)] = v
+        end
+    end
+
+    bc_expr = parse_expression(wrapper)
+    rewrite_out = rewrite(canonicalize(bc_expr), rules, ctx; max_passes=max_passes)
+
+    if !(rewrite_out isa OpExpr && rewrite_out.op == "bc")
+        # A rule rewrote the bc wrapper — emit the result.
+        final = canonicalize(rewrite_out)
+        if _has_pde_op(final) && !passthrough
+            if strict_unrewritten
+                op = _first_pde_op(final)
+                throw(RuleEngineError("E_UNREWRITTEN_PDE_OP",
+                    "$path still contains PDE op '$op' after bc-wrapper rewrite; " *
+                    "annotate the equation with 'passthrough: true' to opt out"))
+            end
+            eqn["passthrough"] = true
+        end
+        eqn["rhs"] = serialize_expression(final)
+    else
+        # No bc rule matched — fall through to normal interior equation processing.
+        _discretize_equation!(path, eqn, rules, ctx, max_passes, strict_unrewritten)
+    end
+end
+
+function _discretize_equation_ic!(path::String, eqn::Dict{String,Any},
+                                   rules::Vector{Rule}, ctx::RuleContext,
+                                   max_passes::Int, strict_unrewritten::Bool)
+    lhs_raw = get(eqn, "lhs", nothing)
+    rhs_raw = get(eqn, "rhs", nothing)
+
+    # Build synthetic ic(lhs, rhs) wrapper.
+    wrapper = Dict{String,Any}("op" => "ic", "args" => Any[])
+    lhs_raw !== nothing && push!(wrapper["args"], lhs_raw)
+    rhs_raw !== nothing && push!(wrapper["args"], rhs_raw)
+
+    ic_expr = parse_expression(wrapper)
+    rewrite_out = rewrite(canonicalize(ic_expr), rules, ctx; max_passes=max_passes)
+
+    if !(rewrite_out isa OpExpr && rewrite_out.op == "ic")
+        # A rule rewrote the ic wrapper — emit the result.
+        final = canonicalize(rewrite_out)
+        eqn["rhs"] = serialize_expression(final)
+    else
+        # No ic rule matched — fall through to normal interior equation processing.
+        _discretize_equation!(path, eqn, rules, ctx, max_passes, strict_unrewritten)
+    end
 end
 
 function _canonicalize_value(value_raw)
