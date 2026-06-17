@@ -85,20 +85,21 @@ fn validate_templates(
                 ),
             )
         })?;
-        let params = decl_obj.get("params").and_then(|p| p.as_array()).ok_or_else(|| {
-            err(
-                "apply_expression_template_invalid_declaration",
-                format!(
-                    "{scope}.expression_templates.{name}: 'params' must be a non-empty array"
-                ),
-            )
-        })?;
+        let params = decl_obj
+            .get("params")
+            .and_then(|p| p.as_array())
+            .ok_or_else(|| {
+                err(
+                    "apply_expression_template_invalid_declaration",
+                    format!(
+                        "{scope}.expression_templates.{name}: 'params' must be a non-empty array"
+                    ),
+                )
+            })?;
         if params.is_empty() {
             return Err(err(
                 "apply_expression_template_invalid_declaration",
-                format!(
-                    "{scope}.expression_templates.{name}: 'params' must be a non-empty array"
-                ),
+                format!("{scope}.expression_templates.{name}: 'params' must be a non-empty array"),
             ));
         }
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
@@ -106,25 +107,19 @@ fn validate_templates(
             let p_str = p.as_str().ok_or_else(|| {
                 err(
                     "apply_expression_template_invalid_declaration",
-                    format!(
-                        "{scope}.expression_templates.{name}: param names must be strings"
-                    ),
+                    format!("{scope}.expression_templates.{name}: param names must be strings"),
                 )
             })?;
             if p_str.is_empty() {
                 return Err(err(
                     "apply_expression_template_invalid_declaration",
-                    format!(
-                        "{scope}.expression_templates.{name}: param names must be non-empty"
-                    ),
+                    format!("{scope}.expression_templates.{name}: param names must be non-empty"),
                 ));
             }
             if !seen.insert(p_str) {
                 return Err(err(
                     "apply_expression_template_invalid_declaration",
-                    format!(
-                        "{scope}.expression_templates.{name}: param '{p_str}' declared twice"
-                    ),
+                    format!("{scope}.expression_templates.{name}: param '{p_str}' declared twice"),
                 ));
             }
         }
@@ -180,17 +175,13 @@ fn expand_apply(
     let decl = templates.get(name).ok_or_else(|| {
         err(
             "apply_expression_template_unknown_template",
-            format!(
-                "{scope}: apply_expression_template references undeclared template '{name}'"
-            ),
+            format!("{scope}: apply_expression_template references undeclared template '{name}'"),
         )
     })?;
     let decl_obj = decl.as_object().ok_or_else(|| {
         err(
             "apply_expression_template_invalid_declaration",
-            format!(
-                "{scope}: template '{name}' declaration is not an object"
-            ),
+            format!("{scope}: template '{name}' declaration is not an object"),
         )
     })?;
     let bindings = node
@@ -199,9 +190,7 @@ fn expand_apply(
         .ok_or_else(|| {
             err(
                 "apply_expression_template_bindings_mismatch",
-                format!(
-                    "{scope}: apply_expression_template '{name}' missing 'bindings' object"
-                ),
+                format!("{scope}: apply_expression_template '{name}' missing 'bindings' object"),
             )
         })?;
 
@@ -226,9 +215,7 @@ fn expand_apply(
         if !declared.contains(p) {
             return Err(err(
                 "apply_expression_template_bindings_mismatch",
-                format!(
-                    "{scope}: apply_expression_template '{name}' supplies unknown param '{p}'"
-                ),
+                format!("{scope}: apply_expression_template '{name}' supplies unknown param '{p}'"),
             ));
         }
     }
@@ -294,8 +281,12 @@ fn find_apply_paths(view: &Value, path: &str, hits: &mut Vec<String>) {
 /// in files declaring `esm` < 0.4.0. Mirrors the equivalent TS / Python /
 /// Julia / Go checks for cross-binding-uniform diagnostics.
 pub fn reject_expression_templates_pre_v04(view: &Value) -> Result<(), ExpressionTemplateError> {
-    let Some(obj) = view.as_object() else { return Ok(()) };
-    let Some(esm) = obj.get("esm").and_then(|v| v.as_str()) else { return Ok(()) };
+    let Some(obj) = view.as_object() else {
+        return Ok(());
+    };
+    let Some(esm) = obj.get("esm").and_then(|v| v.as_str()) else {
+        return Ok(());
+    };
     let parts: Vec<&str> = esm.split('.').collect();
     if parts.len() != 3 {
         return Ok(());
@@ -346,7 +337,9 @@ pub fn reject_expression_templates_pre_v04(view: &Value) -> Result<(), Expressio
 pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTemplateError> {
     reject_expression_templates_pre_v04(value)?;
 
-    let Some(_root) = value.as_object_mut() else { return Ok(()) };
+    let Some(_root) = value.as_object_mut() else {
+        return Ok(());
+    };
 
     let mut apply_paths: Vec<String> = Vec::new();
     find_apply_paths(value, "", &mut apply_paths);
@@ -358,9 +351,13 @@ pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTem
 
     let root = value.as_object_mut().unwrap();
     for compkind in ["models", "reaction_systems"] {
-        let Some(Value::Object(comps)) = root.get_mut(compkind) else { continue };
+        let Some(Value::Object(comps)) = root.get_mut(compkind) else {
+            continue;
+        };
         for (cname, comp_value) in comps.iter_mut() {
-            let Value::Object(comp) = comp_value else { continue };
+            let Value::Object(comp) = comp_value else {
+                continue;
+            };
             // Take the templates block (if any) so we can borrow comp mutably.
             let templates_value = comp.remove("expression_templates");
             let templates: Map<String, Value> = match templates_value {
@@ -400,9 +397,13 @@ pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTem
 }
 
 fn strip_expression_templates(value: &mut Value) {
-    let Some(root) = value.as_object_mut() else { return };
+    let Some(root) = value.as_object_mut() else {
+        return;
+    };
     for compkind in ["models", "reaction_systems"] {
-        let Some(Value::Object(comps)) = root.get_mut(compkind) else { continue };
+        let Some(Value::Object(comps)) = root.get_mut(compkind) else {
+            continue;
+        };
         for (_, comp_value) in comps.iter_mut() {
             if let Value::Object(comp) = comp_value {
                 comp.remove("expression_templates");
@@ -538,10 +539,10 @@ mod tests {
             .and_then(|p| p.parent())
             .expect("repo_root from CARGO_MANIFEST_DIR")
             .to_path_buf();
-        let fixture_path = repo_root
-            .join("tests/conformance/expression_templates/arrhenius_smoke/fixture.esm");
-        let expanded_path = repo_root
-            .join("tests/conformance/expression_templates/arrhenius_smoke/expanded.esm");
+        let fixture_path =
+            repo_root.join("tests/conformance/expression_templates/arrhenius_smoke/fixture.esm");
+        let expanded_path =
+            repo_root.join("tests/conformance/expression_templates/arrhenius_smoke/expanded.esm");
         let src = std::fs::read_to_string(&fixture_path).expect("read fixture.esm");
         let mut got: Value = serde_json::from_str(&src).expect("parse fixture");
         lower_expression_templates(&mut got).expect("expansion");
@@ -571,6 +572,9 @@ mod tests {
             }
         });
         lower_expression_templates(&mut v).expect("expansion");
-        assert_eq!(v["reaction_systems"]["chem"]["reactions"][0]["rate"], json!("k"));
+        assert_eq!(
+            v["reaction_systems"]["chem"]["reactions"][0]["rate"],
+            json!("k")
+        );
     }
 }

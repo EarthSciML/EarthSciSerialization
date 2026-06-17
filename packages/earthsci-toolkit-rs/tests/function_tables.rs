@@ -1,7 +1,7 @@
 //! Roundtrip tests for the v0.4.0 function_tables block + table_lookup AST op
 //! (esm-spec §9.5).
 
-use earthsci_toolkit::{load, EsmFile, Expr};
+use earthsci_toolkit::{EsmFile, Expr, load};
 
 const FIXTURE: &str = r#"{
   "esm": "0.4.0",
@@ -59,7 +59,10 @@ const FIXTURE: &str = r#"{
 #[test]
 fn function_tables_block_loads() {
     let file: EsmFile = load(FIXTURE).expect("load function_tables fixture");
-    let fts = file.function_tables.as_ref().expect("function_tables present");
+    let fts = file
+        .function_tables
+        .as_ref()
+        .expect("function_tables present");
     assert_eq!(fts.len(), 2);
     let sig = &fts["sigma_O3"];
     assert_eq!(sig.axes.len(), 1);
@@ -69,7 +72,10 @@ fn function_tables_block_loads() {
     let fa = &fts["F_actinic"];
     assert_eq!(fa.axes.len(), 2);
     assert_eq!(fa.axes[0].units.as_deref(), Some("Pa"));
-    assert_eq!(fa.outputs.as_deref(), Some(&["NO2".to_string(), "O3".to_string()][..]));
+    assert_eq!(
+        fa.outputs.as_deref(),
+        Some(&["NO2".to_string(), "O3".to_string()][..])
+    );
 }
 
 #[test]

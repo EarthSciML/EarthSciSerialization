@@ -518,9 +518,16 @@ impl ArrayCompiled {
         let mut covered_slots: HashSet<usize> = HashSet::new();
 
         for eq in &model.equations {
-            if let Some((var, idx_names, ranges, lhs_idx_exprs, body,
-                          contract_names, contract_ranges, reduce_op)) =
-                extract_derivative_arrayop(&eq.lhs, &eq.rhs)
+            if let Some((
+                var,
+                idx_names,
+                ranges,
+                lhs_idx_exprs,
+                body,
+                contract_names,
+                contract_ranges,
+                reduce_op,
+            )) = extract_derivative_arrayop(&eq.lhs, &eq.rhs)
             {
                 // Array-op derivative over (idx_names, ranges).
                 if !var_shapes.contains_key(&var) {
@@ -534,11 +541,13 @@ impl ArrayCompiled {
                 let shape = &var_shapes[&var];
                 for tuple in cartesian_range(&ranges) {
                     // Map to column-major flat offset using actual LHS index expressions.
-                    let binds: HashMap<String, i64> = idx_names.iter()
+                    let binds: HashMap<String, i64> = idx_names
+                        .iter()
                         .zip(tuple.iter())
                         .map(|(n, v)| (n.clone(), *v))
                         .collect();
-                    let actual_multi: Vec<i64> = lhs_idx_exprs.iter()
+                    let actual_multi: Vec<i64> = lhs_idx_exprs
+                        .iter()
                         .map(|e| eval_simple_index(e, &binds))
                         .collect();
                     let flat = multi_to_flat_col_major(&actual_multi, &shape.shape, &shape.origin);
@@ -999,7 +1008,8 @@ fn evaluate_rhs(
                         }
                         acc
                     };
-                    let actual_multi: Vec<i64> = lhs_idx_exprs.iter()
+                    let actual_multi: Vec<i64> = lhs_idx_exprs
+                        .iter()
                         .map(|e| eval_simple_index(e, &ctx.loop_binds))
                         .collect();
                     let flat = multi_to_flat_col_major(&actual_multi, &vs.shape, &vs.origin);
@@ -1086,12 +1096,48 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
             let a = eval(&node.args[0], ctx).as_scalar().unwrap_or(f64::NAN);
             let b = eval(&node.args[1], ctx).as_scalar().unwrap_or(f64::NAN);
             Value::Scalar(match node.op.as_str() {
-                "==" => if (a - b).abs() == 0.0 { 1.0 } else { 0.0 },
-                "!=" => if (a - b).abs() != 0.0 { 1.0 } else { 0.0 },
-                "<"  => if a < b  { 1.0 } else { 0.0 },
-                "<=" => if a <= b { 1.0 } else { 0.0 },
-                ">"  => if a > b  { 1.0 } else { 0.0 },
-                ">=" => if a >= b { 1.0 } else { 0.0 },
+                "==" => {
+                    if (a - b).abs() == 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                "!=" => {
+                    if (a - b).abs() != 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                "<" => {
+                    if a < b {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                "<=" => {
+                    if a <= b {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                ">" => {
+                    if a > b {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                ">=" => {
+                    if a >= b {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
                 _ => f64::NAN,
             })
         }
@@ -1666,7 +1712,16 @@ fn extract_derivative_scalar(lhs: &Expr) -> Option<(String, Option<Vec<i64>>)> {
 fn extract_derivative_arrayop(
     lhs: &Expr,
     rhs: &Expr,
-) -> Option<(String, Vec<String>, Vec<(i64, i64)>, Vec<Expr>, Expr, Vec<String>, Vec<(i64, i64)>, String)> {
+) -> Option<(
+    String,
+    Vec<String>,
+    Vec<(i64, i64)>,
+    Vec<Expr>,
+    Expr,
+    Vec<String>,
+    Vec<(i64, i64)>,
+    String,
+)> {
     let Expr::Operator(node) = lhs else {
         return None;
     };
@@ -1726,7 +1781,16 @@ fn extract_derivative_arrayop(
         }
         other => (other.clone(), Vec::new(), Vec::new(), "+".to_string()),
     };
-    Some((var_name, idx_names, ranges, lhs_idx_exprs, rhs_body, contract_names, contract_ranges, reduce_op))
+    Some((
+        var_name,
+        idx_names,
+        ranges,
+        lhs_idx_exprs,
+        rhs_body,
+        contract_names,
+        contract_ranges,
+        reduce_op,
+    ))
 }
 
 /// Extract an algebraic `arrayop(expr=index(var, idx...)) = arrayop(...)`
@@ -1991,9 +2055,7 @@ fn eval_simple_index(expr: &Expr, binds: &HashMap<String, i64>) -> i64 {
         Expr::Integer(n) => *n,
         Expr::Number(n) => *n as i64,
         Expr::Variable(name) => binds.get(name).copied().unwrap_or(0),
-        Expr::Operator(node)
-            if (node.op == "+" || node.op == "-") && node.args.len() == 2 =>
-        {
+        Expr::Operator(node) if (node.op == "+" || node.op == "-") && node.args.len() == 2 => {
             let a = eval_simple_index(&node.args[0], binds);
             let b = eval_simple_index(&node.args[1], binds);
             if node.op == "+" { a + b } else { a - b }

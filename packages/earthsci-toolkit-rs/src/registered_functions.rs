@@ -803,7 +803,11 @@ mod tests {
     fn interp_linear_non_monotonic_rejects() {
         let err = evaluate_closed_function(
             "interp.linear",
-            &[a(&[10.0, 20.0, 30.0, 40.0]), a(&[0.0, 2.0, 1.0, 3.0]), s(1.5)],
+            &[
+                a(&[10.0, 20.0, 30.0, 40.0]),
+                a(&[0.0, 2.0, 1.0, 3.0]),
+                s(1.5),
+            ],
         )
         .unwrap_err();
         assert_eq!(err.code, "interp_non_monotonic_axis");
@@ -813,7 +817,11 @@ mod tests {
     fn interp_linear_equal_adjacent_rejects() {
         let err = evaluate_closed_function(
             "interp.linear",
-            &[a(&[10.0, 20.0, 30.0, 40.0]), a(&[0.0, 1.0, 1.0, 2.0]), s(0.5)],
+            &[
+                a(&[10.0, 20.0, 30.0, 40.0]),
+                a(&[0.0, 1.0, 1.0, 2.0]),
+                s(0.5),
+            ],
         )
         .unwrap_err();
         assert_eq!(err.code, "interp_non_monotonic_axis");
@@ -845,11 +853,8 @@ mod tests {
 
     #[test]
     fn interp_linear_axis_too_short_rejects() {
-        let err = evaluate_closed_function(
-            "interp.linear",
-            &[a(&[42.0]), a(&[0.0]), s(0.0)],
-        )
-        .unwrap_err();
+        let err = evaluate_closed_function("interp.linear", &[a(&[42.0]), a(&[0.0]), s(0.0)])
+            .unwrap_err();
         assert_eq!(err.code, "interp_axis_too_short");
     }
 

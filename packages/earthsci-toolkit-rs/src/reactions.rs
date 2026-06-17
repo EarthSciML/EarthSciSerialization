@@ -154,7 +154,11 @@ pub fn lower_reactions_to_equations(
             ..Default::default()
         });
 
-        equations.push(Equation { lhs, rhs, region: None });
+        equations.push(Equation {
+            lhs,
+            rhs,
+            region: None,
+        });
     }
 
     Ok(equations)

@@ -79,13 +79,15 @@ fn roundtrip_cross_metric_cartesian() {
 
 #[test]
 fn roundtrip_multi_output_ppm_reconstruction() {
-    let fixture = include_str!("../../../tests/discretizations/multi_output_ppm_reconstruction.esm");
+    let fixture =
+        include_str!("../../../tests/discretizations/multi_output_ppm_reconstruction.esm");
     assert_discretizations_roundtrip(fixture);
 }
 
 #[test]
 fn multi_output_stencil_structure() {
-    let fixture = include_str!("../../../tests/discretizations/multi_output_ppm_reconstruction.esm");
+    let fixture =
+        include_str!("../../../tests/discretizations/multi_output_ppm_reconstruction.esm");
     let parsed: EsmFile = load(fixture).expect("fixture should load cleanly");
     let discs = parsed
         .discretizations
@@ -104,10 +106,7 @@ fn multi_output_stencil_structure() {
     let outputs = provider["outputs"]
         .as_array()
         .expect("outputs must be an array");
-    let output_names: Vec<&str> = outputs
-        .iter()
-        .map(|v| v.as_str().unwrap_or(""))
-        .collect();
+    let output_names: Vec<&str> = outputs.iter().map(|v| v.as_str().unwrap_or("")).collect();
     assert_eq!(output_names, vec!["q_left_edge", "q_right_edge"]);
     // stencil must be an object keyed by output name
     let stencil_obj = provider["stencil"]
@@ -115,22 +114,17 @@ fn multi_output_stencil_structure() {
         .expect("multi_output_stencil.stencil must be a JSON object");
     assert!(stencil_obj.contains_key("q_left_edge"));
     assert!(stencil_obj.contains_key("q_right_edge"));
+    assert_eq!(stencil_obj["q_left_edge"].as_array().unwrap().len(), 2);
+    assert_eq!(stencil_obj["q_right_edge"].as_array().unwrap().len(), 2);
     assert_eq!(
-        stencil_obj["q_left_edge"].as_array().unwrap().len(),
-        2
+        provider["emits_location"],
+        Value::String("face".to_string())
     );
-    assert_eq!(
-        stencil_obj["q_right_edge"].as_array().unwrap().len(),
-        2
-    );
-    assert_eq!(provider["emits_location"], Value::String("face".to_string()));
     // primary is explicitly null
     assert_eq!(provider.get("primary"), Some(&Value::Null));
 
     // Consumer: ppm_flux
-    let consumer = discs
-        .get("ppm_flux")
-        .expect("ppm_flux must be present");
+    let consumer = discs.get("ppm_flux").expect("ppm_flux must be present");
 
     assert_eq!(consumer["kind"], Value::String("stencil".to_string()));
     let requires = consumer["requires"]

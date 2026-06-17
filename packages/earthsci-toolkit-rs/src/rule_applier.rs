@@ -387,10 +387,7 @@ fn resolve_side_or_literal(g: &Guard, b: &HashMap<String, Expr>, field: &str) ->
     }
 }
 
-fn guard_bind_side_axis(
-    g: &Guard,
-    b: &HashMap<String, Expr>,
-) -> Option<HashMap<String, Expr>> {
+fn guard_bind_side_axis(g: &Guard, b: &HashMap<String, Expr>) -> Option<HashMap<String, Expr>> {
     let pvar = param_str(g, "pvar")?;
     let side_name = resolve_side_or_literal(g, b, "side")?;
     let axis = side_to_axis(&side_name)?;

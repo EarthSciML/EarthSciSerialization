@@ -893,7 +893,11 @@ fn apply_couple(
             .cloned()
             .and_then(|v| serde_json::from_value::<Expr>(v).ok());
         if let (Some(lhs), Some(rhs)) = (lhs, rhs) {
-            new_equations.push(Equation { lhs, rhs, region: None });
+            new_equations.push(Equation {
+                lhs,
+                rhs,
+                region: None,
+            });
         }
     }
     if !new_equations.is_empty() {

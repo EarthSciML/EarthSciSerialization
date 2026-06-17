@@ -3299,7 +3299,7 @@ fn find_tests_dir() -> Option<std::path::PathBuf> {
 
 #[cfg(feature = "cli")]
 fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::collections::BTreeMap;
 
     fs::create_dir_all(out_dir)?;
@@ -3343,7 +3343,10 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
                 Err(e) => {
                     let msg = format!("valid/{name}: read error: {e}");
                     errors.push(msg.clone());
-                    validation_valid.insert(name, json!({ "parsed_successfully": false, "error": e.to_string() }));
+                    validation_valid.insert(
+                        name,
+                        json!({ "parsed_successfully": false, "error": e.to_string() }),
+                    );
                 }
             }
         }
@@ -3362,7 +3365,9 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
             match fs::read_to_string(&path) {
                 Ok(content) => {
                     let result = validate_complete(&content);
-                    let parsed_ok = !result.schema_errors.iter().any(|e| e.message.contains("JSON parse") || e.message.contains("failed to parse"));
+                    let parsed_ok = !result.schema_errors.iter().any(|e| {
+                        e.message.contains("JSON parse") || e.message.contains("failed to parse")
+                    });
                     validation_invalid.insert(name, json!({
                         "is_valid": result.is_valid,
                         "schema_errors": result.schema_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
@@ -3372,11 +3377,14 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
                     }));
                 }
                 Err(e) => {
-                    validation_invalid.insert(name, json!({
-                        "parsed_successfully": false,
-                        "error": e.to_string(),
-                        "is_expected_error": true,
-                    }));
+                    validation_invalid.insert(
+                        name,
+                        json!({
+                            "parsed_successfully": false,
+                            "error": e.to_string(),
+                            "is_expected_error": true,
+                        }),
+                    );
                 }
             }
         }
@@ -3397,12 +3405,15 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
             match fs::read_to_string(&path) {
                 Ok(content) => {
                     let result = validate_complete(&content);
-                    math_results.insert(name, json!({
-                        "loaded": true,
-                        "is_valid": result.is_valid,
-                        "schema_error_count": result.schema_errors.len(),
-                        "structural_error_count": result.structural_errors.len(),
-                    }));
+                    math_results.insert(
+                        name,
+                        json!({
+                            "loaded": true,
+                            "is_valid": result.is_valid,
+                            "schema_error_count": result.schema_errors.len(),
+                            "structural_error_count": result.structural_errors.len(),
+                        }),
+                    );
                 }
                 Err(e) => {
                     math_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
@@ -3424,17 +3435,16 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().into_owned();
             match fs::read_to_string(&path) {
-                Ok(content) => {
-                    match serde_json::from_str::<Value>(&content) {
-                        Ok(fixture) => {
-                            let result = run_graph_fixture(&fixture, &tests_dir);
-                            graph_results.insert(name, result);
-                        }
-                        Err(e) => {
-                            graph_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
-                        }
+                Ok(content) => match serde_json::from_str::<Value>(&content) {
+                    Ok(fixture) => {
+                        let result = run_graph_fixture(&fixture, &tests_dir);
+                        graph_results.insert(name, result);
                     }
-                }
+                    Err(e) => {
+                        graph_results
+                            .insert(name, json!({ "loaded": false, "error": e.to_string() }));
+                    }
+                },
                 Err(e) => {
                     graph_results.insert(name, json!({ "loaded": false, "error": e.to_string() }));
                 }
@@ -3458,12 +3468,18 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
 
     let results_file = out_dir.join("results.json");
     fs::write(&results_file, serde_json::to_string_pretty(&results)?)?;
-    println!("Rust conformance results written to: {}", results_file.display());
+    println!(
+        "Rust conformance results written to: {}",
+        results_file.display()
+    );
 
     if errors.is_empty() {
         println!("Rust conformance testing completed successfully!");
     } else {
-        eprintln!("Rust conformance testing completed with {} errors", errors.len());
+        eprintln!(
+            "Rust conformance testing completed with {} errors",
+            errors.len()
+        );
         std::process::exit(1);
     }
 
@@ -3471,18 +3487,25 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
 }
 
 #[cfg(feature = "cli")]
-fn run_graph_fixture(fixture: &serde_json::Value, tests_dir: &std::path::Path) -> serde_json::Value {
+fn run_graph_fixture(
+    fixture: &serde_json::Value,
+    tests_dir: &std::path::Path,
+) -> serde_json::Value {
     use serde_json::json;
 
     if let Some(arr) = fixture.as_array() {
         let mut cases = serde_json::Map::new();
         for (i, case) in arr.iter().enumerate() {
-            let name = case.get("name").and_then(|v| v.as_str())
+            let name = case
+                .get("name")
+                .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| format!("case_{i}"));
             let src = case.get("esm_file").or_else(|| case.get("input_file"));
             match src {
-                None => { cases.insert(name, json!({ "skipped": "no esm_file/input_file" })); }
+                None => {
+                    cases.insert(name, json!({ "skipped": "no esm_file/input_file" }));
+                }
                 Some(v) => {
                     let record = exercise_graph_esm_source(v, tests_dir);
                     cases.insert(name, record);
@@ -3512,7 +3535,10 @@ fn run_graph_fixture(fixture: &serde_json::Value, tests_dir: &std::path::Path) -
 }
 
 #[cfg(feature = "cli")]
-fn exercise_graph_esm_source(src: &serde_json::Value, tests_dir: &std::path::Path) -> serde_json::Value {
+fn exercise_graph_esm_source(
+    src: &serde_json::Value,
+    tests_dir: &std::path::Path,
+) -> serde_json::Value {
     use serde_json::json;
 
     let content = if let Some(filename) = src.as_str() {
@@ -3523,11 +3549,13 @@ fn exercise_graph_esm_source(src: &serde_json::Value, tests_dir: &std::path::Pat
         ];
         let path = candidates.iter().find(|p| p.exists());
         match path {
-            None => return json!({ "loaded": false, "error": format!("ESM file not found: {filename}") }),
+            None => {
+                return json!({ "loaded": false, "error": format!("ESM file not found: {filename}") });
+            }
             Some(p) => match fs::read_to_string(p) {
                 Ok(s) => s,
                 Err(e) => return json!({ "loaded": false, "error": e.to_string() }),
-            }
+            },
         }
     } else {
         // inline ESM object
