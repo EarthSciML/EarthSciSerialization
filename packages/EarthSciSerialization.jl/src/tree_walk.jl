@@ -338,8 +338,18 @@ function build_evaluator(model::Model;
             # Generalized einsum: detect contracted (reduction) indices in the RHS.
             # Contracted indices are keys in rhs.ranges that are NOT in output_idx.
             # Default reduce operator is "+" per ESM spec.
+            #
+            # A contracted range's bounds may be CONSTANT (structured grids /
+            # Route-B padded unstructured form — expand once, globally) or
+            # *expression-valued* per output cell (variable-valence unstructured
+            # reduction, e.g. bound `index(n_edges_on_cell, i) - 1`).  We collect
+            # the raw range spec for each contracted index and, for the constant
+            # ones, precompute the global iterator; expression-valued ones
+            # (`contract_const[d] === nothing`) are expanded per output cell
+            # inside the loop below via `_expand_int_range_dyn`.
             contract_names = String[]
-            contract_iters = Vector{Int}[]
+            contract_ranges = Vector{Any}[]            # raw [lo,hi]/[lo,step,hi]
+            contract_const  = Union{Vector{Int},Nothing}[]  # nothing ⇒ per-cell
             rhs_reduce = "+"
             if eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop"
                 rhs_op = eq.rhs::OpExpr
@@ -350,9 +360,12 @@ function build_evaluator(model::Model;
                              Dict{String,Any}() : rhs_op.ranges
                 for n in sort!(collect(keys(rhs_ranges)))
                     if !(n in idx_names)
+                        rspec = collect(rhs_ranges[n])
                         push!(contract_names, n)
-                        push!(contract_iters,
-                              collect(_expand_int_range(rhs_ranges[n])))
+                        push!(contract_ranges, rspec)
+                        push!(contract_const,
+                              _is_const_int_range(rspec) ?
+                                  collect(_expand_int_range(rspec)) : nothing)
                     end
                 end
             end
@@ -398,10 +411,21 @@ function build_evaluator(model::Model;
                     # Generalized einsum via external Tullio library: compile each
                     # contracted-index term separately, then accumulate at runtime
                     # using _NK_CONTRACTION (Tullio for +, loops for */max/min).
-                    # Size-independent: one node per contracted-index tuple (not
-                    # per output-cell × contracted-index tuple).
+                    # Constant-bound contracted ranges reuse the global iterator;
+                    # expression-valued ones are expanded for THIS output cell from
+                    # the current `idx_env` (variable-valence segment reduction —
+                    # the per-cell bound is the cell's true valence, so absent
+                    # neighbour slots are never iterated; no host-side padding).
+                    cell_contract_iters = Vector{Vector{Int}}(undef, length(contract_names))
+                    for d in 1:length(contract_names)
+                        cc = contract_const[d]
+                        cell_contract_iters[d] = cc === nothing ?
+                            collect(_expand_int_range_dyn(contract_ranges[d],
+                                                          idx_env, _const_arrays)) :
+                            cc
+                    end
                     k_nodes = _Node[]
-                    for k_tuple in Iterators.product(contract_iters...)
+                    for k_tuple in Iterators.product(cell_contract_iters...)
                         k_exprs = Dict{String,Expr}(
                             contract_names[d] => IntExpr(Int64(k_tuple[d]))
                             for d in 1:length(contract_names))
@@ -411,9 +435,16 @@ function build_evaluator(model::Model;
                         rhs_r = _resolve_indices(term, array_var_info, var_map, _const_arrays)
                         push!(k_nodes, _compile(rhs_r, var_map, param_sym_set, reg_funcs))
                     end
-                    push!(rhs_list, (idx, _mknode(kind=_NK_CONTRACTION,
-                                                  op=Symbol(rhs_reduce),
-                                                  children=k_nodes)))
+                    if isempty(k_nodes)
+                        # A per-cell dynamic bound can be empty (e.g. an isolated
+                        # cell with zero neighbours). Emit the reduction identity
+                        # (0 for +; degenerate for */max/min but not a real case).
+                        push!(rhs_list, (idx, _mknode(kind=_NK_LITERAL, literal=0.0)))
+                    else
+                        push!(rhs_list, (idx, _mknode(kind=_NK_CONTRACTION,
+                                                      op=Symbol(rhs_reduce),
+                                                      children=k_nodes)))
+                    end
                 end
             end
         end
@@ -982,14 +1013,34 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                nothing : _sub_preserving(expr.expr_body, bindings)
     new_values = expr.values === nothing ?
                  nothing : Expr[_sub_preserving(v, bindings) for v in expr.values]
+    # Substitute loop-var bindings into range BOUNDS too, so a nested arrayop
+    # whose reduction bound references an OUTER loop index — e.g. a per-cell
+    # variable-valence reduction `k ∈ [1, index(n_edges_on_cell, i)]` inside an
+    # outer `i`-loop — has `i` resolved when the inner arrayop is later expanded.
+    # Bounds are Int (pass through) or Expr (recursively substituted).
+    new_ranges = _sub_ranges(expr.ranges, bindings)
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim,
                   int_var=expr.int_var, lower=expr.lower, upper=expr.upper,
                   output_idx=expr.output_idx, expr_body=new_body,
-                  reduce=expr.reduce, ranges=expr.ranges,
+                  reduce=expr.reduce, ranges=new_ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value)
+end
+
+# Substitute loop-var bindings into an arrayop `ranges` dict's bound expressions.
+# Each entry is a vector whose elements are Int (left as-is) or an Expr bound
+# (recursively `_sub_preserving`d). Returns `nothing` unchanged when ranges is
+# nothing; otherwise a fresh Dict so the original is never mutated.
+_sub_ranges(ranges::Nothing, ::Dict{String,Expr}) = nothing
+function _sub_ranges(ranges, bindings::Dict{String,Expr})
+    out = Dict{String,Any}()
+    for (k, v) in ranges
+        out[String(k)] = v isa AbstractVector ?
+            Any[(e isa Expr ? _sub_preserving(e, bindings) : e) for e in v] : v
+    end
+    return out
 end
 
 # Resolve observed-into-observed substitutions to a fixed point. After
@@ -1048,6 +1099,30 @@ function _expand_int_range(r::AbstractVector)
         "evaluator; use a structured-grid discretization or ESD build_evaluator"))
     length(r) == 2 && return Int(r[1]):Int(r[2])
     length(r) == 3 && return Int(r[1]):Int(r[2]):Int(r[3])
+    throw(TreeWalkError("E_TREEWALK_RANGE_ARITY",
+          "range entry must have 2 or 3 entries, got $(length(r))"))
+end
+
+# True iff every element of a range spec is already a concrete Integer — i.e.
+# the range can be expanded once, globally, with `_expand_int_range` (the
+# constant-bound fast path used by structured grids and the Route-B padded
+# unstructured form).
+_is_const_int_range(r::AbstractVector) = all(x -> x isa Integer, r)
+
+# Expand a ranges entry whose bounds may be *expression-valued* (e.g. a
+# per-cell reduction bound `index(n_edges_on_cell, i) - 1`).  Each non-Integer
+# element is evaluated to a concrete Int via `_eval_const_int` under the current
+# output-cell binding `idx_env` and the model's `const_arrays` — exactly the
+# primitive already used to resolve indirect neighbour gathers.  This realizes a
+# variable-valence / ragged segment reduction with NO host-side padding: the
+# upper bound is each cell's true valence, evaluated lazily per output cell.
+# Integer elements pass through unchanged, so a fully-constant range gives the
+# same result as `_expand_int_range` (backward compatible).
+function _expand_int_range_dyn(r::AbstractVector, idx_env::Dict{String,Int},
+                               const_arrays::AbstractDict)
+    bnd(x) = x isa Integer ? Int(x) : _eval_const_int(x, idx_env, const_arrays)
+    length(r) == 2 && return bnd(r[1]):bnd(r[2])
+    length(r) == 3 && return bnd(r[1]):bnd(r[2]):bnd(r[3])
     throw(TreeWalkError("E_TREEWALK_RANGE_ARITY",
           "range entry must have 2 or 3 entries, got $(length(r))"))
 end
@@ -1254,7 +1329,18 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
     ranges_dict  = arrayop_expr.ranges === nothing ? Dict{String,Any}() : arrayop_expr.ranges
     reduce_op    = arrayop_expr.reduce === nothing ? "+" : String(arrayop_expr.reduce)
     contract_names = sort!(String[n for n in keys(ranges_dict)])
-    contract_iters = [collect(_expand_int_range(ranges_dict[n])) for n in contract_names]
+    # A contracted range bound may be a per-cell INDEX EXPRESSION (e.g. the
+    # variable-valence unstructured reduction's `index(n_edges_on_cell, i)`).
+    # This scalar-arrayop resolver is reached from `_resolve_indices` AFTER the
+    # outer loop variable has been substituted to a literal in `body`/`ranges`,
+    # so the bound is evaluable now via `_eval_const_int` against `const_arrays`
+    # with an empty idx_env (any surviving symbol would be unbound — an error,
+    # as before). Constant bounds pass through unchanged (backward compatible).
+    _empty_idx = Dict{String,Int}()
+    contract_iters = [collect(_is_const_int_range(ranges_dict[n]) ?
+                              _expand_int_range(ranges_dict[n]) :
+                              _expand_int_range_dyn(ranges_dict[n], _empty_idx, const_arrays))
+                      for n in contract_names]
     isempty(contract_names) &&
         return _resolve_indices(body, array_var_info, var_map, const_arrays)
     terms = Expr[]

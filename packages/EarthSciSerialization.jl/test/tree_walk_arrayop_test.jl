@@ -495,4 +495,119 @@ _arrayop2d(body, i, ilo, ihi, j, jlo, jhi) = OpExpr("arrayop", ESM.Expr[];
         @test isapprox(du[vmap["u[3]"]], -1.5; rtol=1e-12)
     end
 
+    # ------------------------------------------------------------------
+    # 19. Mesh reduction with PER-CELL DYNAMIC bound (variable valence, Route A)
+    #     D(u[c]) = sum_{k=1}^{n_edges_on_cell[c]} coeff[c,k]*(u[cells_on_cell[c,k]]-u[c])
+    #
+    #     The reduction's upper bound is itself an INDEX EXPRESSION over a
+    #     connectivity const_array (`index(n_edges_on_cell, c)`), evaluated PER
+    #     OUTPUT CELL by the einsum branch — no host-side constant-max-edges
+    #     padding (cf. test 18, which pads to a global max_k and zeroes padding
+    #     slots).  This pins the variable-valence segment reduction that lets ESD
+    #     drop Route B's padding.
+    #
+    #     Fixture: an OPEN 4-cell strip  1—2—3—4 (path graph, NOT a closed loop).
+    #       valence n_edges_on_cell = [1, 2, 2, 1]  (boundary cells 1,4 have one).
+    #       all edge metrics = 1 ⇒ every real-slot coeff = 1.
+    #     The const_arrays are allocated (n_cells, max_k=2) but each cell's bound
+    #     is its TRUE valence, so the trailing padding slot is NEVER read — proven
+    #     by POISONING the padding slots so that reading one corrupts the result
+    #     by ~1e9: the padding neighbour points at a REAL cell (so the gather is
+    #     in-range, not a ghost) and the padding coeff is 1e9.  If the engine
+    #     iterated a padding slot, du[boundary] would be ~1e9 instead of O(1).
+    #     (Verified: the CONSTANT-bound form below DOES read it — du[1]≈1e9 —
+    #     while the dynamic bound stays exact.)
+    #
+    #     u = [0,1,0,0] ⇒ each cell sums over its REAL neighbours only:
+    #       du[1] = (u[2]-u[1])               =  1   (valence-1 boundary cell)
+    #       du[2] = (u[1]-u[2]) + (u[3]-u[2]) = -2
+    #       du[3] = (u[2]-u[3]) + (u[4]-u[3]) =  1
+    #       du[4] = (u[3]-u[4])               =  0   (valence-1 boundary cell)
+    # ------------------------------------------------------------------
+    @testset "19. Mesh reduction: per-cell dynamic bound (variable valence, no padding)" begin
+        N_c = 4; max_k = 2
+        POISON_NB = 2.0        # padding neighbour → a REAL cell (in-range gather)
+        POISON_W  = 1.0e9      # padding-slot coeff that must never be used
+        # cells_on_cell[c,k]: real neighbour at slot k≤valence; poison beyond.
+        cells_on_cell_data = [2.0  POISON_NB;    # cell 1: nbr 2          (valence 1)
+                              1.0  3.0;          # cell 2: nbrs 1, 3      (valence 2)
+                              2.0  4.0;          # cell 3: nbrs 2, 4      (valence 2)
+                              3.0  POISON_NB]    # cell 4: nbr 3          (valence 1)
+        coeff_data = [1.0  POISON_W;             # cell 1
+                      1.0  1.0;                  # cell 2
+                      1.0  1.0;                  # cell 3
+                      1.0  POISON_W]             # cell 4
+        n_edges_on_cell_data = [1.0, 2.0, 2.0, 1.0]   # per-cell valence (the bound)
+
+        vars = Dict("u" => ModelVariable(StateVariable))
+        _c  = _v("c"); _k_var = _v("k")
+        coeff_idx  = _op("index", _v("coeff"), _c, _k_var)
+        nb_expr    = _op("index", _v("cells_on_cell"), _c, _k_var)
+        u_nb       = _op("index", _v("u"), nb_expr)
+        u_c        = _op("index", _v("u"), _c)
+        body       = _op("*", coeff_idx, _op("-", u_nb, u_c))
+
+        # Per-cell DYNAMIC reduction bound: k ∈ [1, index(n_edges_on_cell, c)].
+        k_bound = _op("index", _v("n_edges_on_cell"), _c)
+
+        lhs = OpExpr("arrayop", ESM.Expr[];
+            output_idx=Any["c"],
+            expr_body=_D_idx("u", _c),
+            ranges=Dict("c" => [1, N_c]))
+        rhs = OpExpr("arrayop", ESM.Expr[];
+            output_idx=Any["c"],
+            reduce="+",
+            ranges=Dict("c" => Any[1, N_c], "k" => Any[1, k_bound]),
+            expr_body=body)
+        model = ESM.Model(vars, [ESM.Equation(lhs, rhs)])
+
+        ics = Dict("u[$c]" => 0.0 for c in 1:N_c)
+        f!, u0, p, _, vmap = build_evaluator(model;
+            initial_conditions=ics,
+            const_arrays=Dict("cells_on_cell"   => cells_on_cell_data,
+                              "coeff"           => coeff_data,
+                              "n_edges_on_cell" => n_edges_on_cell_data))
+
+        # u = [0,1,0,0]
+        u = copy(u0)
+        u[vmap["u[1]"]] = 0.0; u[vmap["u[2]"]] = 1.0
+        u[vmap["u[3]"]] = 0.0; u[vmap["u[4]"]] = 0.0
+        du = similar(u0); f!(du, u, p, 0.0)
+        @test isapprox(du[vmap["u[1]"]],  1.0; atol=1e-12)
+        @test isapprox(du[vmap["u[2]"]], -2.0; atol=1e-12)
+        @test isapprox(du[vmap["u[3]"]],  1.0; atol=1e-12)
+        @test isapprox(du[vmap["u[4]"]],  0.0; atol=1e-12)
+
+        # Uniform field u≡1 ⇒ exact-zero discrete Laplacian everywhere, INCLUDING
+        # the valence-1 boundary cells (no spurious term from the dropped slot).
+        u1 = copy(u0)
+        for c in 1:N_c; u1[vmap["u[$c]"]] = 1.0; end
+        du1 = similar(u0); f!(du1, u1, p, 0.0)
+        for c in 1:N_c
+            @test isapprox(du1[vmap["u[$c]"]], 0.0; atol=1e-12)
+        end
+
+        # Backward-compat guard: the CONSTANT-bound padded form (test 18) must
+        # still expand once, globally. Reuse the same model with a constant k
+        # range [1, max_k] and zeroed-padding coeff/sentinel neighbour table.
+        cells_pad = [2.0 0.0; 1.0 3.0; 2.0 4.0; 3.0 0.0]   # 0 sentinel padding
+        coeff_pad = [1.0 0.0; 1.0 1.0; 1.0 1.0; 1.0 0.0]   # zeroed padding
+        rhs_const = OpExpr("arrayop", ESM.Expr[];
+            output_idx=Any["c"], reduce="+",
+            ranges=Dict("c" => Any[1, N_c], "k" => Any[1, max_k]),
+            expr_body=body)
+        model_const = ESM.Model(vars, [ESM.Equation(lhs, rhs_const)])
+        f2!, u02, p2, _, vmap2 = build_evaluator(model_const;
+            initial_conditions=Dict("u[$c]" => 0.0 for c in 1:N_c),
+            const_arrays=Dict("cells_on_cell" => cells_pad, "coeff" => coeff_pad))
+        uc = copy(u02)
+        uc[vmap2["u[1]"]] = 0.0; uc[vmap2["u[2]"]] = 1.0
+        uc[vmap2["u[3]"]] = 0.0; uc[vmap2["u[4]"]] = 0.0
+        du2 = similar(u02); f2!(du2, uc, p2, 0.0)
+        @test isapprox(du2[vmap2["u[1]"]],  1.0; atol=1e-12)
+        @test isapprox(du2[vmap2["u[2]"]], -2.0; atol=1e-12)
+        @test isapprox(du2[vmap2["u[3]"]],  1.0; atol=1e-12)
+        @test isapprox(du2[vmap2["u[4]"]],  0.0; atol=1e-12)
+    end
+
 end
