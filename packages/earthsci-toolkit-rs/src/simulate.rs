@@ -756,14 +756,12 @@ impl Compiled {
         if !self.algebraic_topo.is_empty() && !time.is_empty() {
             let n_obs0 = self.observed_exprs.len();
             let n_states = self.state_names.len();
-            let n_samples = time.len();
             let mut y_eff = vec![0.0f64; n_states];
             let mut obs_buf = vec![0.0f64; n_obs0];
-            for k in 0..n_samples {
+            for (k, &t) in time.iter().enumerate() {
                 for i in 0..n_states {
                     y_eff[i] = state[i][k];
                 }
-                let t = time[k];
                 for (i, e) in self.observed_exprs.iter().enumerate() {
                     obs_buf[i] = interpret(e, &y_eff, &param_vec, &obs_buf, t);
                 }

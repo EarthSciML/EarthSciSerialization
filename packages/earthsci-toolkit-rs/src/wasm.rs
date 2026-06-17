@@ -201,14 +201,14 @@ pub fn substitute(json_str: &str, bindings_str: &str) -> Result<String, JsValue>
 
     // Apply substitutions to all models
     if let Some(ref mut models) = result_file.models {
-        for (_, model) in models.iter_mut() {
+        for model in models.values_mut() {
             *model = substitute_in_model(model, &expr_bindings);
         }
     }
 
     // Apply substitutions to reaction systems if present
     if let Some(ref mut reactions) = result_file.reaction_systems {
-        for (_, reaction_system) in reactions.iter_mut() {
+        for reaction_system in reactions.values_mut() {
             *reaction_system = substitute_in_reaction_system(reaction_system, &expr_bindings);
         }
     }

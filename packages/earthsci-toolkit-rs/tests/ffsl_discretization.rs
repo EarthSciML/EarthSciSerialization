@@ -30,7 +30,7 @@ fn ffsl_rule_with_stencil_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
 
@@ -45,7 +45,7 @@ fn ffsl_rule_missing_cfl_policy_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
 
@@ -59,6 +59,6 @@ fn stencil_rule_with_ffsl_field_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }

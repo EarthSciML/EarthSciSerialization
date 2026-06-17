@@ -25,7 +25,7 @@ fn enums_categorical_lookup_fixture_lowers_enum_ops() {
     let expr = r_c.expression.as_ref().expect("r_c has expression");
 
     let Expr::Operator(node) = expr else {
-        panic!("r_c expression must be an Operator node, got {:?}", expr);
+        panic!("r_c expression must be an Operator node, got {expr:?}");
     };
     assert_eq!(node.op, "index");
 

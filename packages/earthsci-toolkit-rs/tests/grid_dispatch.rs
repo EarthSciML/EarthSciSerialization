@@ -24,7 +24,7 @@ fn grid_dispatch_with_parent_grid_family_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
 
@@ -38,7 +38,7 @@ fn grid_dispatch_with_inline_stencil_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
 
@@ -53,7 +53,7 @@ fn grid_dispatch_with_single_variant_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
 
@@ -68,6 +68,6 @@ fn grid_dispatch_variant_missing_grid_family_is_rejected() {
     let bad = serde_json::to_string(&doc).unwrap();
     match load(&bad) {
         Err(EsmError::SchemaValidation(_)) => {}
-        other => panic!("expected SchemaValidation error, got {:?}", other),
+        other => panic!("expected SchemaValidation error, got {other:?}"),
     }
 }
