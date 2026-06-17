@@ -105,9 +105,10 @@ end
     du = similar(u0)
     f!(du, u0, p, 0.0)
 
+    # Grid is periodic: boundary cells wrap to the opposite side.
     for i in 1:n
-        u_left  = i > 1 ? sin(2π * cell_x(i - 1)) : 0.0
-        u_right = i < n ? sin(2π * cell_x(i + 1)) : 0.0
+        u_left  = sin(2π * cell_x(mod1(i - 1, n)))
+        u_right = sin(2π * cell_x(mod1(i + 1, n)))
         expected = (u_right - u_left) / (2 * dx)
         @test isapprox(du[var_map["u[$i]"]], expected; rtol=1e-12, atol=1e-12)
     end

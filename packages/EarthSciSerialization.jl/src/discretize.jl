@@ -343,12 +343,17 @@ function _arrayop_lift_equations!(model::Dict{String,Any},
                                    lift_1d::Bool = false)
     eqns = get(model, "equations", nothing)
     eqns isa AbstractVector || return
+    bcs = get(model, "boundary_conditions", nothing)
     new_eqns = Any[]
     for eqn_any in eqns
         eqn = eqn_any isa Dict{String,Any} ? eqn_any :
             Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
-        _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
+        info = _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
         push!(new_eqns, eqn)
+        if info !== nothing && bcs isa AbstractDict && !isempty(bcs)
+            append!(new_eqns,
+                    _apply_nonperiodic_bcs!(eqn, info, bcs, grids, variables))
+        end
     end
     model["equations"] = new_eqns
 end
@@ -526,6 +531,40 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
     rhs_raw, _ = _inline_elementwise_arrayops(rhs_raw, dim_to_canon)
+    # Keep a pre-fold copy: boundary-cell emission (ess-gp3) instantiates the
+    # stencil at literal indices and must see raw i±k offsets, not the
+    # periodic ifelse wrappers.
+    rhs_prefold = _deep_native(rhs_raw)
+
+    periodic_dims = get(gmeta, "periodic_dims", nothing)
+    if periodic_dims isa AbstractVector && !isempty(periodic_dims)
+        # Fold EVERY shaped variable on this grid, not just the equation's
+        # LHS variable: a stencil RHS may index other fields (e.g. a
+        # space-varying velocity in an advection rule), and an unfolded
+        # out-of-range read would silently hit the zero-ghost convention
+        # instead of wrapping.
+        var_periodic_sizes = Dict{String,Vector{Tuple{Int,Bool}}}()
+        for (vname, vm) in variables
+            vshape = get(vm, "shape", nothing)
+            vshape isa AbstractVector && !isempty(vshape) || continue
+            get(vm, "grid", nothing) == grid_name || continue
+            dims_info = Tuple{Int,Bool}[]
+            all_found = true
+            for d in eachindex(vshape)
+                dim_name_p = String(vshape[d])
+                sz_p = get(dim_sizes, dim_name_p, nothing)
+                sz_p isa Integer || (all_found = false; break)
+                is_periodic = dim_name_p in (String(p) for p in periodic_dims)
+                push!(dims_info, (Int(sz_p), is_periodic))
+            end
+            if all_found && any(d -> d[2], dims_info)
+                var_periodic_sizes[String(vname)] = dims_info
+            end
+        end
+        if !isempty(var_periodic_sizes)
+            _apply_periodic_folding!(rhs_raw, var_periodic_sizes)
+        end
+    end
 
     eqn["rhs"] = Dict{String,Any}(
         "op"         => "arrayop",
@@ -534,7 +573,288 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
         "expr"       => rhs_raw,
         "ranges"     => ranges,
     )
-    return
+
+    wrt = lhs_expr.wrt === nothing ? "t" : lhs_expr.wrt
+    return (var_name = var_name,
+            shape = String[String(s) for s in shape],
+            grid_name = String(grid_name),
+            output_idx = String[String(ix) for ix in output_idx],
+            rhs_prefold = rhs_prefold,
+            wrt = wrt)
+end
+
+# ============================================================================
+# Periodic boundary folding and non-periodic BC cell emission (ess-1nm)
+# ============================================================================
+
+# Walk a raw JSON-like body Dict and fold stencil index accesses for periodic
+# grid dimensions. For each `index(u, e1, e2, ...)` node where variable `u`
+# lives on a periodic dimension d of size N, replaces `e_d` with:
+#   ifelse(e_d < 1, e_d + N, ifelse(e_d > N, e_d - N, e_d))
+# This is exact for nearest-neighbor stencils where e_d ∈ {0, 1, …, N, N+1}.
+# At _build_arrayop scalarization time, e_d is a concrete integer, so the
+# ifelse collapses to the correct in-bounds index.
+function _apply_periodic_folding!(body::Any,
+                                   var_periodic_sizes::Dict{String,Vector{Tuple{Int,Bool}}})
+    body isa AbstractDict || return
+    op = get(body, "op", nothing)
+    if op == "index"
+        args = get(body, "args", nothing)
+        args isa AbstractVector && length(args) >= 2 || return
+        varname = args[1] isa AbstractString ? String(args[1]) : nothing
+        if varname !== nothing
+            dims = get(var_periodic_sizes, varname, nothing)
+            if dims !== nothing
+                new_args = Any[args[1]]
+                for (d, idx_expr) in enumerate(args[2:end])
+                    if d <= length(dims)
+                        N, is_periodic = dims[d]
+                        if is_periodic && !(idx_expr isa AbstractString)
+                            idx_expr = Dict{String,Any}(
+                                "op"   => "ifelse",
+                                "args" => Any[
+                                    Dict{String,Any}("op" => "<",
+                                        "args" => Any[idx_expr, 1]),
+                                    Dict{String,Any}("op" => "+",
+                                        "args" => Any[idx_expr, N]),
+                                    Dict{String,Any}("op" => "ifelse",
+                                        "args" => Any[
+                                            Dict{String,Any}("op" => ">",
+                                                "args" => Any[idx_expr, N]),
+                                            Dict{String,Any}("op" => "-",
+                                                "args" => Any[idx_expr, N]),
+                                            idx_expr
+                                        ])
+                                ]
+                            )
+                        end
+                    end
+                    push!(new_args, idx_expr)
+                end
+                body["args"] = new_args
+                return
+            end
+        end
+    end
+    for val in values(body)
+        if val isa AbstractDict
+            _apply_periodic_folding!(val, var_periodic_sizes)
+        elseif val isa AbstractVector
+            for item in val
+                item isa AbstractDict && _apply_periodic_folding!(item, var_periodic_sizes)
+            end
+        end
+    end
+end
+
+# Max |offset| per canonical index variable across every index read.
+function _scan_stencil_reach!(reach::Dict{String,Int}, node)
+    node isa AbstractDict || return
+    if get(node, "op", nothing) == "index"
+        args = get(node, "args", Any[])
+        for a in args[2:end]
+            if a isa AbstractDict && get(a, "op", nothing) in ("+", "-")
+                aa = get(a, "args", Any[])
+                if length(aa) == 2 && aa[1] isa AbstractString && aa[2] isa Number
+                    k = abs(Int(aa[2]))
+                    v = String(aa[1])
+                    haskey(reach, v) && (reach[v] = max(reach[v], k))
+                end
+            end
+        end
+    end
+    for a in get(node, "args", Any[])
+        _scan_stencil_reach!(reach, a)
+    end
+end
+
+# Instantiate a stencil body at literal cell indices: canonical index
+# variables resolve via `fixed`, offset arithmetic folds, periodic reads
+# wrap numerically, and bounded out-of-range reads resolve per the read
+# variable's BC (dirichlet value / neumann-zero mirror / zero-ghost
+# passthrough when undeclared).
+function _instantiate_bc_cell(node, fixed::Dict{String,Int},
+                               variables::Dict{String,Dict{String,Any}},
+                               dim_sizes::AbstractDict,
+                               periodic::Set{String},
+                               bc_map::Dict{Tuple{String,String,Symbol},Tuple{String,Any}})
+    node isa AbstractDict || return node
+    if get(node, "op", nothing) == "index"
+        args = get(node, "args", Any[])
+        if !isempty(args) && args[1] isa AbstractString
+            vname = String(args[1])
+            vmeta = get(variables, vname, nothing)
+            vshape = vmeta === nothing ? nothing : get(vmeta, "shape", nothing)
+            if vshape isa AbstractVector && length(vshape) == length(args) - 1
+                new_args = Any[vname]
+                for (p, a) in enumerate(args[2:end])
+                    e = _fold_index_arg(a, fixed)
+                    if e === nothing
+                        push!(new_args, a)
+                        continue
+                    end
+                    dn = String(vshape[p])
+                    N = Int(get(dim_sizes, dn, 0))
+                    if N > 0 && dn in periodic
+                        e = mod(e - 1, N) + 1
+                    elseif N > 0 && (e < 1 || e > N)
+                        side = e < 1 ? :min : :max
+                        entry = get(bc_map, (vname, dn, side), nothing)
+                        if entry !== nothing
+                            kind, value = entry
+                            _check_bc_supported(kind, value, vname, dn)
+                            if kind == "dirichlet"
+                                return _deep_native(value)
+                            else  # zero-flux neumann
+                                e = e < 1 ? 1 - e : 2N + 1 - e
+                            end
+                        end
+                    end
+                    push!(new_args, e)
+                end
+                return Dict{String,Any}("op" => "index", "args" => new_args)
+            end
+        end
+    end
+    out = Dict{String,Any}()
+    for (k, v) in node
+        key = String(k)
+        out[key] = key == "args" && v isa AbstractVector ?
+            Any[_instantiate_bc_cell(a, fixed, variables, dim_sizes, periodic, bc_map)
+                for a in v] : v
+    end
+    return out
+end
+
+# Fold an index-argument expression to a concrete Int given fixed canonical
+# index values; `nothing` when symbols remain.
+function _fold_index_arg(a, fixed::Dict{String,Int})
+    a isa Integer && return Int(a)
+    a isa AbstractFloat && return (isinteger(a) ? Int(a) : nothing)
+    a isa AbstractString && return get(fixed, String(a), nothing)
+    a isa AbstractDict || return nothing
+    op = get(a, "op", nothing)
+    op in ("+", "-") || return nothing
+    args = get(a, "args", Any[])
+    length(args) == 2 || return nothing
+    x = _fold_index_arg(args[1], fixed)
+    y = _fold_index_arg(args[2], fixed)
+    (x === nothing || y === nothing) && return nothing
+    return op == "+" ? x + y : x - y
+end
+
+function _check_bc_supported(kind::String, value, var::String, dim::String)
+    kind == "dirichlet" && return
+    if kind == "neumann"
+        (value isa Number && iszero(value)) && return
+        throw(RuleEngineError("E_BC_UNSUPPORTED",
+            "nonzero-Neumann boundary condition on '$var' along '$dim' is not " *
+            "yet supported by the arrayop lift (requires grid-spacing-aware " *
+            "ghost extrapolation)"))
+    end
+    throw(RuleEngineError("E_BC_UNSUPPORTED",
+        "boundary condition kind '$kind' on '$var' along '$dim' is not " *
+        "supported by the arrayop lift (supported: dirichlet, zero-flux neumann)"))
+end
+
+# Emit boundary-cell equations for non-periodic dimensions with declared
+# dirichlet/neumann BCs. Shrinks the interior arrayop range by the stencil
+# reach on each bounded side, then emits one scalar equation per excluded
+# boundary cell with ghost reads substituted per BC kind:
+#   dirichlet → BC `value` expr; neumann-0 → mirror back in-range (zero-flux).
+# Reads of periodic dims wrap numerically; undeclared ghost reads keep the
+# zero-ghost convention.
+function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
+                                  bcs::AbstractDict,
+                                  grids::Dict{String,Dict{String,Any}},
+                                  variables::Dict{String,Dict{String,Any}})
+    gmeta = get(grids, info.grid_name, nothing)
+    gmeta isa AbstractDict || return Any[]
+    dim_sizes = get(gmeta, "dim_sizes", nothing)
+    dim_sizes isa AbstractDict || return Any[]
+    periodic = Set{String}(String.(get(gmeta, "periodic_dims", Any[])))
+
+    bc_map = Dict{Tuple{String,String,Symbol},Tuple{String,Any}}()
+    for bcname in sort!(collect(String.(keys(bcs))))
+        bc = bcs[bcname]
+        bc isa AbstractDict || continue
+        v = get(bc, "variable", nothing)
+        k = get(bc, "kind", nothing)
+        s = get(bc, "side", nothing)
+        (v isa AbstractString && k isa AbstractString && s isa AbstractString) || continue
+        for dn_any in keys(dim_sizes)
+            dn = String(dn_any)
+            if String(s) == dn * "min"
+                bc_map[(String(v), dn, :min)] = (String(k), get(bc, "value", 0))
+            elseif String(s) == dn * "max"
+                bc_map[(String(v), dn, :max)] = (String(k), get(bc, "value", 0))
+            end
+        end
+    end
+    isempty(bc_map) && return Any[]
+
+    var    = info.var_name
+    shape  = info.shape
+    idxs   = info.output_idx
+    nd     = length(shape)
+    sizes  = Int[Int(dim_sizes[shape[d]]) for d in 1:nd]
+
+    reach = Dict{String,Int}(ix => 0 for ix in idxs)
+    _scan_stencil_reach!(reach, info.rhs_prefold)
+
+    lo = ones(Int, nd)
+    hi = copy(sizes)
+    bounded = falses(nd)
+    for d in 1:nd
+        dn = shape[d]
+        dn in periodic && continue
+        r = get(reach, idxs[d], 0)
+        for (sym, isback) in ((:min, false), (:max, true))
+            entry = get(bc_map, (var, dn, sym), nothing)
+            entry === nothing && continue
+            kind, value = entry
+            _check_bc_supported(kind, value, var, dn)
+            r == 0 && continue
+            if isback
+                hi[d] = sizes[d] - r
+            else
+                lo[d] = 1 + r
+            end
+            bounded[d] = true
+        end
+    end
+    any(bounded) || return Any[]
+    for d in 1:nd
+        lo[d] <= hi[d] || throw(RuleEngineError("E_BC_GRID_TOO_SMALL",
+            "dimension '$(shape[d])' (size $(sizes[d])) is too small for the " *
+            "stencil reach $(get(reach, idxs[d], 0)) with boundary conditions " *
+            "on both sides"))
+    end
+
+    for d in 1:nd
+        bounded[d] || continue
+        eqn["lhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
+        eqn["rhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
+    end
+
+    extra = Any[]
+    for cell in Iterators.product((1:sizes[d] for d in 1:nd)...)
+        all(d -> lo[d] <= cell[d] <= hi[d], 1:nd) && continue
+        fixed = Dict{String,Int}(idxs[d] => cell[d] for d in 1:nd)
+        rhs_cell = _instantiate_bc_cell(info.rhs_prefold, fixed, variables,
+                                        dim_sizes, periodic, bc_map)
+        lhs_cell = Dict{String,Any}(
+            "op"   => "D",
+            "args" => Any[Dict{String,Any}(
+                "op" => "index", "args" => Any[var, cell...])],
+            "wrt"  => info.wrt,
+        )
+        push!(extra, Dict{String,Any}(
+            "lhs" => lhs_cell,
+            "rhs" => rhs_cell,
+        ))
+    end
+    return extra
 end
 
 # ============================================================================
