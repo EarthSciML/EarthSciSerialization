@@ -3,7 +3,6 @@
 //! Tests for expression analysis functions like free variables, evaluation, simplification.
 
 use earthsci_toolkit::*;
-use serde_json;
 use std::collections::HashMap;
 
 /// Test free variables detection

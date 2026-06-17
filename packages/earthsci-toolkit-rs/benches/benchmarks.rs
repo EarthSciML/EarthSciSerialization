@@ -68,6 +68,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
                     Expr::Variable("k".to_string()),
                     Expr::Variable(format!("x{}_{}", i, (j + 1) % equations_per_model)),
                 ),
+                region: None,
             });
         }
 
@@ -119,6 +120,7 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
         grids: None,
         discretizations: None,
         staggering_rules: None,
+        function_tables: None,
     }
 }
 

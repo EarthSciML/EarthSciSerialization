@@ -189,6 +189,35 @@ fn simplify_operator(op: &str, args: &[Expr]) -> Expr {
     }
 }
 
+/// Evaluate a scalar AST expression against a map of float variable bindings.
+///
+/// This is the official ESS Rust runner entry point (the public API exported
+/// as `earthsci_toolkit::evaluate`). It delegates to
+/// [`crate::simulate::fold_constant_expr`] — the single canonical scalar
+/// evaluator for this binding.
+///
+/// `bindings` maps free-variable names to their `f64` values. The special
+/// key `"t"` supplies the simulation time (defaults to `0.0` if absent).
+/// Returns `Ok(f64)` on success, or `Err(Vec<String>)` listing unbound
+/// variable names if any variable in `expr` is missing from `bindings`.
+///
+/// # Examples
+///
+/// ```
+/// use earthsci_toolkit::{Expr, evaluate};
+/// use std::collections::HashMap;
+///
+/// let expr = Expr::Variable("x".to_string());
+/// let mut bindings = HashMap::new();
+/// bindings.insert("x".to_string(), 3.14_f64);
+/// let result = evaluate(&expr, &bindings).unwrap();
+/// assert!((result - 3.14).abs() < 1e-10);
+/// ```
+#[cfg(not(target_arch = "wasm32"))]
+pub fn evaluate(expr: &Expr, bindings: &HashMap<String, f64>) -> Result<f64, Vec<String>> {
+    crate::simulate::fold_constant_expr(expr, bindings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,33 +370,4 @@ mod tests {
             _ => panic!("Expected operator"),
         }
     }
-}
-
-/// Evaluate a scalar AST expression against a map of float variable bindings.
-///
-/// This is the official ESS Rust runner entry point (the public API exported
-/// as `earthsci_toolkit::evaluate`). It delegates to
-/// [`crate::simulate::fold_constant_expr`] — the single canonical scalar
-/// evaluator for this binding.
-///
-/// `bindings` maps free-variable names to their `f64` values. The special
-/// key `"t"` supplies the simulation time (defaults to `0.0` if absent).
-/// Returns `Ok(f64)` on success, or `Err(Vec<String>)` listing unbound
-/// variable names if any variable in `expr` is missing from `bindings`.
-///
-/// # Examples
-///
-/// ```
-/// use earthsci_toolkit::{Expr, evaluate};
-/// use std::collections::HashMap;
-///
-/// let expr = Expr::Variable("x".to_string());
-/// let mut bindings = HashMap::new();
-/// bindings.insert("x".to_string(), 3.14_f64);
-/// let result = evaluate(&expr, &bindings).unwrap();
-/// assert!((result - 3.14).abs() < 1e-10);
-/// ```
-#[cfg(not(target_arch = "wasm32"))]
-pub fn evaluate(expr: &Expr, bindings: &HashMap<String, f64>) -> Result<f64, Vec<String>> {
-    crate::simulate::fold_constant_expr(expr, bindings)
 }

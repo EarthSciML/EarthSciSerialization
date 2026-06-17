@@ -132,7 +132,7 @@ func TestSaveToFile(t *testing.T) {
 	// Create temporary file
 	tmpDir := os.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test_output.esm")
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	err := SaveToFile(esmFile, tmpFile)
 	assert.NoError(t, err)
@@ -168,7 +168,7 @@ func TestSaveCompactToFile(t *testing.T) {
 	// Create temporary file
 	tmpDir := os.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test_output_compact.esm")
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	err := SaveCompactToFile(esmFile, tmpFile)
 	assert.NoError(t, err)

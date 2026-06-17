@@ -38,11 +38,11 @@ func TestLoad(t *testing.T) {
 	// Create temporary file
 	tmpFile, err := os.CreateTemp("", "test*.esm")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString(testJSON)
 	require.NoError(t, err)
-	tmpFile.Close()
+	require.NoError(t, tmpFile.Close())
 
 	// Test loading
 	esmFile, err := Load(tmpFile.Name())

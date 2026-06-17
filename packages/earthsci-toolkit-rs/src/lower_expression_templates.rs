@@ -307,10 +307,10 @@ pub fn reject_expression_templates_pre_v04(view: &Value) -> Result<(), Expressio
     for compkind in ["models", "reaction_systems"] {
         if let Some(comps) = obj.get(compkind).and_then(|v| v.as_object()) {
             for (cname, comp) in comps {
-                if let Some(comp_obj) = comp.as_object() {
-                    if comp_obj.contains_key("expression_templates") {
-                        offences.push(format!("/{compkind}/{cname}/expression_templates"));
-                    }
+                if let Some(comp_obj) = comp.as_object()
+                    && comp_obj.contains_key("expression_templates")
+                {
+                    offences.push(format!("/{compkind}/{cname}/expression_templates"));
                 }
             }
         }

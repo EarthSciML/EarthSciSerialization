@@ -147,7 +147,7 @@ func fetchRemoteRef(url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch remote ref %q: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("failed to fetch remote ref %q: HTTP %d %s", url, resp.StatusCode, resp.Status)

@@ -332,7 +332,7 @@ func discretizeBC(path string, bc map[string]interface{},
 			return err
 		}
 		node, isNode := asExprNode(rewriteOut)
-		if !(isNode && node.Op == "bc") {
+		if !isNode || node.Op != "bc" {
 			final, err := Canonicalize(rewriteOut)
 			if err != nil {
 				return err

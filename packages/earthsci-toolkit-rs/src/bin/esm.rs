@@ -3330,16 +3330,18 @@ fn run_conformance_test(out_dir: &std::path::Path) -> Result<(), Box<dyn std::er
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().into_owned();
             match fs::read_to_string(&path) {
-                Ok(content) => match validate_complete(&content) {
-                    result => {
-                        validation_valid.insert(name, json!({
-                            "is_valid": result.is_valid,
-                            "schema_errors": result.schema_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
-                            "structural_errors": result.structural_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
-                            "parsed_successfully": result.is_valid || result.structural_errors.is_empty() || true,
-                        }));
-                    }
-                },
+                Ok(content) => {
+                    let result = validate_complete(&content);
+                    let parsed_ok = !result.schema_errors.iter().any(|e| {
+                        e.message.contains("JSON parse") || e.message.contains("failed to parse")
+                    });
+                    validation_valid.insert(name, json!({
+                        "is_valid": result.is_valid,
+                        "schema_errors": result.schema_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                        "structural_errors": result.structural_errors.iter().map(|e| format!("{}: {}", e.path, e.message)).collect::<Vec<_>>(),
+                        "parsed_successfully": parsed_ok,
+                    }));
+                }
                 Err(e) => {
                     let msg = format!("valid/{name}: read error: {e}");
                     errors.push(msg.clone());

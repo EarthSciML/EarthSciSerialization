@@ -46,25 +46,6 @@ func newETErr(code, msg string) *ExpressionTemplateError {
 	return &ExpressionTemplateError{Code: code, Message: msg}
 }
 
-func isObject(v interface{}) bool {
-	_, ok := v.(map[string]interface{})
-	return ok
-}
-
-func isArray(v interface{}) bool {
-	_, ok := v.([]interface{})
-	return ok
-}
-
-func opOf(v interface{}) string {
-	if obj, ok := v.(map[string]interface{}); ok {
-		if op, ok := obj["op"].(string); ok {
-			return op
-		}
-	}
-	return ""
-}
-
 func assertNoNestedApply(body interface{}, templateName, path string) error {
 	switch b := body.(type) {
 	case []interface{}:
@@ -314,7 +295,7 @@ func RejectExpressionTemplatesPreV04(view map[string]interface{}) error {
 	}
 	major, _ := strconv.Atoi(m[1])
 	minor, _ := strconv.Atoi(m[2])
-	if !(major == 0 && minor < 4) {
+	if major != 0 || minor >= 4 {
 		return nil
 	}
 	offences := []string{}

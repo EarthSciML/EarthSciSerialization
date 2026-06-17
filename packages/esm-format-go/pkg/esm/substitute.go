@@ -108,7 +108,7 @@ func substituteRecursiveWithScoped(expr Expression, bindings map[string]Expressi
 
 		// Try to handle the case where expr is wrapped in interface{}
 		v := reflect.ValueOf(e)
-		if v.Kind() == reflect.Ptr && !v.IsNil() {
+		if v.Kind() == reflect.Pointer && !v.IsNil() {
 			// Dereference pointer
 			return substituteRecursiveWithScoped(v.Elem().Interface(), bindings, file, currentSystem)
 		}

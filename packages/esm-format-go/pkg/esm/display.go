@@ -514,12 +514,12 @@ func ModelSummary(esm *EsmFile) string {
 	result := strings.Builder{}
 
 	// Header: ESM version and metadata
-	result.WriteString(fmt.Sprintf("ESM v%s: %s\n", esm.Esm, esm.Metadata.Name))
+	fmt.Fprintf(&result, "ESM v%s: %s\n", esm.Esm, esm.Metadata.Name)
 	if esm.Metadata.Description != nil {
-		result.WriteString(fmt.Sprintf("  \"%s\"\n", *esm.Metadata.Description))
+		fmt.Fprintf(&result, "  \"%s\"\n", *esm.Metadata.Description)
 	}
 	if len(esm.Metadata.Authors) > 0 {
-		result.WriteString(fmt.Sprintf("  Authors: %s\n", strings.Join(esm.Metadata.Authors, ", ")))
+		fmt.Fprintf(&result, "  Authors: %s\n", strings.Join(esm.Metadata.Authors, ", "))
 	}
 	result.WriteString("\n")
 
@@ -530,8 +530,8 @@ func ModelSummary(esm *EsmFile) string {
 			speciesCount := len(rs.Species)
 			paramCount := len(rs.Parameters)
 			reactionCount := len(rs.Reactions)
-			result.WriteString(fmt.Sprintf("    %s (%d species, %d parameters, %d reactions)\n",
-				name, speciesCount, paramCount, reactionCount))
+			fmt.Fprintf(&result, "    %s (%d species, %d parameters, %d reactions)\n",
+				name, speciesCount, paramCount, reactionCount)
 
 			// Display reactions
 			for _, reaction := range rs.Reactions {
@@ -584,7 +584,7 @@ func ModelSummary(esm *EsmFile) string {
 				}
 			}
 			equationCount := len(model.Equations)
-			result.WriteString(fmt.Sprintf("    %s (%d parameters, %d equation", name, paramCount, equationCount))
+			fmt.Fprintf(&result, "    %s (%d parameters, %d equation", name, paramCount, equationCount)
 			if equationCount != 1 {
 				result.WriteString("s")
 			}
@@ -612,8 +612,8 @@ func ModelSummary(esm *EsmFile) string {
 			}
 			// Sort for deterministic output
 			sort.Strings(varNames)
-			result.WriteString(fmt.Sprintf("    %s: %s (%s)\n", name,
-				strings.Join(varNames, ", "), loader.Kind))
+			fmt.Fprintf(&result, "    %s: %s (%s)\n", name,
+				strings.Join(varNames, ", "), loader.Kind)
 		}
 		result.WriteString("\n")
 	}
@@ -622,22 +622,22 @@ func ModelSummary(esm *EsmFile) string {
 	if len(esm.Coupling) > 0 {
 		result.WriteString("  Coupling:\n")
 		for i, coupling := range esm.Coupling {
-			result.WriteString(fmt.Sprintf("    %d. ", i+1))
+			fmt.Fprintf(&result, "    %d. ", i+1)
 
 			// Type switch to handle different coupling types
 			switch c := coupling.(type) {
 			case OperatorComposeCoupling:
-				result.WriteString(fmt.Sprintf("operator_compose: %s + %s", c.Systems[0], c.Systems[1]))
+				fmt.Fprintf(&result, "operator_compose: %s + %s", c.Systems[0], c.Systems[1])
 			case VariableMapCoupling:
-				result.WriteString(fmt.Sprintf("variable_map: %s → %s", c.From, c.To))
+				fmt.Fprintf(&result, "variable_map: %s → %s", c.From, c.To)
 			case CouplingCouple:
-				result.WriteString(fmt.Sprintf("couple: %s ↔ %s", c.Systems[0], c.Systems[1]))
+				fmt.Fprintf(&result, "couple: %s ↔ %s", c.Systems[0], c.Systems[1])
 			case OperatorApplyCoupling:
-				result.WriteString(fmt.Sprintf("operator_apply: %s", c.Operator))
+				fmt.Fprintf(&result, "operator_apply: %s", c.Operator)
 			case CallbackCoupling:
-				result.WriteString(fmt.Sprintf("callback: %s", c.CallbackID))
+				fmt.Fprintf(&result, "callback: %s", c.CallbackID)
 			case EventCoupling:
-				result.WriteString(fmt.Sprintf("event: %s (%s)", c.Name, c.EventType))
+				fmt.Fprintf(&result, "event: %s (%s)", c.Name, c.EventType)
 			default:
 				result.WriteString("unknown coupling type")
 			}
@@ -649,7 +649,7 @@ func ModelSummary(esm *EsmFile) string {
 	// Domains
 	if len(esm.Domains) > 0 {
 		for domainName, domain := range esm.Domains {
-			result.WriteString(fmt.Sprintf("  Domain %s: ", domainName))
+			fmt.Fprintf(&result, "  Domain %s: ", domainName)
 			parts := make([]string, 0)
 
 			// Spatial dimensions

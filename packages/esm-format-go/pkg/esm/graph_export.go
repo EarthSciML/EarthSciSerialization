@@ -50,8 +50,8 @@ func (e *DOTExporter) ExportComponentGraph(graph *ComponentGraph) (string, error
 		color := getNodeColor(node.Type)
 		label := formatComponentNodeLabel(node)
 
-		builder.WriteString(fmt.Sprintf("  \"%s\" [label=\"%s\", fillcolor=\"%s\"];\n",
-			node.ID, label, color))
+		fmt.Fprintf(&builder, "  \"%s\" [label=\"%s\", fillcolor=\"%s\"];\n",
+			node.ID, label, color)
 	}
 
 	builder.WriteString("\n")
@@ -78,8 +78,8 @@ func (e *DOTExporter) ExportComponentGraph(graph *ComponentGraph) (string, error
 			label = fmt.Sprintf("%s [%s]", edge.Data.Type, *edge.Data.Label)
 		}
 
-		builder.WriteString(fmt.Sprintf("  \"%s\" %s \"%s\" [label=\"%s\"];\n",
-			edge.Source.ID, direction, edge.Target.ID, label))
+		fmt.Fprintf(&builder, "  \"%s\" %s \"%s\" [label=\"%s\"];\n",
+			edge.Source.ID, direction, edge.Target.ID, label)
 	}
 
 	builder.WriteString("}\n")
@@ -111,8 +111,8 @@ func (e *DOTExporter) ExportExpressionGraph(graph *ExpressionGraph) (string, err
 		label := formatVariableNodeLabel(node)
 		nodeID := fmt.Sprintf("%s.%s", node.System, node.Name)
 
-		builder.WriteString(fmt.Sprintf("  \"%s\" [label=\"%s\", fillcolor=\"%s\"];\n",
-			nodeID, label, color))
+		fmt.Fprintf(&builder, "  \"%s\" [label=\"%s\", fillcolor=\"%s\"];\n",
+			nodeID, label, color)
 	}
 
 	builder.WriteString("\n")
@@ -136,8 +136,8 @@ func (e *DOTExporter) ExportExpressionGraph(graph *ExpressionGraph) (string, err
 		sourceID := fmt.Sprintf("%s.%s", edge.Source.System, edge.Source.Name)
 		targetID := fmt.Sprintf("%s.%s", edge.Target.System, edge.Target.Name)
 
-		builder.WriteString(fmt.Sprintf("  \"%s\" -> \"%s\" [label=\"%s\"];\n",
-			sourceID, targetID, edge.Data.Relationship))
+		fmt.Fprintf(&builder, "  \"%s\" -> \"%s\" [label=\"%s\"];\n",
+			sourceID, targetID, edge.Data.Relationship)
 	}
 
 	builder.WriteString("}\n")
@@ -174,7 +174,7 @@ func (e *MermaidExporter) ExportComponentGraph(graph *ComponentGraph) (string, e
 		shape := getMermaidNodeShape(node.Type)
 		label := formatMermaidLabel(node.ID)
 
-		builder.WriteString(fmt.Sprintf("    %s%s%s\n", node.ID, shape, label))
+		fmt.Fprintf(&builder, "    %s%s%s\n", node.ID, shape, label)
 	}
 
 	builder.WriteString("\n")
@@ -201,8 +201,8 @@ func (e *MermaidExporter) ExportComponentGraph(graph *ComponentGraph) (string, e
 			label = *edge.Data.Label
 		}
 
-		builder.WriteString(fmt.Sprintf("    %s %s|%s| %s\n",
-			edge.Source.ID, arrow, label, edge.Target.ID))
+		fmt.Fprintf(&builder, "    %s %s|%s| %s\n",
+			edge.Source.ID, arrow, label, edge.Target.ID)
 	}
 
 	// Add styling
@@ -214,7 +214,7 @@ func (e *MermaidExporter) ExportComponentGraph(graph *ComponentGraph) (string, e
 
 	// Apply classes to nodes
 	for _, node := range nodes {
-		builder.WriteString(fmt.Sprintf("    class %s %s\n", node.ID, node.Type))
+		fmt.Fprintf(&builder, "    class %s %s\n", node.ID, node.Type)
 	}
 
 	return builder.String(), nil
@@ -241,7 +241,7 @@ func (e *MermaidExporter) ExportExpressionGraph(graph *ExpressionGraph) (string,
 		nodeID := sanitizeMermaidID(fmt.Sprintf("%s_%s", node.System, node.Name))
 		label := formatMermaidLabel(node.Name)
 
-		builder.WriteString(fmt.Sprintf("    %s%s\n", nodeID, label))
+		fmt.Fprintf(&builder, "    %s%s\n", nodeID, label)
 	}
 
 	builder.WriteString("\n")
@@ -265,8 +265,8 @@ func (e *MermaidExporter) ExportExpressionGraph(graph *ExpressionGraph) (string,
 		sourceID := sanitizeMermaidID(fmt.Sprintf("%s_%s", edge.Source.System, edge.Source.Name))
 		targetID := sanitizeMermaidID(fmt.Sprintf("%s_%s", edge.Target.System, edge.Target.Name))
 
-		builder.WriteString(fmt.Sprintf("    %s -->|%s| %s\n",
-			sourceID, edge.Data.Relationship, targetID))
+		fmt.Fprintf(&builder, "    %s -->|%s| %s\n",
+			sourceID, edge.Data.Relationship, targetID)
 	}
 
 	// Add styling
@@ -279,7 +279,7 @@ func (e *MermaidExporter) ExportExpressionGraph(graph *ExpressionGraph) (string,
 	// Apply classes to nodes
 	for _, node := range nodes {
 		nodeID := sanitizeMermaidID(fmt.Sprintf("%s_%s", node.System, node.Name))
-		builder.WriteString(fmt.Sprintf("    class %s %s\n", nodeID, node.Kind))
+		fmt.Fprintf(&builder, "    class %s %s\n", nodeID, node.Kind)
 	}
 
 	return builder.String(), nil
