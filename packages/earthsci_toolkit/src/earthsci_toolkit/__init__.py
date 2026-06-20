@@ -151,6 +151,18 @@ from .graph import (
     DependencyEdge,
 )
 
+# Analysis tier - reference resolution (semiring-FAQ node addressing, RFC §6.1)
+from .reference_resolution import (
+    build_reference_graph,
+    resolve_references,
+    ReferenceGraph,
+    ReferenceVertex,
+    ReferenceEdge,
+    ReferenceResolutionError,
+    VertexKind,
+    EdgeKind,
+)
+
 # Analysis tier - unit validation
 from .units import (
     validate_units,
@@ -413,6 +425,16 @@ __all__ = [
     "VariableNode",
     "CouplingEdge",
     "DependencyEdge",
+
+    # Reference resolution (semiring-FAQ node addressing, RFC §6.1)
+    "build_reference_graph",
+    "resolve_references",
+    "ReferenceGraph",
+    "ReferenceVertex",
+    "ReferenceEdge",
+    "ReferenceResolutionError",
+    "VertexKind",
+    "EdgeKind",
 
     # Unit validation
     "validate_units",

@@ -54,6 +54,7 @@ pub mod migration;
 pub mod parse;
 pub mod reactions;
 pub mod ref_loading;
+pub mod reference_resolution;
 pub mod registered_functions;
 pub mod rule_applier;
 pub mod rule_engine;
@@ -102,6 +103,10 @@ pub use reactions::{
     stoichiometric_matrix,
 };
 pub use ref_loading::resolve_subsystem_refs;
+pub use reference_resolution::{
+    EdgeKind, ReferenceEdge, ReferenceError, ReferenceGraph, ReferenceVertex, VertexKind,
+    build_reference_graph, resolve_references,
+};
 pub use registered_functions::{
     ClosedArg, ClosedFunctionError, ClosedValue, closed_function_names, evaluate_closed_function,
 };

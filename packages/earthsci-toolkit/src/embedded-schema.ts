@@ -304,6 +304,10 @@ export const schema: AnySchemaObject = {
             "apply_expression_template"
           ]
         },
+        "id": {
+          "type": "string",
+          "description": "Stable node identity (RFC semiring-faq-unified-ir §6.1): an optional, author-assigned identifier that makes this expression node addressable as a vertex in the inter-node dependency DAG the partition pass walks. Its primary use is to be the referent of a derived index set: an `index_sets` entry of kind \"derived\" names, via `from_faq`, the index-set-producing `aggregate` node that materializes it — and it names it by this id. When present it MUST be unique among the expression nodes of its model; the build-time reference-resolution pass errors on a duplicate id and on a `from_faq` that names no node. Absent ⇒ the node is addressed only by its structural path and cannot be the target of a `from_faq`. Purely additive: a file using no `id` validates and resolves exactly as before."
+        },
         "args": {
           "type": "array",
           "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (aggregate / arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",

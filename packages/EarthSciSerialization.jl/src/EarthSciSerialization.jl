@@ -48,10 +48,18 @@ include("grid_assembly.jl")
 include("ghost_cells.jl")
 include("mtk_export.jl")
 include("tree_walk.jl")
+include("reference_graph.jl")
 include("gdd.jl")
 include("run_tests.jl")
 
 export
+    # Reference resolution — semiring-FAQ node addressing (RFC §6.1).
+    # The graph-query methods (dependencies/dependents/detect_cycle/
+    # topological_order/edges_of_kind) are intentionally NOT exported: they are
+    # generic names (e.g. `dependencies` collides with `Pkg.dependencies`) and
+    # are reached as `EarthSciSerialization.dependencies(graph, key)`.
+    ReferenceGraph, ReferenceVertex, ReferenceEdge, ReferenceResolutionError,
+    build_reference_graph, resolve_references,
     # Expression types
     Expr, NumExpr, IntExpr, VarExpr, OpExpr,
     # Literal predicates (RFC §5.4.1 int/float distinction)
