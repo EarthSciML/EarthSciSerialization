@@ -1,0 +1,134 @@
+{
+  "esm": "0.6.0",
+  "metadata": {
+    "name": "discrete_variable_refresh",
+    "description": "M3 schema fixture (RFC semiring-faq-unified-ir §6.1 / §8; bead ess-my4.3.2): the new `discrete` variable kind — a third variable role beside state (CONTINUOUS) and parameter (CONST). A discrete variable has a shape fixed at setup but values that refresh only at discrete events; it is the declared seed for the DISCRETE cadence class that the dependency-partition pass schedules into a per-event handler. This fixture declares one discrete variable for each of the three refresh-trigger forms — a `schedule` (tstops, the MTK PresetTimeCallback analogue; here a met field reloaded on a periodic interval), a `data_ingest` event (a boundary-condition field reloaded when its source advances), and a `remesh` hook (reloadable mesh topology under AMR) — plus one discrete variable with NO refresh trigger (a setup-only buffer, e.g. a mesh loaded once). Each declares its fixed `shape`; the refresh trigger is inert to the algebra. The model also carries an ordinary continuous state, so the partition is genuinely three-cadence. Validates against the schema with no evaluator.",
+    "authors": [
+      "EarthSciSerialization/polecats/gastown.capable"
+    ],
+    "tags": [
+      "discrete-variable",
+      "refresh-trigger",
+      "cadence-partition",
+      "conformance",
+      "schema"
+    ]
+  },
+  "models": {
+    "DiscreteFields": {
+      "index_sets": {
+        "cells": {
+          "kind": "interval",
+          "size": 64
+        },
+        "levels": {
+          "kind": "interval",
+          "size": 8
+        },
+        "boundary": {
+          "kind": "interval",
+          "size": 24
+        },
+        "edges": {
+          "kind": "interval",
+          "size": 96
+        }
+      },
+      "variables": {
+        "c": {
+          "type": "state",
+          "shape": [
+            "cells",
+            "levels"
+          ],
+          "description": "Continuous tracer concentration — the integrated state (CONTINUOUS cadence)."
+        },
+        "wind": {
+          "type": "discrete",
+          "shape": [
+            "cells",
+            "levels"
+          ],
+          "description": "Loaded meteorology (wind) field — shape fixed at setup, values reloaded on a fixed schedule.",
+          "refresh": {
+            "kind": "schedule",
+            "interval": 3600.0,
+            "initial_offset": 0.0
+          }
+        },
+        "bc_inflow": {
+          "type": "discrete",
+          "shape": [
+            "boundary"
+          ],
+          "description": "Boundary-condition inflow field, reloaded when its external data source advances to the next record.",
+          "refresh": {
+            "kind": "data_ingest",
+            "source": "bc_loader"
+          }
+        },
+        "edge_normal": {
+          "type": "discrete",
+          "shape": [
+            "edges"
+          ],
+          "description": "Reloadable mesh topology / edge-normal geometry, recomputed on an AMR remesh event.",
+          "refresh": {
+            "kind": "remesh",
+            "hook": "amr_refine"
+          }
+        },
+        "cell_area": {
+          "type": "discrete",
+          "shape": [
+            "cells"
+          ],
+          "description": "Cell areas from a mesh loaded once at setup — a discrete variable with NO refresh trigger (setup-only buffer, never refreshed)."
+        },
+        "decay_rate": {
+          "type": "parameter",
+          "default": 0.1,
+          "description": "Externally set constant (CONST cadence)."
+        }
+      },
+      "equations": [
+        {
+          "_comment": "An arrayed continuous decay over the cell/level grid; the discrete fields above seed the DISCRETE class and are inert to this algebra.",
+          "lhs": {
+            "op": "index",
+            "args": [
+              {
+                "op": "D",
+                "args": [
+                  "c"
+                ],
+                "wrt": "t"
+              },
+              "i",
+              "k"
+            ]
+          },
+          "rhs": {
+            "op": "*",
+            "args": [
+              {
+                "op": "-",
+                "args": [
+                  "decay_rate"
+                ]
+              },
+              {
+                "op": "index",
+                "args": [
+                  "c",
+                  "i",
+                  "k"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

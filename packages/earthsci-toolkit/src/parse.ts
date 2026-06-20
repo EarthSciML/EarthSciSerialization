@@ -323,6 +323,9 @@ const schema = {
             "sign",
             "arrayop",
             "aggregate",
+            "skolem",
+            "rank",
+            "true",
             "makearray",
             "index",
             "broadcast",
@@ -472,6 +475,15 @@ const schema = {
         "filter": {
           "$ref": "#/$defs/Expression",
           "description": "For arrayop / aggregate: optional boolean predicate Expression that restricts which index combinations contribute a ⊗-product term to the reduction (RFC semiring-faq-unified-ir §5.3 / §7.2). May reference any index symbol in scope (an entry of output_idx or a contracted index). Combinations for which the predicate evaluates false contribute the additive identity (the empty ⊕-reduction value) — the explicit way to express a guarded sum or a \"keep unmatched with a default\", as opposed to a join mode."
+        },
+        "distinct": {
+          "type": "boolean",
+          "default": false,
+          "description": "For arrayop / aggregate: when true, the node has set semantics (dedup) and is index-set-producing — it materializes a data-derived index set rather than an array (RFC semiring-faq-unified-ir §5.5). Only meaningful under the `bool_and_or` semiring (the relational specialization, §5.1); combined with `key`, it enumerates the unique Skolem terms (e.g. the unique edges discovered from a face→vertex relation) and exposes the result as a `kind:\"derived\"` index set (§5.2) that a downstream geometric aggregate consumes. The output order is fixed by the normative determinism rules (§5.7): sort by the total tuple order, then drop adjacent duplicates — never first-seen / insertion order. Absent ⇒ false (ordinary array-producing reduction), exactly as today."
+        },
+        "key": {
+          "$ref": "#/$defs/Expression",
+          "description": "For arrayop / aggregate: optional Skolem term — a deterministic, content-addressed key naming each member an index-set-producing (`distinct`) node emits (RFC semiring-faq-unified-ir §5.5). Typically a `{ \"op\": \"skolem\", \"args\": [<label>, <component>…] }` node; the components are canonicalized (a symmetric relation sorts its components, e.g. an undirected edge (min(u,v), max(u,v)); a directed one preserves order) so the same member is named identically across bindings (§5.7). Dense integer ids for the array backend then come from a `{ \"op\": \"rank\" }` over the resulting set. Floats are forbidden in keys (§5.7 / §A.5) — keys are integer or categorical ids."
         },
         "regions": {
           "type": "array",
@@ -1039,6 +1051,89 @@ const schema = {
         }
       }
     },
+    "RefreshTrigger": {
+      "description": "Refresh-trigger descriptor for a `discrete` ModelVariable (RFC semiring-faq-unified-ir §6.1): declares WHEN the variable's per-event buffer is recomputed by the dependency-partition pass's per-event handler. It seeds the DISCRETE cadence class but is otherwise inert to the algebra — it schedules the recompute and carries no value. Exactly one of three forms, discriminated by `kind`: a `schedule` (time-driven on a tstops schedule — the MTK PresetTimeCallback / tstops analogue), a `data_ingest` event (recompute when a named external data source advances to a new record, e.g. the next met/BC slice), or a `remesh` hook (recompute on an AMR refinement / moving-mesh topology change).",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "schedule: time-driven refresh on a tstops schedule (the MTK PresetTimeCallback / tstops analogue). Recompute at the listed preset `times` and/or on a periodic `interval`; at least one of the two MUST be present.",
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "schedule"
+            },
+            "times": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 1,
+              "description": "Explicit simulation times (the tstops) at which the buffer recomputes."
+            },
+            "interval": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Periodic refresh interval in simulation time units."
+            },
+            "initial_offset": {
+              "type": "number",
+              "default": 0,
+              "description": "Offset from t=0 for the first periodic refresh. Ignored when `interval` is absent."
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "times"
+              ]
+            },
+            {
+              "required": [
+                "interval"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "description": "data_ingest: refresh driven by arrival of a new external data record. The buffer recomputes when the named data source advances to a new record (e.g. the next met / boundary-condition slice from a DataLoader).",
+          "required": [
+            "kind",
+            "source"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "data_ingest"
+            },
+            "source": {
+              "type": "string",
+              "description": "Name of the external data source (e.g. a DataLoader id or a provided-variable name) whose record advance drives the refresh. Resolution of the name is a build-time concern; the schema does not enforce the cross-reference."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "remesh: refresh driven by a mesh-topology change (AMR refinement or a moving / reloaded mesh). The buffer — typically reloadable mesh topology or coefficients derived from it — recomputes when the remesh event fires.",
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "remesh"
+            },
+            "hook": {
+              "type": "string",
+              "description": "Optional name of the remesh hook / event that drives the refresh. Absent ⇒ refresh on any remesh event."
+            }
+          }
+        }
+      ]
+    },
     "DiscreteEvent": {
       "type": "object",
       "description": "Fires when a boolean condition is true at end of a timestep, or at preset/periodic times. Maps to MTK SymbolicDiscreteCallback.",
@@ -1107,9 +1202,10 @@ const schema = {
             "state",
             "parameter",
             "observed",
-            "brownian"
+            "brownian",
+            "discrete"
           ],
-          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise process (Wiener) that drives an SDE \u2014 the presence of any brownian variable promotes the enclosing model from an ODE system to an SDE system."
+          "description": "state = time-dependent unknown; parameter = externally set constant; observed = derived quantity; brownian = stochastic noise process (Wiener) that drives an SDE \u2014 the presence of any brownian variable promotes the enclosing model from an ODE system to an SDE system; discrete = a variable whose shape is fixed at setup but whose values refresh only at discrete events (piecewise-constant between them) \u2014 the declared seed for the DISCRETE cadence class of the dependency-partition pass (RFC semiring-faq-unified-ir \u00a76.1), e.g. loaded met/BC fields, scheduled emission inventories, or reloadable mesh topology. A discrete variable MUST declare its `shape` (the index sets / dims known ahead of time) and MAY declare an optional `refresh` trigger that drives when its per-event buffer recomputes. Without this kind the partition pass would be forced to mis-seed such inputs as CONST (never refresh) or CONTINUOUS (recompute every step)."
         },
         "units": {
           "type": "string"
@@ -1133,7 +1229,7 @@ const schema = {
           "items": {
             "type": "string"
           },
-          "description": "Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC \u00a710.2)."
+          "description": "Arrayed-variable shape: ordered list of dimension names (drawn from the enclosing model's domain.spatial or from the document-scoped index_sets registry). Omitted or null indicates a scalar. Introduced in spec 0.2 (discretization RFC \u00a710.2). REQUIRED for a `discrete` variable, which by definition has a shape fixed at setup (RFC semiring-faq-unified-ir \u00a76.1); a discrete variable that omits it is invalid. An empty array is a valid (scalar) discrete shape."
         },
         "location": {
           "type": "string",
@@ -1150,6 +1246,10 @@ const schema = {
         "correlation_group": {
           "type": "string",
           "description": "Brownian-only: optional opaque tag used to group correlated noise sources. Brownian variables sharing a group label are interpreted by the runtime as drawn from a joint multivariate normal whose correlation matrix is supplied externally. Brownian variables without a group label are independent. The spec does not currently encode the correlation matrix itself; that is left to a future extension."
+        },
+        "refresh": {
+          "$ref": "#/$defs/RefreshTrigger",
+          "description": "Discrete-only: optional refresh-trigger descriptor declaring WHEN this variable's per-event buffer is recomputed by the dependency-partition pass's per-event handler (RFC semiring-faq-unified-ir §6.1). One of a `schedule` (a tstops schedule — the MTK PresetTimeCallback / tstops analogue), a `data_ingest` event (arrival of a new external data record, e.g. the next met/BC slice), or a `remesh` hook (an AMR refinement / moving-mesh topology change). The trigger is inert to the algebra — it schedules the DISCRETE-cadence recompute and nothing else. Absent ⇒ the buffer is computed once at setup and never refreshed (e.g. a mesh topology loaded once at the start of a run)."
         }
       },
       "allOf": [
@@ -1196,6 +1296,44 @@ const schema = {
                     "correlation_group"
                   ]
                 }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "discrete"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "shape"
+            ]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "type": {
+                  "const": "discrete"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "refresh"
               ]
             }
           }
