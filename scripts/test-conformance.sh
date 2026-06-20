@@ -347,6 +347,25 @@ run_cadence_conformance_self_test() {
     fi
 }
 
+# Drive the REAL Julia partition pass (ess-my4.3.7) through the cadence harness:
+# the adapter (packages/EarthSciSerialization.jl/scripts/cadence_adapter.jl) runs
+# EarthSciSerialization.Cadence over the three §6.1 fixtures and the runner
+# asserts its class map, materialization set, and CONST-folded buffers are
+# byte-identical to the golden. Julia is `bindings_optional` in the manifest, so
+# a missing adapter (no julia) is skipped, but a MISMATCH fails. Rust/Python
+# siblings register the same way as they land.
+run_cadence_conformance_julia() {
+    if ! check_language_availability "julia" "$JULIA_DIR"; then
+        warning "Julia unavailable — skipping Julia cadence-partition producer check"
+        return 0
+    fi
+    log "Running cadence-partition conformance with the Julia partition pass..."
+    EARTHSCI_CADENCE_ADAPTER_JULIA="julia --project=$JULIA_DIR $JULIA_DIR/scripts/cadence_adapter.jl" \
+        python3 "$SCRIPT_DIR/run-cadence-conformance.py" \
+            --bindings julia \
+            --output "$OUTPUT_DIR/cadence/julia_report.json"
+}
+
 run_property_corpus() {
     log "Running property-corpus round-trip across bindings..."
     local corpus="$PROJECT_ROOT/tests/property_corpus/expressions"
@@ -458,6 +477,13 @@ main() {
             success "Cadence-partition conformance harness self-test completed"
         else
             error "Cadence-partition conformance harness self-test failed"
+            exit 1
+        fi
+
+        if run_cadence_conformance_julia; then
+            success "Cadence-partition Julia producer check completed"
+        else
+            error "Cadence-partition Julia producer check failed"
             exit 1
         fi
 

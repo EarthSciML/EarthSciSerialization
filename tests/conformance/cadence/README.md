@@ -57,10 +57,10 @@ classifier + folder** — the §5.7 contract as code — and the committed golde
 
 ## Two phases
 
-The producers do not exist yet: the per-binding partition-pass implementations
-land them (`ess-my4.3.7` Julia, plus the Rust/Python siblings). So the harness
-runs in two phases, exactly like the determinism and grid-conformance runners'
-`--self-test`:
+The **Julia** producer has landed (`ess-my4.3.7`,
+`EarthSciSerialization.Cadence`); the Rust/Python siblings are pending. So the
+harness runs in two phases, exactly like the determinism and grid-conformance
+runners' `--self-test`:
 
 1. **Now (skeleton, gated by `--self-test`).** The runner asserts the contract
    against its embedded reference classifier + folder and the golden. It
@@ -83,9 +83,15 @@ runs in two phases, exactly like the determinism and grid-conformance runners'
 2. **Later (per-binding producers).** Each binding ships a thin adapter. The
    default run mode invokes every registered adapter on this same manifest and
    asserts its class map, materialization set, and `CONST`-folded buffers are
-   identical to the golden and to each other. As producers land, move the
-   binding from `bindings_optional` to `bindings_required` so a missing or
-   mismatching producer fails CI.
+   identical to the golden and to each other. The Julia adapter
+   (`packages/EarthSciSerialization.jl/scripts/cadence_adapter.jl`) is wired
+   into `scripts/test-conformance.sh` as `run_cadence_conformance_julia` (it
+   sets `$EARTHSCI_CADENCE_ADAPTER_JULIA` and runs `--bindings julia`); the
+   Julia package's own `test/cadence_test.jl` asserts the same golden directly.
+   Julia stays `bindings_optional` so a bare runner invocation without the
+   adapter on `PATH` is skipped, not failed — but a *mismatch* fails. As the
+   Rust/Python siblings land, move each from `bindings_optional` to
+   `bindings_required` so a missing or mismatching producer fails CI.
 
 ## The contract (summary — normative text is `CONFORMANCE_SPEC.md` §5.7)
 
