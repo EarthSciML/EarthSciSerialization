@@ -162,6 +162,20 @@ from .reference_resolution import (
     VertexKind,
     EdgeKind,
 )
+# Build-time relational engine — value-invention primitives (RFC
+# semiring-faq-unified-ir §5.5; CONFORMANCE_SPEC.md §5.5)
+from .relational import (
+    FloatKeyError,
+    skolem,
+    skolem_edge,
+    distinct,
+    rank,
+    Ranking,
+    equijoin,
+    group_aggregate,
+    canonical_index_set_json,
+    serialize_canonical,
+)
 
 # Analysis tier - unit validation
 from .units import (
@@ -435,6 +449,17 @@ __all__ = [
     "ReferenceResolutionError",
     "VertexKind",
     "EdgeKind",
+    # Build-time relational engine (value-invention primitives)
+    "FloatKeyError",
+    "skolem",
+    "skolem_edge",
+    "distinct",
+    "rank",
+    "Ranking",
+    "equijoin",
+    "group_aggregate",
+    "canonical_index_set_json",
+    "serialize_canonical",
 
     # Unit validation
     "validate_units",
