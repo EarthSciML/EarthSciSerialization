@@ -347,6 +347,11 @@ function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String}):
         namespace_expr(expr.expr_body, prefix, local_names)
     new_values = expr.values === nothing ? nothing :
         EarthSciSerialization.Expr[namespace_expr(v, prefix, local_names) for v in expr.values]
+    # A `filter` predicate (M2, §7.2) holds variable references — namespace it
+    # too. `join`/`join_gates` carry only index-symbol / position data, so they
+    # pass through unchanged.
+    new_filter = expr.filter === nothing ? nothing :
+        namespace_expr(expr.filter, prefix, local_names)
     return OpExpr(expr.op, new_args;
         wrt=expr.wrt, dim=expr.dim,
         output_idx=expr.output_idx,
@@ -361,7 +366,10 @@ function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String}):
         axis=expr.axis,
         fn=expr.fn,
         name=expr.name,
-        value=expr.value)
+        value=expr.value,
+        join=expr.join,
+        filter=new_filter,
+        join_gates=expr.join_gates)
 end
 
 """

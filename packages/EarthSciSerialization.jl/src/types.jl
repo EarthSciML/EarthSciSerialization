@@ -126,6 +126,28 @@ struct OpExpr <: Expr
     # integer (0-based index) or a string (entry of the table's outputs).
     output::Any
 
+    # ── M2: value-equality joins + filter predicates on aggregate/arrayop ──
+    # (RFC semiring-faq-unified-ir §5.3 / §7.2; schema bead ess-my4.2.1).
+    #
+    # `join`   — the parsed join clauses, an inner equi-join of factors by key
+    #            columns. Each clause is a `Vector{Tuple{String,String}}` of
+    #            `[left, right]` key-column pairs that must all compare equal for
+    #            a ⊗-product term to contribute. This is the wire form (parsed /
+    #            serialized); the build path resolves it into `join_gates`.
+    # `filter` — an optional boolean predicate Expression restricting which index
+    #            combinations contribute a term (§7.2). A combination for which it
+    #            is false contributes the additive identity 0̄ — compiled into a
+    #            runtime `ifelse(pred, term, 0̄)` guard (it may reference factors
+    #            whose values are only known at run time, so it is NOT folded).
+    # `join_gates` — INTERNAL: the build-time-resolved join, a `Vector` of
+    #            `_JoinGate` mapping each key symbol's range position to a bucket
+    #            code (equal codes ⇔ equal key values). Populated by
+    #            `_resolve_join_gates` against the document index-set registry;
+    #            never parsed or serialized (the wire form is `join`).
+    join::Union{Vector{Any},Nothing}
+    filter::Union{Expr,Nothing}
+    join_gates::Union{Vector{Any},Nothing}
+
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
            int_var=nothing, lower=nothing, upper=nothing,
@@ -135,6 +157,7 @@ struct OpExpr <: Expr
            shape=nothing, perm=nothing, axis=nothing, fn=nothing,
            name=nothing, value=nothing,
            table=nothing, table_axes=nothing, output=nothing,
+           join=nothing, filter=nothing, join_gates=nothing,
            # `handler_id` was the v0.2.x field for the now-removed `call`
            # op (esm-spec §9.2 closure). Accept and ignore on construction
            # so internal helpers that still pass it through don't break
@@ -143,7 +166,7 @@ struct OpExpr <: Expr
         new(op, args, wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce,
             semiring, ranges,
             regions, values, shape, perm, axis, fn, name, value,
-            table, table_axes, output)
+            table, table_axes, output, join, filter, join_gates)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},
@@ -493,10 +516,17 @@ struct IndexSet
     offsets::Union{String,Nothing}
     values::Union{String,Nothing}
     from_faq::Union{String,Nothing}
+    # The original, un-stringified categorical members, retained ONLY when at
+    # least one member is non-string (float / null / boolean / integer). Lets the
+    # join-key validator (RFC §5.3) reject keys whose equality is not portable
+    # across bindings — float and null members — which `members` (always coerced
+    # to `String`) can no longer distinguish. `nothing` for ordinary string-only
+    # sets, so they stay byte-identical to before.
+    members_raw::Union{Vector{Any},Nothing}
 
     IndexSet(kind::AbstractString; size=nothing, members=nothing, of=nothing,
-             offsets=nothing, values=nothing, from_faq=nothing) =
-        new(String(kind), size, members, of, offsets, values, from_faq)
+             offsets=nothing, values=nothing, from_faq=nothing, members_raw=nothing) =
+        new(String(kind), size, members, of, offsets, values, from_faq, members_raw)
 end
 
 """

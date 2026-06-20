@@ -139,6 +139,19 @@ function serialize_expression(expr::Expr)
         if expr.output !== nothing
             result["output"] = expr.output
         end
+        # M2 (RFC §5.3 / §7.2): value-equality `join` clauses and the boolean
+        # `filter` predicate. `join` round-trips back to the wire form
+        # `[{ "on": [[left, right], …] }, …]`; the internal resolved
+        # `join_gates` is a build artifact and is never serialized.
+        if expr.join !== nothing
+            result["join"] = [
+                Dict{String,Any}("on" => [[p[1], p[2]] for p in clause])
+                for clause in expr.join
+            ]
+        end
+        if expr.filter !== nothing
+            result["filter"] = serialize_expression(expr.filter)
+        end
         return result
     else
         throw(ArgumentError("Unknown expression type: $(typeof(expr))"))

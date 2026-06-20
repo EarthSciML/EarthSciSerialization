@@ -60,13 +60,15 @@ function parse_expression(data::Any)::Expr
                               "var", "lower", "upper",
                               "output_idx", "expr", "reduce", "semiring", "ranges",
                               "regions", "values", "shape", "perm", "axis", "fn",
-                              "name", "value", "table", "axes", "output")
+                              "name", "value", "table", "axes", "output",
+                              "join", "filter")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
                               :var, :lower, :upper,
                               :output_idx, :expr, :reduce, :semiring, :ranges,
                               :regions, :values, :shape, :perm, :axis, :fn,
-                              :name, :value, :table, :axes, :output)
+                              :name, :value, :table, :axes, :output,
+                              :join, :filter)
     else
         throw(ParseError("Invalid expression format: expected number, string, or object with 'op' field. Got: $(typeof(data))"))
     end
@@ -78,7 +80,8 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
                         kint_var, klower, kupper,
                         koutput_idx, kexpr, kreduce, ksemiring, kranges,
                         kregions, kvalues, kshape, kperm, kaxis, kfn,
-                        kname, kvalue, ktable, ktable_axes, koutput)
+                        kname, kvalue, ktable, ktable_axes, koutput,
+                        kjoin, kfilter)
     op = string(data[kop])
     if op == "call"
         # The `call` op + `registered_functions` extension point was removed in
@@ -175,6 +178,13 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     output_native = output_raw === nothing ? nothing :
         (isa(output_raw, Integer) ? Int(output_raw) : string(output_raw))
 
+    # M2 (RFC §5.3 / §7.2): the optional value-equality `join` clauses and the
+    # boolean `filter` predicate that gate which index combinations of an
+    # aggregate / arrayop contribute a ⊗-product term.
+    join_clauses = _coerce_join(get(data, kjoin, nothing))
+    filter_raw = get(data, kfilter, nothing)
+    filter_expr = filter_raw === nothing ? nothing : parse_expression(filter_raw)
+
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
@@ -184,7 +194,8 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
         perm=perm_vec, axis=axis_int, fn=fn_str,
         name=name_str, value=value_native,
-        table=table_str, table_axes=table_axes_dict, output=output_native)
+        table=table_str, table_axes=table_axes_dict, output=output_native,
+        join=join_clauses, filter=filter_expr)
 end
 
 function _coerce_output_idx(data)
@@ -230,6 +241,35 @@ function _coerce_ranges(data)
         end
     end
     return result
+end
+
+# Coerce the wire `join` array (M2, RFC semiring-faq-unified-ir §5.3) into the
+# parsed clause form. Each wire clause is a `{ "on": [[left, right], …] }`
+# object; the result is a `Vector{Any}` whose entries are
+# `Vector{Tuple{String,String}}` — one list of key-column pairs per clause.
+# Only STRUCTURAL validation lives here (≥1 pair, exactly length-2 pairs);
+# key-type / symbol-resolution checks are deferred to build time so they can
+# consult the index-set registry (`_resolve_join_gates`).
+function _coerce_join(data)
+    data === nothing && return nothing
+    clauses = Vector{Any}()
+    for clause in data
+        on_raw = _json_get(clause, "on")
+        on_raw === nothing && throw(ParseError(
+            "join clause requires an `on` array of [left, right] key-column " *
+            "pairs (RFC semiring-faq-unified-ir §5.3)"))
+        pairs_vec = Vector{Tuple{String,String}}()
+        for pair in on_raw
+            length(pair) == 2 || throw(ParseError(
+                "join `on` entry must be a 2-element [left, right] pair, got " *
+                "$(length(pair)) element(s) (RFC §5.3)"))
+            push!(pairs_vec, (string(pair[1]), string(pair[2])))
+        end
+        isempty(pairs_vec) && throw(ParseError(
+            "join clause `on` requires at least one key-column pair (RFC §5.3)"))
+        push!(clauses, pairs_vec)
+    end
+    return clauses
 end
 
 function _coerce_regions(data)
@@ -1695,6 +1735,11 @@ function coerce_index_set(data::Any)::IndexSet
     size_val = size_raw === nothing ? nothing : Int(size_raw)
     members_raw = _json_get(data, "members")
     members = members_raw === nothing ? nothing : String[string(x) for x in members_raw]
+    # Keep the original member types ONLY when some member is not a string, so the
+    # join-key validator can reject float / null keys (RFC §5.3). A string-only
+    # set keeps `members_typed === nothing` and is unchanged from before.
+    members_typed = members_raw === nothing ? nothing :
+        (any(x -> !(x isa AbstractString), members_raw) ? Any[x for x in members_raw] : nothing)
     of_raw = _json_get(data, "of")
     of = of_raw === nothing ? nothing : String[string(x) for x in of_raw]
     offsets_raw = _json_get(data, "offsets")
@@ -1704,7 +1749,8 @@ function coerce_index_set(data::Any)::IndexSet
     from_faq_raw = _json_get(data, "from_faq")
     from_faq = from_faq_raw === nothing ? nothing : string(from_faq_raw)
     return IndexSet(string(kind_raw); size=size_val, members=members, of=of,
-                    offsets=offsets, values=values, from_faq=from_faq)
+                    offsets=offsets, values=values, from_faq=from_faq,
+                    members_raw=members_typed)
 end
 
 """

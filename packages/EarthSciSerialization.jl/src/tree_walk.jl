@@ -105,13 +105,22 @@ function build_evaluator(model::Model;
     end
     sort!(param_names)
 
+    # ---- Resolve value-equality joins (RFC §5.3) ----
+    # Rewrite each aggregate's `join` clauses into build-time `join_gates` (a
+    # canonical bucket code per key-column position) BEFORE index-set ranges are
+    # resolved away — categorical members are read from the still-present
+    # `{from}` references here. No-op (byte-identical) for files without a join.
+    equations = _resolve_join_gates(model.equations, model.index_sets)
+    init_equations = _resolve_join_gates(model.initialization_equations,
+                                         model.index_sets)
+
     # ---- Resolve index-set references in ranges (RFC §5.2) ----
     # Rewrite any `ranges[*]` `{from: <name>}` reference against the model's
     # `index_sets` registry into the dense / dynamic-bound form the range
     # machinery already consumes, BEFORE any range expansion runs. No-op (and
     # therefore byte-identical) for files that use no `{from}` references.
-    equations = _resolve_index_set_ranges(model.equations, model.index_sets)
-    init_equations = _resolve_index_set_ranges(model.initialization_equations,
+    equations = _resolve_index_set_ranges(equations, model.index_sets)
+    init_equations = _resolve_index_set_ranges(init_equations,
                                                model.index_sets)
 
     # ---- Discover array cells from equations and initial conditions ----
@@ -434,12 +443,31 @@ function build_evaluator(model::Model;
                                                           idx_env, _const_arrays)) :
                             cc
                     end
+                    # M2 (§5.3 / §7.2): the value-equality join gates (resolved at
+                    # build time) and the boolean filter predicate restrict which
+                    # contracted combinations contribute a ⊗-term. A join-rejected
+                    # combination is dropped (so a degenerate join keeps every term
+                    # and is byte-identical); a filter-rejected one contributes 0̄
+                    # at runtime via an `ifelse` guard.
+                    agg_gates  = eq.rhs isa OpExpr ? (eq.rhs::OpExpr).join_gates : nothing
+                    agg_filter = eq.rhs isa OpExpr ? (eq.rhs::OpExpr).filter : nothing
                     k_nodes = _Node[]
                     for k_tuple in Iterators.product(cell_contract_iters...)
+                        if agg_gates !== nothing
+                            binding = Dict{String,Int}(idx_env)
+                            for d in 1:length(contract_names)
+                                binding[contract_names[d]] = k_tuple[d]
+                            end
+                            _join_admits(agg_gates, binding) || continue
+                        end
                         k_exprs = Dict{String,Expr}(
                             contract_names[d] => IntExpr(Int64(k_tuple[d]))
                             for d in 1:length(contract_names))
                         term = _sub_preserving(sub_rhs_outer, k_exprs)
+                        if agg_filter !== nothing
+                            filt = _sub_preserving(_sub_preserving(agg_filter, idx_exprs), k_exprs)
+                            term = OpExpr("ifelse", Expr[filt, term, NumExpr(rhs_zerobar)])
+                        end
                         term = isempty(resolved_obs) ? term :
                                _sub_preserving(term, resolved_obs)
                         rhs_r = _resolve_indices(term, array_var_info, var_map, _const_arrays)
@@ -1040,6 +1068,10 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
     # outer `i`-loop — has `i` resolved when the inner arrayop is later expanded.
     # Bounds are Int (pass through) or Expr (recursively substituted).
     new_ranges = _sub_ranges(expr.ranges, bindings)
+    # Substitute loop-var bindings into a `filter` predicate too, so a nested
+    # aggregate's filter sees the outer index values (the join's `join_gates` are
+    # position-keyed and need no substitution — they are carried through).
+    new_filter = expr.filter === nothing ? nothing : _sub_preserving(expr.filter, bindings)
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim,
                   int_var=expr.int_var, lower=expr.lower, upper=expr.upper,
@@ -1047,7 +1079,8 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                   reduce=expr.reduce, semiring=expr.semiring, ranges=new_ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
-                  fn=expr.fn, name=expr.name, value=expr.value)
+                  fn=expr.fn, name=expr.name, value=expr.value,
+                  join=expr.join, filter=new_filter, join_gates=expr.join_gates)
 end
 
 # Substitute loop-var bindings into an arrayop `ranges` dict's bound expressions.
@@ -1332,6 +1365,245 @@ function _combine_with_reducer(oplus::String, zerobar::Float64, terms::Vector{Ex
 end
 
 # ============================================================
+# 5c-join. M2 — value-equality joins (RFC semiring-faq-unified-ir §5.3)
+# ============================================================
+#
+# A `join` clause gates which (output × contracted) index combinations of an
+# aggregate contribute a ⊗-product term: a term contributes iff, for EVERY
+# key-column pair of EVERY clause, the two columns hold the SAME key value
+# (categorical member compared by Unicode code point; interval / dense index by
+# its integer value). All pairs of all clauses are ANDed. Resolution is purely
+# structural — it depends only on the index symbols and the document index-set
+# registry, never on run-time factor values — so it happens once at BUILD time:
+# each key symbol's range position is bucketed into a canonical code (equal codes
+# ⇔ equal key values, RFC Appendix A.6) and the expansion sites drop any
+# combination whose codes disagree. A dropped combination contributes nothing →
+# the additive identity 0̄ once the reduction is empty (§5.1). Because the output
+# stays in DECLARED index order, a degenerate / positional join (each key bound
+# to its own dimension) keeps every term and is byte-identical to the join-free
+# node (§5.3). Inner-only; many-to-many is defined (m·n terms), not an error.
+
+# One resolved key-column pair: the two range symbols and, for each, a map from a
+# range position (the loop-variable value) to its bucket code. A combination is
+# admitted iff `codes_l[pos_l] == codes_r[pos_r]` for every gate.
+struct _JoinGate
+    sym_l::String
+    sym_r::String
+    codes_l::Dict{Int,Int}
+    codes_r::Dict{Int,Int}
+end
+
+# Resolve a join-key name to the range symbol it denotes (RFC §5.3): either a
+# declared range symbol directly, or the name of an index set bound by exactly
+# one range symbol via `{from: <name>}` (naming the dimension instead of the loop
+# symbol). Zero or multiple bindings are build-time errors.
+function _join_sym_for_key(key::String, ranges::AbstractDict, sym_to_set::AbstractDict)
+    haskey(ranges, key) && return key
+    candidates = sort!(String[s for (s, setn) in sym_to_set if setn == key])
+    if length(candidates) == 1
+        return candidates[1]
+    elseif isempty(candidates)
+        throw(TreeWalkError("E_TREEWALK_JOIN_UNKNOWN_KEY",
+            "join key '$key' is neither a declared range symbol nor an index set " *
+            "bound by a range of this aggregate (RFC semiring-faq-unified-ir §5.3)"))
+    else
+        throw(TreeWalkError("E_TREEWALK_JOIN_AMBIGUOUS_KEY",
+            "join key '$key' names an index set bound by multiple range symbols " *
+            "$(candidates); reference the range symbol directly (RFC §5.3)"))
+    end
+end
+
+# Validate one member used as a join key (RFC §5.3 / §5.7): keys must be
+# exact-equality types — integer IDs or string members. Floats (equality is not
+# portable across bindings), booleans, and nulls are build-time errors.
+function _validated_key_member(m, set_name::String)
+    m === nothing && throw(TreeWalkError("E_TREEWALK_JOIN_NULL_KEY",
+        "null member in join key index set '$set_name': emitting null into a key " *
+        "column is a build-time error (RFC semiring-faq-unified-ir §5.3)"))
+    if m isa Bool
+        throw(TreeWalkError("E_TREEWALK_JOIN_KEY_TYPE",
+            "boolean member $(repr(m)) in join key index set '$set_name' is not an " *
+            "exact-equality key type (RFC §5.3)"))
+    elseif m isa AbstractFloat
+        throw(TreeWalkError("E_TREEWALK_JOIN_FLOAT_KEY",
+            "floating-point member $(repr(m)) in join key index set '$set_name': " *
+            "float join keys are forbidden — equality is not portable across " *
+            "bindings (RFC semiring-faq-unified-ir §5.3 / §5.7 rule 1)"))
+    elseif m isa Integer
+        return Int(m)
+    elseif m isa AbstractString
+        return String(m)
+    else
+        throw(TreeWalkError("E_TREEWALK_JOIN_KEY_TYPE",
+            "unsupported join key member type $(typeof(m)) in index set " *
+            "'$set_name'; keys must be integer IDs or categorical members (RFC §5.3)"))
+    end
+end
+
+# The 1-based range positions iterated for a join-key symbol — the loop-variable
+# values the expansion will see (categorical / interval `{from}` resolve to
+# `1:size`; a dense `[lo,hi]` tuple expands to `lo:hi`). Runs on the ORIGINAL
+# (pre-index-set-resolution) ranges so the `{from}` reference is still present.
+function _join_key_positions(sym::String, ranges::AbstractDict, index_sets::AbstractDict)
+    spec = get(ranges, sym, nothing)
+    spec === nothing && throw(TreeWalkError("E_TREEWALK_JOIN_UNKNOWN_KEY",
+        "join key symbol '$sym' is not a range of this aggregate (RFC §5.3)"))
+    if spec isa IndexSetRef
+        haskey(index_sets, spec.from) || throw(TreeWalkError(
+            "E_TREEWALK_UNDECLARED_INDEX_SET",
+            "undeclared index set '$(spec.from)' referenced by join key '$sym' (RFC §5.2)"))
+        is = index_sets[spec.from]
+        if is.kind == "categorical"
+            n = is.members === nothing ? 0 : length(is.members)
+            return collect(1:n)
+        elseif is.kind == "interval"
+            is.size === nothing && throw(TreeWalkError("E_TREEWALK_INDEX_SET_INCOMPLETE",
+                "interval index set '$(spec.from)' requires a `size`"))
+            return collect(1:Int(is.size))
+        else
+            throw(TreeWalkError("E_TREEWALK_JOIN_KEY_KIND",
+                "join key index set '$(spec.from)' has kind '$(is.kind)'; only " *
+                "'interval' (integer IDs) and 'categorical' keys can be equi-joined " *
+                "(RFC §5.3)"))
+        end
+    end
+    return collect(_expand_int_range(spec))
+end
+
+# The key VALUE at each range position for a join-key symbol (RFC §5.3): a
+# categorical range yields its declared members (validated as exact-equality
+# keys); an interval or dense integer range yields the integer index itself.
+function _key_member_values(sym::String, ranges::AbstractDict, positions::Vector{Int},
+                            index_sets::AbstractDict)
+    spec = get(ranges, sym, nothing)
+    if spec isa IndexSetRef
+        is = index_sets[spec.from]
+        if is.kind == "categorical"
+            # Prefer the original-typed members (retained only when non-string) so
+            # float / null keys are rejected; otherwise the string members are keys.
+            src = is.members_raw !== nothing ? is.members_raw :
+                  (is.members === nothing ? Any[] : is.members)
+            return Any[_validated_key_member(src[p], spec.from) for p in positions]
+        elseif is.kind == "interval"
+            return Any[Int(p) for p in positions]
+        end
+    end
+    # Dense integer-tuple range — the integer index value is the key.
+    return Any[Int(p) for p in positions]
+end
+
+# Bucket two key columns into one canonical sorted order and return
+# equal-iff-equal integer codes (RFC Appendix A.6 / §5.7 rule 1: integers by
+# value, strings by Unicode code point). Equal values get equal codes; a value
+# present on only one side never matches (inner join → 0̄). Coupling an integer
+# key column to a string key column is a key-type error (they can never compare
+# equal — §5.3).
+function _encode_join_keys(vals_l::Vector{Any}, vals_r::Vector{Any})
+    l_str = any(v -> v isa AbstractString, vals_l)
+    r_str = any(v -> v isa AbstractString, vals_r)
+    if l_str != r_str
+        throw(TreeWalkError("E_TREEWALK_JOIN_KEY_TYPE",
+            "join pair couples incompatible key types (integer IDs vs categorical " *
+            "string members); both sides must be the same exact-equality type " *
+            "(RFC semiring-faq-unified-ir §5.3)"))
+    end
+    table = sort!(unique(vcat(vals_l, vals_r)))
+    code_of = Dict{Any,Int}(v => i for (i, v) in enumerate(table))
+    return (Int[code_of[v] for v in vals_l], Int[code_of[v] for v in vals_r])
+end
+
+# Resolve every join clause of an aggregate node into `_JoinGate`s (RFC §5.3).
+# Operates on the node's ORIGINAL ranges (index-set `{from}` refs intact) so it
+# can read categorical members from the document registry.
+function _resolve_join_gates_for(node::OpExpr, index_sets::AbstractDict)
+    node.join === nothing && return nothing
+    ranges = node.ranges === nothing ? Dict{String,Any}() : node.ranges
+    sym_to_set = Dict{String,String}(
+        s => spec.from for (s, spec) in ranges if spec isa IndexSetRef)
+    gates = Vector{Any}()
+    for clause in node.join            # clause :: Vector{Tuple{String,String}}
+        for (lkey, rkey) in clause
+            sym_l = _join_sym_for_key(lkey, ranges, sym_to_set)
+            sym_r = _join_sym_for_key(rkey, ranges, sym_to_set)
+            pos_l = _join_key_positions(sym_l, ranges, index_sets)
+            pos_r = _join_key_positions(sym_r, ranges, index_sets)
+            vals_l = _key_member_values(sym_l, ranges, pos_l, index_sets)
+            vals_r = _key_member_values(sym_r, ranges, pos_r, index_sets)
+            codes_l, codes_r = _encode_join_keys(vals_l, vals_r)
+            push!(gates, _JoinGate(sym_l, sym_r,
+                Dict{Int,Int}(zip(pos_l, codes_l)),
+                Dict{Int,Int}(zip(pos_r, codes_r))))
+        end
+    end
+    return gates
+end
+
+# True iff every join pair's key columns are equal under `binding` (symbol →
+# range position). `nothing` gates (no join) admit everything.
+function _join_admits(gates, binding::AbstractDict)
+    gates === nothing && return true
+    for g in gates
+        gg = g::_JoinGate
+        gg.codes_l[binding[gg.sym_l]] == gg.codes_r[binding[gg.sym_r]] || return false
+    end
+    return true
+end
+
+# True if any node in the subtree carries a `join` clause — used to skip the
+# resolution pre-pass (and stay byte-identical) for join-free documents.
+function _expr_has_join(expr::OpExpr)
+    expr.join !== nothing && return true
+    any(_expr_has_join, expr.args) && return true
+    expr.expr_body !== nothing && _expr_has_join(expr.expr_body) && return true
+    expr.values !== nothing && any(_expr_has_join, expr.values) && return true
+    expr.filter !== nothing && _expr_has_join(expr.filter) && return true
+    return false
+end
+_expr_has_join(::Expr) = false
+_eq_has_join(eq::Equation) = _expr_has_join(eq.lhs) || _expr_has_join(eq.rhs)
+
+# Rewrite each aggregate node's `join` clauses into build-time `join_gates`
+# against the document index-set registry, preserving every other field. Runs
+# BEFORE index-set range resolution so categorical `{from}` refs are still
+# present for member lookup. The wire `join`/`filter` fields are carried through
+# unchanged (serialization round-trips them); only the internal `join_gates` is
+# populated.
+function _resolve_join_in_expr(expr::OpExpr, index_sets::AbstractDict)
+    new_args = Expr[_resolve_join_in_expr(a, index_sets) for a in expr.args]
+    new_body = expr.expr_body === nothing ? nothing : _resolve_join_in_expr(expr.expr_body, index_sets)
+    new_values = expr.values === nothing ? nothing :
+                 Expr[_resolve_join_in_expr(v, index_sets) for v in expr.values]
+    new_lower = expr.lower === nothing ? nothing : _resolve_join_in_expr(expr.lower, index_sets)
+    new_upper = expr.upper === nothing ? nothing : _resolve_join_in_expr(expr.upper, index_sets)
+    new_filter = expr.filter === nothing ? nothing : _resolve_join_in_expr(expr.filter, index_sets)
+    gates = (_is_aggregate_op(expr.op) && expr.join !== nothing) ?
+            _resolve_join_gates_for(expr, index_sets) : expr.join_gates
+    return OpExpr(expr.op, new_args;
+                  wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
+                  lower=new_lower, upper=new_upper,
+                  output_idx=expr.output_idx, expr_body=new_body,
+                  reduce=expr.reduce, semiring=expr.semiring, ranges=expr.ranges,
+                  regions=expr.regions, values=new_values,
+                  shape=expr.shape, perm=expr.perm, axis=expr.axis,
+                  fn=expr.fn, name=expr.name, value=expr.value,
+                  table=expr.table, table_axes=expr.table_axes, output=expr.output,
+                  join=expr.join, filter=new_filter, join_gates=gates)
+end
+_resolve_join_in_expr(expr::Expr, ::AbstractDict) = expr
+
+_resolve_join_in_eq(eq::Equation, index_sets::AbstractDict) =
+    Equation(_resolve_join_in_expr(eq.lhs, index_sets),
+             _resolve_join_in_expr(eq.rhs, index_sets);
+             _comment=eq._comment, region=eq.region)
+
+# Resolve join gates across a vector of equations. Returns the input unchanged
+# when no equation uses a `join` clause (byte-identical for join-free files).
+function _resolve_join_gates(eqs::Vector{Equation}, index_sets::AbstractDict)
+    any(_eq_has_join, eqs) || return eqs
+    return Equation[_resolve_join_in_eq(eq, index_sets) for eq in eqs]
+end
+
+# ============================================================
 # 5d. Index-set registry resolution (RFC semiring-faq-unified-ir §5.2)
 # ============================================================
 #
@@ -1426,7 +1698,8 @@ function _resolve_isr(expr::OpExpr, index_sets::AbstractDict)
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value,
-                  table=expr.table, table_axes=expr.table_axes, output=expr.output)
+                  table=expr.table, table_axes=expr.table_axes, output=expr.output,
+                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
 end
 _resolve_isr(expr::Expr, ::AbstractDict) = expr
 _resolve_isr(eq::Equation, index_sets::AbstractDict) =
@@ -1472,15 +1745,36 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
     contract_names = sort!(String[n for n in keys(ranges_dict) if !(n in output_idx_set)])
     contract_iters = [collect(_expand_int_range(ranges_dict[n])) for n in contract_names]
 
-    isempty(contract_names) &&
+    # M2 (§5.3 / §7.2): value-equality join gates + filter predicate. Resolved at
+    # build time for the join (drop non-matching combinations) and compiled to a
+    # runtime `ifelse(pred, term, 0̄)` for the filter. With neither, this is the
+    # unchanged M1 expansion.
+    gates = arrayop_expr.join_gates
+    filt0 = arrayop_expr.filter
+    if isempty(contract_names) && gates === nothing && filt0 === nothing
         return _resolve_indices(sub_body, array_var_info, var_map, const_arrays)
+    end
 
     terms = Expr[]
     for k_tuple in Iterators.product(contract_iters...)
+        if gates !== nothing
+            binding = Dict{String,Int}()
+            for d in 1:length(output_idx_strs)
+                binding[output_idx_strs[d]] = k_vals[d]
+            end
+            for d in 1:length(contract_names)
+                binding[contract_names[d]] = k_tuple[d]
+            end
+            _join_admits(gates, binding) || continue
+        end
         k_exprs = Dict{String,Expr}(
             contract_names[d] => IntExpr(Int64(k_tuple[d]))
             for d in 1:length(contract_names))
         term = _sub_preserving(sub_body, k_exprs)
+        if filt0 !== nothing
+            filt = _sub_preserving(_sub_preserving(filt0, idx_exprs), k_exprs)
+            term = OpExpr("ifelse", Expr[filt, term, NumExpr(zerobar)])
+        end
         push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
     end
     return _combine_with_reducer(oplus, zerobar, terms)
@@ -1537,14 +1831,32 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
                               _expand_int_range(ranges_dict[n]) :
                               _expand_int_range_dyn(ranges_dict[n], _empty_idx, const_arrays))
                       for n in contract_names]
-    isempty(contract_names) &&
+    # M2 (§5.3 / §7.2): build-time join gates + runtime filter guard. Every join
+    # key of a scalar aggregate is a contracted symbol, so the binding is the
+    # contraction tuple. With neither join nor filter, this is the unchanged M1
+    # scalar expansion.
+    gates = arrayop_expr.join_gates
+    filt0 = arrayop_expr.filter
+    if isempty(contract_names) && gates === nothing && filt0 === nothing
         return _resolve_indices(body, array_var_info, var_map, const_arrays)
+    end
     terms = Expr[]
     for k_tuple in Iterators.product(contract_iters...)
+        if gates !== nothing
+            binding = Dict{String,Int}()
+            for d in 1:length(contract_names)
+                binding[contract_names[d]] = k_tuple[d]
+            end
+            _join_admits(gates, binding) || continue
+        end
         k_exprs = Dict{String,Expr}(
             contract_names[d] => IntExpr(Int64(k_tuple[d]))
             for d in 1:length(contract_names))
         term = _sub_preserving(body, k_exprs)
+        if filt0 !== nothing
+            filt = _sub_preserving(filt0, k_exprs)
+            term = OpExpr("ifelse", Expr[filt, term, NumExpr(zerobar)])
+        end
         push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
     end
     return _combine_with_reducer(oplus, zerobar, terms)
@@ -1648,7 +1960,8 @@ function _resolve_indices(expr::OpExpr,
                       reduce=expr.reduce, semiring=expr.semiring, ranges=expr.ranges,
                       regions=expr.regions, values=expr.values,
                       shape=expr.shape, perm=expr.perm, axis=expr.axis,
-                      fn=expr.fn, name=expr.name, value=expr.value)
+                      fn=expr.fn, name=expr.name, value=expr.value,
+                      join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
     end
     if expr.op == "integral"
         # Euler/midpoint quadrature: integral(u, var=x) → dx * sum(u[k] for k in lo..hi)
@@ -1704,7 +2017,8 @@ function _resolve_indices(expr::OpExpr,
                   reduce=expr.reduce, semiring=expr.semiring, ranges=expr.ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
-                  fn=expr.fn, name=expr.name, value=expr.value)
+                  fn=expr.fn, name=expr.name, value=expr.value,
+                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
 end
 
 # Detect which state variables are used in array context (inside index ops)
