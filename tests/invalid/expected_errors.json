@@ -1990,5 +1990,13 @@
     ],
     "is_valid": false,
     "notes": "The ideal gas constant 'R' is declared with units 'kcal/mol' — missing the temperature dimension — so the computed dimensions of 'n*R*T' in 'gas_law_calculation' do not match the canonical energy dimension expected from P*V = n*R*T. Python's validator pattern-matches a small registry of well-known constants (R, k_B, N_A) and flags dimensional (not numerical) mismatches at the first usage site. Julia/Rust/TS/Go currently do not implement this check — follow-up beads required for full cross-language support."
+  },
+  "undeclared_from_name.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "resolver_only": true,
+    "resolver_error_code": "E_REF_UNDECLARED_INDEX_SET",
+    "notes": "Resolver-level invalid (bead ess-my4.1.6; RFC semiring-faq-unified-ir §5.2). The aggregate `ranges` entry references { \"from\": \"ghost_cells\" }, a name absent from the model `index_sets` registry (which declares only \"cells\"). The document is SCHEMA-VALID, so schema-only bindings (TypeScript, Go) accept it (is_valid: true) — their invalid-fixture loops read `resolver_only` and assert schema acceptance instead of rejection. The evaluating bindings reject the undeclared name: Julia build_evaluator -> TreeWalkError E_TREEWALK_UNDECLARED_INDEX_SET; Rust resolve_aggregate_ranges -> CompileError::InterpreterBuildError; Python build_reference_graph -> ReferenceResolutionError E_REF_UNDECLARED_INDEX_SET."
   }
 }

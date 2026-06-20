@@ -325,3 +325,36 @@ fn shared_valid_aggregate_fixture_parses_and_resolves() {
     let mut resolved = model;
     resolve_aggregate_ranges(&mut resolved).expect("fixture `{from}` ranges resolve");
 }
+
+/// Cross-bead invalid fixture (bead ess-my4.1.6): the shared resolver-level
+/// invalid fixture under tests/invalid/aggregate/ is SCHEMA-VALID (so `load`
+/// succeeds) but its aggregate `{from}` ranges name `ghost_cells`, an index set
+/// absent from the registry, so *this* bead's resolver rejects it (no implicit
+/// interval inference, §5.2) and the message names the offending set. Schema-only
+/// bindings (TypeScript/Go) accept it; see tests/invalid/expected_errors.json
+/// (the `resolver_only` entry).
+#[test]
+fn shared_invalid_undeclared_from_fixture_is_rejected() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/invalid/aggregate/undeclared_from_name.esm"
+    );
+    let json = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+    // Schema-valid: the loader accepts it.
+    let file = load(&json).unwrap_or_else(|e| panic!("schema-valid fixture should load: {e}"));
+
+    let mut model = file
+        .models
+        .as_ref()
+        .and_then(|m| m.values().next())
+        .expect("fixture has a model")
+        .clone();
+
+    let err = resolve_aggregate_ranges(&mut model)
+        .expect_err("undeclared {from} must be rejected by the resolver");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("ghost_cells"),
+        "error should name the undeclared set: {msg}"
+    );
+}

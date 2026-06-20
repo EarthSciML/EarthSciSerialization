@@ -29,6 +29,11 @@ import numpy as np
 import pytest
 
 from earthsci_toolkit.parse import load
+from earthsci_toolkit.reference_resolution import (
+    E_REF_UNDECLARED_INDEX_SET,
+    ReferenceResolutionError,
+    build_reference_graph,
+)
 from earthsci_toolkit.simulation import simulate
 
 
@@ -36,6 +41,13 @@ _FIXTURES_DIR = (
     Path(__file__).resolve().parents[3]  # repo root
     / "tests"
     / "valid"
+    / "aggregate"
+)
+
+_INVALID_FIXTURES_DIR = (
+    Path(__file__).resolve().parents[3]  # repo root
+    / "tests"
+    / "invalid"
     / "aggregate"
 )
 
@@ -153,3 +165,29 @@ def test_aggregate_fixture_conformance(fixture_path: Path) -> None:
                 )
 
     assert any_assertions, f"{fixture_path.name}: no assertions were checked"
+
+
+def test_undeclared_from_name_rejected_by_resolver() -> None:
+    """Resolver-level invalid fixture (bead ess-my4.1.6; RFC §5.2).
+
+    An aggregate ``{from}`` range naming an index set absent from the model
+    ``index_sets`` registry is SCHEMA-VALID (so :func:`load` succeeds) but
+    rejected by the build-time index-set-registry resolver
+    (:func:`build_reference_graph`), which raises ``ReferenceResolutionError``
+    with code ``E_REF_UNDECLARED_INDEX_SET`` and names the offending set. No
+    implicit interval is inferred for an undeclared name. Schema-only bindings
+    (TypeScript/Go) accept it; see ``tests/invalid/expected_errors.json``.
+    """
+    path = _INVALID_FIXTURES_DIR / "undeclared_from_name.esm"
+    assert path.is_file(), f"missing fixture: {path}"
+
+    # Schema-valid: the typed loader accepts it (the resolver is a separate pass).
+    load(path)
+
+    # The build-time resolver rejects the undeclared `{from}`, naming it.
+    raw = json.loads(path.read_text())
+    model_name, model = next(iter(raw["models"].items()))
+    with pytest.raises(ReferenceResolutionError) as exc:
+        build_reference_graph(model, model_name)
+    assert exc.value.code == E_REF_UNDECLARED_INDEX_SET
+    assert "ghost_cells" in str(exc.value)

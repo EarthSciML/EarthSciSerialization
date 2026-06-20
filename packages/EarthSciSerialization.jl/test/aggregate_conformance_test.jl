@@ -75,3 +75,24 @@ end
         @test du[vmap["emissions[2]"]] ≈ 12.0
     end
 end
+
+# Resolver-level invalid fixture (bead ess-my4.1.6; RFC §5.2): an `aggregate`
+# `{from}` range naming an index set absent from the model `index_sets` registry
+# is SCHEMA-VALID (so `load` succeeds) but rejected by the index-set-registry
+# resolver inside `build_evaluator` — no implicit interval is inferred for an
+# undeclared name. Schema-only bindings (TypeScript/Go) accept it; see
+# tests/invalid/expected_errors.json (resolver_only entry).
+@testset "invalid: undeclared {from} index set rejected (ess-my4.1.6)" begin
+    path = joinpath(_AGG_REPO_ROOT, "tests", "invalid", "aggregate",
+                    "undeclared_from_name.esm")
+    @test isfile(path)
+    file = EarthSciSerialization.load(path)   # schema-valid: load must succeed
+    err = try
+        build_evaluator(file; model_name="UndeclaredFrom")
+        nothing
+    catch e
+        e
+    end
+    @test err isa EarthSciSerialization.TreeWalkError
+    @test occursin("ghost_cells", sprint(showerror, err))
+end

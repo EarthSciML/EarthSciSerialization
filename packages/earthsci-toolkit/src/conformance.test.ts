@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import {
   load,
   save,
@@ -176,11 +176,32 @@ describe('Conformance Test Suite', () => {
   describe('Schema validation tests', () => {
     const invalidFiles = findEsmFiles(join(testsDir, 'invalid'));
 
+    // Resolver-only invalid fixtures are SCHEMA-VALID but rejected only by an
+    // evaluator/resolver the schema-only TS binding does not run — e.g. an
+    // `aggregate` `{ from }` range naming an index set absent from the registry
+    // (RFC semiring-faq-unified-ir §5.2). tests/invalid/expected_errors.json
+    // marks them `resolver_only: true`; for those, schema validation must PASS,
+    // so this recursive invalid-fixture sweep does not flag the acceptance as a
+    // failure. See bead ess-my4.1.6.
+    const expectedErrors = loadJsonFixture<Record<string, { resolver_only?: boolean }>>(
+      join(testsDir, 'invalid/expected_errors.json')
+    );
+
     it.each(invalidFiles)('should detect errors in %s', (filePath) => {
       const content = readFileSync(filePath, 'utf-8');
 
       // Attempt to validate - should find schema or structural errors
       const result = validate(content);
+
+      if (expectedErrors[basename(filePath)]?.resolver_only) {
+        // Resolver-only: the JSON-Schema layer must ACCEPT it (no schema_errors).
+        // The defect is rejected only by an evaluator/resolver the TS binding
+        // does not run (asserted by Julia/Rust/Python). Structural-layer gaps
+        // (e.g. the TS binding not yet modelling `aggregate` ODE equations) are
+        // unrelated to this contract and are intentionally not asserted here.
+        expect(result.schema_errors).toHaveLength(0);
+        return;
+      }
 
       expect(result.is_valid).toBe(false);
       const totalErrors = result.schema_errors.length + result.structural_errors.length;
