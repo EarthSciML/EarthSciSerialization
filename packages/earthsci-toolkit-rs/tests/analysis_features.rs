@@ -51,6 +51,7 @@ fn test_analysis_features_integration() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -229,6 +230,7 @@ fn test_editing_operations() {
     // Create a simple model
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,

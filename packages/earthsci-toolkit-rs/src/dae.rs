@@ -464,6 +464,7 @@ mod tests {
         Model {
             name: None,
             domain: None,
+            index_sets: None,
             coupletype: None,
             reference: None,
             variables: HashMap::new(),

@@ -37,6 +37,9 @@
     clippy::large_enum_variant
 )]
 
+use crate::aggregate::{
+    ReduceKind, effective_reduce_kind, is_aggregate_op, resolve_aggregate_ranges,
+};
 use crate::simulate::{CompileError, SimulateError, SimulateOptions, SolutionMetadata};
 use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
 use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, VariableType};
@@ -106,8 +109,8 @@ enum RhsRule {
     /// of `output_idx` values (the tuple drawn from `output_ranges`) and the
     /// resulting scalar is written into `var_name[idx...]`.
     /// If `contract_names` is non-empty the body also contains contracted
-    /// (reduction) indices that are unrolled at eval time and combined via
-    /// `reduce_op`.
+    /// (reduction) indices that are unrolled at eval time and combined via the
+    /// semiring's ⊕ (`reduce`), resolved once at build time.
     ArrayLoop {
         var_name: String,
         output_idx_names: Vec<String>,
@@ -116,7 +119,7 @@ enum RhsRule {
         body: Box<Expr>,
         contract_names: Vec<String>,
         contract_ranges: Vec<(i64, i64)>,
-        reduce_op: String,
+        reduce: ReduceKind,
     },
 }
 
@@ -172,6 +175,7 @@ pub struct ArrayCompiled {
 /// intermediates.
 const ARRAY_OP_NAMES: &[&str] = &[
     "arrayop",
+    "aggregate", // canonical alias of `arrayop` (RFC semiring-faq-unified-ir §5.6)
     "makearray",
     "reshape",
     "transpose",
@@ -322,6 +326,15 @@ impl ArrayCompiled {
     }
 
     pub fn from_model(model: &Model) -> Result<Self, CompileError> {
+        // Resolve `{ "from": <index set> }` range references (RFC
+        // semiring-faq-unified-ir §5.2) into concrete `[lo, hi]` intervals
+        // before any shape inference or rule building. Operates on an owned
+        // clone so the caller's model — and its serialized form — is untouched;
+        // every downstream consumer then sees only dense interval ranges.
+        let mut model_owned = model.clone();
+        resolve_aggregate_ranges(&mut model_owned)?;
+        let model = &model_owned;
+
         // (0) Reject spatial differential operators anywhere in the model's
         // equations or observed-variable expressions — the canonical
         // pipeline contract requires `grad`/`div`/`laplacian` to be
@@ -526,7 +539,7 @@ impl ArrayCompiled {
                 body,
                 contract_names,
                 contract_ranges,
-                reduce_op,
+                reduce,
             )) = extract_derivative_arrayop(&eq.lhs, &eq.rhs)
             {
                 // Array-op derivative over (idx_names, ranges).
@@ -561,7 +574,7 @@ impl ArrayCompiled {
                     body: Box::new(body),
                     contract_names,
                     contract_ranges,
-                    reduce_op,
+                    reduce,
                 });
                 continue;
             }
@@ -968,7 +981,7 @@ fn evaluate_rhs(
                 body,
                 contract_names,
                 contract_ranges,
-                reduce_op,
+                reduce,
             } => {
                 let vs = &var_shapes[var_name];
                 for tuple in cartesian_range(output_ranges) {
@@ -988,23 +1001,13 @@ fn evaluate_rhs(
                     let v = if contract_names.is_empty() {
                         eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN)
                     } else {
-                        let mut acc: f64 = match reduce_op.as_str() {
-                            "*" => 1.0,
-                            "max" => f64::NEG_INFINITY,
-                            "min" => f64::INFINITY,
-                            _ => 0.0,
-                        };
+                        let mut acc: f64 = reduce.identity();
                         for k_tuple in cartesian_range(contract_ranges) {
                             for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
                                 ctx.loop_binds.insert(kn.clone(), *kv);
                             }
                             let term = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
-                            acc = match reduce_op.as_str() {
-                                "*" => acc * term,
-                                "max" => f64::max(acc, term),
-                                "min" => f64::min(acc, term),
-                                _ => acc + term,
-                            };
+                            acc = reduce.combine(acc, term);
                         }
                         acc
                     };
@@ -1171,7 +1174,7 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
 
         // Array ops.
         "index" => eval_index(node, ctx),
-        "arrayop" => eval_arrayop(node, ctx),
+        "arrayop" | "aggregate" => eval_arrayop(node, ctx),
         "makearray" => eval_makearray(node, ctx),
         "reshape" => eval_reshape(node, ctx),
         "transpose" => eval_transpose(node, ctx),
@@ -1460,7 +1463,7 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     let ranges: Vec<(i64, i64)> = idx_names
         .iter()
         .map(|n| {
-            let r = ranges_map.get(n).copied().unwrap_or([0, 0]);
+            let r = ranges_map.get(n).and_then(|s| s.bounds()).unwrap_or([0, 0]);
             (r[0], r[1])
         })
         .collect();
@@ -1476,11 +1479,11 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     let contract_ranges: Vec<(i64, i64)> = sorted_contract_keys
         .iter()
         .map(|k| {
-            let r = ranges_map[*k];
+            let r = ranges_map[*k].bounds().unwrap_or([0, 0]);
             (r[0], r[1])
         })
         .collect();
-    let reduce_op = node.reduce.clone().unwrap_or_else(|| "+".to_string());
+    let reduce = effective_reduce_kind(node.semiring.as_deref(), node.reduce.as_deref());
 
     let shape: Vec<usize> = ranges
         .iter()
@@ -1501,23 +1504,13 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         let v = if contract_names.is_empty() {
             eval(&body, ctx).as_scalar().unwrap_or(f64::NAN)
         } else {
-            let mut acc: f64 = match reduce_op.as_str() {
-                "*" => 1.0,
-                "max" => f64::NEG_INFINITY,
-                "min" => f64::INFINITY,
-                _ => 0.0,
-            };
+            let mut acc: f64 = reduce.identity();
             for k_tuple in cartesian_range(&contract_ranges) {
                 for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
                     ctx.loop_binds.insert(kn.clone(), *kv);
                 }
                 let term = eval(&body, ctx).as_scalar().unwrap_or(f64::NAN);
-                acc = match reduce_op.as_str() {
-                    "*" => acc * term,
-                    "max" => f64::max(acc, term),
-                    "min" => f64::min(acc, term),
-                    _ => acc + term,
-                };
+                acc = reduce.combine(acc, term);
             }
             acc
         };
@@ -1705,10 +1698,11 @@ fn extract_derivative_scalar(lhs: &Expr) -> Option<(String, Option<Vec<i64>>)> {
 
 /// If `lhs` is `arrayop(expr=D(index(var, idx...)), ...)`, extract
 /// `(var_name, output_idx_names, output_ranges, lhs_idx_exprs, rhs_body,
-///  contract_names, contract_ranges, reduce_op)`.
+///  contract_names, contract_ranges, reduce)`.
 /// `contract_names`/`contract_ranges` are indices present in the RHS ranges
 /// but absent from `output_idx` (generalized-einsum contracted indices).
-/// `reduce_op` defaults to "+" per the ESM spec.
+/// `reduce` is the semiring ⊕ resolved from the RHS node's `semiring`/`reduce`
+/// (defaulting to `Sum` per the ESM spec).
 fn extract_derivative_arrayop(
     lhs: &Expr,
     rhs: &Expr,
@@ -1720,12 +1714,12 @@ fn extract_derivative_arrayop(
     Expr,
     Vec<String>,
     Vec<(i64, i64)>,
-    String,
+    ReduceKind,
 )> {
     let Expr::Operator(node) = lhs else {
         return None;
     };
-    if node.op != "arrayop" {
+    if !is_aggregate_op(&node.op) {
         return None;
     }
     let body = node.expr.as_ref()?.as_ref();
@@ -1753,17 +1747,17 @@ fn extract_derivative_arrayop(
     let ranges: Vec<(i64, i64)> = idx_names
         .iter()
         .map(|n| {
-            let r = ranges_map.get(n).copied().unwrap_or([0, 0]);
+            let r = ranges_map.get(n).and_then(|s| s.bounds()).unwrap_or([0, 0]);
             (r[0], r[1])
         })
         .collect();
     // RHS body: assume rhs is also arrayop with body, or pass through as
     // scalar-valued expr that evaluates at each tuple.
-    // Also extract contracted (reduction) indices and reduce_op.
-    let (rhs_body, contract_names, contract_ranges, reduce_op) = match rhs {
-        Expr::Operator(rnode) if rnode.op == "arrayop" => {
+    // Also extract contracted (reduction) indices and the semiring ⊕ reducer.
+    let (rhs_body, contract_names, contract_ranges, reduce) = match rhs {
+        Expr::Operator(rnode) if is_aggregate_op(&rnode.op) => {
             let b = rnode.expr.as_ref().map(|b| b.as_ref().clone())?;
-            let rop = rnode.reduce.clone().unwrap_or_else(|| "+".to_string());
+            let rop = effective_reduce_kind(rnode.semiring.as_deref(), rnode.reduce.as_deref());
             let mut c_names: Vec<String> = Vec::new();
             let mut c_ranges: Vec<(i64, i64)> = Vec::new();
             if let Some(rhs_ranges) = &rnode.ranges {
@@ -1771,7 +1765,7 @@ fn extract_derivative_arrayop(
                 sorted_keys.sort();
                 for n in sorted_keys {
                     if !idx_names.contains(n) {
-                        let r = rhs_ranges[n];
+                        let r = rhs_ranges[n].bounds().unwrap_or([0, 0]);
                         c_names.push(n.clone());
                         c_ranges.push((r[0], r[1]));
                     }
@@ -1779,7 +1773,7 @@ fn extract_derivative_arrayop(
             }
             (b, c_names, c_ranges, rop)
         }
-        other => (other.clone(), Vec::new(), Vec::new(), "+".to_string()),
+        other => (other.clone(), Vec::new(), Vec::new(), ReduceKind::Sum),
     };
     Some((
         var_name,
@@ -1789,7 +1783,7 @@ fn extract_derivative_arrayop(
         rhs_body,
         contract_names,
         contract_ranges,
-        reduce_op,
+        reduce,
     ))
 }
 
@@ -1803,7 +1797,7 @@ fn extract_algebraic_arrayop(
     let Expr::Operator(node) = lhs else {
         return None;
     };
-    if node.op != "arrayop" {
+    if !is_aggregate_op(&node.op) {
         return None;
     }
     let body = node.expr.as_ref()?.as_ref();
@@ -1834,12 +1828,12 @@ fn extract_algebraic_arrayop(
     let ranges: Vec<(i64, i64)> = idx_names
         .iter()
         .map(|n| {
-            let r = ranges_map.get(n).copied().unwrap_or([0, 0]);
+            let r = ranges_map.get(n).and_then(|s| s.bounds()).unwrap_or([0, 0]);
             (r[0], r[1])
         })
         .collect();
     let rhs_body = match rhs {
-        Expr::Operator(rnode) if rnode.op == "arrayop" => {
+        Expr::Operator(rnode) if is_aggregate_op(&rnode.op) => {
             rnode.expr.as_ref().map(|b| b.as_ref().clone())?
         }
         other => other.clone(),
@@ -1964,12 +1958,16 @@ fn walk_for_shapes(
                     }
                 }
             }
-            if node.op == "arrayop" {
-                // Build loop range map from the arrayop's ranges.
+            if is_aggregate_op(&node.op) {
+                // Build loop range map from the arrayop's ranges. Ranges have
+                // already been resolved to concrete intervals (RFC §5.2) by
+                // `resolve_aggregate_ranges` at the top of `from_model`.
                 let mut inner = loop_ranges.clone();
                 if let Some(ranges) = &node.ranges {
                     for (k, v) in ranges {
-                        inner.insert(k.clone(), (v[0], v[1]));
+                        if let Some(b) = v.bounds() {
+                            inner.insert(k.clone(), (b[0], b[1]));
+                        }
                     }
                 }
                 if let Some(inner_expr) = &node.expr {

@@ -199,6 +199,7 @@ fn test_model_substitution() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,

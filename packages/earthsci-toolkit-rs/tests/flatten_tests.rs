@@ -207,6 +207,7 @@ fn flatten_mixed_model_and_reaction_system() {
         "dyn".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -396,6 +397,7 @@ fn flatten_conflicting_derivative_raises_error() {
         "sys".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -509,6 +511,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
         "A".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -534,6 +537,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
         "B".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -659,6 +663,7 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
         "M".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -684,6 +689,7 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
         "S".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -759,6 +765,7 @@ fn flatten_couple_includes_connector_equations() {
         "A".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -837,6 +844,7 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
     );
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         name: Some("Nested".to_string()),
@@ -887,6 +895,7 @@ fn flatten_rejects_spatial_operators() {
         "transport".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -954,6 +963,7 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
         "pde".to_string(),
         Model {
             domain: None,
+            index_sets: None,
             coupletype: None,
             subsystems: None,
             name: None,

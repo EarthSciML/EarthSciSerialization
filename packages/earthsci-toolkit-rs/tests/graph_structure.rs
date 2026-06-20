@@ -41,6 +41,7 @@ fn test_component_graph_generation() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -154,6 +155,7 @@ fn test_component_graph_exports() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -258,6 +260,7 @@ fn test_model_expression_graph() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -421,6 +424,7 @@ fn test_component_existence() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -555,6 +559,7 @@ fn test_expected_graph_outputs() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,

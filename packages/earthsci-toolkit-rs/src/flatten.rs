@@ -1051,6 +1051,7 @@ mod tests {
             Model {
                 name: Some("System".to_string()),
                 domain: None,
+                index_sets: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,

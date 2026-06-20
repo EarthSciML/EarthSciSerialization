@@ -81,6 +81,7 @@ fn test_structural_validation() {
     let variables = HashMap::new();
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -254,6 +255,7 @@ fn test_component_graph() {
 
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -328,6 +330,7 @@ fn test_pretty_printing() {
 fn test_editing() {
     let model = Model {
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,

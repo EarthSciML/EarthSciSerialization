@@ -459,8 +459,9 @@ fn propagate_operator(
 
         // Array operators: propagate the element dimension. Shape and
         // indexing are orthogonal to dimension (see gt-t5c / gt-vt3 — shapes
-        // are a separate concern from unit checking).
-        "arrayop" => {
+        // are a separate concern from unit checking). `aggregate` is the
+        // canonical tag for the former `arrayop` (RFC §5.6).
+        "arrayop" | "aggregate" => {
             // The body is the scalar expression evaluated for each tuple of
             // loop-index values; its dimension is the array's element
             // dimension.

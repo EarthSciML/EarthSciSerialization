@@ -293,6 +293,41 @@ pub enum Expr {
 }
 
 /// Expression node representing an operator with operands
+/// A single `arrayop`/`aggregate` index range (RFC semiring-faq-unified-ir
+/// §5.2). Either a dense inclusive integer interval `[lo, hi]` (the original,
+/// and still the most common form) or a reference to a declared index set.
+///
+/// Index-set references are resolved to concrete `[lo, hi]` intervals against
+/// the document `index_sets` registry by
+/// [`crate::aggregate::resolve_aggregate_ranges`] before the evaluator runs, so
+/// every range the evaluator actually iterates is a [`RangeSpec::Interval`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RangeSpec {
+    /// Dense inclusive integer interval `[lo, hi]`.
+    Interval([i64; 2]),
+    /// Reference to a declared index set by name, optionally ragged/dependent
+    /// (`of` names the parent index variables, e.g. the edges *of* cell `i`).
+    IndexSetRef {
+        /// Key into the model `index_sets` registry.
+        from: String,
+        /// Parent index variables for a ragged/dependent inner set.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        of: Option<Vec<String>>,
+    },
+}
+
+impl RangeSpec {
+    /// The concrete `[lo, hi]` bounds if this range is (or has been resolved
+    /// to) a dense interval; `None` for an unresolved index-set reference.
+    pub fn bounds(&self) -> Option<[i64; 2]> {
+        match self {
+            RangeSpec::Interval(iv) => Some(*iv),
+            RangeSpec::IndexSetRef { .. } => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ExpressionNode {
     /// Operator name (e.g., "+", "-", "*", "/", "sin", "cos", etc.)
@@ -333,14 +368,29 @@ pub struct ExpressionNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_idx: Option<Vec<String>>,
 
-    /// Per-index inclusive ranges `{name: [lo, hi]}` for `arrayop`.
+    /// Per-index ranges for `arrayop`/`aggregate`. Each entry is either a dense
+    /// inclusive integer interval `[lo, hi]` (the original form) or a reference
+    /// to a declared index set, `{ "from": <name>, "of"?: [...] }` (RFC
+    /// semiring-faq-unified-ir §5.2). Index-set references are resolved to
+    /// concrete intervals against the model `index_sets` registry by
+    /// [`crate::aggregate::resolve_aggregate_ranges`] before evaluation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ranges: Option<HashMap<String, [i64; 2]>>,
+    pub ranges: Option<HashMap<String, RangeSpec>>,
 
     /// Reduction operator (`"+"`, `"*"`, `"max"`, `"min"`) for `arrayop`
     /// contractions over indices appearing in `expr` but not `output_idx`.
+    /// Names the semiring's ⊕ only; see `semiring` for the full algebra.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reduce: Option<String>,
+
+    /// Named semiring `(⊕, ⊗)` for `aggregate`/`arrayop` reductions (RFC
+    /// semiring-faq-unified-ir §5.1). One of `sum_product` (default),
+    /// `max_product`, `min_sum`, `max_sum`, `bool_and_or`. When present it is
+    /// authoritative: ⊕ (the `reduce`) and both identities come from the closed
+    /// registry table, never the file. Absent ⇒ today's `reduce`-string
+    /// behavior (strict superset).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semiring: Option<String>,
 
     /// Per-region per-dimension inclusive range lists for `makearray`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -483,6 +533,45 @@ pub struct ModelTest {
     pub assertions: Vec<ModelTestAssertion>,
 }
 
+/// A document-scoped index set declared in a model's `index_sets` registry
+/// (RFC semiring-faq-unified-ir §5.2 / §8). Unifies ESM `domain.spatial` grid
+/// dims and ESI categorical index sets under one shape. `kind` selects which
+/// optional fields are meaningful (enforced by the schema's kind-conditional
+/// `allOf`):
+/// - `interval`    → `size`
+/// - `categorical` → `members`
+/// - `derived`     → `from_faq`
+/// - `ragged`      → `of`, `offsets`, `values`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IndexSet {
+    /// `"interval" | "categorical" | "derived" | "ragged"`.
+    pub kind: String,
+
+    /// Dense size for `kind: "interval"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<i64>,
+
+    /// Enumerated members for `kind: "categorical"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<serde_json::Value>>,
+
+    /// Source FAQ-node id for `kind: "derived"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_faq: Option<String>,
+
+    /// Parent index sets for `kind: "ragged"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub of: Option<Vec<String>>,
+
+    /// CSR/length backing-factor name for `kind: "ragged"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offsets: Option<String>,
+
+    /// Member backing-factor name for `kind: "ragged"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<String>,
+}
+
 /// ODE-based model component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
@@ -493,6 +582,12 @@ pub struct Model {
     /// Name of a domain from the `domains` section (or null for 0D models)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
+
+    /// Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
+    /// Unifies grid dims and categorical index sets; referenced from
+    /// `aggregate`/`arrayop` `ranges` via `{ "from": <name> }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_sets: Option<HashMap<String, IndexSet>>,
 
     /// Coupling type label
     #[serde(skip_serializing_if = "Option::is_none")]

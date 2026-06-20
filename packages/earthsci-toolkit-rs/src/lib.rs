@@ -36,6 +36,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod aggregate;
 pub mod canonicalize;
 pub mod coupling;
 pub mod dae;

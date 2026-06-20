@@ -148,6 +148,7 @@ fn make_model(
     Model {
         name: Some(name.to_string()),
         domain: None,
+        index_sets: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -912,7 +913,10 @@ fn test_error_grad_in_array_simulator_rejected() {
     use earthsci_toolkit::simulate_array::ArrayCompiled;
 
     let mut ranges = HashMap::new();
-    ranges.insert("i".to_string(), [1i64, 2i64]);
+    ranges.insert(
+        "i".to_string(),
+        earthsci_toolkit::types::RangeSpec::Interval([1i64, 2i64]),
+    );
     let arrayop_body = Expr::Operator(ExpressionNode {
         op: "arrayop".to_string(),
         args: vec![],
