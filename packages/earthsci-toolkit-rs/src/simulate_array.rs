@@ -120,6 +120,9 @@ enum RhsRule {
         contract_names: Vec<String>,
         contract_ranges: Vec<(i64, i64)>,
         reduce: ReduceKind,
+        /// Optional `filter` predicate (§5.3): combinations for which it is
+        /// false contribute the additive identity 0̄. `None` ⇒ no gating.
+        filter: Option<Box<Expr>>,
     },
 }
 
@@ -333,6 +336,12 @@ impl ArrayCompiled {
         // every downstream consumer then sees only dense interval ranges.
         let mut model_owned = model.clone();
         resolve_aggregate_ranges(&mut model_owned)?;
+        // Resolve `join.on` value-equality clauses (RFC §5.3). After range
+        // resolution every range is a concrete interval, so a join over loop
+        // indices is the degenerate positional case (a no-op for the dense
+        // einsum — byte-identical to the no-join form); a join over non-loop
+        // data-derived columns is rejected here (M3) rather than mis-combined.
+        crate::join::resolve_aggregate_joins(&mut model_owned)?;
         let model = &model_owned;
 
         // (0) Reject spatial differential operators anywhere in the model's
@@ -540,6 +549,7 @@ impl ArrayCompiled {
                 contract_names,
                 contract_ranges,
                 reduce,
+                filter,
             )) = extract_derivative_arrayop(&eq.lhs, &eq.rhs)
             {
                 // Array-op derivative over (idx_names, ranges).
@@ -575,6 +585,7 @@ impl ArrayCompiled {
                     contract_names,
                     contract_ranges,
                     reduce,
+                    filter,
                 });
                 continue;
             }
@@ -982,8 +993,10 @@ fn evaluate_rhs(
                 contract_names,
                 contract_ranges,
                 reduce,
+                filter,
             } => {
                 let vs = &var_shapes[var_name];
+                let filter = filter.as_deref();
                 for tuple in cartesian_range(output_ranges) {
                     let mut ctx = EvalCtx {
                         state_arrays: &state_arrays,
@@ -999,12 +1012,21 @@ fn evaluate_rhs(
                     // Generalized einsum: if contracted indices are present, unroll
                     // them at eval time and combine terms with the reduce operator.
                     let v = if contract_names.is_empty() {
-                        eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN)
+                        // A filtered-out pointwise cell contributes 0̄ (§5.3).
+                        if filter_excludes(filter, &mut ctx) {
+                            reduce.identity()
+                        } else {
+                            eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN)
+                        }
                     } else {
                         let mut acc: f64 = reduce.identity();
                         for k_tuple in cartesian_range(contract_ranges) {
                             for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
                                 ctx.loop_binds.insert(kn.clone(), *kv);
+                            }
+                            // A filtered-out combination contributes 0̄ (§5.3).
+                            if filter_excludes(filter, &mut ctx) {
+                                continue;
                             }
                             let term = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
                             acc = reduce.combine(acc, term);
@@ -1447,6 +1469,18 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     }
 }
 
+/// Evaluate an `aggregate`/`arrayop` `filter` predicate under the current loop
+/// binds and report whether the combination is **excluded** (§5.3): excluded
+/// iff a filter is present and evaluates to false (a zero scalar). With no
+/// filter this is always `false`, so the reduction is byte-identical to the
+/// no-filter form.
+fn filter_excludes(filter: Option<&Expr>, ctx: &mut EvalCtx) -> bool {
+    match filter {
+        Some(f) => eval(f, ctx).as_scalar().unwrap_or(0.0) == 0.0,
+        None => false,
+    }
+}
+
 fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     // Standalone arrayop (embedded as an expression, not as the top-level
     // of an equation LHS/RHS). Build the output array by iterating
@@ -1484,6 +1518,10 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         })
         .collect();
     let reduce = effective_reduce_kind(node.semiring.as_deref(), node.reduce.as_deref());
+    // §5.3 filter: a boolean predicate gating which index combinations
+    // contribute a ⊗-term. Absent ⇒ every combination contributes (byte-
+    // identical to the no-filter form).
+    let filter = node.filter.as_deref();
 
     let shape: Vec<usize> = ranges
         .iter()
@@ -1502,12 +1540,22 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
             ctx.loop_binds.insert(name.clone(), *val);
         }
         let v = if contract_names.is_empty() {
-            eval(&body, ctx).as_scalar().unwrap_or(f64::NAN)
+            // A filtered-out pointwise cell contributes the additive identity 0̄.
+            if filter_excludes(filter, ctx) {
+                reduce.identity()
+            } else {
+                eval(&body, ctx).as_scalar().unwrap_or(f64::NAN)
+            }
         } else {
             let mut acc: f64 = reduce.identity();
             for k_tuple in cartesian_range(&contract_ranges) {
                 for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
                     ctx.loop_binds.insert(kn.clone(), *kv);
+                }
+                // A filtered-out combination contributes 0̄ (acc ⊕ 0̄ = acc),
+                // i.e. it is simply omitted from the reduction (§5.3).
+                if filter_excludes(filter, ctx) {
+                    continue;
                 }
                 let term = eval(&body, ctx).as_scalar().unwrap_or(f64::NAN);
                 acc = reduce.combine(acc, term);
@@ -1652,7 +1700,7 @@ fn collect_derivative_targets(equations: &[crate::types::Equation]) -> HashSet<S
         if let Some((name, _)) = extract_derivative_scalar(&eq.lhs) {
             out.insert(name);
         }
-        if let Some((name, _, _, _, _, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
+        if let Some((name, _, _, _, _, _, _, _, _)) = extract_derivative_arrayop(&eq.lhs, &eq.rhs) {
             out.insert(name);
         }
     }
@@ -1715,6 +1763,7 @@ fn extract_derivative_arrayop(
     Vec<String>,
     Vec<(i64, i64)>,
     ReduceKind,
+    Option<Box<Expr>>,
 )> {
     let Expr::Operator(node) = lhs else {
         return None;
@@ -1754,7 +1803,7 @@ fn extract_derivative_arrayop(
     // RHS body: assume rhs is also arrayop with body, or pass through as
     // scalar-valued expr that evaluates at each tuple.
     // Also extract contracted (reduction) indices and the semiring ⊕ reducer.
-    let (rhs_body, contract_names, contract_ranges, reduce) = match rhs {
+    let (rhs_body, contract_names, contract_ranges, reduce, filter) = match rhs {
         Expr::Operator(rnode) if is_aggregate_op(&rnode.op) => {
             let b = rnode.expr.as_ref().map(|b| b.as_ref().clone())?;
             let rop = effective_reduce_kind(rnode.semiring.as_deref(), rnode.reduce.as_deref());
@@ -1771,9 +1820,11 @@ fn extract_derivative_arrayop(
                     }
                 }
             }
-            (b, c_names, c_ranges, rop)
+            // §5.3 filter rides on the RHS aggregate; carry it into the rule so
+            // the contraction gates on it (otherwise it would be silently lost).
+            (b, c_names, c_ranges, rop, rnode.filter.clone())
         }
-        other => (other.clone(), Vec::new(), Vec::new(), ReduceKind::Sum),
+        other => (other.clone(), Vec::new(), Vec::new(), ReduceKind::Sum, None),
     };
     Some((
         var_name,
@@ -1784,6 +1835,7 @@ fn extract_derivative_arrayop(
         contract_names,
         contract_ranges,
         reduce,
+        filter,
     ))
 }
 
@@ -1834,6 +1886,12 @@ fn extract_algebraic_arrayop(
         .collect();
     let rhs_body = match rhs {
         Expr::Operator(rnode) if is_aggregate_op(&rnode.op) => {
+            // This elementwise (non-contracting) fast path does not apply a
+            // `filter`. Bail rather than silently drop it — a filtered
+            // definition must be compiled by a path that honors §5.3.
+            if rnode.filter.is_some() {
+                return None;
+            }
             rnode.expr.as_ref().map(|b| b.as_ref().clone())?
         }
         other => other.clone(),

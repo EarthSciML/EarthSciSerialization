@@ -47,6 +47,7 @@ pub mod expression;
 pub mod flatten;
 pub mod graph;
 pub mod grid_accessor;
+pub mod join;
 pub mod lower_enums;
 pub mod lower_expression_templates;
 pub mod migration;

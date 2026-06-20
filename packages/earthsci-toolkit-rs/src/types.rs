@@ -328,6 +328,19 @@ impl RangeSpec {
     }
 }
 
+/// One value-equality join clause on an `aggregate`/`arrayop` node (RFC
+/// semiring-faq-unified-ir §5.3). `on` lists one or more `[left, right]`
+/// key-column pairs; a combined ⊗-product term is contributed only for index
+/// combinations whose key columns are equal on **every** listed pair (an inner
+/// equi-join). At least one pair is required and each pair is exactly length-2
+/// (enforced by the schema). Resolved at build time by
+/// [`crate::join::resolve_aggregate_joins`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct JoinClause {
+    /// The `[left, right]` key-column pairs to equi-join on.
+    pub on: Vec<[String; 2]>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ExpressionNode {
     /// Operator name (e.g., "+", "-", "*", "/", "sin", "cos", etc.)
@@ -391,6 +404,24 @@ pub struct ExpressionNode {
     /// behavior (strict superset).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semiring: Option<String>,
+
+    /// Value-equality `join` clauses for `aggregate`/`arrayop` (RFC
+    /// semiring-faq-unified-ir §5.3). An inner equi-join combining factors by
+    /// the value equality of key columns, subsuming ESI `join`. Each clause's
+    /// `on` lists `[left, right]` key-column pairs; absent ⇒ factors combine
+    /// only by shared index name (positional einsum), exactly as today.
+    /// Resolved at build time by [`crate::join::resolve_aggregate_joins`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join: Option<Vec<JoinClause>>,
+
+    /// Boolean predicate restricting which index combinations contribute a
+    /// ⊗-product term to an `aggregate`/`arrayop` reduction (RFC
+    /// semiring-faq-unified-ir §5.3 / §7.2). Combinations for which the
+    /// predicate evaluates false contribute the additive identity `0̄` — the
+    /// explicit way to express a guarded sum. May reference any index symbol in
+    /// scope. Absent ⇒ every combination contributes (today's behavior).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<Box<Expr>>,
 
     /// Per-region per-dimension inclusive range lists for `makearray`.
     #[serde(default, skip_serializing_if = "Option::is_none")]

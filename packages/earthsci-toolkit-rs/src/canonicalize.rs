@@ -70,6 +70,8 @@ fn canon_op(node: &ExpressionNode) -> Result<Expr, CanonicalizeError> {
         ranges: node.ranges.clone(),
         reduce: node.reduce.clone(),
         semiring: node.semiring.clone(),
+        join: node.join.clone(),
+        filter: node.filter.clone(),
         regions: node.regions.clone(),
         values: node.values.clone(),
         shape: node.shape.clone(),
