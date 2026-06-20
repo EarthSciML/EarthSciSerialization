@@ -22,6 +22,7 @@
     "src/core.ts",
     "src/types.ts",
     "src/generated.ts",
+    "src/embedded-schema.ts",
     "src/parse.ts",
     "src/serialize.ts",
     "src/validate.ts",

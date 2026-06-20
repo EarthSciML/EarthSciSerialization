@@ -30,6 +30,7 @@
     "test:performance": "playwright test tests/interactive/performance/",
     "test:all": "npm run test && npm run test:e2e",
     "dev:demo": "npx tsx -e \"import { createDemoServer } from './tests/demo/demo-pages.ts'; createDemoServer()\"",
+    "generate-schema": "node scripts/generate-embedded-schema.mjs",
     "generate-types": "json2ts -i ../../esm-schema.json -o src/generated.ts",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",

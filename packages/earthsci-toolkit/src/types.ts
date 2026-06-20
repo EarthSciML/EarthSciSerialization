@@ -89,7 +89,12 @@ export type {
   Equation,
   AffectEquation,
   FunctionalAffect,
-  RuleRegion,
+  // NOTE: `RuleRegion` is intentionally absent. The canonical schema models it
+  // as an untitled `oneOf`, which json-schema-to-typescript inlines at each use
+  // site (e.g. `Equation.region`) instead of emitting a standalone named type,
+  // so `generated.ts` (regenerated verbatim from esm-schema.json) has no
+  // `RuleRegion` export to re-export. Region predicates are modeled at runtime
+  // by `RuleRegionScope` in rule-engine.ts.
 
   // Data handling
   DataLoader,
