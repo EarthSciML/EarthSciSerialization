@@ -37,6 +37,7 @@
 //! ```
 
 pub mod aggregate;
+pub mod cadence;
 pub mod canonicalize;
 pub mod coupling;
 pub mod dae;
@@ -78,6 +79,10 @@ pub mod simulate;
 pub mod simulate_array;
 
 // Re-export main types
+pub use cadence::{
+    Cadence, CadenceError, ClassSummary, MaterializationPoint, Partition, classify, compute_fold,
+    partition_model,
+};
 pub use canonicalize::{CanonicalizeError, canonical_json, canonicalize, format_canonical_float};
 pub use dae::{DaeError, DiscretizeOptions, apply_dae_contract, default_dae_support, discretize};
 pub use display::{to_ascii, to_latex, to_unicode};
