@@ -322,6 +322,7 @@ const schema = {
             "Pre",
             "sign",
             "arrayop",
+            "aggregate",
             "makearray",
             "index",
             "broadcast",
@@ -338,7 +339,7 @@ const schema = {
         },
         "args": {
           "type": "array",
-          "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",
+          "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (aggregate / arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",
           "items": {
             "$ref": "#/$defs/Expression"
           },
@@ -366,7 +367,7 @@ const schema = {
         },
         "output_idx": {
           "type": "array",
-          "description": "For arrayop: the result's index signature. Each entry is either a string (a symbolic index variable like \"i\", \"j\") or the integer 1 (a literal singleton dimension for reshape/broadcast). Mirrors SymbolicUtils.ArrayOp.output_idx.",
+          "description": "For arrayop / aggregate: the result's index signature. Each entry is either a string (a symbolic index variable like \"i\", \"j\") or the integer 1 (a literal singleton dimension for reshape/broadcast). Mirrors SymbolicUtils.ArrayOp.output_idx.",
           "items": {
             "oneOf": [
               {
@@ -381,11 +382,11 @@ const schema = {
         },
         "expr": {
           "$ref": "#/$defs/Expression",
-          "description": "For arrayop: the scalar body evaluated at each index point. May reference index symbols declared in output_idx as well as additional (contracted) index symbols. Mirrors SymbolicUtils.ArrayOp.expr."
+          "description": "For arrayop / aggregate: the scalar body evaluated at each index point. May reference index symbols declared in output_idx as well as additional (contracted) index symbols. Mirrors SymbolicUtils.ArrayOp.expr."
         },
         "reduce": {
           "type": "string",
-          "description": "For arrayop: the reduction operator applied to any index symbol that appears in expr but not in output_idx. Default is \"+\".",
+          "description": "For arrayop / aggregate: the reduction operator applied to any index symbol that appears in expr but not in output_idx. Default is \"+\". This names only the ⊕ operator; it is a shorthand retained for files that omit \"semiring\" (⊕ = reduce, ⊗ = \"*\"). When \"semiring\" is present it supersedes \"reduce\".",
           "enum": [
             "+",
             "*",
@@ -394,16 +395,52 @@ const schema = {
           ],
           "default": "+"
         },
+        "semiring": {
+          "type": "string",
+          "description": "For arrayop / aggregate: the named semiring (⊕, ⊗) that parameterizes the reduction (RFC semiring-faq-unified-ir §5.1). A closed, exhaustive registry — adding a semiring is a spec change, not a per-file extension. Absent ⇒ \"sum_product\", which reproduces today's einsum / sum-of-products semantics exactly (the strict-superset promise). The ⊕ operator, the ⊗ operator, and BOTH identity elements (the value of an empty ⊕-reduction and an empty ⊗-product) are fixed by the registry table and MUST NOT be written into the file: sum_product (+,0;×,1), max_product (max,-∞;×,1), min_sum (min,+∞;+,0), max_sum (max,-∞;+,0), bool_and_or (∨,false;∧,true).",
+          "enum": [
+            "sum_product",
+            "max_product",
+            "min_sum",
+            "max_sum",
+            "bool_and_or"
+          ],
+          "default": "sum_product"
+        },
         "ranges": {
           "type": "object",
-          "description": "For arrayop: optional map from index symbol name to the range it iterates over. Each value is either a 2-element array [start, stop] (unit step) or a 3-element array [start, step, stop]. Indices not present are inferred from the domain / operand shapes at runtime. Mirrors SymbolicUtils.ArrayOp.ranges.",
+          "description": "For arrayop / aggregate: optional map from index symbol name to the range it iterates over. Each value is EITHER (a) a dense integer tuple — a 2-element array [start, stop] (unit step) or a 3-element array [start, step, stop], as today, mirroring SymbolicUtils.ArrayOp.ranges; OR (b) a reference to a declared index set (RFC semiring-faq-unified-ir §5.2): an object { \"from\": <index_sets key> }, optionally with \"of\": [parent index names] for a ragged / dependent inner set (e.g. the edges of cell \"i\"). Indices not present are inferred from the domain / operand shapes at runtime.",
           "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "integer"
-            },
-            "minItems": 2,
-            "maxItems": 3
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "from"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "Name of a declared index set: a key in Model.index_sets, or — as a back-compat alias — a Domain.spatial dimension / ESI index_sets entry. The resolver MUST error on an undeclared name; no implicit interval is inferred, so a typo cannot silently become an empty set."
+                  },
+                  "of": {
+                    "type": "array",
+                    "description": "Parent index name(s) for a ragged / dependent inner set: the members enumerated depend on these outer indices (e.g. { \"from\": \"edges_of_cell\", \"of\": [\"i\"] } iterates the edges of cell i).",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "regions": {
@@ -523,7 +560,10 @@ const schema = {
           "if": {
             "properties": {
               "op": {
-                "const": "arrayop"
+                "enum": [
+                  "arrayop",
+                  "aggregate"
+                ]
               }
             },
             "required": [
@@ -1260,6 +1300,13 @@ const schema = {
           "description": "Component-scoped in-file Expression-AST templates (v0.4.0; docs/rfcs/ast-expression-templates.md). Each entry names a fixed Expression body with parameter substitution slots; `apply_expression_template` AST nodes elsewhere in this component reference the entry by key with per-parameter bindings. Templates are component-local: declarations here are visible only within this model's expression positions. Loaders MUST expand `apply_expression_template` to a fully-substituted Expression AST at load time (Option A round-trip; the canonical AST after parse-then-emit is the expanded form). Templates do NOT call other templates and do NOT recurse.",
           "additionalProperties": {
             "$ref": "#/$defs/ExpressionTemplate"
+          }
+        },
+        "index_sets": {
+          "type": "object",
+          "description": "Document-scoped registry of named index sets (RFC semiring-faq-unified-ir §5.2), keyed by name. Unifies the two pre-existing declaration sites — ESM Domain.spatial grid dimensions and ESI index_sets — under one shape; both of those remain accepted as back-compat aliases when resolving an arrayop / aggregate range reference of the form { \"from\": <name> }. Each entry is an interval (dense grid axis), categorical enumeration, data-derived set, or ragged / dependent inner set. A reference resolves by name to exactly one entry; resolvers MUST error on an undeclared name. Absent ⇒ resolution falls back to Domain.spatial exactly as today (strict-superset promise).",
+          "additionalProperties": {
+            "$ref": "#/$defs/IndexSet"
           }
         }
       }
@@ -2943,6 +2990,125 @@ const schema = {
           }
         }
       }
+    },
+    "IndexSet": {
+      "type": "object",
+      "description": "A named index set (RFC semiring-faq-unified-ir \u00a75.2): the unified declaration shape for an iteration domain referenced from an arrayop / aggregate range via { \"from\": <name> }. Subsumes ESM grid dimensions (Domain.spatial) and ESI categorical dimensions under one shape. Exactly one of four kinds, each requiring its own fields.",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Which of the four index-set forms this entry is. \"interval\": a dense [1..size] grid axis. \"categorical\": an explicit enumeration of members. \"derived\": a data-derived set materialized from an index-set-producing aggregate node. \"ragged\": a per-parent (dependent) inner set backed by CSR offsets/values factors.",
+          "enum": [
+            "interval",
+            "categorical",
+            "derived",
+            "ragged"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "description": "interval: number of members in the dense interval (the grid-axis length). Required when kind is \"interval\"."
+        },
+        "members": {
+          "type": "array",
+          "description": "categorical: the explicit enumeration of members (e.g. county FIPS codes, fuel types). Required when kind is \"categorical\"."
+        },
+        "from_faq": {
+          "type": "string",
+          "description": "derived: the id of the index-set-producing aggregate node (RFC \u00a75.5) that materializes this set (e.g. the unique edges discovered from a face\u2192vertex relation). Required when kind is \"derived\"."
+        },
+        "of": {
+          "type": "array",
+          "description": "ragged: the parent index-set name(s) this inner set depends on (e.g. [\"cells\"] for the edges of each cell). Required when kind is \"ragged\".",
+          "items": {
+            "type": "string"
+          }
+        },
+        "offsets": {
+          "type": "string",
+          "description": "ragged: name of the keyed factor giving |set(i)| for each parent tuple \u2014 the per-parent length / CSR offsets (e.g. MPAS nEdgesOnCell). Required when kind is \"ragged\"."
+        },
+        "values": {
+          "type": "string",
+          "description": "ragged: name of the keyed factor giving the member at (i, k) for k in 1\u2026|set(i)| \u2014 the flattened CSR member array (e.g. edgesOnCell). Required when kind is \"ragged\"."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "interval"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "size"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "categorical"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "members"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "derived"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "from_faq"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "ragged"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "of",
+              "offsets",
+              "values"
+            ]
+          }
+        }
+      ]
     },
     "InitialConditions": {
       "description": "Initial conditions for state variables. Four shapes: `constant` (uniform scalar), `per_variable` (uniform per variable), `from_file` (load a precomputed field), and `expression` (per-variable Expressions over the component's domain coordinates \u2014 a serializable closed-form initial field for PDE components).",

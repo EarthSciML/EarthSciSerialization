@@ -58,6 +58,71 @@ for target in "${TARGETS[@]}"; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# TypeScript embedded schema (packages/earthsci-toolkit/src/parse.ts).
+#
+# The TS binding cannot read a JSON file at runtime (it must work in the
+# browser), so instead of an esm-schema.json copy it inlines the schema as a
+# `const schema = { ... }` object literal in parse.ts. That literal is the
+# "6th copy" and is the one most prone to silent drift. Because the literal is
+# hand-formatted (short arrays inlined), it cannot be byte-diffed against the
+# canonical JSON; we compare it SEMANTICALLY instead.
+#
+# This check is scoped to the $defs that the semiring-FAQ IR campaign owns
+# (ExpressionNode, IndexSet, Model). Reconciling the full embedded literal with
+# the canonical schema (it carries unrelated pre-existing discretization drift)
+# is tracked separately; this guard ensures the aggregate / semiring / index_set
+# deltas, at least, cannot drift between the canonical schema and the TS copy.
+# ---------------------------------------------------------------------------
+TS_EMBEDDED="packages/earthsci-toolkit/src/parse.ts"
+ts_embedded_path="${REPO_ROOT}/${TS_EMBEDDED}"
+if [[ -f "$ts_embedded_path" ]]; then
+  ts_result=$(CANONICAL="$CANONICAL" TS_EMBEDDED="$ts_embedded_path" python3 - <<'PY'
+import json, os, sys
+canonical = json.load(open(os.environ["CANONICAL"], encoding="utf-8"))
+src = open(os.environ["TS_EMBEDDED"], encoding="utf-8").read()
+marker = "const schema = "
+try:
+    start = src.index(marker) + len(marker)
+except ValueError:
+    print("ERROR: could not find `const schema = ` in parse.ts"); sys.exit(2)
+depth = 0; end = None
+for j in range(start, len(src)):
+    c = src[j]
+    if c == "{": depth += 1
+    elif c == "}":
+        depth -= 1
+        if depth == 0:
+            end = j + 1; break
+if end is None:
+    print("ERROR: could not find end of embedded schema object"); sys.exit(2)
+try:
+    embedded = json.loads(src[start:end])
+except Exception as e:
+    print(f"ERROR: embedded schema is not parseable JSON: {e}"); sys.exit(2)
+# $defs the semiring-FAQ campaign owns; these must not drift from canonical.
+GUARDED = ["ExpressionNode", "IndexSet", "Model"]
+drift = []
+for name in GUARDED:
+    if embedded.get("$defs", {}).get(name) != canonical.get("$defs", {}).get(name):
+        drift.append(name)
+if drift:
+    print("DRIFT " + ",".join(drift)); sys.exit(1)
+print("OK")
+PY
+) && ts_status=0 || ts_status=$?
+  if [[ "$check_mode" == true ]]; then
+    if [[ "$ts_status" -eq 0 ]]; then
+      echo "OK:      $TS_EMBEDDED (embedded \$defs: ExpressionNode, IndexSet, Model)"
+    else
+      echo "DRIFT:   $TS_EMBEDDED — $ts_result"
+      echo "         Update the embedded \`const schema\` literal in parse.ts to match esm-schema.json,"
+      echo "         then run: cd packages/earthsci-toolkit && npm run generate-types"
+      drifted=1
+    fi
+  fi
+fi
+
 # Extract the version field from a binding manifest.
 # Emits "<file>: <version>" to stdout.
 read_version() {
