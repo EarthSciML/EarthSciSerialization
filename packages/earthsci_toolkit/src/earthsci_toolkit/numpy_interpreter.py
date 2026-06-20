@@ -683,6 +683,25 @@ def _eval_arrayop(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
     reduce_syms: List[str] = [s for s in raw_ranges if s not in out_syms]
     ragged_reduce = any(isinstance(resolved[s], _RaggedRange) for s in reduce_syms)
 
+    # M2: a value-equality join (RFC §5.3) and/or a boolean filter predicate
+    # gate which index combinations contribute a ⊗-term. They share one scalar
+    # gated path; the vectorized einsum fast path cannot express the gate, so it
+    # is bypassed whenever either is present. Nodes with neither flow through the
+    # unchanged M1 fast / scalar paths below and stay byte-for-byte identical.
+    join_clauses = getattr(expr, "join", None)
+    filter_expr = getattr(expr, "filter", None)
+    if join_clauses or filter_expr is not None:
+        if ragged_reduce:
+            raise NumpyInterpreterError(
+                "aggregate 'join'/'filter' with a ragged contracted range is not "
+                "supported; equi-join keys are dense interval / categorical index "
+                "sets (RFC semiring-faq-unified-ir §5.3)"
+            )
+        return _eval_arrayop_joined(
+            expr, ctx, out_syms, out_ranges_exp, out_shape,
+            reduce_syms, resolved, raw_ranges, reducer, empty_zero, filter_expr,
+        )
+
     if ragged_reduce:
         return _eval_arrayop_ragged(
             expr, ctx, out_syms, out_ranges_exp, out_shape,
@@ -829,6 +848,285 @@ def _reduce_step(op: str, acc: Optional[float], val: float) -> float:
     if op == "min":
         return min(acc, val)
     raise NumpyInterpreterError(f"Unsupported reduce: {op}")
+
+
+# ---------------------------------------------------------------------------
+# M2 — value-equality joins (RFC semiring-faq-unified-ir §5.3) + filter
+# predicates (§7.2). Resolved at build time into a gate over the contraction:
+# an inner equi-join contributes a ⊗-product term only for index combinations
+# whose key columns are equal on every listed pair, and a filter keeps only
+# combinations for which its predicate holds. Unmatched / filtered-out
+# combinations contribute nothing — i.e. the additive identity 0̄ once the
+# whole reduction is empty (§5.1). Key matching follows the RFC Appendix A.6
+# convention: bucket key values into one canonical sorted order (integers by
+# value, strings by Unicode code point — §5.7 rule 1) and probe with
+# ``np.searchsorted``. The dense output keeps declared index order, so a
+# degenerate / positional join is byte-identical to the join-free node.
+# ---------------------------------------------------------------------------
+
+
+def _join_sym_for_key(key: str, raw_ranges: Dict[str, Any],
+                      sym_to_set: Dict[str, str]) -> str:
+    """Resolve a join-key name to the range symbol it denotes.
+
+    A key is either a declared range symbol directly, or the name of an index
+    set bound by exactly one range symbol (``{"from": <name>}``) — the latter
+    lets a clause name the dimension instead of the loop symbol. Anything else
+    is a build-time error (RFC §5.3).
+    """
+    if key in raw_ranges:
+        return key
+    candidates = sorted(s for s, setn in sym_to_set.items() if setn == key)
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise NumpyInterpreterError(
+            f"join key {key!r} is neither a declared range symbol nor an index "
+            f"set bound by a range of this aggregate (RFC semiring-faq-unified-ir §5.3)"
+        )
+    raise NumpyInterpreterError(
+        f"join key {key!r} names an index set bound by multiple range symbols "
+        f"{candidates}; reference the range symbol directly (RFC §5.3)"
+    )
+
+
+def _validated_key_member(m: Any, set_name: str) -> Any:
+    """Validate one categorical member used as a join key (RFC §5.3 / §5.7).
+
+    Keys must be exact-equality types: integer IDs or categorical members
+    (strings). Floats are forbidden (equality is not portable across bindings),
+    and a null member is a build-time error.
+    """
+    if m is None:
+        raise NumpyInterpreterError(
+            f"null member in join key index set {set_name!r}: emitting null into "
+            f"a key column is a build-time error (RFC semiring-faq-unified-ir §5.3)"
+        )
+    if isinstance(m, bool):
+        raise NumpyInterpreterError(
+            f"boolean member {m!r} in join key index set {set_name!r} is not an "
+            f"exact-equality key type (RFC §5.3)"
+        )
+    if isinstance(m, float):
+        raise NumpyInterpreterError(
+            f"floating-point member {m!r} in join key index set {set_name!r}: "
+            f"float join keys are forbidden — equality is not portable across "
+            f"bindings (RFC semiring-faq-unified-ir §5.3 / §5.7 rule 1)"
+        )
+    if not isinstance(m, (int, str)):
+        raise NumpyInterpreterError(
+            f"unsupported join key member type {type(m).__name__} in index set "
+            f"{set_name!r}; keys must be integer IDs or categorical members "
+            f"(RFC §5.3)"
+        )
+    return m
+
+
+def _key_member_values(sym: str, raw_ranges: Dict[str, Any],
+                       positions: List[int], ctx: EvalContext) -> List[Any]:
+    """Key-column values for ``sym`` at each 1-based ``positions`` entry.
+
+    A categorical range yields its declared members (validated as exact-equality
+    keys); an interval range or a dense integer tuple yields the integer index
+    itself as the key (RFC §5.3).
+    """
+    spec = raw_ranges.get(sym)
+    if isinstance(spec, dict) and "from" in spec:
+        set_name = spec["from"]
+        entry = ctx.index_sets.get(set_name) or {}
+        kind = entry.get("kind")
+        if kind == "categorical":
+            members = entry.get("members") or []
+            return [_validated_key_member(members[p - 1], set_name) for p in positions]
+        if kind == "interval":
+            return [int(p) for p in positions]
+        raise NumpyInterpreterError(
+            f"join key index set {set_name!r} has kind {kind!r}; only 'interval' "
+            f"(integer IDs) and 'categorical' keys can be equi-joined (RFC §5.3)"
+        )
+    # Dense integer tuple range — the integer index value is the key.
+    return [int(p) for p in positions]
+
+
+def _encode_join_keys(vals_a: List[Any], vals_b: List[Any]) -> Tuple[List[int], List[int]]:
+    """Bucket two key columns into one canonical order; return equal-iff-equal codes.
+
+    Builds the sorted union of distinct key values (integers by value, strings by
+    Unicode code point — RFC §5.7 rule 1) and probes each column into it with
+    ``np.searchsorted`` (the bucket-and-probe equi-join of RFC Appendix A.6).
+    Equal values receive equal codes; a value present on only one side simply
+    never matches (inner join → 0̄). Mixing integer and string keys in one pair
+    is a key-type error (they can never compare equal — §5.3).
+    """
+    a_str = any(isinstance(v, str) for v in vals_a)
+    b_str = any(isinstance(v, str) for v in vals_b)
+    if a_str != b_str:
+        raise NumpyInterpreterError(
+            "join pair couples incompatible key types (integer IDs vs categorical "
+            "string members); both sides must be the same exact-equality type "
+            "(RFC semiring-faq-unified-ir §5.3)"
+        )
+    table = np.array(sorted(set(vals_a) | set(vals_b)), dtype=object)
+    if table.size == 0:
+        return [], []
+
+    def codes(vals: List[Any]) -> List[int]:
+        if not vals:
+            return []
+        return [int(c) for c in np.searchsorted(table, np.array(vals, dtype=object))]
+
+    return codes(vals_a), codes(vals_b)
+
+
+def _resolve_join(expr: ExprNode, raw_ranges: Dict[str, Any],
+                  sym_positions: Dict[str, List[int]],
+                  ctx: EvalContext) -> List[Tuple[str, str, Dict[int, int], Dict[int, int]]]:
+    """Resolve every join clause into coded key-pair gates (RFC §5.3).
+
+    Returns a list of ``(symL, symR, codesL, codesR)`` where ``codesX`` maps a
+    1-based position of the symbol to its bucket code. A contraction tuple
+    contributes a ⊗-term iff ``codesL[posL] == codesR[posR]`` for every pair of
+    every clause (all clauses' pairs are ANDed — multiple clauses compose).
+    """
+    clauses = getattr(expr, "join", None) or []
+    sym_to_set = {
+        s: spec["from"] for s, spec in raw_ranges.items()
+        if isinstance(spec, dict) and "from" in spec
+    }
+    gates: List[Tuple[str, str, Dict[int, int], Dict[int, int]]] = []
+    for clause in clauses:
+        on = (clause or {}).get("on") or []
+        if not on:
+            raise NumpyInterpreterError(
+                "join clause requires at least one key-column pair in 'on' "
+                "(RFC semiring-faq-unified-ir §5.3)"
+            )
+        for pair in on:
+            if not (isinstance(pair, (list, tuple)) and len(pair) == 2):
+                raise NumpyInterpreterError(
+                    f"join 'on' entry {pair!r} must be a [left, right] key-column "
+                    f"pair (RFC §5.3)"
+                )
+            sym_l = _join_sym_for_key(pair[0], raw_ranges, sym_to_set)
+            sym_r = _join_sym_for_key(pair[1], raw_ranges, sym_to_set)
+            for s in (sym_l, sym_r):
+                if s not in sym_positions:
+                    raise NumpyInterpreterError(
+                        f"join key symbol {s!r} is not an output or contracted "
+                        f"range of this aggregate (RFC §5.3)"
+                    )
+            vals_l = _key_member_values(sym_l, raw_ranges, sym_positions[sym_l], ctx)
+            vals_r = _key_member_values(sym_r, raw_ranges, sym_positions[sym_r], ctx)
+            codes_l, codes_r = _encode_join_keys(vals_l, vals_r)
+            gates.append((
+                sym_l, sym_r,
+                dict(zip(sym_positions[sym_l], codes_l)),
+                dict(zip(sym_positions[sym_r], codes_r)),
+            ))
+    return gates
+
+
+def _join_admits(gates: List[Tuple[str, str, Dict[int, int], Dict[int, int]]],
+                 binding: Dict[str, int]) -> bool:
+    """True iff every join pair's key columns are equal under ``binding``."""
+    for sym_l, sym_r, codes_l, codes_r in gates:
+        if codes_l[binding[sym_l]] != codes_r[binding[sym_r]]:
+            return False
+    return True
+
+
+def _filter_admits(filter_expr: Expr, ctx: EvalContext) -> bool:
+    """Evaluate a scalar boolean filter predicate for the current binding."""
+    val = np.asarray(eval_expr(filter_expr, ctx))
+    if val.size != 1:
+        raise NumpyInterpreterError(
+            "aggregate 'filter' predicate must evaluate to a scalar for each "
+            "index combination (RFC semiring-faq-unified-ir §5.3)"
+        )
+    return bool(val.reshape(-1)[0])
+
+
+def _eval_arrayop_joined(
+    expr: ExprNode,
+    ctx: EvalContext,
+    out_syms: List[str],
+    out_ranges_exp: List[List[int]],
+    out_shape: Tuple[int, ...],
+    reduce_syms: List[str],
+    resolved: Dict[str, Any],
+    raw_ranges: Dict[str, Any],
+    reducer: str,
+    empty_zero: float,
+    filter_expr: Optional[Expr],
+) -> np.ndarray:
+    """Scalar evaluation path for aggregates carrying a join and/or filter.
+
+    The contraction iterates the dense reduce ranges in declared order; for each
+    combination the join gate (value equality of key columns, §5.3) and the
+    filter predicate (§7.2) decide whether it contributes a ⊗-term. An empty
+    set of admitted terms reduces to the semiring identity 0̄ (§5.1).
+    """
+    from .flatten import _expand_range  # local import to avoid cycle
+
+    red_ranges_exp = [_expand_range(resolved[s]) for s in reduce_syms]
+    sym_positions: Dict[str, List[int]] = {}
+    for s, r in zip(out_syms, out_ranges_exp):
+        sym_positions[s] = list(r)
+    for s, r in zip(reduce_syms, red_ranges_exp):
+        sym_positions[s] = list(r)
+
+    gates = _resolve_join(expr, raw_ranges, sym_positions, ctx)
+    cartesian_red = _cartesian(red_ranges_exp) if reduce_syms else [()]
+
+    out = np.zeros(out_shape, dtype=float)
+    it = np.ndindex(*out_shape) if out_shape else [()]
+    for multi_idx in it:
+        local_binding: Dict[str, int] = {}
+        for s, pos, r in zip(out_syms, multi_idx, out_ranges_exp):
+            local_binding[s] = r[pos]
+        out[multi_idx] = _reduce_over_gated(
+            expr.expr, ctx, local_binding, reduce_syms, cartesian_red,
+            reducer, empty_zero, gates, filter_expr,
+        )
+    return out
+
+
+def _reduce_over_gated(
+    body: Expr,
+    ctx: EvalContext,
+    local_binding: Dict[str, int],
+    reduce_syms: List[str],
+    cartesian_red: List[Tuple[int, ...]],
+    reducer: str,
+    empty_zero: float,
+    gates: List[Tuple[str, str, Dict[int, int], Dict[int, int]]],
+    filter_expr: Optional[Expr],
+) -> float:
+    """Reduce ``body`` over the contracted product, gated by join + filter.
+
+    Mirrors :func:`_reduce_over` but skips any contraction combination that
+    fails the inner equi-join (RFC §5.3) or the filter predicate (§7.2). Returns
+    the semiring identity ``empty_zero`` (0̄) when no combination is admitted.
+    """
+    acc: Optional[float] = None
+    prev = dict(ctx.locals)
+    try:
+        ctx.locals.update(local_binding)
+        for red_point in cartesian_red:
+            binding = dict(local_binding)
+            for s, v in zip(reduce_syms, red_point):
+                binding[s] = v
+            if gates and not _join_admits(gates, binding):
+                continue
+            for s, v in zip(reduce_syms, red_point):
+                ctx.locals[s] = v
+            if filter_expr is not None and not _filter_admits(filter_expr, ctx):
+                continue
+            val = float(eval_expr(body, ctx))
+            acc = _reduce_step(reducer, acc, val)
+    finally:
+        ctx.locals = prev
+    return acc if acc is not None else empty_zero
 
 
 def _eval_makearray(expr: ExprNode, ctx: EvalContext) -> np.ndarray:

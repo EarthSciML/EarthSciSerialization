@@ -163,6 +163,13 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         reduce = expr_data.get("reduce")
         semiring = expr_data.get("semiring")
         ranges = expr_data.get("ranges")
+        # M2 value-equality join + filter predicate (RFC §5.3) and the §5.5
+        # index-set-producing fields. ``join``/``distinct`` are plain data;
+        # ``filter``/``key`` are nested Expressions.
+        join = expr_data.get("join")
+        filter_expr = _parse_expression(expr_data["filter"]) if "filter" in expr_data else None
+        distinct = expr_data.get("distinct")
+        key_expr = _parse_expression(expr_data["key"]) if "key" in expr_data else None
         regions = expr_data.get("regions")
         values = None
         if "values" in expr_data:
@@ -208,6 +215,10 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
             reduce=reduce,
             semiring=semiring,
             ranges=ranges,
+            join=join,
+            filter=filter_expr,
+            distinct=distinct,
+            key=key_expr,
             regions=regions,
             values=values,
             shape=shape,

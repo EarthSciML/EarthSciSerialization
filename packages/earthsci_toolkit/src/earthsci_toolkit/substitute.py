@@ -38,6 +38,12 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
         )
         substituted_lower = substitute(expr.lower, bindings) if expr.lower is not None else None
         substituted_upper = substitute(expr.upper, bindings) if expr.upper is not None else None
+        # Aggregate (arrayop) carries semiring/join/filter/distinct/key beside
+        # output_idx/reduce/ranges; preserve all of them so a substituted
+        # aggregate keeps its full semantics (RFC §5.1/§5.3/§5.5). ``filter``
+        # and ``key`` are nested Expressions and must themselves be substituted.
+        substituted_filter = substitute(expr.filter, bindings) if expr.filter is not None else None
+        substituted_key = substitute(expr.key, bindings) if expr.key is not None else None
         return ExprNode(
             op=expr.op,
             args=substituted_args,
@@ -46,7 +52,12 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
             output_idx=expr.output_idx,
             expr=substituted_body,
             reduce=expr.reduce,
+            semiring=expr.semiring,
             ranges=expr.ranges,
+            join=expr.join,
+            filter=substituted_filter,
+            distinct=expr.distinct,
+            key=substituted_key,
             regions=expr.regions,
             values=substituted_values,
             shape=expr.shape,

@@ -35,6 +35,23 @@ class ExprNode:
     # [start, step, stop]) OR an index-set reference {"from": <name>, "of": [...]}
     # resolved against the document ``index_sets`` registry (RFC §5.2).
     ranges: Optional[Dict[str, Union[List[int], Dict[str, Any]]]] = None
+    # Value-equality joins (RFC §5.3): an array of join clauses, each
+    # ``{"on": [[left, right], ...]}`` naming key-column pairs. An inner
+    # equi-join — a ⊗-product term is contributed only for index combinations
+    # whose key columns are equal on every listed pair; an unmatched
+    # combination contributes the additive identity 0̄. None ⇒ positional
+    # einsum (factors combine by shared index name), exactly as today.
+    join: Optional[List[Dict[str, Any]]] = None
+    # Boolean predicate restricting which index combinations contribute a
+    # ⊗-product term (RFC §5.3 / §7.2). Combinations for which it is false
+    # contribute 0̄. None ⇒ no filter.
+    filter: Optional['Expr'] = None
+    # Set semantics for an index-set-producing aggregate (RFC §5.5). Parsed for
+    # schema completeness; data-derived index-set materialization is not part of
+    # the M2 join work.
+    distinct: Optional[bool] = None
+    # Skolem-term expression for an index-set-producing aggregate (RFC §5.5).
+    key: Optional['Expr'] = None
     # makearray:
     regions: Optional[List[List[List[int]]]] = None
     values: Optional[List['Expr']] = None

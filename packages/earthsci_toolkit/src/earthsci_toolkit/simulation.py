@@ -912,7 +912,12 @@ def _substitute_algebraic(
             output_idx=expr.output_idx,
             expr=new_body,
             reduce=expr.reduce,
+            semiring=expr.semiring,
             ranges=expr.ranges,
+            join=expr.join,
+            filter=_substitute_algebraic(expr.filter, subs) if expr.filter is not None else None,
+            distinct=expr.distinct,
+            key=_substitute_algebraic(expr.key, subs) if expr.key is not None else None,
             regions=expr.regions,
             values=new_values,
             shape=expr.shape,
@@ -948,7 +953,12 @@ def _rebind_index_syms(
             output_idx=expr.output_idx,
             expr=new_body,
             reduce=expr.reduce,
+            semiring=expr.semiring,
             ranges=expr.ranges,
+            join=expr.join,
+            filter=_rebind_index_syms(expr.filter, bindings) if expr.filter is not None else None,
+            distinct=expr.distinct,
+            key=_rebind_index_syms(expr.key, bindings) if expr.key is not None else None,
             regions=expr.regions,
             values=new_values,
             shape=expr.shape,
@@ -985,13 +995,18 @@ def _iter_arrayop_points(
 def _aggregate_needs_interpreter(node: Any) -> bool:
     """True if an aggregate / arrayop node uses a feature beyond the simulation
     fast path's reach — a named ``semiring`` or any ``{"from": ...}`` index-set
-    range reference (RFC §5.1 / §5.2). Such nodes are evaluated through the full
-    NumPy interpreter, which carries the semiring and index-set semantics, rather
-    than the hand-rolled einsum unroll below.
+    range reference (RFC §5.1 / §5.2), or a value-equality ``join`` / ``filter``
+    predicate (RFC §5.3 / §7.2). Such nodes are evaluated through the full NumPy
+    interpreter, which carries the semiring, index-set, and join/filter
+    semantics, rather than the hand-rolled einsum unroll below. (The einsum fast
+    path has no way to express a join/filter gate, so missing this routing would
+    silently drop the join — see _eval_arrayop.)
     """
     if not isinstance(node, ExprNode):
         return False
     if getattr(node, "semiring", None) is not None:
+        return True
+    if getattr(node, "join", None) or getattr(node, "filter", None) is not None:
         return True
     return any(isinstance(v, dict) for v in (node.ranges or {}).values())
 
