@@ -1,0 +1,125 @@
+{
+  "category": "cadence_partition_conformance",
+  "version": "1.0",
+  "description": "Static golden for the cross-binding dependency-partition (cadence) contract (CONFORMANCE_SPEC.md §5.7, RFC semiring-faq-unified-ir §6.1). Each fixture pins the golden the partition pass MUST reproduce in every binding: the cadence CLASS of every annotated node (const ⊏ discrete ⊏ continuous, class(node)=max over inputs, the gather rule classing index expressions independently of the array), the SET of materialization points (where the frontier cut fires — a lower-cadence sub-DAG feeding a higher-cadence parent), and the byte-identical CONST-folded buffers. The three fixtures are the §6.1 trio: a mixed stencil (all three classes, both frontier thresholds, the gather split), a pure-topology rule (all CONST, empty hot tree — folds entirely into the artifact), and a pure-pointwise rule (all CONTINUOUS, empty per-event handler, no materialization). Until the per-binding partition-pass implementations land (ess-my4.3.7 Julia, and the Rust/Python siblings), the harness (scripts/run-cadence-conformance.py --self-test) asserts the contract against an embedded REFERENCE classifier + folder; each binding then registers a thin adapter and the SAME golden is asserted across Julia / Rust / Python. See tests/conformance/cadence/README.md for the adapter contract.",
+  "class_order": ["const", "discrete", "continuous"],
+  "bindings_required": [],
+  "bindings_optional": ["julia", "rust", "python"],
+  "fixtures": [
+    {
+      "id": "mixed_stencil",
+      "fixture": "tests/valid/cadence/mixed_stencil.esm",
+      "model": "MixedStencilDiffusion",
+      "doc": "The canonical three-cadence FVM stencil D(u[i])/dt = Σ_k Kdiff[i]·coeff[i,k]·(u[nbr[i,k]] − u[i]). CONST topology (nbr, coeff) folds into the artifact; the DISCRETE diffusivity Kdiff materializes into a per-event buffer; the CONTINUOUS state loads form the hot tree. The nested gather index(u, index(nbr,i,k)) splits: the inner topology selection is CONST while the outer value load is CONTINUOUS.",
+      "class_summary": { "const": 2, "discrete": 1, "continuous": 6 },
+      "hot_tree_empty": false,
+      "event_handler_empty": false,
+      "materialization_points": [
+        {
+          "label": "nbr_idx",
+          "kind": "expr_edge",
+          "threshold": "const->continuous",
+          "provenance": "compile",
+          "array": "nbr",
+          "doc": "The CONST topology gather index(nbr,i,k) feeding the CONTINUOUS value load index(u, .) — folds at compile into a 0-based neighbour-index buffer the hot path reads as a constant."
+        },
+        {
+          "label": "coeff",
+          "kind": "expr_edge",
+          "threshold": "const->continuous",
+          "provenance": "compile",
+          "array": "coeff",
+          "doc": "The CONST coefficient gather index(coeff,i,k) feeding the CONTINUOUS product — folds at compile into a coefficient buffer."
+        },
+        {
+          "label": "Kdiff",
+          "kind": "expr_edge",
+          "threshold": "discrete->continuous",
+          "provenance": "bind",
+          "array": "Kdiff",
+          "doc": "The DISCRETE diffusivity gather index(Kdiff,i) feeding the CONTINUOUS product — materialized into a per-event buffer, recomputed by the per-event handler when the source refreshes (schedule). No compile-time golden bytes (the value comes from the runtime data source); asserted by the per-binding adapter at the DISCRETE refresh epoch."
+        }
+      ],
+      "const_fold": {
+        "inputs": {
+          "nbr": [[2, 4, 1], [3, 1, 2], [4, 2, 3], [1, 3, 4]],
+          "coeff": [[1, 1, 0], [1, 1, 0], [1, 1, 0], [1, 1, 0]]
+        },
+        "expected": {
+          "nbr_idx": {
+            "fold": "to_zero_based",
+            "array": "nbr",
+            "shape": [4, 3],
+            "value": [[1, 3, 0], [2, 0, 1], [3, 1, 2], [0, 2, 3]],
+            "serialized": "[[1,3,0],[2,0,1],[3,1,2],[0,2,3]]"
+          },
+          "coeff": {
+            "fold": "identity",
+            "shape": [4, 3],
+            "value": [[1, 1, 0], [1, 1, 0], [1, 1, 0], [1, 1, 0]],
+            "serialized": "[[1,1,0],[1,1,0],[1,1,0],[1,1,0]]"
+          }
+        }
+      }
+    },
+    {
+      "id": "pure_topology",
+      "fixture": "tests/valid/cadence/pure_topology.esm",
+      "model": "PureTopologyEdges",
+      "doc": "The minimal 2-triangle mesh (faces sharing edge {2,3}). The unique undirected edges are enumerated from the CONST face→vertex connectivity and ranked to dense ids. Every node is CONST, so the entire partition folds into the artifact at compile time: the per-step CONTINUOUS tree is EMPTY and the per-event DISCRETE handler is EMPTY. Reuses the determinism edge_enumeration golden (tests/conformance/determinism/manifest.json) — the dedup order and numbering are fixed by the §5.5 determinism rules.",
+      "class_summary": { "const": 6, "discrete": 0, "continuous": 0 },
+      "hot_tree_empty": true,
+      "event_handler_empty": true,
+      "materialization_points": [
+        {
+          "label": "edge_set",
+          "kind": "output_buffer",
+          "threshold": "const->artifact",
+          "provenance": "compile",
+          "produces": "edges",
+          "doc": "The CONST distinct/skolem aggregate that materializes the derived `edges` index set — folds into the artifact at compile time (the deduplicated, canonically-sorted edge set)."
+        },
+        {
+          "label": "edge_dense_id",
+          "kind": "output_buffer",
+          "threshold": "const->artifact",
+          "provenance": "compile",
+          "doc": "The CONST rank that assigns dense ids over `edges` — folds into the artifact (the array-backend index buffer)."
+        }
+      ],
+      "const_fold": {
+        "inputs": {
+          "face_lo": [[1, 2, 3], [3, 2, 4]],
+          "face_hi": [[2, 3, 1], [2, 4, 3]],
+          "skolem": "undirected"
+        },
+        "expected": {
+          "edges": {
+            "fold": "edge_enumeration",
+            "value": [[1, 2], [1, 3], [2, 3], [2, 4], [3, 4]],
+            "serialized": "[[1,2],[1,3],[2,3],[2,4],[3,4]]"
+          },
+          "edge_dense_id": {
+            "fold": "rank",
+            "value": [0, 1, 2, 3, 4],
+            "serialized": "[0,1,2,3,4]"
+          }
+        }
+      }
+    },
+    {
+      "id": "pure_pointwise",
+      "fixture": "tests/valid/cadence/pure_pointwise.esm",
+      "model": "PurePointwiseForcing",
+      "doc": "A pointwise relaxation-plus-forcing RHS D(u[i])/dt = −u[i] + A·sin(omega·t). Every node is CONTINUOUS — including the analytic continuous-t forcing sin(omega·t), which is NOT piecewise-constant between events and must recompute every step (classing it DISCRETE would let it go stale). The CONST scalars A, omega inline as literals (the pre-existing constant-fold); a bare scalar constant is not a buffer, so the materialization-point SET is empty, the per-event handler is empty, and the entire RHS is the hot tree.",
+      "class_summary": { "const": 0, "discrete": 0, "continuous": 6 },
+      "hot_tree_empty": false,
+      "event_handler_empty": true,
+      "materialization_points": [],
+      "const_fold": {
+        "inputs": {},
+        "expected": {}
+      }
+    }
+  ]
+}

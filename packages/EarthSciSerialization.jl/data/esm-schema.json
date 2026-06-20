@@ -291,6 +291,15 @@
           "type": "string",
           "description": "Stable node identity (RFC semiring-faq-unified-ir §6.1): an optional, author-assigned identifier that makes this expression node addressable as a vertex in the inter-node dependency DAG the partition pass walks. Its primary use is to be the referent of a derived index set: an `index_sets` entry of kind \"derived\" names, via `from_faq`, the index-set-producing `aggregate` node that materializes it — and it names it by this id. When present it MUST be unique among the expression nodes of its model; the build-time reference-resolution pass errors on a duplicate id and on a `from_faq` that names no node. Absent ⇒ the node is addressed only by its structural path and cannot be the target of a `from_faq`. Purely additive: a file using no `id` validates and resolves exactly as before."
         },
+        "expect_cadence": {
+          "type": "string",
+          "enum": [
+            "const",
+            "discrete",
+            "continuous"
+          ],
+          "description": "Optional author assertion on this node's cadence class, checked by the dependency-partition pass (RFC semiring-faq-unified-ir §6.1; CONFORMANCE_SPEC.md §5.7). A diagnostic/test hook ONLY — it changes no semantics. The pass derives every node's class from the data-dependency DAG (`class(node) = max` over inputs; `const ⊏ discrete ⊏ continuous`); when `expect_cadence` is present the pass errors if the DERIVED class disagrees with it. \"const\" = never changes, folded into the artifact (parameter / literal); \"discrete\" = changes only at discrete events, recomputed by the per-event handler (a `discrete` variable, e.g. loaded met / reloadable mesh); \"continuous\" = changes every step, evaluated in the hot per-step tree (integrated state `u`, or an explicit continuous-`t` forcing). Absent ⇒ no assertion. Purely additive: a file using no `expect_cadence` validates and partitions exactly as before."
+        },
         "args": {
           "type": "array",
           "description": "Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (aggregate / arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.",

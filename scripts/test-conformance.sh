@@ -327,6 +327,26 @@ run_determinism_conformance_self_test() {
     fi
 }
 
+# Sanity-check the cross-binding cadence-partition harness (ess-my4.3.6). Until
+# the per-binding partition-pass implementations land (ess-my4.3.7 Julia +
+# Rust/Python siblings), the harness asserts the §5.7 cadence contract against an
+# embedded reference classifier + folder and the static golden
+# (tests/conformance/cadence/manifest.json): class agreement (reference ==
+# expect_cadence == golden) over the three §6.1 fixtures, the materialization-
+# point set + hot-tree/handler emptiness, byte-identical CONST-folded buffers,
+# and negative controls (wrong expect_cadence, continuous relational, from_faq
+# cycle). When producers exist, the same golden is asserted across bindings.
+run_cadence_conformance_self_test() {
+    log "Running cadence-partition conformance harness self-test..."
+    if python3 "$SCRIPT_DIR/run-cadence-conformance.py" --self-test; then
+        success "Cadence-partition conformance harness self-test passed"
+        return 0
+    else
+        error "Cadence-partition conformance harness self-test failed"
+        return 1
+    fi
+}
+
 run_property_corpus() {
     log "Running property-corpus round-trip across bindings..."
     local corpus="$PROJECT_ROOT/tests/property_corpus/expressions"
@@ -431,6 +451,13 @@ main() {
             success "Determinism-conformance harness self-test completed"
         else
             error "Determinism-conformance harness self-test failed"
+            exit 1
+        fi
+
+        if run_cadence_conformance_self_test; then
+            success "Cadence-partition conformance harness self-test completed"
+        else
+            error "Cadence-partition conformance harness self-test failed"
             exit 1
         fi
 

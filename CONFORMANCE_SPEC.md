@@ -746,6 +746,193 @@ values**, so agreement is the cross-binding semiring-equivalence proof:
   evaluator (`packages/esm-format-go/pkg/esm/aggregate_fixtures_test.go`,
   `packages/earthsci-toolkit/src/aggregate-fixtures.test.ts`).
 
+### 5.7 Cadence-Partition Pass (normative)
+
+> This is the normative form of RFC `semiring-faq-unified-ir` §6.1. The
+> **dependency-partition pass** is the ESS analogue of ModelingToolkit's
+> `structural_simplify` / observed-variable elimination, generalized from two
+> phases to three. It classifies every node by the **cadence** at which its
+> value can change and schedules each class into its own evaluation phase. The
+> rules below are the contract; they are exercised by the worked-example
+> fixtures in `tests/valid/cadence/` and the harness in
+> `tests/conformance/cadence/` (see §5.7.7).
+
+The classification is a **compile-time** property that drives *which code runs
+in which phase* — a folded artifact, a per-event handler, or the hot per-step
+tree. Two bindings that disagree on a node's class, on the **set of
+materialization points**, or on the bytes of a **`CONST`-folded buffer** produce
+*different models* (different hot loops, different per-event work), not merely
+different formatting. The partition is therefore **normative spec**, and the
+§5.2 "minor formatting differences" tolerances explicitly do **not** apply to it.
+
+**Governing principle.** Every node's cadence class is a **pure function of the
+data-dependency DAG** — `class(node) = max` over its inputs' classes — and is
+**never declared by the author**. The boundary between phases is *derived*, not
+written into the file. The one new declaration the pass requires is the leaf
+seed (the `discrete` variable kind, §5.7.2); the optional `expect_cadence`
+annotation is a checked assertion, not a control input.
+
+#### 5.7.1 The cadence classes
+
+Every value is determined at one of three cadences, forming a total order
+`CONST ⊏ DISCRETE ⊏ CONTINUOUS`:
+
+| Class | Changes | Evaluated | Phase | MTK analogue |
+|---|---|---|---|---|
+| `CONST` | never | once | folded into the artifact | true parameter / literal |
+| `DISCRETE` | only at discrete events (piecewise-constant between them) | at setup + on each refresh event, memoized between | per-event handler | callback-updated parameter (`PresetTimeCallback`, `tstops`) |
+| `CONTINUOUS` | every step | every RHS call | hot `_Node` tree | integrated state `u` |
+
+Two points fix the semantics:
+
+1. **Named by cadence, not by role.** `CONTINUOUS` means "changes every step,"
+   not "the unknown we solve for." Its dominant inhabitant is the integrated
+   state `u`, but an explicit continuous-`t` forcing (`sin(2πt)`, an analytic
+   diurnal cycle) is **also** `CONTINUOUS` — it is not piecewise-constant
+   between events and must recompute every step. Classifying by cadence keeps
+   such forcings out of `DISCRETE`, where they would silently go stale.
+2. **There is no "grid" class.** With topology first-class (§5.6.4), the mesh is
+   not a primitive input — it is `aggregate` nodes (`distinct`, `join`, `rank`)
+   over mesh primitive arrays. When those primitives are document literals the
+   topology partition is `CONST` and folds into the artifact; when the mesh is
+   reloaded at discrete events (AMR, moving meshes) the same nodes are
+   `DISCRETE`. "Grid" is a *consequence* of where its leaves sit, not a category.
+
+#### 5.7.2 Seeding the leaves
+
+The `max`-propagation bottoms out at *declared* leaf cadences. Three roles seed
+the three classes:
+
+| Leaf | Seed | Source |
+|---|---|---|
+| `state` variable, the independent variable `t` | `CONTINUOUS` | existing ESM |
+| `parameter` variable, numeric literal, index-set name, bound index symbol | `CONST` | existing ESM |
+| `discrete` variable | `DISCRETE` | the **one new declaration** (`esm-schema.json`, `ModelVariable.type` enum) |
+
+`DISCRETE` had no existing role to derive from — nothing in the pre-M3 schema
+expressed "shape fixed at setup, values refreshed at discrete events." The
+`discrete` variable kind (a third role beside `state` and `parameter`) is that
+seed: it declares its **fixed shape** and, optionally, a **`refresh` trigger**
+(`schedule` / `data_ingest` / `remesh`) that drives its per-event recompute.
+Loaded met/BC fields, scheduled emission inventories, and reloadable mesh
+topology are all declared `discrete`.
+
+The compile-fold-vs-bind-fold distinction is a **provenance sub-tag**, not a
+declared class: a `CONST`/`DISCRETE` leaf whose bytes are inline folds at
+**compile**; one loaded from an external resource (NetCDF mesh/met) folds at
+**bind**. Same algebra, same propagation.
+
+#### 5.7.3 Propagation and the gather rule
+
+Walk the inter-node DAG bottom-up; `class(n) = max` over inputs. The DAG spans
+**all** nodes — edges include expression child→parent, a node→an index set it
+references (`ranges[*].from`), a `kind:"derived"` set→its `from_faq` node, and a
+`join.on` factor→the factor it names. (Node addressing — §5.6.4, the node `id`
+and `from_faq` — is a hard prerequisite: the pass cannot run until these are
+real edges.)
+
+One rule carries the design. For a **gather** `index(A, e₁…eₖ)`, the index
+expressions are classified **independently of the array**:
+
+```
+class(index(A, e…)) = max( class(A), class(e₁), …, class(eₖ) )
+```
+
+This is what lets a stencil split across phases: in
+`index(u, index(nbr, i, k))` the inner neighbour-selection is `CONST` (topology)
+while the outer value load is `CONTINUOUS` (it touches `u`). (Operationally this
+is just `max` over a node's children, so no special case is needed — the split
+is a *consequence* of classing the index sub-expressions as ordinary inputs.)
+
+#### 5.7.4 The frontier cut and materialization points
+
+The boundary is drawn *through* nodes, not around them: wherever a lower-cadence
+child feeds a higher-cadence parent, the maximal lower-cadence sub-DAG below
+that edge is a **materialization point** — evaluated in its phase, stored in a
+buffer, and referenced by the parent. With three classes the cut fires at two
+thresholds:
+
+- **`CONST → {DISCRETE, CONTINUOUS}`** — fold once into the artifact (the
+  deduplicated edge set, `nbr_idx`, `coeff`, …).
+- **`DISCRETE → CONTINUOUS`** — materialize into a buffer the hot path reads as
+  a constant, recomputed by the per-event handler when the underlying data
+  refreshes (met slices, reloaded BCs, a remeshed topology).
+
+A **bare scalar-constant leaf** that feeds a higher-cadence parent is **not** a
+materialization point — it inlines as a literal (the pre-existing constant-fold
+`build_evaluator` already performs). A materialization point is a *buffer* (an
+array / index set), the maximal lower-cadence **sub-DAG** rooted at the boundary.
+The frontier generalizes the existing constant-fold — applied once at the
+`CONST` threshold and again at the `DISCRETE` one.
+
+#### 5.7.5 Three execution outputs
+
+Instead of a single compiled tree, the pass emits:
+
+1. **Folded artifact** (`CONST`) — literals plus precomputed index/coefficient
+   buffers baked in.
+2. **Per-event handler** (`DISCRETE`) — recomputes its buffers on each
+   refresh/remesh event; the relational engine (§5.5) runs here, off the hot
+   path. **Empty** when nothing is event-driven.
+3. **Per-step `_Node` tree** (`CONTINUOUS`) — identical in shape to today's
+   `build_evaluator` output for existing rules, with frontier references
+   replaced by buffer loads. Performance for existing rules is unchanged.
+   **Empty** when nothing is per-step (a pure-topology rule).
+
+#### 5.7.6 The guards (checked, not hoped for)
+
+Each partition is **pure feed-forward**, so the pass needs partial evaluation by
+cadence, not equation tearing. This is a *checked* property:
+
+1. **Acyclicity.** The `≤ DISCRETE` subgraph MUST be a DAG; a cycle is an
+   implicit/iterative solve, out of scope (use a `call` handler). Reject with a
+   diagnostic **naming the cycle**.
+2. **No relational engine on the hot path.** A `distinct`/`join`/`skolem`/`rank`
+   node that classifies `CONTINUOUS` is **rejected** — state-dependent topology
+   may not run per step in v1.
+3. **Optional author assertion.** `expect_cadence: "const"|"discrete"|
+   "continuous"` on a node (`esm-schema.json`, the `expect_cadence` property on
+   `ExpressionNode`) is a test/diagnostic hook only; the pass errors if the
+   **derived class disagrees**. It changes no semantics.
+
+#### 5.7.7 Conformance requirement
+
+The partition is a compile-time classification, so conformance asserts it
+**directly**: all bindings MUST agree on (a) **every node's class**, (b) the
+**set of materialization points** (and the empty/non-empty status of the hot
+tree and per-event handler), and (c) the **byte-identical `CONST`-folded
+buffers** (ties to §5.5 — the same canonical-JSON discipline). The §5.2
+tolerances do not apply.
+
+Three fixtures under `tests/valid/cadence/`, each carrying an `expect_cadence`
+assertion on every meaningful node, fix the contract:
+
+| Fixture | Profile | Exercises |
+|---|---|---|
+| `mixed_stencil.esm` | all three classes, both thresholds | the gather split `index(u, index(nbr,i,k))`; `CONST` topology fold (`nbr_idx`, `coeff`) + `DISCRETE` per-event materialization (`Kdiff`) + `CONTINUOUS` hot contraction |
+| `pure_topology.esm` | all `CONST`, **empty hot tree** | the edge-enumeration FAQ folds entirely into the artifact — nothing per-step (reuses the §5.5 `edge_enumeration` golden) |
+| `pure_pointwise.esm` | all `CONTINUOUS`, **empty handler**, no materialization | the analytic continuous-`t` forcing `sin(omega·t)` stays `CONTINUOUS`; `CONST` scalars inline as literals, not buffers |
+
+The golden lives in `tests/conformance/cadence/manifest.json` (per fixture: the
+class summary, the materialization-point set, and the `CONST`-fold inputs +
+expected byte-serialized buffers). Like the §5.5 determinism contract, the
+harness runs in two phases:
+
+- **Now** (before any partition-pass producer exists):
+  `scripts/run-cadence-conformance.py --self-test` asserts the contract against
+  an embedded **reference classifier + folder** (the §5.7 rules as code) — class
+  agreement (reference == `expect_cadence` == golden), the materialization set
+  and hot-tree/handler emptiness, byte-identical `CONST` folds, and negative
+  controls (a wrong `expect_cadence`, a `CONTINUOUS` relational node, a
+  `from_faq` cycle, a float topology key). Wired into
+  `scripts/test-conformance.sh`.
+- **Later** (`ess-my4.3.7` Julia partition pass + the Rust/Python siblings): each
+  binding ships a thin adapter (discovered via
+  `$EARTHSCI_CADENCE_ADAPTER_<BINDING>` or on `PATH`); the runner asserts every
+  adapter's class map, materialization set, and folded buffers byte-identical to
+  the golden and to each other. See `tests/conformance/cadence/README.md` for the
+  adapter contract.
+
 ## 6. CI Integration
 
 ### 6.1 GitHub Actions Workflow
