@@ -94,7 +94,101 @@ function extractVariableReferences(expr: Expression): string[] {
 }
 
 /**
- * Count D(var, t) derivatives in an expression
+ * Collect the binder-introduced index / contraction symbols in an expression:
+ * the loop variables of an aggregate (`output_idx` and `ranges` keys) and the
+ * element positions of an `index` node (`index(array, i, j)` binds `i`, `j`).
+ * These name iteration positions, not declared variables, so reference
+ * integrity must not flag them as undefined. Traversal mirrors
+ * `extractVariableReferences` (descends `args`) so every symbol that function
+ * can surface as a candidate reference is captured here.
+ */
+function collectIndexSymbols(expr: Expression): Set<string> {
+    const symbols = new Set<string>();
+
+    function visit(node: Expression): void {
+        if (!node || typeof node !== 'object' || !('op' in node)) return;
+        const exprNode = node as ExpressionNode;
+
+        if (exprNode.op === 'aggregate') {
+            const agg = exprNode as any;
+            for (const idx of agg.output_idx || []) {
+                if (typeof idx === 'string') symbols.add(idx);
+            }
+            if (agg.ranges && typeof agg.ranges === 'object') {
+                for (const key of Object.keys(agg.ranges)) symbols.add(key);
+            }
+        }
+
+        if (exprNode.op === 'index' && exprNode.args) {
+            // index(array, pos1, pos2, ...): positions after the array head are
+            // index expressions; bare-name positions are bound index symbols.
+            for (let i = 1; i < exprNode.args.length; i++) {
+                const pos = exprNode.args[i];
+                if (typeof pos === 'string') symbols.add(pos);
+            }
+        }
+
+        if (exprNode.args) {
+            for (const arg of exprNode.args) visit(arg);
+        }
+    }
+
+    visit(expr);
+    return symbols;
+}
+
+/**
+ * The variable a derivative differentiates. Either a bare name (`D(v)`) or the
+ * array head of an `index` node (`D(index(v, i...))`) — the aggregate-IR form
+ * that differentiates a single element of an arrayed state variable.
+ */
+function derivativeTargetVariable(arg: Expression): string | undefined {
+    if (typeof arg === 'string') return arg;
+    if (arg && typeof arg === 'object' && 'op' in arg) {
+        const node = arg as ExpressionNode;
+        if (node.op === 'index' && node.args && node.args.length > 0) {
+            const head = node.args[0];
+            if (typeof head === 'string') return head;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * The variable an equation LHS assigns to, peeling derivative, element-index,
+ * and aggregate-output wrappers down to the underlying name. Used to credit a
+ * relational / algebraic equation (e.g. the aggregate-IR `index(v, i) =
+ * aggregate(...)` produced by skolem / distinct / rank) that defines a state
+ * variable without a time derivative.
+ */
+function lhsAssignmentTarget(lhs: Expression): string | undefined {
+    if (typeof lhs === 'string') return lhs;
+    if (lhs && typeof lhs === 'object' && 'op' in lhs) {
+        const node = lhs as ExpressionNode;
+        switch (node.op) {
+            case 'D':
+            case 'index':
+                return node.args && node.args.length > 0
+                    ? lhsAssignmentTarget(node.args[0])
+                    : undefined;
+            case 'aggregate':
+                return (node as any).expr !== undefined
+                    ? lhsAssignmentTarget((node as any).expr as Expression)
+                    : undefined;
+            default:
+                return undefined;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Count D(var, t) derivatives in an expression.
+ *
+ * Recognises the aggregate-IR derivative forms in addition to the bare
+ * `D(v)`: an `index`-wrapped derivative `D(index(v, i))`, and a derivative
+ * carried in an aggregate's contracted body (`aggregate(output_idx:[i],
+ * expr: D(index(v, i)))`), whose `D` lives under `expr` rather than `args`.
  */
 function countDerivatives(expr: Expression): { [variable: string]: number } {
     const derivatives: { [variable: string]: number } = {};
@@ -102,10 +196,10 @@ function countDerivatives(expr: Expression): { [variable: string]: number } {
     function visit(node: Expression): void {
         if (typeof node === 'object' && node && 'op' in node) {
             const exprNode = node as ExpressionNode;
-            if (exprNode.op === 'D' && exprNode.args.length >= 1) {
-                const firstArg = exprNode.args[0];
-                if (typeof firstArg === 'string') {
-                    derivatives[firstArg] = (derivatives[firstArg] || 0) + 1;
+            if (exprNode.op === 'D' && exprNode.args && exprNode.args.length >= 1) {
+                const target = derivativeTargetVariable(exprNode.args[0]);
+                if (target !== undefined) {
+                    derivatives[target] = (derivatives[target] || 0) + 1;
                 }
             }
             // Recursively visit all arguments
@@ -113,6 +207,11 @@ function countDerivatives(expr: Expression): { [variable: string]: number } {
                 for (const arg of exprNode.args) {
                     visit(arg);
                 }
+            }
+            // An aggregate carries its contracted body (and any LHS derivative)
+            // in `expr`, not `args` — descend there too.
+            if ('expr' in exprNode && (exprNode as any).expr !== undefined) {
+                visit((exprNode as any).expr as Expression);
             }
         }
     }
@@ -180,13 +279,25 @@ function validateEquationBalance(model: Model, modelPath: string): StructuralErr
         .filter(([_, variable]) => variable.type === 'state')
         .map(([name, _]) => name);
 
-    // Count D(var,t) equations by looking at all equation LHS expressions
+    // Count equations driving each state variable. A normal ODE contributes a
+    // D(var,t) derivative; an aggregate LHS contributes the derivative carried
+    // in its contracted body. A relational / algebraic equation with no time
+    // derivative (the aggregate-IR `index(v, i) = aggregate(...)` form emitted
+    // by skolem / distinct / rank) instead credits the state variable its LHS
+    // assigns to, so element-defined state still balances the unknown count.
     const derivativeCounts: { [variable: string]: number } = {};
 
     for (const equation of model.equations || []) {
         const lhsDerivatives = countDerivatives(equation.lhs);
-        for (const [variable, count] of Object.entries(lhsDerivatives)) {
-            derivativeCounts[variable] = (derivativeCounts[variable] || 0) + count;
+        if (Object.keys(lhsDerivatives).length > 0) {
+            for (const [variable, count] of Object.entries(lhsDerivatives)) {
+                derivativeCounts[variable] = (derivativeCounts[variable] || 0) + count;
+            }
+        } else {
+            const target = lhsAssignmentTarget(equation.lhs);
+            if (target !== undefined && stateVariables.includes(target)) {
+                derivativeCounts[target] = (derivativeCounts[target] || 0) + 1;
+            }
         }
     }
 
@@ -222,6 +333,15 @@ function validateReferenceIntegrity(model: Model, modelPath: string, esmFile: Es
         const equation = model.equations![i];
         const equationPath = `${modelPath}/equations/${i}`;
 
+        // Binder-introduced index / contraction symbols (aggregate ranges and
+        // output indices, `index` element positions) are iteration positions,
+        // not declared variables — collect them so they are not flagged as
+        // undefined references below.
+        const boundSymbols = new Set<string>([
+            ...collectIndexSymbols(equation.lhs),
+            ...collectIndexSymbols(equation.rhs),
+        ]);
+
         // Check LHS variables
         const lhsVars = extractVariableReferences(equation.lhs);
         for (const varRef of lhsVars) {
@@ -237,7 +357,7 @@ function validateReferenceIntegrity(model: Model, modelPath: string, esmFile: Es
                 }
             } else {
                 // Local reference
-                if (!declaredVariables.has(varRef)) {
+                if (!declaredVariables.has(varRef) && !boundSymbols.has(varRef)) {
                     errors.push({
                         path: `${equationPath}/lhs`,
                         code: 'undefined_variable',
@@ -263,7 +383,7 @@ function validateReferenceIntegrity(model: Model, modelPath: string, esmFile: Es
                 }
             } else {
                 // Local reference
-                if (!declaredVariables.has(varRef)) {
+                if (!declaredVariables.has(varRef) && !boundSymbols.has(varRef)) {
                     errors.push({
                         path: `${equationPath}/rhs`,
                         code: 'undefined_variable',

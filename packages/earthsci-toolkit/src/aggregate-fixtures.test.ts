@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { load, save, validateSchema } from './index.js';
+import { load, save, validate, validateSchema } from './index.js';
 
 const testsDir = join(__dirname, '../../../tests');
 
@@ -34,13 +34,18 @@ describe('Aggregate / semiring fixtures', () => {
       const content = readFileSync(filePath, 'utf-8');
 
       // Schema-valid: the additive aggregate/semiring/index_sets fields all
-      // satisfy the embedded JSON schema. We assert on the schema validator
-      // directly (not the combined `validate()`): the structural pass is not
-      // yet aggregate-aware — it miscounts an LHS-aggregate ODE and does not
-      // recognise contracted index symbols — which is the evaluator bindings'
-      // domain, tracked separately. The additive-field contract here is purely
-      // schema-level.
+      // satisfy the embedded JSON schema.
       expect(validateSchema(JSON.parse(content))).toHaveLength(0);
+
+      // Structurally valid too: the structural pass is aggregate-aware
+      // (ess-my4.1.7). It recognises an LHS-aggregate equation (and the
+      // relational `index(v, i) = aggregate(...)` form) as an equation for its
+      // output variable, and binds aggregate range / `index` element symbols so
+      // contracted indices are not flagged as undefined references.
+      const result = validate(content);
+      expect(result.schema_errors).toHaveLength(0);
+      expect(result.structural_errors).toHaveLength(0);
+      expect(result.is_valid).toBe(true);
 
       // parse -> serialize -> parse is a fixed point on the typed view.
       const original = load(content);
