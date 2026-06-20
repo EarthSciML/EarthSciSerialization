@@ -48,8 +48,14 @@ def _directed_edges_from_faces(faces: List[List[Any]]) -> List[Tuple[Any, Any]]:
 
 
 def _compute_fixture(fixture: Dict[str, Any]) -> Dict[str, Any]:
+    """The canonical conformance outputs for a fixture (its `inputs.canonical`
+    payload). Kept as the single-payload entry point the Python conformance tests
+    drive directly; :func:`main` reuses it for the adversarial variants too."""
+    return _compute_payload(fixture, fixture["inputs"]["canonical"])
+
+
+def _compute_payload(fixture: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
     primitive = fixture["primitive"]
-    payload = fixture["inputs"]["canonical"]
 
     if primitive == "skolem_distinct_rank":
         mode = fixture.get("skolem")
@@ -106,7 +112,17 @@ def main(argv: "List[str] | None" = None) -> int:
 
     fixtures: Dict[str, Any] = {}
     for fixture in manifest["fixtures"]:
-        fixtures[fixture["id"]] = _compute_fixture(fixture)
+        record = _compute_fixture(fixture)
+        # Run the adversarial variants through the SAME real producers and emit
+        # each — the runner asserts they collapse to the golden, proving order-,
+        # duplicate-, and orientation-independence per binding (§5.5.4).
+        variants = {
+            vname: _compute_payload(fixture, vpayload)
+            for vname, vpayload in (fixture["inputs"].get("variants") or {}).items()
+        }
+        if variants:
+            record["variants"] = variants
+        fixtures[fixture["id"]] = record
 
     result = {"binding": "python", "fixtures": fixtures}
     args.output.parent.mkdir(parents=True, exist_ok=True)

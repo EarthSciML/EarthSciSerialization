@@ -767,11 +767,14 @@ def run_suite(manifest_path: Path, bindings: list, output_path: Path, timeout) -
             overall_ok = False
         report["bindings"][b] = b_report
 
-    if not any(a.get("adapter_status") == "ok" for a in adapters.values()):
+    any_ok = any(a.get("adapter_status") == "ok" for a in adapters.values())
+    if not any_ok and not required:
+        # No producer registered AND none demanded: nothing to check here. The
+        # --self-test gate is the green check in such an environment. (Once a
+        # binding is in `bindings_required`, a missing producer fails above.)
         report["status"] = "no_producers"
-        print("No cadence-partition adapters registered yet (ess-my4.3.7 Julia "
-              "partition pass + Rust/Python siblings pending). The contract is "
-              "gated by --self-test until then.")
+        print("No cadence-partition adapters registered for any requested binding, "
+              "and none are required. The contract is gated by --self-test here.")
     else:
         report["status"] = "ok" if overall_ok else "fail"
 

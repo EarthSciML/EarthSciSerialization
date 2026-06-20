@@ -1,7 +1,7 @@
 {
   "category": "determinism_conformance",
   "version": "1.0",
-  "description": "Static golden example for the cross-binding determinism contract (CONFORMANCE_SPEC.md §5.5, RFC semiring-faq-unified-ir §5.7). Each fixture pins a byte-identical serialized index set and the canonical dense-ID array a conforming producer MUST emit for the value-invention primitives (skolem / distinct / rank) and group-by aggregate joins. Adversarial input variants (permuted, duplicated, reversed orientation) MUST collapse to the identical golden output, proving order-, duplicate-, and orientation-independence. Until the M2 join impls and M3 relational engine land producers, the harness (scripts/run-determinism-conformance.py --self-test) asserts the contract against an embedded reference implementation; M2/M3 register per-binding adapters and the same golden is asserted byte-for-byte across Julia / Rust / Python.",
+  "description": "Static golden example for the cross-binding determinism contract (CONFORMANCE_SPEC.md §5.5, RFC semiring-faq-unified-ir §5.7). Each fixture pins a byte-identical serialized index set and the canonical dense-ID array a conforming producer MUST emit for the value-invention primitives (skolem / distinct / rank) and group-by aggregate joins. Adversarial input variants (permuted, duplicated, reversed orientation) MUST collapse to the identical golden output, proving order-, duplicate-, and orientation-independence. The M2 joins and M3 relational engine have landed: each binding (Julia / Rust / Python) ships a thin adapter (scripts/run-determinism-conformance.py + EARTHSCI_DETERMINISM_ADAPTER_<BINDING>) and the runner asserts every adapter's serialized index set + base-normalized dense IDs are byte-identical to this golden — for the canonical input AND every adversarial variant. `bindings_required` lists all three, so a missing or mismatching producer fails the gate. The embedded reference implementation remains the --self-test green check.",
   "canonical_rank_base": 0,
   "rank_base_pin": {
     "_doc": "rank assigns dense IDs by position in the sorted distinct sequence. Conformance asserts on the CANONICAL numbering (0-based, language-neutral position). Each binding emits in its native base and the adapter declares it; the harness normalizes reported IDs to canonical via (reported - emission_base) before comparison. Go/TS receive the additive schema only (no evaluator/producer) and are N/A here.",
@@ -9,8 +9,8 @@
     "rust": 0,
     "python": 0
   },
-  "bindings_required": [],
-  "bindings_optional": ["julia", "rust", "python"],
+  "bindings_required": ["julia", "rust", "python"],
+  "bindings_optional": [],
   "fixtures": [
     {
       "id": "edge_enumeration",

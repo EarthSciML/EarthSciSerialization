@@ -35,9 +35,9 @@ golden in `manifest.json` is hand-derived and checked against it.
 
 ## Two phases
 
-The producers do not exist yet: the M2 value-equality joins and the M3
-relational engine (`distinct` / `skolem` / `rank`) land them. So the harness
-runs in two phases, exactly like the grid-conformance runner's `--self-test`:
+The harness runs in two layers — a reference self-test plus the now-live
+per-binding producers (the M2 value-equality joins and the M3 relational engine
+— `distinct` / `skolem` / `rank` — have landed):
 
 1. **Now (skeleton, gated by `--self-test`).** The runner asserts the contract
    against its embedded reference implementation and the golden example. It
@@ -54,12 +54,14 @@ runs in two phases, exactly like the grid-conformance runner's `--self-test`:
    This is wired into `scripts/test-conformance.sh` as
    `run_determinism_conformance_self_test` and runs green parallel to M1.
 
-2. **Later (M2 / M3, per-binding producers).** Each binding ships a thin
-   adapter. The default run mode invokes every registered adapter on this same
-   manifest and asserts its serialized index sets + dense IDs are byte-identical
-   to the golden (after base normalization) and to each other. As producers
-   land, move the binding from `bindings_optional` to `bindings_required` so a
-   missing or mismatching producer fails CI.
+2. **Per-binding producers (live).** Each binding (Julia, Rust, Python) ships a
+   thin adapter. The default run mode invokes every registered adapter on this
+   same manifest and asserts its serialized index sets + dense IDs are
+   byte-identical to the golden (after base normalization) — and so, transitively,
+   to each other — for the canonical input **and every adversarial variant**.
+   All three are in `bindings_required`, so a missing or mismatching producer
+   fails CI; `scripts/test-conformance.sh` drives each via
+   `EARTHSCI_DETERMINISM_ADAPTER_<BINDING>`.
 
 ## The contract (summary — normative text is `CONFORMANCE_SPEC.md` §5.5)
 
@@ -109,7 +111,12 @@ fixture's `inputs.canonical` payload and write:
     "edge_enumeration": {
       "index_set": [[1,2],[1,3],[2,3],[2,4],[3,4]],
       "serialized": "[[1,2],[1,3],[2,3],[2,4],[3,4]]",
-      "dense_ids_canonical": [0,1,2,3,4]
+      "dense_ids_canonical": [0,1,2,3,4],
+      "variants": {
+        "permuted_faces":   { "serialized": "[[1,2],[1,3],[2,3],[2,4],[3,4]]", "dense_ids_canonical": [0,1,2,3,4] },
+        "reversed_winding": { "serialized": "[[1,2],[1,3],[2,3],[2,4],[3,4]]", "dense_ids_canonical": [0,1,2,3,4] },
+        "duplicate_face":   { "serialized": "[[1,2],[1,3],[2,3],[2,4],[3,4]]", "dense_ids_canonical": [0,1,2,3,4] }
+      }
     }
   }
 }
@@ -120,9 +127,12 @@ fixture's `inputs.canonical` payload and write:
   canonical-JSON discipline as the round-trip idempotence contract.
 - `dense_ids_canonical` is emitted in the binding's **native** base; the runner
   normalizes via `rank_base_pin` before comparison.
-- Adapters SHOULD also run the `inputs.variants` and confirm each collapses to
-  the same output; the runner checks variant-collapse for the reference
-  implementation today and will check it per-binding once producers exist.
+- Adapters MUST also run every `inputs.variants` payload through the same real
+  producers and emit each under a `variants` map (keyed by variant name, each a
+  `{serialized, dense_ids_canonical}` record). The runner asserts every variant
+  collapses to the golden **per binding** — a fixture that declares variants
+  whose adapter omitted them fails. This is what proves order-, duplicate-, and
+  orientation-independence for each real engine, not just the reference.
 
 Keep the adapter thin (target ≲ 100 lines, like the round-trip adapters). If it
 grows, the contract is leaking into the adapter — push it back into the binding

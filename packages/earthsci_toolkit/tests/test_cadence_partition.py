@@ -176,6 +176,18 @@ def test_guard_continuous_relational_rejected():
         partition(bad_model)
 
 
+def test_continuous_relational_fixture_rejected():
+    """The shared invalid fixture tests/invalid/aggregate/continuous_relational_node.esm
+    — a relational/value-invention node whose Skolem key reads a `state` var — is
+    SCHEMA-VALID (Go / TS accept it, marked resolver_only) but the partition pass
+    rejects it (guard 2). The same fixture is rejected by the Julia and Rust
+    siblings, so all three evaluators agree (bead ess-my4.3.11)."""
+    path = REPO_ROOT / "tests" / "invalid" / "aggregate" / "continuous_relational_node.esm"
+    model = json.loads(path.read_text())["models"]["ContinuousRelationalNode"]
+    with pytest.raises(CadenceError, match="CONTINUOUS"):
+        partition(model)
+
+
 def test_guard_from_faq_cycle_rejected():
     """A ``from_faq`` cycle in the ≤DISCRETE index-set graph is an implicit
     solve, out of scope (guard 1)."""

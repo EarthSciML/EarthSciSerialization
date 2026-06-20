@@ -98,6 +98,17 @@ const CADENCE_MANIFEST = joinpath(REPO_ROOT, "tests", "conformance", "cadence", 
         @test_throws C.CadenceError C.assert_no_continuous_relational(rhs, model)
     end
 
+    @testset "neg: continuous relational FIXTURE rejected (guard 2)" begin
+        # The shared invalid fixture tests/invalid/aggregate/continuous_relational_node.esm
+        # — SCHEMA-VALID (Go/TS accept it, marked resolver_only) but rejected by the
+        # partition guard. The same fixture is rejected by the Rust and Python
+        # siblings, so all three evaluators agree (bead ess-my4.3.11). In Julia the
+        # guard lives in run_guards (not partition_model).
+        fixture = joinpath(REPO_ROOT, "tests", "invalid", "aggregate", "continuous_relational_node.esm")
+        model = C.load_model_json(fixture, "ContinuousRelationalNode")
+        @test_throws C.CadenceError C.run_guards(model)
+    end
+
     @testset "neg: from_faq cycle rejected (guard 1)" begin
         cyclic = Dict{String,Any}(
             "variables" => Dict{String,Any}(),

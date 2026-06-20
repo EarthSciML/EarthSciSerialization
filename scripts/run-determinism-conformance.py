@@ -21,12 +21,15 @@ Two phases, one harness:
     REJECTS non-conforming output (negative controls). This runs green before
     any producer exists, parallel to M1.
 
-  * LATER (M2 joins / M3 relational engine): each binding ships a thin adapter
-    registered via $EARTHSCI_DETERMINISM_ADAPTER_<BINDING> (or on PATH as
-    earthsci-determinism-adapter-<binding>). The default run mode invokes each
-    adapter on the same manifest and asserts its serialized index sets + dense
-    IDs are byte-identical to the golden (after base normalization) and to each
-    other. Populate `bindings_required` in the manifest as producers land.
+  * PRODUCERS (live — M2 joins + M3 relational engine have landed): each binding
+    ships a thin adapter registered via $EARTHSCI_DETERMINISM_ADAPTER_<BINDING>
+    (or on PATH as earthsci-determinism-adapter-<binding>). The default run mode
+    invokes each adapter on the same manifest — over the canonical input AND
+    every adversarial variant — and asserts its serialized index sets + dense IDs
+    are byte-identical to the golden (after base normalization) and to each
+    other, and that every variant collapses to the golden per binding. Julia /
+    Rust / Python are `bindings_required`, so a missing or mismatching producer
+    fails the run.
 
 See tests/conformance/determinism/README.md for the adapter contract.
 
@@ -352,6 +355,54 @@ def compare_to_golden(fixture: dict, produced: dict, emission_base: int) -> dict
     return {"match": not problems, "problems": problems}
 
 
+def compare_variants(fixture: dict, produced: dict, emission_base: int) -> dict:
+    """Assert every adversarial input variant the binding ran collapses to the
+    golden output — byte-identical serialized index set and (base-normalized)
+    canonical dense IDs. This is the per-binding proof of order-, duplicate-, and
+    orientation-independence (CONFORMANCE_SPEC.md §5.5.4): the same engine fed
+    permuted / duplicated / reversed inputs MUST emit the identical canonical set.
+
+    A fixture that declares `inputs.variants` whose adapter emitted no matching
+    `variants` block is a FAILURE — silence cannot pass the adversarial gate."""
+    golden = fixture["expected"]
+    declared = fixture.get("inputs", {}).get("variants") or {}
+    if not declared:
+        return {"match": True, "problems": []}
+
+    produced_variants = produced.get("variants")
+    if not isinstance(produced_variants, dict):
+        return {
+            "match": False,
+            "problems": [
+                f"adapter emitted no 'variants' for a fixture with "
+                f"{len(declared)} adversarial input(s); cannot prove "
+                "order-/duplicate-/orientation-independence (§5.5.4)"
+            ],
+        }
+
+    problems: list[str] = []
+    for vname in declared:
+        v = produced_variants.get(vname)
+        if not isinstance(v, dict):
+            problems.append(f"variant {vname!r} missing from adapter output")
+            continue
+        got_ser = v.get("serialized")
+        if got_ser != golden["serialized"]:
+            problems.append(
+                f"variant {vname!r} did not collapse to golden:\n"
+                f"    golden={golden['serialized']!r}\n    got   ={got_ser!r}"
+            )
+        raw_ids = v.get("dense_ids_canonical")
+        if raw_ids is not None and emission_base:
+            raw_ids = normalize_dense_ids(raw_ids, emission_base)
+        if raw_ids is not None and raw_ids != golden["dense_ids_canonical"]:
+            problems.append(
+                f"variant {vname!r} dense IDs diverged (after base norm): "
+                f"golden={golden['dense_ids_canonical']!r} got={raw_ids!r}"
+            )
+    return {"match": not problems, "problems": problems}
+
+
 # === Self-test (the static-example phase) =================================
 
 
@@ -497,11 +548,13 @@ def run_suite(manifest_path: Path, bindings: list[str], output_path: Path,
                 b_ok = False
                 continue
             verdict = compare_to_golden(fx, produced, b_base)
+            variants = compare_variants(fx, produced, b_base)
+            match = verdict["match"] and variants["match"]
             b_report["fixtures"][fx["id"]] = {
-                "status": "ok" if verdict["match"] else "mismatch",
-                "problems": verdict["problems"],
+                "status": "ok" if match else "mismatch",
+                "problems": verdict["problems"] + variants["problems"],
             }
-            if not verdict["match"]:
+            if not match:
                 b_ok = False
         b_report["status"] = "ok" if b_ok else "fail"
         # A producer that bothered to REGISTER (adapter_status == ok) must
@@ -511,12 +564,15 @@ def run_suite(manifest_path: Path, bindings: list[str], output_path: Path,
             overall_ok = False
         report["bindings"][b] = b_report
 
-    if not any(a.get("adapter_status") == "ok" for a in adapters.values()):
-        # M2/M3 not landed yet: no producers to check. The --self-test gate is
-        # the green check until adapters exist; not a failure.
+    any_ok = any(a.get("adapter_status") == "ok" for a in adapters.values())
+    if not any_ok and not required:
+        # No producer registered AND none demanded: nothing to check. The
+        # --self-test gate is the green check in such an environment; not a
+        # failure. (Once a binding is in `bindings_required`, a missing producer
+        # below fails instead of silently passing here.)
         report["status"] = "no_producers"
-        print("No determinism adapters registered yet (M2 joins / M3 relational "
-              "engine pending). The contract is gated by --self-test until then.")
+        print("No determinism adapters registered for any requested binding, and "
+              "none are required. The contract is gated by --self-test here.")
     else:
         report["status"] = "ok" if overall_ok else "fail"
 

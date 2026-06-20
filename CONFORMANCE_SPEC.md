@@ -635,17 +635,26 @@ arrays** — including adversarial inputs designed to break order-dependence:
 order**. All such variants MUST collapse to the identical canonical output.
 
 This is implemented by `scripts/run-determinism-conformance.py` against the
-golden example in `tests/conformance/determinism/manifest.json`, in two phases:
+golden example in `tests/conformance/determinism/manifest.json`, in two layers:
 
-- **Now** (parallel to M1, before any producer exists): `--self-test` asserts
-  the contract against an embedded reference implementation of the primitives —
-  byte-identity to the committed golden, adversarial-variant collapse, rank
-  base-pin round-trip, and negative controls (it must *reject* unsorted output
-  and float keys). Wired into `scripts/test-conformance.sh`.
-- **Later** (M2 value-equality joins, M3 relational engine): each binding ships
-  a thin adapter (discovered via `$EARTHSCI_DETERMINISM_ADAPTER_<BINDING>` or on
-  `PATH`); the runner asserts every adapter's output byte-identical to the golden
-  and to each other. See `tests/conformance/determinism/README.md` for the
+- **The reference layer** (`--self-test`, always on): asserts the contract
+  against an embedded reference implementation of the primitives — byte-identity
+  to the committed golden, adversarial-variant collapse, rank base-pin
+  round-trip, and negative controls (it must *reject* unsorted output and float
+  keys). Wired into `scripts/test-conformance.sh`.
+- **The per-binding producer layer** (live — the M2 value-equality joins and the
+  M3 relational engine have landed): each binding ships a thin adapter
+  (discovered via `$EARTHSCI_DETERMINISM_ADAPTER_<BINDING>` or as
+  `earthsci-determinism-adapter-<binding>` on `PATH`) that runs its real
+  value-invention primitives over the **canonical input and every adversarial
+  variant**. The runner asserts each adapter's serialized index sets are
+  byte-identical to the golden — so, transitively, to every other binding — its
+  dense IDs identical after base normalization, and that **every variant
+  collapses to the golden per binding**, so order-, duplicate-, and
+  orientation-independence is proven for each real engine, not just the
+  reference. The three evaluators (Julia, Rust, Python) are `bindings_required`,
+  so a missing or mismatching producer fails the gate; `test-conformance.sh`
+  drives all three. See `tests/conformance/determinism/README.md` for the
   adapter contract.
 
 ### 5.6 Closed Semiring Registry (normative)
@@ -916,9 +925,9 @@ assertion on every meaningful node, fix the contract:
 The golden lives in `tests/conformance/cadence/manifest.json` (per fixture: the
 class summary, the materialization-point set, and the `CONST`-fold inputs +
 expected byte-serialized buffers). Like the §5.5 determinism contract, the
-harness runs in two phases:
+harness runs in two layers:
 
-- **Now** (before any partition-pass producer exists):
+- **The reference layer** (`--self-test`, always on):
   `scripts/run-cadence-conformance.py --self-test` asserts the contract against
   an embedded **reference classifier + folder** (the §5.7 rules as code) — class
   agreement (reference == `expect_cadence` == golden), the materialization set
@@ -926,12 +935,20 @@ harness runs in two phases:
   controls (a wrong `expect_cadence`, a `CONTINUOUS` relational node, a
   `from_faq` cycle, a float topology key). Wired into
   `scripts/test-conformance.sh`.
-- **Later** (`ess-my4.3.7` Julia partition pass + the Rust/Python siblings): each
-  binding ships a thin adapter (discovered via
-  `$EARTHSCI_CADENCE_ADAPTER_<BINDING>` or on `PATH`); the runner asserts every
-  adapter's class map, materialization set, and folded buffers byte-identical to
-  the golden and to each other. See `tests/conformance/cadence/README.md` for the
-  adapter contract.
+- **The per-binding producer layer** (live — `ess-my4.3.7` Julia, `ess-my4.3.8`
+  Rust, `ess-my4.3.9` Python partition passes have landed): each binding ships a
+  thin adapter (discovered via `$EARTHSCI_CADENCE_ADAPTER_<BINDING>` or on
+  `PATH`); the runner asserts every adapter's class map, materialization set, and
+  folded buffers byte-identical to the golden and to each other. The three are
+  `bindings_required`, so a missing or mismatching producer fails the gate;
+  `test-conformance.sh` drives all three. See
+  `tests/conformance/cadence/README.md` for the adapter contract.
+
+Guard 2 (no relational engine on the hot path) is additionally pinned by the
+committed fixture `tests/invalid/aggregate/continuous_relational_node.esm` — a
+schema-valid document (accepted by Go / TypeScript, marked `resolver_only`) whose
+state-dependent `distinct` classifies `CONTINUOUS` and is rejected by the
+partition pass in all three evaluators.
 
 ## 6. CI Integration
 

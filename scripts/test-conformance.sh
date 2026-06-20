@@ -327,6 +327,50 @@ run_determinism_conformance_self_test() {
     fi
 }
 
+# Drive the REAL value-invention primitives (skolem / distinct / rank + group-by,
+# ess-my4.3.3/.4/.5) through the determinism harness: each binding's adapter runs
+# the relational engine over the golden fixtures and EVERY adversarial variant
+# (permuted / duplicated / reversed), and the runner asserts the serialized index
+# sets + base-normalized dense IDs are byte-identical to the golden — proving
+# cross-binding byte-identity AND per-binding order-independence (§5.5.4, bead
+# ess-my4.3.11). The three bindings are `bindings_required`, so a MISMATCH or a
+# missing producer (when the language is available) fails.
+run_determinism_conformance_julia() {
+    if ! check_language_availability "julia" "$JULIA_DIR"; then
+        warning "Julia unavailable — skipping Julia determinism producer check"
+        return 0
+    fi
+    log "Running determinism conformance with the Julia relational engine..."
+    EARTHSCI_DETERMINISM_ADAPTER_JULIA="julia --project=$JULIA_DIR $JULIA_DIR/scripts/determinism_adapter.jl" \
+        python3 "$SCRIPT_DIR/run-determinism-conformance.py" \
+            --bindings julia \
+            --output "$OUTPUT_DIR/determinism/julia_report.json"
+}
+
+run_determinism_conformance_rust() {
+    if ! check_language_availability "rust" "$RUST_DIR"; then
+        warning "Rust unavailable — skipping Rust determinism producer check"
+        return 0
+    fi
+    log "Running determinism conformance with the Rust relational engine..."
+    EARTHSCI_DETERMINISM_ADAPTER_RUST="cargo run --quiet --manifest-path $RUST_DIR/Cargo.toml --bin earthsci-determinism-adapter-rust --" \
+        python3 "$SCRIPT_DIR/run-determinism-conformance.py" \
+            --bindings rust \
+            --output "$OUTPUT_DIR/determinism/rust_report.json"
+}
+
+run_determinism_conformance_python() {
+    if ! check_language_availability "python" "$PYTHON_DIR"; then
+        warning "Python unavailable — skipping Python determinism producer check"
+        return 0
+    fi
+    log "Running determinism conformance with the Python relational engine..."
+    EARTHSCI_DETERMINISM_ADAPTER_PYTHON="python3 -m earthsci_toolkit.cli.determinism_adapter" \
+        python3 "$SCRIPT_DIR/run-determinism-conformance.py" \
+            --bindings python \
+            --output "$OUTPUT_DIR/determinism/python_report.json"
+}
+
 # Sanity-check the cross-binding cadence-partition harness (ess-my4.3.6). Until
 # the per-binding partition-pass implementations land (ess-my4.3.7 Julia +
 # Rust/Python siblings), the harness asserts the §5.7 cadence contract against an
@@ -505,6 +549,27 @@ main() {
             success "Determinism-conformance harness self-test completed"
         else
             error "Determinism-conformance harness self-test failed"
+            exit 1
+        fi
+
+        if run_determinism_conformance_julia; then
+            success "Determinism Julia producer check completed"
+        else
+            error "Determinism Julia producer check failed"
+            exit 1
+        fi
+
+        if run_determinism_conformance_rust; then
+            success "Determinism Rust producer check completed"
+        else
+            error "Determinism Rust producer check failed"
+            exit 1
+        fi
+
+        if run_determinism_conformance_python; then
+            success "Determinism Python producer check completed"
+        else
+            error "Determinism Python producer check failed"
             exit 1
         fi
 

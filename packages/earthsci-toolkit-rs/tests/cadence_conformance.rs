@@ -105,3 +105,22 @@ fn rust_partition_matches_golden() {
         }
     }
 }
+
+/// The shared invalid fixture: a relational/value-invention node whose Skolem key
+/// reads a `state` variable classifies CONTINUOUS, so the partition pass MUST
+/// reject it (§5.7.6 guard 2 — no relational engine on the hot path). The same
+/// schema-valid fixture is accepted by the schema-only bindings (Go / TS) and
+/// rejected here, in Julia, and in Python (tests/invalid/expected_errors.json
+/// marks it `resolver_only`). Bead ess-my4.3.11.
+#[test]
+fn rust_rejects_continuous_relational_fixture() {
+    let doc = load_json("tests/invalid/aggregate/continuous_relational_node.esm");
+    let model = &doc["models"]["ContinuousRelationalNode"];
+    let err = partition_model(model)
+        .expect_err("a CONTINUOUS-classified relational node must be rejected (guard 2)");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("CONTINUOUS"),
+        "rejection should name the CONTINUOUS class, got: {msg}"
+    );
+}
