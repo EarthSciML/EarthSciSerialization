@@ -56,6 +56,7 @@ pub mod reactions;
 pub mod ref_loading;
 pub mod reference_resolution;
 pub mod registered_functions;
+pub mod relational;
 pub mod rule_applier;
 pub mod rule_engine;
 pub mod serialize;
@@ -109,6 +110,10 @@ pub use reference_resolution::{
 };
 pub use registered_functions::{
     ClosedArg, ClosedFunctionError, ClosedValue, closed_function_names, evaluate_closed_function,
+};
+pub use relational::{
+    FloatKeyError, Key, Num, Ranking, SemiringOp, canonical_index_set_json, distinct, equijoin,
+    group_aggregate, rank, rank_with_base, serialize_keys, serialize_pairs, skolem, skolem_edge,
 };
 pub use rule_engine::{
     DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
