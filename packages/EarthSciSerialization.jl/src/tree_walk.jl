@@ -105,6 +105,15 @@ function build_evaluator(model::Model;
     end
     sort!(param_names)
 
+    # ---- Resolve index-set references in ranges (RFC §5.2) ----
+    # Rewrite any `ranges[*]` `{from: <name>}` reference against the model's
+    # `index_sets` registry into the dense / dynamic-bound form the range
+    # machinery already consumes, BEFORE any range expansion runs. No-op (and
+    # therefore byte-identical) for files that use no `{from}` references.
+    equations = _resolve_index_set_ranges(model.equations, model.index_sets)
+    init_equations = _resolve_index_set_ranges(model.initialization_equations,
+                                               model.index_sets)
+
     # ---- Discover array cells from equations and initial conditions ----
     # Array variable detection: a variable is treated as an array if it has
     # an explicit non-nothing shape, OR if it appears inside index(var, k...)
@@ -114,12 +123,12 @@ function build_evaluator(model::Model;
                                            if v.type == StateVariable &&
                                               v.shape !== nothing)
     # Detect array usage from equations even when shape is not declared.
-    array_var_names = _detect_array_vars(model.equations, state_var_names,
+    array_var_names = _detect_array_vars(equations, state_var_names,
                                          initial_conditions)
     union!(array_var_names, array_var_names_declared)
 
     # array_cells: var_name → sorted list of index-tuples (1-based)
-    array_cells = _discover_array_cells(model.equations, initial_conditions,
+    array_cells = _discover_array_cells(equations, initial_conditions,
                                         array_var_names)
 
     # Scalar state variables: all state vars not treated as arrays.
@@ -212,7 +221,7 @@ function build_evaluator(model::Model;
     # ---- Observed substitution ----
     observed_exprs = Dict{String,Expr}()
     derivative_eqs = Equation[]
-    for eq in model.equations
+    for eq in equations
         if _is_scalar_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
         elseif _is_indexed_D_lhs(eq.lhs) || _is_arrayop_D_lhs(eq.lhs)
@@ -253,9 +262,9 @@ function build_evaluator(model::Model;
     # arrayop path. The coord_<dim> const_array must be provided by the caller.
     # Explicit initial_conditions values take precedence (already in u0 above).
     param_sym_set = Set(p_syms)
-    for eq in model.initialization_equations
+    for eq in init_equations
         eq.lhs isa VarExpr || continue
-        eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop" || continue
+        eq.rhs isa OpExpr && _is_aggregate_op((eq.rhs::OpExpr).op) || continue
         var_name = (eq.lhs::VarExpr).name
         rhs_op   = eq.rhs::OpExpr
         idx_names_raw = rhs_op.output_idx === nothing ? Any[] : rhs_op.output_idx
@@ -350,12 +359,13 @@ function build_evaluator(model::Model;
             contract_names = String[]
             contract_ranges = Vector{Any}[]            # raw [lo,hi]/[lo,step,hi]
             contract_const  = Union{Vector{Int},Nothing}[]  # nothing ⇒ per-cell
-            rhs_reduce = "+"
-            if eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop"
+            # Semiring ⊕ and its 0̄ identity (§5.1). Default sum_product (+, 0̄=0).
+            rhs_oplus = "+"
+            rhs_zerobar = 0.0
+            if eq.rhs isa OpExpr && _is_aggregate_op((eq.rhs::OpExpr).op)
                 rhs_op = eq.rhs::OpExpr
-                if rhs_op.reduce !== nothing
-                    rhs_reduce = rhs_op.reduce::String
-                end
+                rhs_oplus, rhs_zerobar =
+                    _aggregate_oplus_identity(rhs_op.semiring, rhs_op.reduce)
                 rhs_ranges = rhs_op.ranges === nothing ?
                              Dict{String,Any}() : rhs_op.ranges
                 for n in sort!(collect(keys(rhs_ranges)))
@@ -437,12 +447,16 @@ function build_evaluator(model::Model;
                     end
                     if isempty(k_nodes)
                         # A per-cell dynamic bound can be empty (e.g. an isolated
-                        # cell with zero neighbours). Emit the reduction identity
-                        # (0 for +; degenerate for */max/min but not a real case).
-                        push!(rhs_list, (idx, _mknode(kind=_NK_LITERAL, literal=0.0)))
+                        # cell with zero neighbours). Emit the semiring's 0̄
+                        # empty-⊕-reduction identity (§5.1): 0 for sum_product,
+                        # +∞ for min_sum, -∞ for max_*, 1 for the legacy ×-reduce.
+                        push!(rhs_list, (idx, _mknode(kind=_NK_LITERAL, literal=rhs_zerobar)))
                     else
+                        # Carry 0̄ on the contraction node so the runtime fold is
+                        # seeded from the registry table, never a hardcoded value.
                         push!(rhs_list, (idx, _mknode(kind=_NK_CONTRACTION,
-                                                      op=Symbol(rhs_reduce),
+                                                      op=Symbol(rhs_oplus),
+                                                      literal=rhs_zerobar,
                                                       children=k_nodes)))
                     end
                 end
@@ -707,14 +721,14 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
             "in simulation evaluation. Spatial operators must be rewritten " *
             "by ESD discretization rules before reaching the simulator. " *
             "Pipeline contract violated."))
-    elseif op_sym === :arrayop
-        # If _resolve_indices ran, scalar arrayop (empty output_idx) was
+    elseif op_sym === :arrayop || op_sym === :aggregate
+        # If _resolve_indices ran, scalar aggregate (empty output_idx) was
         # already expanded to a plain arithmetic tree and never reaches here.
-        # Reaching this branch means an array-producing arrayop (non-empty
+        # Reaching this branch means an array-producing aggregate (non-empty
         # output_idx) appeared without being wrapped in an index() call.
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
-                            "arrayop with non-empty output_idx in expression position " *
-                            "requires wrapping in index(arrayop(...), k1, k2, ...)"))
+                            "$(expr.op) with non-empty output_idx in expression position " *
+                            "requires wrapping in index($(expr.op)(...), k1, k2, ...)"))
     elseif op_sym === :makearray
         # makearray in expression position must be wrapped in index().
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
@@ -756,6 +770,13 @@ end
     end
 end
 
+# Runtime ⊕-reduction over a node's children, parameterized by semiring (§5.1).
+# The accumulator is seeded from `n.literal`, the 0̄ identity baked onto the node
+# at build time from the registry table — so max/min/× empty-or-folded reductions
+# return the normative identity without any hardcoded constant here. `:+` uses a
+# Tullio sum whose identity is 0.0 = sum_product's 0̄ (the only semiring with
+# ⊕=+); this node is only built with ≥1 child (the empty case folds to a literal
+# upstream), so the Tullio reduction always has terms.
 function _eval_contraction(n::_Node, u, p, t)
     op = n.op
     children = n.children
@@ -763,19 +784,19 @@ function _eval_contraction(n::_Node, u, p, t)
         @tullio s = _eval_node(children[k], u, p, t)
         return s
     elseif op === :*
-        s = 1.0
+        s = n.literal  # 1̄ for the ×-reduce
         @inbounds for k in eachindex(children)
             s *= _eval_node(children[k], u, p, t)
         end
         return s
     elseif op === :max
-        s = -Inf
+        s = n.literal  # -∞
         @inbounds for k in eachindex(children)
             s = max(s, _eval_node(children[k], u, p, t))
         end
         return s
     else  # :min
-        s = Inf
+        s = n.literal  # +∞
         @inbounds for k in eachindex(children)
             s = min(s, _eval_node(children[k], u, p, t))
         end
@@ -1023,7 +1044,7 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                   wrt=expr.wrt, dim=expr.dim,
                   int_var=expr.int_var, lower=expr.lower, upper=expr.upper,
                   output_idx=expr.output_idx, expr_body=new_body,
-                  reduce=expr.reduce, ranges=new_ranges,
+                  reduce=expr.reduce, semiring=expr.semiring, ranges=new_ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value)
@@ -1214,35 +1235,210 @@ function _eval_const_int(expr::OpExpr, idx_env::Dict{String,Int},
           "cannot evaluate '$(op)' as a constant integer index"))
 end
 
-# Combine a vector of expressions with a reduce operator.
-# Build-time helper for expression-position arrayop expansion.
+# ============================================================
+# 5c. Semiring registry (RFC semiring-faq-unified-ir §5.1)
+# ============================================================
+#
+# A semiring is the pair (⊕, ⊗) together with its two NORMATIVE identity
+# elements (0̄, 1̄): 0̄ is the value of an empty ⊕-reduction and 1̄ the value of
+# an empty ⊗-product. The `reduce` field on an aggregate names ⊕ only; the
+# matching ⊗ and BOTH identities come from this table, NEVER from the file.
+# The registry is closed and exhaustive — adding a semiring is a spec change.
+struct _Semiring
+    name::String
+    oplus::String      # ⊕ reduce spelling
+    zerobar::Float64   # 0̄ : result of an empty ⊕-reduction
+    otimes::String     # ⊗ product spelling
+    onebar::Float64    # 1̄ : result of an empty ⊗-product
+end
+
+# ±∞ identities are represented per-binding (Julia: Inf/-Inf) and are the
+# *result* of an empty reduction — never written into a file (§5.1 note 2).
+const _SEMIRING_REGISTRY = Dict{String,_Semiring}(
+    "sum_product" => _Semiring("sum_product", "+",   0.0,  "*", 1.0),
+    "max_product" => _Semiring("max_product", "max", -Inf, "*", 1.0),
+    "min_sum"     => _Semiring("min_sum",     "min",  Inf, "+", 0.0),
+    "max_sum"     => _Semiring("max_sum",     "max", -Inf, "+", 0.0),
+    "bool_and_or" => _Semiring("bool_and_or", "or",   0.0, "and", 1.0),  # false / true
+)
+
+# ⊕-spelling → 0̄, the empty-⊕-reduction identity. Derived from (and consistent
+# with) the registry table; this is what the legacy `reduce`-only shorthand
+# resolves to when no `semiring` is given (⊕ = reduce, ⊗ = "*"; §5.1 note 1).
+# "*" is the legacy product-reduce: no registry semiring has ⊕=× (it appears
+# only as ⊗), but files predating the registry may carry reduce="*".
+const _OPLUS_IDENTITY = Dict{String,Float64}(
+    "+" => 0.0, "max" => -Inf, "min" => Inf, "*" => 1.0, "or" => 0.0,
+)
+
+# Resolve an aggregate node's (⊕ spelling, 0̄ identity) — everything the
+# evaluator needs to fold a reduction and to value an empty one. `semiring`
+# (if present) is authoritative and supersedes `reduce`; otherwise `reduce`
+# (default "+") names ⊕. Both ⊗ and the identities are sourced here, never
+# from the file.
+function _aggregate_oplus_identity(semiring::Union{String,Nothing},
+                                   reduce::Union{String,Nothing})
+    if semiring !== nothing
+        sr = get(_SEMIRING_REGISTRY, semiring, nothing)
+        sr === nothing && throw(TreeWalkError("E_TREEWALK_UNKNOWN_SEMIRING",
+            "unknown semiring '$semiring'; the closed registry is " *
+            join(sort(collect(keys(_SEMIRING_REGISTRY))), ", ")))
+        return (sr.oplus, sr.zerobar)
+    end
+    r = reduce === nothing ? "+" : reduce
+    haskey(_OPLUS_IDENTITY, r) || throw(TreeWalkError("E_TREEWALK_ARRAYOP_UNKNOWN_REDUCE",
+        "unsupported reduce='$r'; expected one of +, *, max, min (or set `semiring`)"))
+    return (r, _OPLUS_IDENTITY[r])
+end
+
+# True for both the canonical `aggregate` op tag and its deprecated `arrayop`
+# alias (§5.6). The evaluator dispatches on the two identically.
+@inline _is_aggregate_op(op::AbstractString) = (op == "arrayop" || op == "aggregate")
+
+# Combine a vector of expressions with the semiring ⊕ (`oplus`), returning the
+# 0̄ identity (`zerobar`) for an empty reduction. Build-time helper for
+# expression-position aggregate expansion.
 # For "+" and "*" we emit an n-ary OpExpr (matching _eval_node_op hot paths).
 # For "max"/"min" we emit left-folded binary OpExprs to avoid adding n-ary
 # variants to _eval_node_op (which already handles them as ≥2-arg ops, but
 # the build-time fold keeps runtime dispatch uniform).
-function _combine_with_reducer(reduce_op::String, terms::Vector{Expr})
-    isempty(terms) && return NumExpr(reduce_op == "*" ? 1.0 : 0.0)
+function _combine_with_reducer(oplus::String, zerobar::Float64, terms::Vector{Expr})
+    isempty(terms) && return NumExpr(zerobar)
     length(terms) == 1 && return terms[1]
-    if reduce_op == "+"
+    if oplus == "+"
         return OpExpr("+", terms)
-    elseif reduce_op == "*"
+    elseif oplus == "*"
         return OpExpr("*", terms)
-    elseif reduce_op == "max"
+    elseif oplus == "max"
         result = terms[1]
         for i in 2:length(terms)
             result = OpExpr("max", Expr[result, terms[i]])
         end
         return result
-    elseif reduce_op == "min"
+    elseif oplus == "min"
         result = terms[1]
         for i in 2:length(terms)
             result = OpExpr("min", Expr[result, terms[i]])
         end
         return result
     else
-        throw(TreeWalkError("E_TREEWALK_ARRAYOP_UNKNOWN_REDUCE",
-                            "unsupported reduce='$reduce_op'; expected +, *, max, or min"))
+        # ⊕ ∈ {or} (bool_and_or) is index-set-producing (§5.5) — out of scope
+        # for the M1 array-producing tree-walk evaluator.
+        throw(TreeWalkError("E_TREEWALK_ARRAYOP_UNSUPPORTED_SEMIRING",
+            "array-producing aggregate with ⊕='$oplus' is not supported by the " *
+            "tree-walk evaluator (M1); only numeric semirings (+, *, max, min) " *
+            "reduce to an array — bool_and_or is index-set-producing (§5.5)"))
     end
+end
+
+# ============================================================
+# 5d. Index-set registry resolution (RFC semiring-faq-unified-ir §5.2)
+# ============================================================
+#
+# A `ranges[*]` value may be a dense `[lo,hi]`/`[lo,step,hi]` tuple (as today) or
+# an `IndexSetRef` `{from: <name>, of?: [...]}`. The pre-pass below resolves each
+# reference against the model's `index_sets` registry into the dense / dynamic
+# forms the existing range machinery already consumes, so the downstream einsum /
+# scalar-aggregate expansion (and the compiled `_Node` tree) is unchanged (§6):
+#   interval     → dense bound `[1, size]`
+#   categorical  → enumerated members `[1, |members|]`
+#   ragged       → per-cell dynamic bound `[1, index(offsets, of…)]` — exactly the
+#                  existing `_expand_int_range_dyn` mechanism + a `values` gather
+#                  authored in the body (§5.2). offsets/values are keyed factors (§5.4).
+
+# Resolve ONE IndexSetRef to a concrete `ranges` value. Errors clearly on an
+# undeclared name — no implicit interval is inferred, so a typo can't silently
+# become an empty set (§5.2).
+function _resolve_one_index_set_ref(ref::IndexSetRef, index_sets::AbstractDict)
+    haskey(index_sets, ref.from) || throw(TreeWalkError(
+        "E_TREEWALK_UNDECLARED_INDEX_SET",
+        "undeclared index set '$(ref.from)' referenced in ranges; declare it in " *
+        "the model's `index_sets` registry (no implicit interval is inferred)"))
+    is = index_sets[ref.from]
+    if is.kind == "interval"
+        is.size === nothing && throw(TreeWalkError("E_TREEWALK_INDEX_SET_INCOMPLETE",
+            "interval index set '$(ref.from)' requires a `size`"))
+        return Any[1, Int(is.size)]
+    elseif is.kind == "categorical"
+        is.members === nothing && throw(TreeWalkError("E_TREEWALK_INDEX_SET_INCOMPLETE",
+            "categorical index set '$(ref.from)' requires `members`"))
+        return Any[1, length(is.members)]
+    elseif is.kind == "ragged"
+        is.offsets === nothing && throw(TreeWalkError("E_TREEWALK_INDEX_SET_INCOMPLETE",
+            "ragged index set '$(ref.from)' requires an `offsets` backing factor"))
+        isempty(ref.of) && throw(TreeWalkError("E_TREEWALK_RAGGED_NO_PARENTS",
+            "ragged index set '$(ref.from)' referenced without `of` parent index " *
+            "variable(s); a ragged set's per-tuple length is a function of its parent"))
+        # Per-cell dynamic upper bound |set(of…)| = offsets[of…]. The member
+        # gather through `values` is authored in the body (e.g.
+        # index(values, of…, k)) and resolved by the existing const_array path.
+        idx_args = Expr[VarExpr(is.offsets)]
+        append!(idx_args, Expr[VarExpr(p) for p in ref.of])
+        return Any[1, OpExpr("index", idx_args)]
+    elseif is.kind == "derived"
+        throw(TreeWalkError("E_TREEWALK_DERIVED_INDEX_SET",
+            "derived index set '$(ref.from)' requires §5.5 distinct/skolem " *
+            "materialization; the tree-walk evaluator does not support it (M1)"))
+    end
+    throw(TreeWalkError("E_TREEWALK_UNKNOWN_INDEX_SET_KIND",
+        "unknown index set kind '$(is.kind)' for '$(ref.from)'"))
+end
+
+# True iff any node in the subtree carries a `ranges` entry that is an IndexSetRef.
+function _has_index_set_ref(expr::OpExpr)
+    if expr.ranges !== nothing
+        for v in values(expr.ranges)
+            v isa IndexSetRef && return true
+        end
+    end
+    any(_has_index_set_ref, expr.args) && return true
+    expr.expr_body !== nothing && _has_index_set_ref(expr.expr_body) && return true
+    expr.values !== nothing && any(_has_index_set_ref, expr.values) && return true
+    expr.lower !== nothing && _has_index_set_ref(expr.lower) && return true
+    expr.upper !== nothing && _has_index_set_ref(expr.upper) && return true
+    return false
+end
+_has_index_set_ref(::Expr) = false
+_has_index_set_ref(eq::Equation) = _has_index_set_ref(eq.lhs) || _has_index_set_ref(eq.rhs)
+
+# Rewrite every IndexSetRef in the subtree's ranges to its resolved concrete
+# form, rebuilding OpExpr nodes while preserving all fields.
+function _resolve_isr(expr::OpExpr, index_sets::AbstractDict)
+    new_args = Expr[_resolve_isr(a, index_sets) for a in expr.args]
+    new_body = expr.expr_body === nothing ? nothing : _resolve_isr(expr.expr_body, index_sets)
+    new_values = expr.values === nothing ? nothing :
+                 Expr[_resolve_isr(v, index_sets) for v in expr.values]
+    new_lower = expr.lower === nothing ? nothing : _resolve_isr(expr.lower, index_sets)
+    new_upper = expr.upper === nothing ? nothing : _resolve_isr(expr.upper, index_sets)
+    new_ranges = expr.ranges
+    if expr.ranges !== nothing && any(v -> v isa IndexSetRef, values(expr.ranges))
+        new_ranges = Dict{String,Any}()
+        for (k, v) in expr.ranges
+            new_ranges[k] = v isa IndexSetRef ?
+                _resolve_one_index_set_ref(v, index_sets) : v
+        end
+    end
+    return OpExpr(expr.op, new_args;
+                  wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
+                  lower=new_lower, upper=new_upper,
+                  output_idx=expr.output_idx, expr_body=new_body,
+                  reduce=expr.reduce, semiring=expr.semiring, ranges=new_ranges,
+                  regions=expr.regions, values=new_values,
+                  shape=expr.shape, perm=expr.perm, axis=expr.axis,
+                  fn=expr.fn, name=expr.name, value=expr.value,
+                  table=expr.table, table_axes=expr.table_axes, output=expr.output)
+end
+_resolve_isr(expr::Expr, ::AbstractDict) = expr
+_resolve_isr(eq::Equation, index_sets::AbstractDict) =
+    Equation(_resolve_isr(eq.lhs, index_sets), _resolve_isr(eq.rhs, index_sets);
+             _comment=eq._comment, region=eq.region)
+
+# Resolve all index-set references across a vector of equations. Returns the
+# input unchanged when no equation uses a `{from}` reference — preserving
+# byte-identical behaviour (and the compiled tree) for existing files (§6).
+function _resolve_index_set_ranges(eqs::Vector{Equation}, index_sets::AbstractDict)
+    any(_has_index_set_ref, eqs) || return eqs
+    return Equation[_resolve_isr(eq, index_sets) for eq in eqs]
 end
 
 # Resolve index(arrayop(...), k1, k2, ...) in expression position by
@@ -1262,7 +1458,7 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
         throw(TreeWalkError("E_TREEWALK_ARRAYOP_NO_BODY",
                             "arrayop requires an expr body"))
     ranges_dict = arrayop_expr.ranges === nothing ? Dict{String,Any}() : arrayop_expr.ranges
-    reduce_op = arrayop_expr.reduce === nothing ? "+" : String(arrayop_expr.reduce)
+    oplus, zerobar = _aggregate_oplus_identity(arrayop_expr.semiring, arrayop_expr.reduce)
 
     # Substitute concrete output-index values into body.
     k_vals = [_eval_const_int(a, Dict{String,Int}(), const_arrays) for a in idx_args]
@@ -1287,7 +1483,7 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
         term = _sub_preserving(sub_body, k_exprs)
         push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
     end
-    return _combine_with_reducer(reduce_op, terms)
+    return _combine_with_reducer(oplus, zerobar, terms)
 end
 
 # Resolve index(makearray(regions=[...], values=[...]), k1, k2, ...) by
@@ -1327,7 +1523,7 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
         throw(TreeWalkError("E_TREEWALK_ARRAYOP_NO_BODY",
                             "arrayop requires an expr body"))
     ranges_dict  = arrayop_expr.ranges === nothing ? Dict{String,Any}() : arrayop_expr.ranges
-    reduce_op    = arrayop_expr.reduce === nothing ? "+" : String(arrayop_expr.reduce)
+    oplus, zerobar = _aggregate_oplus_identity(arrayop_expr.semiring, arrayop_expr.reduce)
     contract_names = sort!(String[n for n in keys(ranges_dict)])
     # A contracted range bound may be a per-cell INDEX EXPRESSION (e.g. the
     # variable-valence unstructured reduction's `index(n_edges_on_cell, i)`).
@@ -1351,7 +1547,7 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
         term = _sub_preserving(body, k_exprs)
         push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
     end
-    return _combine_with_reducer(reduce_op, terms)
+    return _combine_with_reducer(oplus, zerobar, terms)
 end
 
 # Replace index(var, k1, k2, ...) nodes:
@@ -1394,7 +1590,7 @@ function _resolve_indices(expr::OpExpr,
         # Expand the arrayop at build time by substituting output_idx and
         # unrolling contracted indices (same strategy as the LHS-arrayop
         # equation path in build_evaluator, ~lines 280-370).
-        if first_arg isa OpExpr && first_arg.op == "arrayop"
+        if first_arg isa OpExpr && _is_aggregate_op(first_arg.op)
             return _resolve_index_of_arrayop(first_arg::OpExpr, expr.args[2:end],
                                              array_var_info, var_map, const_arrays)
         end
@@ -1449,7 +1645,7 @@ function _resolve_indices(expr::OpExpr,
                       wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                       lower=expr.lower, upper=expr.upper,
                       output_idx=expr.output_idx, expr_body=expr.expr_body,
-                      reduce=expr.reduce, ranges=expr.ranges,
+                      reduce=expr.reduce, semiring=expr.semiring, ranges=expr.ranges,
                       regions=expr.regions, values=expr.values,
                       shape=expr.shape, perm=expr.perm, axis=expr.axis,
                       fn=expr.fn, name=expr.name, value=expr.value)
@@ -1484,10 +1680,10 @@ function _resolve_indices(expr::OpExpr,
             return OpExpr("*", Expr[VarExpr("d$(iv)"), OpExpr("+", cells)])
         end
     end
-    # Scalar arrayop (empty output_idx) in expression position: expand inline.
-    # Non-scalar arrayop (non-empty output_idx) must be wrapped in index() —
-    # handled by the _resolve_indices index-of-arrayop branch above.
-    if expr.op == "arrayop"
+    # Scalar aggregate (empty output_idx) in expression position: expand inline.
+    # Non-scalar aggregate (non-empty output_idx) must be wrapped in index() —
+    # handled by the _resolve_indices index-of-aggregate branch above.
+    if _is_aggregate_op(expr.op)
         output_idx_raw = expr.output_idx === nothing ? Any[] : expr.output_idx
         output_idx_strs = [s for s in output_idx_raw if s isa AbstractString]
         if isempty(output_idx_strs)
@@ -1505,7 +1701,7 @@ function _resolve_indices(expr::OpExpr,
                   wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                   lower=expr.lower, upper=expr.upper,
                   output_idx=expr.output_idx, expr_body=new_body,
-                  reduce=expr.reduce, ranges=expr.ranges,
+                  reduce=expr.reduce, semiring=expr.semiring, ranges=expr.ranges,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value)
@@ -1534,7 +1730,7 @@ function _detect_array_vars(equations::Vector{Equation},
             if first_arg isa VarExpr && first_arg.name in state_var_names
                 push!(detected, first_arg.name)
             end
-        elseif lhs isa OpExpr && lhs.op == "arrayop"
+        elseif lhs isa OpExpr && _is_aggregate_op(lhs.op)
             body = lhs.expr_body
             if body isa OpExpr && body.op == "D" && !isempty(body.args)
                 inner = body.args[1]
@@ -1598,8 +1794,8 @@ function _scan_lhs_cells!(cells, lhs::Expr, array_var_names::Set{String})
         catch; end
         return
     end
-    if lhs isa OpExpr && lhs.op == "arrayop"
-        # arrayop(expr=D(index(var, idx_exprs...)), output_idx=[...], ranges={...})
+    if lhs isa OpExpr && _is_aggregate_op(lhs.op)
+        # aggregate(expr=D(index(var, idx_exprs...)), output_idx=[...], ranges={...})
         lhs_body = lhs.expr_body
         lhs_body === nothing && return
         lhs_body isa OpExpr && lhs_body.op == "D" && lhs_body.wrt == "t" &&
@@ -1647,7 +1843,7 @@ end
 
 # Identify arrayop(D(index(var, ...)), ...) — array-loop derivative LHS.
 function _is_arrayop_D_lhs(lhs)
-    lhs isa OpExpr && lhs.op == "arrayop" || return false
+    lhs isa OpExpr && _is_aggregate_op(lhs.op) || return false
     body = lhs.expr_body
     body === nothing && return false
     return body isa OpExpr && body.op == "D" && body.wrt == "t" &&
@@ -1658,7 +1854,7 @@ end
 # Extract the scalar body from an arrayop node (or return expr unchanged).
 # Used to unwrap the RHS of an arrayop equation.
 function _extract_arrayop_body(expr::Expr)
-    if expr isa OpExpr && expr.op == "arrayop"
+    if expr isa OpExpr && _is_aggregate_op(expr.op)
         expr.expr_body !== nothing && return expr.expr_body
     end
     return expr

@@ -21,6 +21,33 @@ function _emit_stoich(x::Real)
     return Float64(x)
 end
 
+# Serialize one `ranges[*]` value: either a dense integer / expression tuple
+# (as today) or an index-set reference object (RFC §5.2).
+function _serialize_range_value(v)
+    if v isa IndexSetRef
+        d = Dict{String,Any}("from" => v.from)
+        isempty(v.of) || (d["of"] = v.of)
+        return d
+    end
+    return [x isa Expr ? serialize_expression(x) : x for x in v]
+end
+
+"""
+    serialize_index_set(is::IndexSet) -> Dict{String,Any}
+
+Serialize one `index_sets` registry entry (RFC §5.2). Mirrors `coerce_index_set`.
+"""
+function serialize_index_set(is::IndexSet)::Dict{String,Any}
+    d = Dict{String,Any}("kind" => is.kind)
+    is.size !== nothing && (d["size"] = is.size)
+    is.members !== nothing && (d["members"] = is.members)
+    is.of !== nothing && (d["of"] = is.of)
+    is.offsets !== nothing && (d["offsets"] = is.offsets)
+    is.values !== nothing && (d["values"] = is.values)
+    is.from_faq !== nothing && (d["from_faq"] = is.from_faq)
+    return d
+end
+
 """
     serialize_expression(expr::Expr) -> Any
 
@@ -67,10 +94,12 @@ function serialize_expression(expr::Expr)
         if expr.reduce !== nothing
             result["reduce"] = expr.reduce
         end
+        if expr.semiring !== nothing
+            result["semiring"] = expr.semiring
+        end
         if expr.ranges !== nothing
             result["ranges"] = Dict{String,Any}(
-                k => [x isa Expr ? serialize_expression(x) : x for x in v]
-                for (k, v) in expr.ranges
+                k => _serialize_range_value(v) for (k, v) in expr.ranges
             )
         end
         if expr.regions !== nothing
@@ -336,6 +365,12 @@ function serialize_model(model::Model)::Dict{String,Any}
 
     if model.domain !== nothing
         result["domain"] = model.domain
+    end
+
+    if !isempty(model.index_sets)
+        result["index_sets"] = Dict{String,Any}(
+            k => serialize_index_set(v) for (k, v) in model.index_sets
+        )
     end
 
     if model.tolerance !== nothing

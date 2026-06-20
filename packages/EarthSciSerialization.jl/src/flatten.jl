@@ -352,6 +352,7 @@ function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String}):
         output_idx=expr.output_idx,
         expr_body=new_expr_body,
         reduce=expr.reduce,
+        semiring=expr.semiring,
         ranges=expr.ranges,
         regions=expr.regions,
         values=new_values,
@@ -1352,13 +1353,13 @@ function _scan_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
         return
     end
 
-    if expr.op == "arrayop"
+    if expr.op == "arrayop" || expr.op == "aggregate"
         # Extend idx_env with any explicit ranges declared on this node.
         new_env = copy(idx_env)
         if expr.ranges !== nothing
             for (name, r) in expr.ranges
                 lo, hi = _range_bounds(r)
-                lo === nothing && continue  # expression-valued bounds — skip for static shape analysis
+                lo === nothing && continue  # expression-valued / index-set bounds — skip for static shape analysis
                 new_env[name] = lo:hi
             end
         end
@@ -1391,6 +1392,10 @@ function _scan_shape!(shapes::Dict{String,Vector{UnitRange{Int}}},
     end
 end
 
+# An index-set reference (RFC §5.2) carries no statically-known bound here
+# (interval size / categorical members / ragged length live in the registry,
+# resolved by the evaluator) — skip it for static shape analysis.
+_range_bounds(::IndexSetRef) = (nothing, nothing)
 function _range_bounds(r::AbstractVector)
     all(x -> x isa Integer, r) || return nothing, nothing  # expression-valued stop — skip for static analysis
     if length(r) == 2

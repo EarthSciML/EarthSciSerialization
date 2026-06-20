@@ -58,13 +58,13 @@ function parse_expression(data::Any)::Expr
     elseif isa(data, Dict) && haskey(data, "op")
         return _parse_op_dict(data, "op", "args", "wrt", "dim",
                               "var", "lower", "upper",
-                              "output_idx", "expr", "reduce", "ranges",
+                              "output_idx", "expr", "reduce", "semiring", "ranges",
                               "regions", "values", "shape", "perm", "axis", "fn",
                               "name", "value", "table", "axes", "output")
     elseif hasfield(typeof(data), :op) || (hasmethod(haskey, (typeof(data), String)) && haskey(data, "op"))
         return _parse_op_dict(data, :op, :args, :wrt, :dim,
                               :var, :lower, :upper,
-                              :output_idx, :expr, :reduce, :ranges,
+                              :output_idx, :expr, :reduce, :semiring, :ranges,
                               :regions, :values, :shape, :perm, :axis, :fn,
                               :name, :value, :table, :axes, :output)
     else
@@ -76,7 +76,7 @@ end
 # arguments are passed as strings for Dict and symbols for JSON3.Object.
 function _parse_op_dict(data, kop, kargs, kwrt, kdim,
                         kint_var, klower, kupper,
-                        koutput_idx, kexpr, kreduce, kranges,
+                        koutput_idx, kexpr, kreduce, ksemiring, kranges,
                         kregions, kvalues, kshape, kperm, kaxis, kfn,
                         kname, kvalue, ktable, ktable_axes, koutput)
     op = string(data[kop])
@@ -127,6 +127,8 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     expr_body = raw_expr === nothing ? nothing : parse_expression(raw_expr)
     reduce_val = get(data, kreduce, nothing)
     reduce_str = reduce_val === nothing ? nothing : string(reduce_val)
+    semiring_val = get(data, ksemiring, nothing)
+    semiring_str = semiring_val === nothing ? nothing : string(semiring_val)
     ranges = _coerce_ranges(get(data, kranges, nothing))
     regions = _coerce_regions(get(data, kregions, nothing))
     raw_values = get(data, kvalues, nothing)
@@ -178,6 +180,7 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
         dim=(dim === nothing ? nothing : string(dim)),
         int_var=int_var_str, lower=lower_expr, upper=upper_expr,
         output_idx=output_idx, expr_body=expr_body, reduce=reduce_str,
+        semiring=semiring_str,
         ranges=ranges, regions=regions, values=values_vec, shape=shape_vec,
         perm=perm_vec, axis=axis_int, fn=fn_str,
         name=name_str, value=value_native,
@@ -193,16 +196,37 @@ function _coerce_output_idx(data)
     return out
 end
 
+# Robust accessor for a nested JSON value that may be a Dict (string or symbol
+# keys) or a JSON3.Object (symbol keys). Symbol-first so JSON3.Object works;
+# falls back to the string key for Dict{String}.
+function _json_get(v, key::AbstractString)
+    r = get(v, Symbol(key), nothing)
+    r === nothing || return r
+    return get(v, key, nothing)
+end
+
 function _coerce_ranges(data)
     data === nothing && return nothing
     result = Dict{String,Any}()
     for (k, v) in pairs(data)
         sv = string(k)
-        v isa AbstractVector || throw(ArgumentError("ranges entry `$sv` must be an array"))
-        if all(x -> x isa Number, v)
-            result[sv] = Any[Int(x) for x in v]
+        if v isa AbstractVector
+            # Dense integer tuple [lo, hi] / [lo, step, hi] (as today).
+            if all(x -> x isa Number, v)
+                result[sv] = Any[Int(x) for x in v]
+            else
+                result[sv] = Any[x isa Number ? Int(x) : parse_expression(x) for x in v]
+            end
         else
-            result[sv] = Any[x isa Number ? Int(x) : parse_expression(x) for x in v]
+            # Index-set reference (RFC semiring-faq-unified-ir §5.2):
+            # { "from": <index_sets key>, "of"?: [parent index names] }.
+            from_val = _json_get(v, "from")
+            from_val === nothing && throw(ArgumentError(
+                "ranges entry `$sv` must be a dense array [lo,hi]/[lo,step,hi] " *
+                "or an index-set reference object with a `from` key"))
+            of_raw = _json_get(v, "of")
+            of_names = of_raw === nothing ? String[] : String[string(x) for x in of_raw]
+            result[sv] = IndexSetRef(string(from_val); of=of_names)
         end
     end
     return result
@@ -792,6 +816,16 @@ function coerce_model(data::Any)::Model
     system_kind = haskey(data, :system_kind) && data.system_kind !== nothing ?
         string(data.system_kind) : nothing
 
+    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
+    # Accepted as a Model-level key (the canonical site that unifies ESM
+    # domain.spatial dims and ESI index_sets). Empty when absent.
+    index_sets = Dict{String,IndexSet}()
+    if haskey(data, :index_sets) && data.index_sets !== nothing
+        for (k, v) in pairs(data.index_sets)
+            index_sets[string(k)] = coerce_index_set(v)
+        end
+    end
+
     # Backwards compatibility: handle old 'events' field
     if haskey(data, :events)
         mixed_events = [coerce_event(ev) for ev in data.events]
@@ -803,6 +837,7 @@ function coerce_model(data::Any)::Model
                      domain=base.domain,
                      tolerance=base.tolerance,
                      tests=base.tests,
+                     index_sets=index_sets,
                      initialization_equations=initialization_equations,
                      guesses=guesses,
                      system_kind=system_kind)
@@ -845,7 +880,8 @@ function coerce_model(data::Any)::Model
                  tests=tests,
                  initialization_equations=initialization_equations,
                  guesses=guesses,
-                 system_kind=system_kind)
+                 system_kind=system_kind,
+                 index_sets=index_sets)
 end
 
 """
@@ -1641,6 +1677,34 @@ function coerce_event(data::AbstractDict)::CouplingEvent
                         conditions=conditions, trigger=trigger, affect_neg=affect_neg,
                         discrete_parameters=discrete_parameters, root_find=root_find,
                         reinitialize=reinitialize, description=description)
+end
+
+"""
+    coerce_index_set(data::Any) -> IndexSet
+
+Coerce one JSON `index_sets` registry entry into an `IndexSet`
+(RFC semiring-faq-unified-ir §5.2). Kind-conditional fields (`size`, `members`,
+`of`/`offsets`/`values`, `from_faq`) are read when present; completeness per kind
+is enforced by JSON-schema validation, not here.
+"""
+function coerce_index_set(data::Any)::IndexSet
+    kind_raw = _json_get(data, "kind")
+    kind_raw === nothing &&
+        throw(ParseError("index_sets entry requires a `kind` field"))
+    size_raw = _json_get(data, "size")
+    size_val = size_raw === nothing ? nothing : Int(size_raw)
+    members_raw = _json_get(data, "members")
+    members = members_raw === nothing ? nothing : String[string(x) for x in members_raw]
+    of_raw = _json_get(data, "of")
+    of = of_raw === nothing ? nothing : String[string(x) for x in of_raw]
+    offsets_raw = _json_get(data, "offsets")
+    offsets = offsets_raw === nothing ? nothing : string(offsets_raw)
+    values_raw = _json_get(data, "values")
+    values = values_raw === nothing ? nothing : string(values_raw)
+    from_faq_raw = _json_get(data, "from_faq")
+    from_faq = from_faq_raw === nothing ? nothing : string(from_faq_raw)
+    return IndexSet(string(kind_raw); size=size_val, members=members, of=of,
+                    offsets=offsets, values=values, from_faq=from_faq)
 end
 
 """

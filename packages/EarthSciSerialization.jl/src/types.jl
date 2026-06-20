@@ -66,8 +66,16 @@ Operator expression node containing:
 - `expr_body`: for `arrayop`, the scalar body evaluated at each index point
   (a nested `Expr` tree). Named `expr_body` — not `expr` — to avoid shadowing
   the `EarthSciSerialization.Expr` abstract type.
-- `reduce`: for `arrayop`, the reduction operator applied to contracted
-  indices (one of "+", "*", "max", "min"; default "+").
+- `reduce`: for `arrayop`/`aggregate`, the reduction operator applied to
+  contracted indices (one of "+", "*", "max", "min"; default "+"). Names the
+  semiring ⊕ only; it is the shorthand retained for files that omit `semiring`
+  (RFC semiring-faq-unified-ir §5.1).
+- `semiring`: for `arrayop`/`aggregate`, the named semiring `(⊕, ⊗)` with
+  normative identity elements that parameterizes the reduction (closed registry:
+  "sum_product", "max_product", "min_sum", "max_sum", "bool_and_or"). Absent ⇒
+  "sum_product", reproducing today's einsum semantics. When present it supersedes
+  `reduce`; the ⊕/⊗ operators and BOTH identities come from the registry table,
+  never the file (RFC §5.1).
 - `ranges`: for `arrayop`, map from index symbol name to iteration range
   (vector of 2 or 3 ints `[start, stop]` / `[start, step, stop]`).
 - `regions`: for `makearray`, list of sub-region boxes, each a list of
@@ -97,6 +105,7 @@ struct OpExpr <: Expr
     output_idx::Union{Vector{Any},Nothing}
     expr_body::Union{Expr,Nothing}
     reduce::Union{String,Nothing}
+    semiring::Union{String,Nothing}
     ranges::Union{Dict{String,Any},Nothing}
     regions::Union{Vector{Vector{Vector{Int}}},Nothing}
     values::Union{Vector{Expr},Nothing}
@@ -121,6 +130,7 @@ struct OpExpr <: Expr
            wrt=nothing, dim=nothing,
            int_var=nothing, lower=nothing, upper=nothing,
            output_idx=nothing, expr_body=nothing, reduce=nothing,
+           semiring=nothing,
            ranges=nothing, regions=nothing, values=nothing,
            shape=nothing, perm=nothing, axis=nothing, fn=nothing,
            name=nothing, value=nothing,
@@ -130,7 +140,8 @@ struct OpExpr <: Expr
            # so internal helpers that still pass it through don't break
            # mid-migration; the field is no longer stored or serialized.
            handler_id=nothing) =
-        new(op, args, wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce, ranges,
+        new(op, args, wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce,
+            semiring, ranges,
             regions, values, shape, perm, axis, fn, name, value,
             table, table_axes, output)
 end
@@ -460,6 +471,51 @@ struct Test
 end
 
 """
+    IndexSet(kind; size, members, of, offsets, values, from_faq)
+
+A declared index set in a model's document-scoped `index_sets` registry
+(RFC semiring-faq-unified-ir §5.2). Unifies ESM grid dims and ESI categorical
+dims under one shape. `kind` is one of:
+
+- `"interval"`   — dense integer axis; `size` gives its length.
+- `"categorical"`— enumerated members; `members` is the ordered member list.
+- `"ragged"`     — data-dependent inner set (e.g. the edges of a cell); `of`
+  names the parent index set(s), `offsets` the length/CSR-offset backing factor,
+  and `values` the member-id backing factor (both keyed factors, §5.4).
+- `"derived"`    — materialized from another FAQ (§5.5); `from_faq` is its node
+  id. Not evaluated by the tree-walk evaluator in M1.
+"""
+struct IndexSet
+    kind::String
+    size::Union{Int,Nothing}
+    members::Union{Vector{String},Nothing}
+    of::Union{Vector{String},Nothing}
+    offsets::Union{String,Nothing}
+    values::Union{String,Nothing}
+    from_faq::Union{String,Nothing}
+
+    IndexSet(kind::AbstractString; size=nothing, members=nothing, of=nothing,
+             offsets=nothing, values=nothing, from_faq=nothing) =
+        new(String(kind), size, members, of, offsets, values, from_faq)
+end
+
+"""
+    IndexSetRef(from; of)
+
+A reference to a declared `IndexSet`, used as a `ranges[*]` value in place of a
+dense `[lo, hi]` / `[lo, step, hi]` integer tuple (RFC §5.2). `from` is the
+registry key; `of` lists the parent index *variable* names for a ragged /
+dependent inner set (e.g. `of=["i"]` for the edges of cell `i`).
+"""
+struct IndexSetRef
+    from::String
+    of::Vector{String}
+
+    IndexSetRef(from::AbstractString; of::AbstractVector=String[]) =
+        new(String(from), String[String(x) for x in of])
+end
+
+"""
     Model
 
 ODE-based model component containing variables, equations, and optional subsystems.
@@ -477,6 +533,10 @@ struct Model
     initialization_equations::Vector{Equation}
     guesses::Dict{String,Union{Float64,Expr}}
     system_kind::Union{String,Nothing}
+    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
+    # Maps a name to its IndexSet declaration; `ranges[*]` `{from: <name>}`
+    # references resolve against it. Empty when the model declares none.
+    index_sets::Dict{String,IndexSet}
 
     # Primary constructor with separate event arrays
     Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
@@ -485,11 +545,13 @@ struct Model
           domain=nothing, tolerance=nothing, tests=Test[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
-          system_kind=nothing) =
+          system_kind=nothing,
+          index_sets=Dict{String,IndexSet}()) =
         new(Dict{String,ModelVariable}(variables), equations,
             discrete_events, continuous_events, Dict{String,Model}(subsystems),
             domain, tolerance, tests,
-            initialization_equations, guesses, system_kind)
+            initialization_equations, guesses, system_kind,
+            Dict{String,IndexSet}(index_sets))
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -505,7 +567,8 @@ struct Model
                    tests=Test[],
                    initialization_equations=Equation[],
                    guesses=Dict{String,Union{Float64,Expr}}(),
-                   system_kind=nothing)
+                   system_kind=nothing,
+                   index_sets=Dict{String,IndexSet}())
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -522,7 +585,8 @@ struct Model
         return new(Dict{String,ModelVariable}(variables), equations,
                    discrete_events, continuous_events, Dict{String,Model}(subsystems),
                    domain, tolerance, tests,
-                   initialization_equations, guesses, system_kind)
+                   initialization_equations, guesses, system_kind,
+                   Dict{String,IndexSet}(index_sets))
     end
 end
 

@@ -51,6 +51,7 @@ using JSON3
     include("tree_walk_test.jl")
     include("tree_walk_e2e_discretize_test.jl")
     include("tree_walk_arrayop_test.jl")
+    include("tree_walk_semiring_test.jl")
     include("cartesian_2d_diffusion_e2e_test.jl")
     include("latlon_diffusion_e2e_test.jl")
     include("closed_functions_test.jl")
