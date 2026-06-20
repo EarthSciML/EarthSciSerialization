@@ -1,11 +1,14 @@
 # Cross-binding conformance tests for the M1 semiring / index-set worked
-# examples (bead ess-my4.1.5).
+# examples (bead ess-my4.1.5) and the M2 value-equality join.on worked examples
+# (bead ess-my4.2.5).
 #
-# Loads the four shared fixtures under tests/valid/aggregate/ that carry inline
-# `tests` blocks — the M1-expressible worked examples — and evaluates each
-# through `build_evaluator`. Julia, Rust, and Python all check the SAME inline
-# expected values baked into these shared fixtures, so agreement here is the
-# cross-binding semiring-equivalence proof.
+# Loads the shared fixtures under tests/valid/aggregate/ that carry inline
+# `tests` blocks and evaluates each through `build_evaluator`. Julia, Rust, and
+# Python all check the SAME inline expected values baked into these shared
+# fixtures, so agreement here is the cross-binding semiring-equivalence proof.
+# (The M2 many-to-many fixtures are Julia/Python only — the data-derived
+# value-equality engine is M3 in the dense Rust evaluator, which sees only the
+# degenerate positional join; see the per-testset comments below.)
 #
 # Each fixture is a constant-RHS contraction from zero initial conditions, so
 # the derivative du = f!(u0) the evaluator returns IS the trajectory value at
@@ -13,7 +16,7 @@
 # no ODE integrator dependency — and the asserted numbers mirror the fixtures'
 # inline `tests[].assertions[].expected` (which Rust/Python check via simulate).
 #
-# RFC: docs/content/rfcs/semiring-faq-unified-ir.md §5.1 / §5.2 / §7.1.
+# RFC: docs/content/rfcs/semiring-faq-unified-ir.md §5.1 / §5.2 / §5.3 / §5.7 / §7.1 / §7.2.
 
 using Test
 using EarthSciSerialization
@@ -95,4 +98,74 @@ end
     end
     @test err isa EarthSciSerialization.TreeWalkError
     @test occursin("ghost_cells", sprint(showerror, err))
+end
+
+# M2 join.on conformance (bead ess-my4.2.5). Evaluates the shared join fixtures
+# under tests/valid/aggregate/. Julia and Python check the SAME inline expected
+# values; Rust additionally checks the degenerate fixture (the value-equality
+# m·n engine is M3 in Rust, so the m2m fixtures are Julia/Python here). The
+# RFC §5.3 / §5.7 / §7.2 semantics: inner-only; m·n defined; output in declared
+# index order (permutation-invariant value); float/null keys rejected at build.
+@testset "join.on worked-example conformance (ess-my4.2.5)" begin
+    # §7.2 MOVES running-exhaust contraction as the degenerate positional join:
+    # the join key columns are the loop indices, so the gate admits every
+    # (sourceType x fuelType) combination — byte-identical to the join-free
+    # contraction. running_exhaust[p] = p · Σ_{src,fuel} src·fuel = 9p.
+    @testset "join_moves_running_exhaust (degenerate positional)" begin
+        du, vmap = _eval_aggregate_fixture(
+            "join_moves_running_exhaust.esm", "MovesRunningExhaust",
+            ["running_exhaust[1]", "running_exhaust[2]"])
+        @test du[vmap["running_exhaust[1]"]] ≈ 9.0
+        @test du[vmap["running_exhaust[2]"]] ≈ 18.0
+    end
+
+    # True value-equality many-to-many join: the shared key "coal" (multiplicity
+    # 2 left, 2 right) contributes 2·2 = 4 product terms; "oil"/"gas" unmatched.
+    # The constant body 1 makes the reduction COUNT admitted combinations = 4
+    # (vs the join-free full product 3·3 = 9), pinning the m·n cardinality.
+    @testset "join_disaggregation_m2m (m·n cardinality)" begin
+        du, vmap = _eval_aggregate_fixture(
+            "join_disaggregation_m2m.esm", "Disaggregation", ["count"])
+        @test du[vmap["count"]] ≈ 4.0
+    end
+
+    # Determinism: the SAME join with both key sets' members reordered yields the
+    # identical count (4) — value-equality matches by member value, not declared
+    # position (§5.7 rule 5). Agreement with the canonical fixture above is the
+    # permuted-input -> identical-result proof.
+    @testset "join_disaggregation_m2m_permuted (determinism)" begin
+        du, vmap = _eval_aggregate_fixture(
+            "join_disaggregation_m2m_permuted.esm", "DisaggregationPermuted", ["count"])
+        @test du[vmap["count"]] ≈ 4.0
+    end
+
+    # Build-time key-type rejection (RFC §5.3 / §5.7 rule 1). These shared
+    # fixtures live in tests/invalid/aggregate/build_time/ — schema-valid (so the
+    # Go/TS schema harness, which globs the parent dir non-recursively, skips
+    # them) but rejected by the evaluating bindings at build. A float member or a
+    # null member in a join key set must make `build_evaluator` raise, never
+    # silently bucket on a non-portable key.
+    @testset "build-time key-type rejection" begin
+        function _build_error_msg(filename, model_name)
+            path = joinpath(_AGG_REPO_ROOT, "tests", "invalid", "aggregate",
+                            "build_time", filename)
+            @test isfile(path)
+            file = EarthSciSerialization.load(path)
+            try
+                build_evaluator(file; model_name=model_name,
+                                initial_conditions=Dict("count" => 0.0))
+                return nothing
+            catch e
+                return sprint(showerror, e)
+            end
+        end
+
+        msg_float = _build_error_msg("float_join_key.esm", "FloatJoinKey")
+        @test msg_float !== nothing            # rejected, not silently evaluated
+        @test occursin("float", lowercase(msg_float))
+
+        msg_null = _build_error_msg("null_in_key_column.esm", "NullInKeyColumn")
+        @test msg_null !== nothing             # rejected, not silently evaluated
+        @test occursin("null", lowercase(msg_null))
+    end
 end

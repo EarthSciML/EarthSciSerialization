@@ -1998,5 +1998,21 @@
     "resolver_only": true,
     "resolver_error_code": "E_REF_UNDECLARED_INDEX_SET",
     "notes": "Resolver-level invalid (bead ess-my4.1.6; RFC semiring-faq-unified-ir §5.2). The aggregate `ranges` entry references { \"from\": \"ghost_cells\" }, a name absent from the model `index_sets` registry (which declares only \"cells\"). The document is SCHEMA-VALID, so schema-only bindings (TypeScript, Go) accept it (is_valid: true) — their invalid-fixture loops read `resolver_only` and assert schema acceptance instead of rejection. The evaluating bindings reject the undeclared name: Julia build_evaluator -> TreeWalkError E_TREEWALK_UNDECLARED_INDEX_SET; Rust resolve_aggregate_ranges -> CompileError::InterpreterBuildError; Python build_reference_graph -> ReferenceResolutionError E_REF_UNDECLARED_INDEX_SET."
+  },
+  "float_join_key.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "resolver_only": true,
+    "resolver_error_code": "FloatKeyError",
+    "notes": "Resolver/build-time invalid (bead ess-my4.2.5; RFC semiring-faq-unified-ir §5.3 / §5.7 rule 1). The categorical index set `keys` declares FLOAT members [1.5, 2.5] used as a value-equality join key column. Floating-point join keys are forbidden because equality on a float repr is not portable across bindings (CONFORMANCE_SPEC.md §5.5.1 rule 1). The document is SCHEMA-VALID — the schema's categorical `members` is an untyped array — so schema-only bindings (TypeScript, Go) accept it (is_valid: true): the TS conformance.test.ts recursive invalid sweep reads `resolver_only` and asserts schema acceptance, and the Go aggregate glob (tests/invalid/aggregate/*.esm) is non-recursive so it never descends into the build_time/ subdir. The evaluating bindings reject it at build: Rust Key::try_from_json -> FloatKeyError ('float … forbidden in a relational key'); Julia build_evaluator -> TreeWalkError (message names the float); Python simulate -> raises / success=False. Lives under tests/invalid/aggregate/build_time/."
+  },
+  "null_in_key_column.esm": {
+    "schema_errors": [],
+    "structural_errors": [],
+    "is_valid": true,
+    "resolver_only": true,
+    "resolver_error_code": "FloatKeyError",
+    "notes": "Resolver/build-time invalid (bead ess-my4.2.5; RFC semiring-faq-unified-ir §5.3). The categorical index set `keys` declares members [\"x\", null]; emitting a NULL into a value-equality join key column is a front-end error surfaced at build time, never silently dropped (a null key is unmatchable and nulls never compare equal). The document is SCHEMA-VALID — the schema's categorical `members` is an untyped array — so schema-only bindings (TypeScript, Go) accept it (is_valid: true): the TS conformance.test.ts recursive invalid sweep reads `resolver_only` and asserts schema acceptance, and the Go aggregate glob (tests/invalid/aggregate/*.esm) is non-recursive so it never descends into the build_time/ subdir. The evaluating bindings reject it at build: Rust Key::try_from_json -> FloatKeyError ('unsupported relational key component null'); Julia build_evaluator -> TreeWalkError (message names null); Python simulate -> raises / success=False. Lives under tests/invalid/aggregate/build_time/."
   }
 }

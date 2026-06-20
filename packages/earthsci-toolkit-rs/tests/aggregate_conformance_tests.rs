@@ -197,3 +197,24 @@ fn max_product_saturation() {
 fn categorical_index_set() {
     run_named("categorical_index_set.esm");
 }
+
+/// §7.2 MOVES running-exhaust contraction as the DEGENERATE POSITIONAL join:
+/// the `on` key columns are the aggregate's own loop indices, so the
+/// value-equality gate admits every (sourceType x fuelType) combination — the
+/// existing dense einsum combines the factors positionally and the compiled
+/// artifact is byte-identical to the join-free form (RFC §5.3 / §7.2). This is
+/// the join form all three evaluating bindings agree on, so the same inline
+/// `expected` (running_exhaust[1]=9, [2]=18) is checked here as in Julia/Python.
+///
+/// The sibling `join_disaggregation_m2m{,_permuted}.esm` fixtures are
+/// deliberately NOT registered here: they exercise a TRUE value-equality join
+/// over duplicate data-derived keys (m·n cardinality), which the dense Rust
+/// evaluator does not yet drive — it would treat the loop-index key column as
+/// the positional no-op and compute the full product, not the gated m·n. That
+/// engine is M3 (see `src/join.rs`); Julia and Python evaluate those fixtures,
+/// and their inline `expected` acts as a tripwire if they are wired in here
+/// before the value-equality engine lands.
+#[test]
+fn join_moves_running_exhaust() {
+    run_named("join_moves_running_exhaust.esm");
+}

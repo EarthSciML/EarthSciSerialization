@@ -191,3 +191,59 @@ def test_undeclared_from_name_rejected_by_resolver() -> None:
         build_reference_graph(model, model_name)
     assert exc.value.code == E_REF_UNDECLARED_INDEX_SET
     assert "ghost_cells" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Build-time key-type rejection (M2 join.on; bead ess-my4.2.5)
+# ---------------------------------------------------------------------------
+
+_BUILD_TIME_INVALID_DIR = (
+    Path(__file__).resolve().parents[3]  # repo root
+    / "tests"
+    / "invalid"
+    / "aggregate"
+    / "build_time"
+)
+
+
+def _build_time_invalid_fixtures() -> List[Path]:
+    """Join fixtures that are schema-VALID but must be rejected at build time."""
+    if not _BUILD_TIME_INVALID_DIR.is_dir():
+        return []
+    return sorted(_BUILD_TIME_INVALID_DIR.glob("*.esm"))
+
+
+def test_build_time_invalid_fixtures_present() -> None:
+    """The float-key and null-key build-time fixtures must be present."""
+    assert len(_build_time_invalid_fixtures()) >= 2, (
+        "expected the float_join_key / null_in_key_column build-time fixtures "
+        f"under {_BUILD_TIME_INVALID_DIR}"
+    )
+
+
+@pytest.mark.parametrize(
+    "fixture_path", _build_time_invalid_fixtures(), ids=lambda p: p.name
+)
+def test_build_time_invalid_join_key_rejected(fixture_path: Path) -> None:
+    """A float or null member in a join key column is schema-valid but a
+    build-time error (RFC semiring-faq-unified-ir §5.3 / §5.7 rule 1): equality
+    on a float repr is not portable, and a null emitted into a key column is a
+    front-end error. These live under ``build_time/`` (skipped by the Go/TS
+    schema harness, which globs the parent directory non-recursively) and must
+    be rejected by the evaluating binding — ``simulate`` either raises or
+    reports ``success=False``, never silently bucketing on a non-portable key.
+    """
+    esm_file = load(fixture_path)
+    rejected = False
+    try:
+        result = simulate(
+            esm_file, tspan=(0.0, 1.0), initial_conditions={"count": 0.0}
+        )
+        rejected = not result.success
+    except Exception:
+        # A raised interpreter/simulation error is an equally valid rejection.
+        rejected = True
+    assert rejected, (
+        f"{fixture_path.name}: expected a build-time rejection of the invalid "
+        "join key, but simulate succeeded"
+    )
