@@ -366,6 +366,41 @@ run_cadence_conformance_julia() {
             --output "$OUTPUT_DIR/cadence/julia_report.json"
 }
 
+# Drive the REAL Rust partition pass (ess-my4.3.8) through the cadence harness:
+# the adapter binary (packages/earthsci-toolkit-rs/src/bin/earthsci-cadence-adapter-rust.rs)
+# runs the Rust Cadence module over the §6.1 fixtures and the runner asserts its
+# class map, materialization set, and CONST-folded buffers are byte-identical to
+# the golden. Rust is `bindings_optional`, so a missing adapter is skipped but a
+# MISMATCH fails. (Mirrors run_cadence_conformance_julia; ess-my4.3.10.)
+run_cadence_conformance_rust() {
+    if ! check_language_availability "rust" "$RUST_DIR"; then
+        warning "Rust unavailable — skipping Rust cadence-partition producer check"
+        return 0
+    fi
+    log "Running cadence-partition conformance with the Rust partition pass..."
+    EARTHSCI_CADENCE_ADAPTER_RUST="cargo run --quiet --manifest-path $RUST_DIR/Cargo.toml --bin earthsci-cadence-adapter-rust --" \
+        python3 "$SCRIPT_DIR/run-cadence-conformance.py" \
+            --bindings rust \
+            --output "$OUTPUT_DIR/cadence/rust_report.json"
+}
+
+# Drive the REAL Python partition pass (ess-my4.3.9) through the cadence harness:
+# the adapter (packages/earthsci_toolkit/src/earthsci_toolkit/cli/cadence_adapter.py)
+# runs the Python Cadence module over the §6.1 fixtures and the runner asserts the
+# same golden. Python is `bindings_optional` — missing adapter skipped, mismatch
+# fails. (Mirrors run_cadence_conformance_julia; ess-my4.3.10.)
+run_cadence_conformance_python() {
+    if ! check_language_availability "python" "$PYTHON_DIR"; then
+        warning "Python unavailable — skipping Python cadence-partition producer check"
+        return 0
+    fi
+    log "Running cadence-partition conformance with the Python partition pass..."
+    EARTHSCI_CADENCE_ADAPTER_PYTHON="python3 -m earthsci_toolkit.cli.cadence_adapter" \
+        python3 "$SCRIPT_DIR/run-cadence-conformance.py" \
+            --bindings python \
+            --output "$OUTPUT_DIR/cadence/python_report.json"
+}
+
 run_property_corpus() {
     log "Running property-corpus round-trip across bindings..."
     local corpus="$PROJECT_ROOT/tests/property_corpus/expressions"
@@ -484,6 +519,20 @@ main() {
             success "Cadence-partition Julia producer check completed"
         else
             error "Cadence-partition Julia producer check failed"
+            exit 1
+        fi
+
+        if run_cadence_conformance_rust; then
+            success "Cadence-partition Rust producer check completed"
+        else
+            error "Cadence-partition Rust producer check failed"
+            exit 1
+        fi
+
+        if run_cadence_conformance_python; then
+            success "Cadence-partition Python producer check completed"
+        else
+            error "Cadence-partition Python producer check failed"
             exit 1
         fi
 

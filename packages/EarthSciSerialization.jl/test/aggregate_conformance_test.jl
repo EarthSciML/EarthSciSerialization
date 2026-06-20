@@ -77,6 +77,22 @@ end
         @test du[vmap["emissions[1]"]] ≈ 6.0
         @test du[vmap["emissions[2]"]] ≈ 12.0
     end
+
+    # §7.3 DOWNSTREAM geometric FAQ (bead ess-my4.3.10): the second half of the
+    # value-invention end-to-end chain. The first half (mesh-edge enumeration via
+    # bool_and_or + distinct + skolem, then rank) MINTS the `edges` index set as a
+    # CONST-fold whose byte-identical output is pinned by the determinism
+    # `edge_enumeration` + cadence `pure_topology` goldens. Post-fold, `edges` is a
+    # PRIMITIVE index set, consumed here by a plain sum_product contraction:
+    # area_eff[i] = Σ_{e∈edges} i·e over the 5 materialized edges of the canonical
+    # 2-triangle mesh. Same inline `expected` as Rust/Python — completing §7.3.
+    @testset "area_eff_edge_faq (downstream geometric FAQ over the edge set)" begin
+        du, vmap = _eval_aggregate_fixture(
+            "area_eff_edge_faq.esm", "AreaEffEdgeFaq",
+            ["area_eff[1]", "area_eff[2]"])
+        @test du[vmap["area_eff[1]"]] ≈ 15.0   # Σ_{e=1..5} 1·e = 15
+        @test du[vmap["area_eff[2]"]] ≈ 30.0   # Σ_{e=1..5} 2·e = 30
+    end
 end
 
 # Resolver-level invalid fixture (bead ess-my4.1.6; RFC §5.2): an `aggregate`

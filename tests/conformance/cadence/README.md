@@ -47,20 +47,32 @@ The three fixtures themselves are valid ESM files under
 classifier + folder** — the §5.7 contract as code — and the committed golden in
 `manifest.json` is hand-derived and checked against it.
 
-## The three fixtures (RFC §6.1)
+## The fixtures (RFC §6.1)
 
 | Fixture | Class profile | Exercises |
 |---|---|---|
 | `mixed_stencil` | all three classes, both thresholds | the gather split `index(u, index(nbr,i,k))` (inner topology `CONST`, outer load `CONTINUOUS`); `CONST` topology fold + `DISCRETE` per-event materialization + `CONTINUOUS` hot contraction |
 | `pure_topology` | all `CONST` | empty hot tree — the whole edge-enumeration folds into the artifact (the mechanism by which an unstructured-mesh discretization drops its imperative edge construction) |
 | `pure_pointwise` | all `CONTINUOUS` | empty per-event handler, no materialization; the analytic continuous-`t` forcing `sin(omega·t)` stays `CONTINUOUS` (not `DISCRETE`) — classify by cadence, not by role |
+| `discrete_remesh_stencil` | `DISCRETE` topology + `CONTINUOUS` hot path | the §6.1 worked-trace **discrete-mesh path** (ess-my4.3.10): `mixed_stencil` with the topology (`nbr`/`coeff`) declared `discrete` (an AMR remesh-reloadable mesh) so the SAME topology gathers materialize at the `DISCRETE→CONTINUOUS` threshold — recomputed by the per-event handler on each remesh event instead of folding once at compile. With `mixed_stencil` (CONST topology) this is the const-vs-discrete topology pair: "mesh primitives as document literals → topology folds at compile; reloaded/refined mesh → same nodes are DISCRETE and re-run on the remesh event." |
+
+The numeric tail of the §7.3 worked example — the downstream `sum_product`
+geometric FAQ that consumes the materialized edge set as a *primitive* index set
+(`area_eff[i] = Σ_{e∈edges} …`) — lives in
+`tests/valid/aggregate/area_eff_edge_faq.esm` and is evaluated numerically by all
+three bindings via the aggregate-conformance suites (its inline `tests` golden is
+the cross-binding numeric check). The full §7.3 chain in one document (enumerate →
+skolem/distinct → rank → ragged `edges_of_cell` inversion → `area_eff`) is the
+structural fixture `tests/valid/aggregate/edge_enumeration_area_eff.esm`.
 
 ## Two phases
 
-The **Julia** producer has landed (`ess-my4.3.7`,
-`EarthSciSerialization.Cadence`); the Rust/Python siblings are pending. So the
-harness runs in two phases, exactly like the determinism and grid-conformance
-runners' `--self-test`:
+All three producers have landed — Julia (`ess-my4.3.7`,
+`EarthSciSerialization.Cadence`), Rust (`ess-my4.3.8`), and Python
+(`ess-my4.3.9`) — and all three adapters are now wired into
+`scripts/test-conformance.sh` (`run_cadence_conformance_{julia,rust,python}`,
+ess-my4.3.10). The harness still runs in two phases, exactly like the determinism
+and grid-conformance runners' `--self-test`:
 
 1. **Now (skeleton, gated by `--self-test`).** The runner asserts the contract
    against its embedded reference classifier + folder and the golden. It
@@ -88,10 +100,16 @@ runners' `--self-test`:
    into `scripts/test-conformance.sh` as `run_cadence_conformance_julia` (it
    sets `$EARTHSCI_CADENCE_ADAPTER_JULIA` and runs `--bindings julia`); the
    Julia package's own `test/cadence_test.jl` asserts the same golden directly.
-   Julia stays `bindings_optional` so a bare runner invocation without the
-   adapter on `PATH` is skipped, not failed — but a *mismatch* fails. As the
-   Rust/Python siblings land, move each from `bindings_optional` to
-   `bindings_required` so a missing or mismatching producer fails CI.
+   The Rust adapter
+   (`packages/earthsci-toolkit-rs/src/bin/earthsci-cadence-adapter-rust.rs`,
+   `run_cadence_conformance_rust`) and the Python adapter
+   (`packages/earthsci_toolkit/src/earthsci_toolkit/cli/cadence_adapter.py`,
+   `run_cadence_conformance_python`) are wired the same way; each binding's own
+   suite (`cadence_conformance.rs`, `test_cadence_partition.py`) also asserts the
+   golden directly. All three stay `bindings_optional` so a bare runner invocation
+   without the adapter on `PATH` is skipped, not failed — but a *mismatch* fails.
+   Promote each to `bindings_required` once its adapter is guaranteed present in
+   CI so a *missing* producer also fails.
 
 ## The contract (summary — normative text is `CONFORMANCE_SPEC.md` §5.7)
 

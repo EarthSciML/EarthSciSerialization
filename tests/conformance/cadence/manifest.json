@@ -120,6 +120,37 @@
         "inputs": {},
         "expected": {}
       }
+    },
+    {
+      "id": "discrete_remesh_stencil",
+      "fixture": "tests/valid/cadence/discrete_remesh_stencil.esm",
+      "model": "DiscreteRemeshStencil",
+      "doc": "The DISCRETE-remesh sibling of mixed_stencil (bead ess-my4.3.10): the SAME §6.1 FVM-diffusion stencil D(u[i])/dt = Σ_k coeff[i,k]·(u[nbr[i,k]] − u[i]), but the mesh TOPOLOGY (nbr, coeff) is declared `discrete` (an AMR remesh-reloadable mesh) instead of document-literal `parameter`s — only the leaf seed changes. This realizes the §6.1 worked-trace claim that mixed_stencil only half-shows: 'mesh primitives as document literals → topology folds at compile (CONST); if instead the mesh is reloaded/refined at discrete events, the SAME topology nodes are DISCRETE and move from the artifact into the per-event handler.' The gather split is identical to mixed_stencil — the inner topology selection index(nbr,i,k) is DISCRETE while the outer value-load index(u, .) stays CONTINUOUS — so the two topology gathers (nbr, coeff) materialize at the DISCRETE→CONTINUOUS threshold (bind provenance): recomputed by the per-event handler on each remesh event, NOT folded once at compile as in mixed_stencil. The hot per-step contraction over u is unchanged and stays CONTINUOUS; topology is never on the hot path, CONST or DISCRETE. Together with mixed_stencil (CONST topology) this is the §6.1 const-vs-discrete topology pair the bead requires. No const_fold block: a DISCRETE buffer has no compile-time golden bytes (the value comes from the runtime remesh source), asserted by the per-binding adapter at the remesh epoch — exactly as mixed_stencil's DISCRETE Kdiff point.",
+      "class_summary": { "const": 0, "discrete": 2, "continuous": 5 },
+      "hot_tree_empty": false,
+      "event_handler_empty": false,
+      "materialization_points": [
+        {
+          "label": "nbr_idx",
+          "kind": "expr_edge",
+          "threshold": "discrete->continuous",
+          "provenance": "bind",
+          "array": "nbr",
+          "doc": "The DISCRETE topology gather index(nbr,i,k) feeding the CONTINUOUS value load index(u, .) — materialized into a per-event buffer the hot path reads as a constant, recomputed by the per-event handler on each remesh event (the reloaded connectivity). The §6.1 analogue of mixed_stencil's CONST nbr_idx, which instead folded at compile."
+        },
+        {
+          "label": "coeff",
+          "kind": "expr_edge",
+          "threshold": "discrete->continuous",
+          "provenance": "bind",
+          "array": "coeff",
+          "doc": "The DISCRETE coefficient gather index(coeff,i,k) feeding the CONTINUOUS product — materialized into a per-event buffer, recomputed on each remesh event. The §6.1 analogue of mixed_stencil's CONST coeff, which instead folded at compile."
+        }
+      ],
+      "const_fold": {
+        "inputs": {},
+        "expected": {}
+      }
     }
   ]
 }

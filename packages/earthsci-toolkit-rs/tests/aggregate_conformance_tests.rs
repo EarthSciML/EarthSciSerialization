@@ -251,3 +251,19 @@ fn join_disaggregation_m2m_cardinality() {
 fn join_disaggregation_m2m_permuted_determinism() {
     run_named("join_disaggregation_m2m_permuted.esm");
 }
+
+/// §7.3 DOWNSTREAM geometric FAQ — the second half of the value-invention
+/// end-to-end chain (bead ess-my4.3.10). The first half (mesh-edge enumeration:
+/// bool_and_or + distinct + skolem, then rank) MINTS the `edges` index set as a
+/// CONST-fold whose byte-identical output is pinned by the determinism
+/// `edge_enumeration` and cadence `pure_topology` goldens. Post-fold, `edges` is
+/// a PRIMITIVE index set, and this is the ordinary `sum_product` contraction that
+/// consumes it — area_eff[i] = Σ_{e∈edges} i*e over the 5 materialized edges of
+/// the canonical 2-triangle mesh (area_eff[1]=15, [2]=30). It evaluates here
+/// exactly as in Julia/Python (same inline `expected`), completing §7.3: a
+/// derived index set, once folded, is consumed by a plain geometric FAQ —
+/// replacing imperative per-edge Julia.
+#[test]
+fn area_eff_edge_faq() {
+    run_named("area_eff_edge_faq.esm");
+}
