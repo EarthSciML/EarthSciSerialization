@@ -362,48 +362,168 @@ constants inlined as literals** — is preserved. Joins, Skolem keys, and
 data-derived sets are all resolved at build time, producing the same compiled
 artifact. Performance characteristics for existing rules are unchanged.
 
-### 6.1 Static/dynamic partition (the structural-simplify analogue)
+### 6.1 The dependency-partition pass (cadence classes)
 
 Making value-invention and topology *first-class in the IR* (rather than a
 hand-factored preprocessing stage) raises one fair objection: relational work over
 a large mesh — enumerating edges, inverting connectivity, deduplicating with
 `distinct` — must never run inside the per-timestep RHS. The resolution is a
-**dependency partition** of the FAQ graph that is the direct analogue of
-ModelingToolkit's `structural_simplify`/observed-variable elimination:
+**dependency-partition pass** that classifies every node by the *cadence* at which
+its value can change and schedules each class into its own evaluation phase. It is
+the direct analogue of ModelingToolkit's `structural_simplify`/observed-variable
+elimination, generalized from two phases to three.
 
-| ModelingToolkit | This IR |
-|---|---|
-| states `u` (integrated) | the field variable `u` (dynamic) |
-| parameters (time-invariant) | grid geometry + topology |
-| observed (parameter-only ⇒ constant-folded) | `coeff`, `area_eff`, the discovered index sets |
-| the reduced `f!` the integrator sees | the stencil `⊕_k coeff ⊗ (u[nbr] − u[i])` |
+#### Cadence classes
 
-Each FAQ node is tagged with its transitive **dependency class** — `∅`,
-`{grid params}`, or `{state u, t}`. Nodes that do **not** depend on `u`/`t` form
-the **static partition**; they are evaluated **once at setup** and memoized
-(§5.5 materialized index sets, geometric factors). Only the **dynamic partition**
-— the subgraph transitively touching `u`/`t` — is compiled into the hot `_Node`
-tree. The boundary is therefore *derived by the compiler from the data-dependency
-DAG*, not declared by the rule author, and it falls exactly where a hand-factored
-"topology stage" would have drawn it — without the author having to know which
-side of it they are on.
+Every value is determined at one of three cadences, forming a total order:
 
-This is **not** a from-scratch mechanism. ESS's `build_evaluator` already performs
-a degenerate version: it constant-folds every non-state-dependent gather
-(`const_arrays`, mesh metrics) to a literal via `_resolve_indices`, so the compiled
-tree already contains only state-dependent operations. The static partition is the
-principled generalization of that fold to the new relational/topology ops, so the
-build-time blowup risk applies only to the static partition — which runs once at
-setup, paying a `structural_simplify`-style one-time cost, never per step. Unlike
-full MTK tearing, the static partition is **pure feed-forward** (topology →
-geometry → coeff, no algebraic loops), so it needs partial evaluation by
-dependency class, not equation tearing — strictly simpler.
+| Class | Changes | Evaluated | Phase | MTK analogue |
+|---|---|---|---|---|
+| `CONST` | never | once | folded into the artifact | true parameter / literal |
+| `DISCRETE` | only at discrete events (piecewise-constant between them) | at setup + on each refresh event, memoized between | per-event handler | callback-updated parameter (`PresetTimeCallback`, `tstops`) |
+| `CONTINUOUS` | every step | every RHS call | hot `_Node` tree | integrated state `u` |
 
-The one net-new surface this implies: because topology FAQs (`distinct`, `join`,
-`skolem`) live in the static partition, the **setup-time** evaluator must host a
-small relational engine (hash/sort) that ESS does not have today (it currently does
-only the numeric tree-walk + Tullio). This runs off the hot path, but it is real
-new code — see §9 for the v1 scoping decision, and **Appendix A** for the per-language
+`CONST ⊏ DISCRETE ⊏ CONTINUOUS`; the class of a node is the **maximum** (join)
+over its inputs' classes. The boundary is derived by the compiler from the
+data-dependency DAG, never declared by the author. Two points fix the semantics:
+
+- **Named by cadence, not by role.** `CONTINUOUS` means "changes every step," not
+  "the unknown we solve for." Its dominant inhabitant is the integrated state `u`,
+  but an *explicit continuous-`t` forcing* (`sin(2πt)`, an analytic diurnal cycle)
+  is also `CONTINUOUS` — it is not piecewise-constant between events and must be
+  recomputed every step. Classifying by cadence rather than by "solved-for" keeps
+  such forcings out of `DISCRETE`, where they would silently go stale between events.
+- **There is no "grid" class.** With topology first-class (§5.5), the mesh is *not*
+  a primitive input — it is `aggregate` nodes (`distinct`, `join`, `rank`) over the
+  mesh primitive arrays. When those primitives are document literals the entire
+  topology partition is `CONST` and folds into the artifact; when the mesh is
+  reloaded or refined at discrete events (AMR, moving meshes) the same topology
+  nodes are `DISCRETE` and re-run on the remesh event. "Grid" is a *consequence* of
+  where its leaves sit, not a category of its own.
+
+**Seeding the leaves — a new `discrete` variable kind.** A node's class is `max`
+over its inputs, so the chain bottoms out at *declared* leaf cadences. Two of the
+three already exist in ESM: state variables seed `CONTINUOUS`, and
+parameters/literals seed `CONST`. But **`DISCRETE` has no existing role to derive
+from** — nothing in the current schema expresses "shape fixed at setup, values
+refreshed at discrete events," so the partition would be forced to mis-seed every
+such input as `CONST` (wrong — it would never refresh) or `CONTINUOUS` (wrong — it
+would recompute every step). v1 therefore **adds a new `discrete` variable kind to
+the schema**, a third variable role beside state and parameter. A `discrete`
+variable declares its **fixed shape** (the index sets / dims that *are* known ahead
+of time) and, optionally, the **refresh trigger** that drives its per-event
+recompute (a `tstops` schedule, a data-ingest event, an AMR remesh hook). Loaded
+met/BC fields, emission inventories that update on a schedule, and reloadable mesh
+topology are all declared `discrete`; the partition then seeds them `DISCRETE` and
+the `max`-propagation does the rest. This is the **one genuinely new declaration**
+the partition pass requires — the §6.1 design is otherwise derived, not declared.
+
+The compile-fold-vs-setup-fold distinction, by contrast, is a **provenance
+sub-tag**, not a declared class: a `CONST`/`DISCRETE` leaf whose bytes are inline in
+the document folds at compile time; one loaded from an external resource (NetCDF
+mesh/met, §A.8) folds at bind. Same algebra, same propagation.
+
+#### Propagation
+
+Walk the inter-node DAG bottom-up; `class(n) = max` over inputs. The DAG spans
+**all** nodes — edges include expression child→parent, a node→an index set it
+references (`ranges[*].from`), a `kind:"derived"` set→its `from_faq` node, and a
+`join.on` factor→the factor it names. (This is why node addressing — referencing a
+node by id — is a hard prerequisite: the pass cannot be built until `from_faq` and
+join references are real edges in this DAG.)
+
+One propagation rule carries the design. For a **gather** `index(A, e₁…eₖ)`, the
+index expressions are classified *independently of the array*:
+
+```
+class(index(A, e…)) = max( class(A), class(e₁), …, class(eₖ) )
+```
+
+This is what lets a stencil split across phases: in
+`index(u, index(edgesOnCell, i, k))` the inner neighbour-selection is `CONST`
+(topology) while the outer value load is `CONTINUOUS` (it touches `u`).
+
+#### The frontier cut (now at two thresholds)
+
+The boundary is drawn *through* nodes, not around them: wherever a lower-cadence
+child feeds a higher-cadence parent, the maximal lower-cadence sub-DAG below that
+edge is a **materialization point** — evaluated in its phase, stored in a buffer,
+and referenced by the parent. With three classes the cut fires at two thresholds:
+
+- **`CONST → {DISCRETE, CONTINUOUS}`** — fold once into the artifact (the
+  deduplicated edge set, `nbr_idx`, `coeff`, …).
+- **`DISCRETE → CONTINUOUS`** — materialize into a buffer the hot path reads as a
+  constant, recomputed by the per-event handler when the underlying data refreshes
+  (met slices, reloaded BCs, a remeshed topology).
+
+This generalizes the constant-fold `build_evaluator` already performs
+(`_resolve_indices` inlining non-state gathers to literals) — applied once at the
+`CONST` threshold and again at the `DISCRETE` one.
+
+#### Three execution outputs
+
+Instead of today's single compiled tree, the pass emits:
+
+1. **Folded artifact** (`CONST`) — literals plus precomputed index/coefficient
+   buffers baked in.
+2. **Per-event handler** (`DISCRETE`) — recomputes its buffers on each
+   refresh/remesh event; the relational engine (§A.5) and any reloaded-data folds
+   run here, off the hot path. Empty when nothing is event-driven.
+3. **Per-step `_Node` tree** (`CONTINUOUS`) — identical in shape to today's
+   `build_evaluator` output for existing rules, with frontier references replaced by
+   buffer loads. Performance for existing rules is therefore unchanged.
+
+#### Why this needs no tearing, plus the guards
+
+Each partition is **pure feed-forward** (topology → geometry → coeff;
+loaded-data → derived fields), so the pass needs partial evaluation by cadence, not
+MTK-style equation tearing. This is made a *checked* property:
+
+- **Acyclicity.** The `≤ DISCRETE` subgraph must be a DAG; a cycle means an
+  implicit/iterative solve, which is out of scope (use a `call` handler). Reject
+  with a diagnostic naming the cycle.
+- **No relational engine on the hot path.** A `distinct`/`join`/`skolem`/`rank`
+  node that classifies `CONTINUOUS` is rejected — state-dependent topology may not
+  run per step in v1. The guarantee is enforced, not hoped for.
+- **Optional author assertion.** `expect_cadence: const|discrete|continuous` on a
+  node is a test/diagnostic hook only; the pass errors if the derived class
+  disagrees. It changes no semantics.
+
+#### Worked trace — FVM diffusion
+
+`out[i] = Σ_{k∈edges_of_cell(i)} coeff(i,k)·(u[nbr(i,k)] − u[i])`, mesh primitives
+as document literals:
+
+| Sub-DAG | Class | Fate |
+|---|---|---|
+| edge set / `nbr = index(edgesOnCell,i,k)` / ragged `offsets` | `CONST` | folded → `nbr_idx`, `offsets` literals |
+| `coeff(i,k)` over coordinates | `CONST` | folded → `coeff` literal array |
+| `u[nbr_idx[i,k]] − u[i]` | `CONTINUOUS` | hot `_Node` |
+| `Σ_k coeff[i,k] ⊗ (…)` | `CONTINUOUS` (reduces continuous terms over a const-fixed range) | hot contraction (`_NK_CONTRACTION`) |
+
+The hot tree's shape is identical to today's compiled stencil; the topology FAQ ran
+once at compile. If instead the mesh is reloaded at AMR events, the first two rows
+become `DISCRETE` and move from the artifact into the per-event handler — nothing
+else changes. This is the concrete mechanism by which ESD drops
+`_rewrite_unstructured_arrayop!` and its imperative edge/connectivity construction
+(§2a, §9).
+
+#### Conformance and caching
+
+The partition is a compile-time classification, so conformance asserts it directly:
+all bindings must agree on every node's class, the set of materialization points,
+and the byte-identical `CONST`-folded buffers (ties to §5.7). Add three fixtures: a
+mixed stencil (above), a pure-topology rule (all `CONST`/`DISCRETE`, empty hot
+tree), and a pure-pointwise rule (all `CONTINUOUS`). `DISCRETE` buffers are keyed by
+`(materialization-point id, event-epoch)`; v1 memoizes within a build and
+recomputes a buffer only when its event fires. Incremental/shared rebuild of
+materialized sets across events is the deferred `structural_simplify`-grade
+refinement (§9).
+
+The one net-new runtime surface remains the **setup/per-event relational engine**
+(hash/sort for `distinct`/`join`/`skolem`/`rank`) that ESS lacks today (it does
+only the numeric tree-walk + Tullio). It runs off the hot path but is real new
+code — see §9 for the v1 scoping decision and **Appendix A** for the per-language
 library choices (Julia stdlib, Rust `indexmap`, Python NumPy — all already
 depended-on) and the cross-binding determinism spec the conformance suite requires.
 
@@ -460,6 +580,20 @@ Additive only (Draft 2020-12). On the `AggregateQuery` object (`op` ∈
 
 New Expression ops: `skolem` (variadic), `rank` (unary over an index set), `true`.
 Index sets gain a registry entry mirroring ESM `domain` dims and ESI `index_sets`.
+
+**New variable kind (`discrete`).** Beyond the `AggregateQuery` object, v1 adds a
+third **variable role** to the model schema, beside state (`CONTINUOUS`) and
+parameter (`CONST`): a `discrete` variable, whose **shape is fixed at setup** but
+whose **values refresh at discrete events**. It is the declared seed for the
+`DISCRETE` cadence class that the §6.1 partition pass schedules into a per-event
+handler; without it the schema cannot express loaded met/BC fields, scheduled
+inventories, or reloadable mesh topology, and the pass would be forced to mis-seed
+them as `CONST` or `CONTINUOUS`. A `discrete` variable declares its dims / index
+sets and an **optional refresh-trigger descriptor** (e.g. a `tstops` schedule, a
+data-ingest event, or an AMR remesh hook); the trigger drives *when* its per-event
+buffer is recomputed and is otherwise inert to the algebra. This is additive — a
+file declaring no `discrete` variables validates and partitions exactly as today
+(two cadences, §9 strict-superset promise).
 
 **Concrete patch.** Against the current schema, where `arrayop` is an `op` enum
 value on `$defs/ExpressionNode` (`additionalProperties: false`, so each new field
