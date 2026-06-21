@@ -173,5 +173,120 @@ const _VI_EDGE_GOLDEN = "[[1,2],[1,3],[2,3],[2,4],[3,4]]"
         vi = ESS.materialize_value_invention(plain, Dict{String,Any}(), Dict{String,Float64}())
         @test isempty(vi.extents)
         @test isempty(vi.vi_var_names)
+        @test isempty(vi.assignments)
+    end
+end
+
+# ── Arg-witness reducer front-door (bead ess-os1, mpas-scvt KEYSTONE) ──────────
+# RFC semiring-faq-unified-ir §5.7 rule 6; CONFORMANCE_SPEC.md §5.5.1 rule 6.
+# The integer nearest-generator INDEX buffer materialised through the front-door,
+# byte-identical across Julia/Rust/Python with the smallest-generator-id
+# tie-break. The shared fixture coordinate factors are supplied here (and IDENTICALLY
+# in the Rust / Python port-parity tests) — agreement on the emitted buffer IS the
+# cross-binding conformance proof.
+@testset "argmin arg-witness front-door (ess-os1)" begin
+
+    _ARG_REL = "tests/valid/aggregate/nearest_generator_argmin.esm"
+
+    @testset "nearest-generator argmin + smallest-id tie-break (§5.7 rule 6)" begin
+        mj = ESS._select_model_json(_vi_raw(_ARG_REL), "NearestGeneratorArgmin")
+        # Generators on the x-axis at 0,1,2; point 3 at (1.5,0) is EXACTLY 0.25
+        # from generators 2 (1.0) and 3 (2.0) — the deliberate tie.
+        ca = Dict(
+            "gx" => Float64[0, 1, 2], "gy" => Float64[0, 0, 0],
+            "px" => Float64[0.0, 1.0, 1.5, 2.0], "py" => Float64[0.0, 0.5, 0.0, 0.0])
+        vi = ESS.materialize_value_invention(mj, ca, Dict{String,Float64}())
+        # 1-based nearest-generator ids; point 3's tie resolves to the SMALLER id (2).
+        @test vi.assignments["assign"] == [1, 2, 2, 3]
+        # the arg-witness LHS var leaves the ODE (materialised at setup).
+        @test vi.vi_var_names == Set(["assign"])
+        # a pure arg-witness map: no producers / derived index sets.
+        @test isempty(vi.extents)
+        # pure function of inputs — re-running is identical.
+        @test ESS.materialize_value_invention(mj, ca, Dict{String,Float64}()).assignments["assign"] ==
+              [1, 2, 2, 3]
+    end
+
+    @testset "bin-Skolem-pruned argmin: same-bin candidate join (§5.3 broad phase)" begin
+        mj = ESS._select_model_json(_vi_raw(_ARG_REL), "NearestGeneratorBinned")
+        params = Dict("binw" => 1.0)
+        # binw=1 ⇒ gen bins (0,0)/(1,0)/(2,0); point bins (0,0)/(1,0)/(2,0)/(1,0).
+        # Each point's join keeps only its same-bin generator → [1,2,3,2].
+        ca = Dict(
+            "gx" => Float64[0, 1, 2], "gy" => Float64[0, 0, 0],
+            "px" => Float64[0.1, 1.1, 2.1, 1.9], "py" => Float64[0, 0, 0, 0])
+        vi = ESS.materialize_value_invention(mj, ca, params)
+        @test vi.assignments["assign_binned"] == [1, 2, 3, 2]
+        # the bin map buffers + the assignment all leave the ODE.
+        @test vi.vi_var_names == Set(["point_bin", "gen_bin", "assign_binned"])
+    end
+
+    # Inline models are written as JSON (the .esm shape) and parsed to native
+    # dicts — far more legible than nested `Dict(...)` literals for deep ASTs.
+    _arg_model(json) = ESS.Cadence.to_native(JSON3.read(json))
+
+    @testset "argmax: farthest-generator INDEX + smallest-id tie-break" begin
+        # Mirror op: argmax keeps the GREATEST distance. Point 2 at (1.0) is dist 1
+        # from both generator 1 (0.0) and generator 3 (2.0) → tie to the SMALLER id.
+        model = _arg_model("""
+        {"index_sets": {"points": {"kind": "interval", "size": 2},
+                        "generators": {"kind": "interval", "size": 3}},
+         "variables": {"gx": {"type": "parameter", "shape": ["generators"]},
+                       "px": {"type": "parameter", "shape": ["points"]},
+                       "far": {"type": "state", "shape": ["points"]}},
+         "equations": [{"lhs": {"op": "index", "args": ["far", "i"]},
+           "rhs": {"op": "aggregate", "output_idx": ["i"],
+             "ranges": {"i": {"from": "points"}},
+             "expr": {"op": "argmax", "arg": "g",
+               "ranges": {"g": {"from": "generators"}},
+               "expr": {"op": "*", "args": [
+                 {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                 {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]}]}}}}]}
+        """)
+        ca = Dict("gx" => Float64[0, 1, 2], "px" => Float64[0.0, 1.0])
+        vi = ESS.materialize_value_invention(model, ca, Dict{String,Float64}())
+        @test vi.assignments["far"] == [3, 1]
+    end
+
+    @testset "guard: empty candidate set is an error (no index witnesses argmin)" begin
+        # A filter that excludes every candidate leaves the argmin undefined.
+        model = _arg_model("""
+        {"index_sets": {"points": {"kind": "interval", "size": 1},
+                        "generators": {"kind": "interval", "size": 2}},
+         "variables": {"gx": {"type": "parameter", "shape": ["generators"]},
+                       "px": {"type": "parameter", "shape": ["points"]},
+                       "assign": {"type": "state", "shape": ["points"]}},
+         "equations": [{"lhs": {"op": "index", "args": ["assign", "i"]},
+           "rhs": {"op": "aggregate", "output_idx": ["i"],
+             "ranges": {"i": {"from": "points"}},
+             "expr": {"op": "argmin", "arg": "g",
+               "ranges": {"g": {"from": "generators"}},
+               "filter": {"op": "false", "args": []},
+               "expr": {"op": "*", "args": [
+                 {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]}}}}]}
+        """)
+        @test_throws ESS.TreeWalkError ESS.materialize_value_invention(
+            model, Dict("gx" => Float64[0, 1], "px" => Float64[0.5]), Dict{String,Float64}())
+    end
+
+    @testset "guard: a CONTINUOUS arg-witness assignment is rejected (§5.7 guard 2)" begin
+        # An argmin whose distance reads a genuine `state` coordinate classifies
+        # CONTINUOUS — a per-step assignment is out of scope for v1.
+        model = _arg_model("""
+        {"index_sets": {"points": {"kind": "interval", "size": 1},
+                        "generators": {"kind": "interval", "size": 2}},
+         "variables": {"gx": {"type": "state", "shape": ["generators"]},
+                       "px": {"type": "parameter", "shape": ["points"]},
+                       "assign": {"type": "state", "shape": ["points"]}},
+         "equations": [{"lhs": {"op": "index", "args": ["assign", "i"]},
+           "rhs": {"op": "aggregate", "output_idx": ["i"],
+             "ranges": {"i": {"from": "points"}},
+             "expr": {"op": "argmin", "arg": "g",
+               "ranges": {"g": {"from": "generators"}},
+               "expr": {"op": "*", "args": [
+                 {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]}}}}]}
+        """)
+        @test_throws ESS.TreeWalkError ESS.materialize_value_invention(
+            model, Dict("gx" => Float64[0, 1], "px" => Float64[0.5]), Dict{String,Float64}())
     end
 end

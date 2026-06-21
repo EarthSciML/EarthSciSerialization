@@ -45,6 +45,15 @@ class ValueInventionError(Exception):
 # ODE): mirrors Julia ``_VI_BODY_OPS``.
 _VI_BODY_OPS = ("skolem", "rank", "distinct")
 
+# Arg-witness reducer ops (RFC §5.7 rule 6): a build-time reduction over a
+# contracted candidate range that emits the ARG — the witnessing index — rather
+# than the reduced value (the nearest-generator INDEX). NET-NEW: the closed
+# semiring registry returns values and value-invention (distinct/skolem/rank)
+# returns sets; neither returns the arg. Materialised as an integer per-element
+# buffer at CONST cadence, like the ``:map`` skolem bin buffers. Mirrors Julia
+# ``_VI_ARGWITNESS_OPS``.
+_VI_ARGWITNESS_OPS = ("argmin", "argmax")
+
 
 # --------------------------------------------------------------------------- #
 # Detection — classify raw aggregate nodes (mirror of _vi_node_kind / _vi_detect)
@@ -58,7 +67,10 @@ def _vi_node_kind(node: Any) -> str:
       materialises a derived index set via ``from_faq``).
     - ``"map"``      — a per-element map whose body / key is ``skolem`` (e.g.
       ``src_bin[i] = skolem("bin", floor(...), floor(...))``): a value-invention
-      buffer the producer's ``join`` / ``key`` references.
+      buffer the producer's ``join`` / ``key`` references. Also a per-element map
+      whose body is an arg-witness reducer (``argmin`` / ``argmax``, e.g.
+      ``assign[i] = argmin_g dist(point_i, gen_g)``): an integer assignment
+      buffer emitted by the inner reduction (§5.7 rule 6).
     - ``"exclude"``  — another value-invention output (e.g. a ``rank`` dense-id
       buffer) dropped from the ODE but needing no setup materialisation.
     - ``"none"``     — an ordinary numeric aggregate.
@@ -72,7 +84,7 @@ def _vi_node_kind(node: Any) -> str:
     body = node.get("expr")
     if isinstance(body, Mapping):
         bop = body.get("op")
-        if bop == "skolem":
+        if bop == "skolem" or bop in _VI_ARGWITNESS_OPS:
             return "map"
         if bop in _VI_BODY_OPS:
             return "exclude"
@@ -408,6 +420,87 @@ def _vi_join_ok(join: Sequence[Any], producer_ranges: Mapping[str, Any],
     return True
 
 
+def _vi_argreduce(node: Mapping[str, Any], ctx: _ViCtx,
+                  outer_bindings: Dict[str, Any], outer_ranges: Mapping[str, Any]) -> int:
+    """Arg-witness reducer (RFC §5.7 rule 6). Over the inner contracted ``ranges``
+    (which EXTEND the outer map binding so ``expr`` may read both the point and
+    the candidate), evaluate the scalar ``expr`` body at each candidate and return
+    the ``arg`` index symbol's value at the optimum — ``argmin`` keeps the least
+    value, ``argmax`` the greatest. The NORMATIVE tie-break is the SMALLEST arg
+    (the smallest generator id): equal values resolve to the lower candidate
+    index, so the emitted integer buffer is byte-identical across bindings
+    irrespective of enumeration order. Optional ``join`` (a bin-Skolem prune,
+    §5.3) / ``filter`` restrict the candidate set; an empty candidate set is an
+    error (no index witnesses an empty argmin)."""
+    op = node.get("op")
+    inner_ranges = node.get("ranges") or {}
+    arg_sym = node.get("arg")
+    if arg_sym is None:
+        raise ValueInventionError(
+            f"arg-witness op {op!r} requires an `arg` naming the witnessing index symbol"
+        )
+    arg_sym = str(arg_sym)
+    value_expr = node.get("expr")
+    if value_expr is None:
+        raise ValueInventionError(
+            f"arg-witness op {op!r} requires an `expr` body (the scalar to optimise)"
+        )
+    if arg_sym not in inner_ranges:
+        raise ValueInventionError(
+            f"arg-witness `arg`={arg_sym!r} must name one of the contracted `ranges` symbols"
+        )
+    if arg_sym in outer_bindings:
+        raise ValueInventionError(
+            f"arg-witness `arg`={arg_sym!r} shadows an outer index symbol"
+        )
+    filt = node.get("filter")
+    join = node.get("join")
+    # Combined ranges so a ``join`` column over an OUTER-indexed map buffer (the
+    # point's bin) resolves alongside the inner candidate's bin (§5.3 equi-join).
+    combined: Dict[str, Any] = {**outer_ranges, **inner_ranges}
+    syms = _vi_order_syms(inner_ranges)
+    bindings: Dict[str, Any] = dict(outer_bindings)
+    is_max = op == "argmax"
+    best: Optional[Tuple[float, int]] = None
+
+    def consider() -> None:
+        nonlocal best
+        if filt is not None:
+            fv = _vi_eval(filt, ctx, bindings)
+            if not (fv is True or (isinstance(fv, (int, float)) and not isinstance(fv, bool) and fv > 0)):
+                return
+        if join is not None and not _vi_join_ok(join, combined, ctx, bindings):
+            return
+        v = float(_vi_eval(value_expr, ctx, bindings))
+        a = _vi_key_int(bindings[arg_sym])
+        if best is None:
+            best = (v, a)
+        else:
+            bv, ba = best
+            better = v > bv if is_max else v < bv
+            # Strict improvement OR an exact tie resolved to the smaller arg.
+            if better or (v == bv and a < ba):
+                best = (v, a)
+
+    def rec(k: int) -> None:
+        if k >= len(syms):
+            consider()
+            return
+        s = syms[k]
+        for val in _vi_range_values(inner_ranges[s], ctx, bindings):
+            bindings[s] = val
+            rec(k + 1)
+        bindings.pop(s, None)
+
+    rec(0)
+    if best is None:
+        raise ValueInventionError(
+            f"arg-witness op {op!r} has an empty candidate set; no index witnesses the "
+            f"optimum (a point with no candidate generator is undefined)"
+        )
+    return best[1]
+
+
 def _vi_materialize_map(ctx: _ViCtx, vname: str, node: Mapping[str, Any]) -> Dict[Any, Any]:
     """Materialise a per-element value-invention map var → {output-index → value}."""
     output_idx = node.get("output_idx") or []
@@ -418,13 +511,20 @@ def _vi_materialize_map(ctx: _ViCtx, vname: str, node: Mapping[str, Any]) -> Dic
     body = node.get("expr")
     if body is None:
         raise ValueInventionError(f"value-invention map {vname!r} has no `expr` body")
+    outer_ranges = node.get("ranges") or {}
+    is_arg = isinstance(body, Mapping) and body.get("op") in _VI_ARGWITNESS_OPS
     out: Dict[Any, Any] = {}
     sym = str(output_idx[0])
 
     def visit(bindings: Dict[str, Any]) -> None:
-        out[bindings[sym]] = _vi_eval(body, ctx, bindings)
+        # An arg-witness body runs the inner reduction (with the outer point bound)
+        # and emits the witnessing INDEX; an ordinary body (skolem) emits its value.
+        out[bindings[sym]] = (
+            _vi_argreduce(body, ctx, bindings, outer_ranges) if is_arg
+            else _vi_eval(body, ctx, bindings)
+        )
 
-    _vi_enumerate(node.get("ranges") or {}, ctx, visit)
+    _vi_enumerate(outer_ranges, ctx, visit)
     ctx.maps[vname] = out
     return out
 
@@ -498,11 +598,15 @@ class ValueInventionResult:
       dense extent ``[1, n]`` the resolver consumes).
     - ``members`` — ``from_faq`` producer id → the distinct member tuples in
       §5.5.1 sorted order (for byte-identity assertions).
+    - ``assignments`` — arg-witness map var → the integer nearest-generator INDEX
+      buffer, dense in output-index order (the SCVT assignment; §5.7 rule 6,
+      byte-identical across bindings).
     - ``vi_var_names`` — value-invention LHS vars to drop from the ODE.
     """
 
     extents: Dict[str, int] = field(default_factory=dict)
     members: Dict[str, List[Any]] = field(default_factory=dict)
+    assignments: Dict[str, List[int]] = field(default_factory=dict)
     vi_var_names: Set[str] = field(default_factory=set)
 
 
@@ -534,15 +638,40 @@ def materialize_value_invention(
         variables=dict(model_json.get("variables", {}) or {}),
     )
 
-    # Maps first (a producer's join / key may reference them).
+    # Cadence classification model (built before materialisation — it depends only
+    # on model structure, not materialized values): re-type each map var to its
+    # body's class so the §5.7 guard 2 classifies a producer / arg-witness that
+    # joins on it correctly (a CONST-derived bin map passes; a genuinely
+    # state-dependent one still classifies CONTINUOUS → reject).
+    cls_model = _vi_classification_model(model_json, det.maps)
+
+    # §5.7 guard 2 for arg-witness assignments: a state-dependent nearest-generator
+    # buffer (continuous cadence) may not be materialised at build time — its
+    # topology would change every step (out of scope for v1, like a continuous
+    # `distinct`).
+    for vname, node in det.maps:
+        body = node.get("expr")
+        if not (isinstance(body, Mapping) and body.get("op") in _VI_ARGWITNESS_OPS):
+            continue
+        if cadence.classify(node, cls_model) == "continuous":
+            raise ValueInventionError(
+                f"arg-witness map {vname!r} classifies CONTINUOUS — a build-time assignment "
+                f"buffer's inputs must be CONST/DISCRETE (RFC §5.7 guard 2)"
+            )
+
+    # Maps first (a producer's join / key — or an arg-witness `join` — may reference them).
     for vname, node in det.maps:
         _vi_materialize_map(ctx, vname, node)
 
-    # Cadence classification model: re-type each map var to its body's class so
-    # the §5.7 guard 2 below classifies a producer that joins on it correctly (a
-    # CONST-derived bin map passes; a genuinely state-dependent one still
-    # classifies CONTINUOUS → reject).
-    cls_model = _vi_classification_model(model_json, det.maps)
+    # Surface the arg-witness buffers (the integer nearest-generator INDEX
+    # assignment), dense in output-index order, for byte-identity assertions and
+    # the downstream grouped reduction the SCVT step consumes.
+    for vname, node in det.maps:
+        body = node.get("expr")
+        if not (isinstance(body, Mapping) and body.get("op") in _VI_ARGWITNESS_OPS):
+            continue
+        m = ctx.maps[vname]
+        result.assignments[vname] = [int(m[k]) for k in sorted(m.keys())]
 
     # ``from_faq`` id → derived index-set name (so we only materialise producers a
     # derived set actually names; geometry producers are handled elsewhere).

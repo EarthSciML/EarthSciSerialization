@@ -125,8 +125,10 @@ CLASS_ORDER = ("const", "discrete", "continuous")
 _CLASS_RANK = {name: i for i, name in enumerate(CLASS_ORDER)}
 
 # The relational / value-invention ops that may not run on the hot path (§5.7
-# guard 2): one classifying ``continuous`` is a hard error.
-RELATIONAL_OPS = frozenset({"distinct", "join", "skolem", "rank"})
+# guard 2): one classifying ``continuous`` is a hard error. Includes the
+# arg-witness reducers (``argmin`` / ``argmax``, §5.7 rule 6) — a state-dependent
+# assignment is out of scope for v1, exactly like a state-dependent ``distinct``.
+RELATIONAL_OPS = frozenset({"distinct", "join", "skolem", "rank", "argmin", "argmax"})
 
 
 class CadenceError(Exception):

@@ -55,17 +55,30 @@ fn err<T>(msg: impl Into<String>) -> Result<T, ValueInventionError> {
 /// ODE): mirrors Julia `_VI_BODY_OPS`.
 const VI_BODY_OPS: [&str; 3] = ["skolem", "rank", "distinct"];
 
+/// Arg-witness reducer ops (RFC §5.7 rule 6): a build-time reduction over a
+/// contracted candidate range that emits the ARG — the witnessing index — rather
+/// than the reduced value (the nearest-generator INDEX). NET-NEW: the closed
+/// semiring registry returns values and value-invention (distinct/skolem/rank)
+/// returns sets; neither returns the arg. Materialised as an integer per-element
+/// buffer at CONST cadence, like the `:map` skolem bin buffers. Mirrors Julia
+/// `_VI_ARGWITNESS_OPS`.
+const VI_ARGWITNESS_OPS: [&str; 2] = ["argmin", "argmax"];
+
 /// Result of [`materialize_value_invention`].
 ///
 /// - `extents` — `from_faq` producer id → derived index-set cardinality (the
 ///   dense extent `[1, n]` the resolver consumes).
 /// - `members` — `from_faq` producer id → the distinct member keys in §5.5.1
 ///   sorted order (for byte-identity assertions).
+/// - `assignments` — arg-witness map var → the integer nearest-generator INDEX
+///   buffer, dense in output-index order (the SCVT assignment; §5.7 rule 6,
+///   byte-identical across bindings).
 /// - `vi_var_names` — value-invention LHS vars to drop from the ODE.
 #[derive(Debug, Clone, Default)]
 pub struct ValueInventionResult {
     pub extents: HashMap<String, i64>,
     pub members: HashMap<String, Vec<Key>>,
+    pub assignments: HashMap<String, Vec<i64>>,
     pub vi_var_names: HashSet<String>,
 }
 
@@ -161,7 +174,7 @@ fn vi_node_kind(node: &Value) -> NodeKind {
         .and_then(|b| b.get("op"))
         .and_then(|v| v.as_str())
     {
-        if bop == "skolem" {
+        if bop == "skolem" || VI_ARGWITNESS_OPS.contains(&bop) {
             return NodeKind::Map;
         }
         if VI_BODY_OPS.contains(&bop) {
@@ -655,6 +668,102 @@ fn vi_join_ok(
     Ok(true)
 }
 
+/// Arg-witness reducer (RFC §5.7 rule 6). Over the inner contracted `ranges`
+/// (which EXTEND the outer map binding so `expr` may read both the point and the
+/// candidate), evaluate the scalar `expr` body at each candidate and return the
+/// `arg` index symbol's value at the optimum — `argmin` keeps the least value,
+/// `argmax` the greatest. The NORMATIVE tie-break is the SMALLEST arg (the
+/// smallest generator id): equal values resolve to the lower candidate index, so
+/// the emitted integer buffer is byte-identical across bindings irrespective of
+/// enumeration order. Optional `join` (a bin-Skolem prune, §5.3) / `filter`
+/// restrict the candidate set; an empty candidate set is an error.
+fn vi_argreduce(
+    node: &Value,
+    ctx: &ViCtx,
+    outer_bindings: &Bindings,
+    outer_ranges: &Map<String, Value>,
+) -> Result<i64, ValueInventionError> {
+    let op = node_op(node).unwrap_or("");
+    let empty = Map::new();
+    let inner_ranges = node
+        .get("ranges")
+        .and_then(|v| v.as_object())
+        .unwrap_or(&empty);
+    let arg_sym = node.get("arg").and_then(|v| v.as_str()).ok_or_else(|| {
+        ValueInventionError(format!(
+            "arg-witness op {op:?} requires an `arg` naming the witnessing index symbol"
+        ))
+    })?;
+    let value_expr = node.get("expr").ok_or_else(|| {
+        ValueInventionError(format!(
+            "arg-witness op {op:?} requires an `expr` body (the scalar to optimise)"
+        ))
+    })?;
+    if !inner_ranges.contains_key(arg_sym) {
+        return err(format!(
+            "arg-witness `arg`={arg_sym:?} must name one of the contracted `ranges` symbols"
+        ));
+    }
+    if outer_bindings.contains_key(arg_sym) {
+        return err(format!(
+            "arg-witness `arg`={arg_sym:?} shadows an outer index symbol"
+        ));
+    }
+    let filt = node.get("filter");
+    let join: Vec<Value> = node
+        .get("join")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    // Combined ranges so a `join` column over an OUTER-indexed map buffer (the
+    // point's bin) resolves alongside the inner candidate's bin (§5.3 equi-join).
+    let mut combined: Map<String, Value> = outer_ranges.clone();
+    for (k, v) in inner_ranges {
+        combined.insert(k.clone(), v.clone());
+    }
+    let syms = vi_order_syms(inner_ranges)?;
+    let mut bindings = outer_bindings.clone();
+    let mut best: Option<(f64, i64)> = None;
+    vi_enumerate_rec(&syms, 0, inner_ranges, ctx, &mut bindings, &mut |b| {
+        if let Some(f) = filt {
+            let pass = match vi_eval(f, ctx, b)? {
+                Val::Bool(x) => x,
+                Val::Int(i) => i > 0,
+                Val::Float(x) => x > 0.0,
+                _ => false,
+            };
+            if !pass {
+                return Ok(());
+            }
+        }
+        if !join.is_empty() && !vi_join_ok(&join, &combined, ctx, b)? {
+            return Ok(());
+        }
+        let v = vi_eval(value_expr, ctx, b)?.as_f64()?;
+        let a = b[arg_sym];
+        best = match best {
+            None => Some((v, a)),
+            Some((bv, ba)) => {
+                let better = if op == "argmax" { v > bv } else { v < bv };
+                // Strict improvement OR an exact tie resolved to the smaller arg.
+                if better || (v == bv && a < ba) {
+                    Some((v, a))
+                } else {
+                    Some((bv, ba))
+                }
+            }
+        };
+        Ok(())
+    })?;
+    match best {
+        Some((_, a)) => Ok(a),
+        None => err(format!(
+            "arg-witness op {op:?} has an empty candidate set; no index witnesses the \
+             optimum (a point with no candidate generator is undefined)"
+        )),
+    }
+}
+
 /// Materialise a per-element value-invention map var → {output-index → value}.
 fn vi_materialize_map(
     ctx: &mut ViCtx,
@@ -684,13 +793,25 @@ fn vi_materialize_map(
         .and_then(|v| v.as_object())
         .unwrap_or(&empty);
     let sym = output_idx[0].clone();
+    let is_arg = body
+        .get("op")
+        .and_then(|v| v.as_str())
+        .map(|o| VI_ARGWITNESS_OPS.contains(&o))
+        .unwrap_or(false);
     let mut out: HashMap<i64, Val> = HashMap::new();
     // Borrow the body / ranges via a const reference inside the closure; collect
     // into `out`, then store it on the context after enumeration completes.
     {
         let ctx_ref = &*ctx;
         vi_enumerate(ranges, ctx_ref, |bindings| {
-            let value = vi_eval(body, ctx_ref, bindings)?;
+            // An arg-witness body runs the inner reduction (with the outer point
+            // bound) and emits the witnessing INDEX; an ordinary body (skolem)
+            // emits its value.
+            let value = if is_arg {
+                Val::Int(vi_argreduce(body, ctx_ref, bindings, ranges)?)
+            } else {
+                vi_eval(body, ctx_ref, bindings)?
+            };
             out.insert(bindings[&sym], value);
             Ok(())
         })?;
@@ -826,16 +947,67 @@ pub fn materialize_value_invention(
         maps: HashMap::new(),
     };
 
-    // Maps first (a producer's join / key may reference them).
+    // Cadence classification model (built before materialisation — it depends only
+    // on model structure, not materialized values): re-type each map var to its
+    // body's class so the §5.7 guard 2 classifies a producer / arg-witness that
+    // joins on it correctly (a CONST-derived bin map passes; a genuinely
+    // state-dependent one still classifies CONTINUOUS → reject).
+    let cls_model = vi_classification_model(model_json, &det.maps)?;
+
+    // §5.7 guard 2 for arg-witness assignments: a state-dependent nearest-generator
+    // buffer (continuous cadence) may not be materialised at build time — its
+    // topology would change every step (out of scope for v1, like a continuous
+    // `distinct`).
+    for (vname, node) in &det.maps {
+        let is_arg = node
+            .get("expr")
+            .and_then(|b| b.get("op"))
+            .and_then(|v| v.as_str())
+            .map(|o| VI_ARGWITNESS_OPS.contains(&o))
+            .unwrap_or(false);
+        if !is_arg {
+            continue;
+        }
+        let cls = cadence::classify(node, &cls_model)
+            .map_err(|e| ValueInventionError(format!("cadence classify failed: {e}")))?;
+        if cls == Cadence::Continuous {
+            return err(format!(
+                "arg-witness map {vname:?} classifies CONTINUOUS — a build-time assignment \
+                 buffer's inputs must be CONST/DISCRETE (RFC §5.7 guard 2)"
+            ));
+        }
+    }
+
+    // Maps first (a producer's join / key — or an arg-witness `join` — may reference them).
     for (vname, node) in &det.maps {
         vi_materialize_map(&mut ctx, vname, node)?;
     }
 
-    // Cadence classification model: re-type each map var to its body's class so
-    // the §5.7 guard 2 below classifies a producer that joins on it correctly (a
-    // CONST-derived bin map passes; a genuinely state-dependent one still
-    // classifies CONTINUOUS → reject).
-    let cls_model = vi_classification_model(model_json, &det.maps)?;
+    // Surface the arg-witness buffers (the integer nearest-generator INDEX
+    // assignment), dense in output-index order, for byte-identity assertions and
+    // the downstream grouped reduction the SCVT step consumes.
+    for (vname, node) in &det.maps {
+        let is_arg = node
+            .get("expr")
+            .and_then(|b| b.get("op"))
+            .and_then(|v| v.as_str())
+            .map(|o| VI_ARGWITNESS_OPS.contains(&o))
+            .unwrap_or(false);
+        if !is_arg {
+            continue;
+        }
+        let m = &ctx.maps[vname];
+        let mut keys: Vec<i64> = m.keys().copied().collect();
+        keys.sort_unstable();
+        let buf: Vec<i64> = keys
+            .iter()
+            .map(|k| match m.get(k) {
+                Some(Val::Int(i)) => *i,
+                _ => 0,
+            })
+            .collect();
+        result.assignments.insert(vname.clone(), buf);
+    }
 
     // `from_faq` id → derived index-set name (so we only materialise producers a
     // derived set actually names; geometry producers are handled elsewhere).
@@ -1159,5 +1331,152 @@ mod tests {
         let vi = materialize_value_invention(&plain, &HashMap::new(), &HashMap::new()).unwrap();
         assert!(vi.extents.is_empty());
         assert!(vi.vi_var_names.is_empty());
+        assert!(vi.assignments.is_empty());
+    }
+
+    // ── Arg-witness reducer (bead ess-os1, §5.7 rule 6) ──────────────────────
+    // The integer nearest-generator INDEX buffer, byte-identical to the Julia /
+    // Python port-parity tests: the SAME coordinate factors → the SAME buffer.
+
+    const ARGMIN_FIXTURE: &str =
+        include_str!("../../../tests/valid/aggregate/nearest_generator_argmin.esm");
+
+    #[test]
+    fn argmin_nearest_generator_smallest_id_tiebreak() {
+        let mj = model_json(ARGMIN_FIXTURE, "NearestGeneratorArgmin");
+        // Generators on the x-axis at 0,1,2; point 3 (1.5,0) is EXACTLY 0.25 from
+        // generators 2 (1.0) and 3 (2.0) — the deliberate equidistant tie.
+        let const_arrays = ca(vec![
+            ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
+            ("gy", arr(&[3], vec![0.0, 0.0, 0.0])),
+            ("px", arr(&[4], vec![0.0, 1.0, 1.5, 2.0])),
+            ("py", arr(&[4], vec![0.0, 0.5, 0.0, 0.0])),
+        ]);
+        let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new()).unwrap();
+        // 1-based nearest-generator ids; the tie at point 3 → the SMALLER id (2).
+        assert_eq!(vi.assignments["assign"], vec![1, 2, 2, 3]);
+        assert_eq!(sorted(&vi.vi_var_names), vec!["assign"]);
+        assert!(vi.extents.is_empty());
+    }
+
+    #[test]
+    fn argmin_binned_same_bin_candidate_join() {
+        let mj = model_json(ARGMIN_FIXTURE, "NearestGeneratorBinned");
+        let p = params(&[("binw", 1.0)]);
+        // binw=1 ⇒ each point's join keeps only its same-bin generator → [1,2,3,2].
+        let const_arrays = ca(vec![
+            ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
+            ("gy", arr(&[3], vec![0.0, 0.0, 0.0])),
+            ("px", arr(&[4], vec![0.1, 1.1, 2.1, 1.9])),
+            ("py", arr(&[4], vec![0.0, 0.0, 0.0, 0.0])),
+        ]);
+        let vi = materialize_value_invention(&mj, &const_arrays, &p).unwrap();
+        assert_eq!(vi.assignments["assign_binned"], vec![1, 2, 3, 2]);
+        assert_eq!(
+            sorted(&vi.vi_var_names),
+            vec!["assign_binned", "gen_bin", "point_bin"]
+        );
+    }
+
+    #[test]
+    fn argmax_farthest_generator_smallest_id_tiebreak() {
+        // Mirror op: argmax keeps the GREATEST distance. Point 2 (1.0) is dist 1
+        // from both generator 1 (0.0) and generator 3 (2.0) → tie to the SMALLER id.
+        let model: Value = serde_json::json!({
+            "index_sets": {
+                "points": {"kind": "interval", "size": 2},
+                "generators": {"kind": "interval", "size": 3}
+            },
+            "variables": {
+                "gx": {"type": "parameter", "shape": ["generators"]},
+                "px": {"type": "parameter", "shape": ["points"]},
+                "far": {"type": "state", "shape": ["points"]}
+            },
+            "equations": [{
+                "lhs": {"op": "index", "args": ["far", "i"]},
+                "rhs": {"op": "aggregate", "output_idx": ["i"],
+                    "ranges": {"i": {"from": "points"}},
+                    "expr": {"op": "argmax", "arg": "g",
+                        "ranges": {"g": {"from": "generators"}},
+                        "expr": {"op": "*", "args": [
+                            {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                            {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]}
+                        ]}
+                    }
+                }
+            }]
+        });
+        let const_arrays = ca(vec![
+            ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
+            ("px", arr(&[2], vec![0.0, 1.0])),
+        ]);
+        let vi = materialize_value_invention(&model, &const_arrays, &HashMap::new()).unwrap();
+        assert_eq!(vi.assignments["far"], vec![3, 1]);
+    }
+
+    #[test]
+    fn argmin_empty_candidate_set_is_error() {
+        // A filter that excludes every candidate leaves the argmin undefined.
+        let model: Value = serde_json::json!({
+            "index_sets": {
+                "points": {"kind": "interval", "size": 1},
+                "generators": {"kind": "interval", "size": 2}
+            },
+            "variables": {
+                "gx": {"type": "parameter", "shape": ["generators"]},
+                "px": {"type": "parameter", "shape": ["points"]},
+                "assign": {"type": "state", "shape": ["points"]}
+            },
+            "equations": [{
+                "lhs": {"op": "index", "args": ["assign", "i"]},
+                "rhs": {"op": "aggregate", "output_idx": ["i"],
+                    "ranges": {"i": {"from": "points"}},
+                    "expr": {"op": "argmin", "arg": "g",
+                        "ranges": {"g": {"from": "generators"}},
+                        "filter": {"op": "false", "args": []},
+                        "expr": {"op": "*", "args": [
+                            {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]}
+                    }
+                }
+            }]
+        });
+        let const_arrays = ca(vec![
+            ("gx", arr(&[2], vec![0.0, 1.0])),
+            ("px", arr(&[1], vec![0.5])),
+        ]);
+        assert!(materialize_value_invention(&model, &const_arrays, &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn argmin_continuous_assignment_is_rejected() {
+        // §5.7 guard 2: an argmin whose distance reads a genuine `state` coordinate
+        // classifies CONTINUOUS — a per-step assignment is out of scope for v1.
+        let model: Value = serde_json::json!({
+            "index_sets": {
+                "points": {"kind": "interval", "size": 1},
+                "generators": {"kind": "interval", "size": 2}
+            },
+            "variables": {
+                "gx": {"type": "state", "shape": ["generators"]},
+                "px": {"type": "parameter", "shape": ["points"]},
+                "assign": {"type": "state", "shape": ["points"]}
+            },
+            "equations": [{
+                "lhs": {"op": "index", "args": ["assign", "i"]},
+                "rhs": {"op": "aggregate", "output_idx": ["i"],
+                    "ranges": {"i": {"from": "points"}},
+                    "expr": {"op": "argmin", "arg": "g",
+                        "ranges": {"g": {"from": "generators"}},
+                        "expr": {"op": "*", "args": [
+                            {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]}
+                    }
+                }
+            }]
+        });
+        let const_arrays = ca(vec![
+            ("gx", arr(&[2], vec![0.0, 1.0])),
+            ("px", arr(&[1], vec![0.5])),
+        ]);
+        assert!(materialize_value_invention(&model, &const_arrays, &HashMap::new()).is_err());
     }
 }

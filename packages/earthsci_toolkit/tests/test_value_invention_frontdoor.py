@@ -214,3 +214,140 @@ def test_no_op_for_plain_model() -> None:
     vi = materialize_value_invention(plain, {}, {})
     assert not vi.extents
     assert not vi.vi_var_names
+    assert not vi.assignments
+
+
+# --------------------------------------------------------------------------- #
+# (5) arg-witness reducer (bead ess-os1, §5.7 rule 6) — the integer
+#     nearest-generator INDEX buffer, byte-identical to the Julia / Rust
+#     port-parity tests: the SAME coordinate factors → the SAME buffer.
+# --------------------------------------------------------------------------- #
+
+ARGMIN_REL = "tests/valid/aggregate/nearest_generator_argmin.esm"
+
+
+def test_argmin_nearest_generator_smallest_id_tiebreak() -> None:
+    mj = _load_model(ARGMIN_REL, "NearestGeneratorArgmin")
+    # Generators on the x-axis at 0,1,2; point 3 (1.5,0) is EXACTLY 0.25 from
+    # generators 2 (1.0) and 3 (2.0) — the deliberate equidistant tie.
+    ca = {
+        "gx": np.array([0.0, 1.0, 2.0]), "gy": np.array([0.0, 0.0, 0.0]),
+        "px": np.array([0.0, 1.0, 1.5, 2.0]), "py": np.array([0.0, 0.5, 0.0, 0.0]),
+    }
+    vi = materialize_value_invention(mj, ca, {})
+    # 1-based nearest-generator ids; the tie at point 3 resolves to the SMALLER id (2).
+    assert vi.assignments["assign"] == [1, 2, 2, 3]
+    assert vi.vi_var_names == {"assign"}
+    assert not vi.extents
+    # pure function of inputs — re-running is identical.
+    assert materialize_value_invention(mj, ca, {}).assignments["assign"] == [1, 2, 2, 3]
+
+
+def test_argmin_binned_same_bin_candidate_join() -> None:
+    """The argmin's bin-Skolem `join` restricts each point's candidates to its
+    bin (the SCVT broad phase, §5.3)."""
+    mj = _load_model(ARGMIN_REL, "NearestGeneratorBinned")
+    # binw=1 ⇒ each point's join keeps only its same-bin generator → [1,2,3,2].
+    ca = {
+        "gx": np.array([0.0, 1.0, 2.0]), "gy": np.array([0.0, 0.0, 0.0]),
+        "px": np.array([0.1, 1.1, 2.1, 1.9]), "py": np.array([0.0, 0.0, 0.0, 0.0]),
+    }
+    vi = materialize_value_invention(mj, ca, {"binw": 1.0})
+    assert vi.assignments["assign_binned"] == [1, 2, 3, 2]
+    assert vi.vi_var_names == {"point_bin", "gen_bin", "assign_binned"}
+
+
+def test_argmax_farthest_generator_smallest_id_tiebreak() -> None:
+    """Mirror op: argmax keeps the GREATEST distance. Point 2 (1.0) is dist 1
+    from both generator 1 (0.0) and generator 3 (2.0) → tie to the SMALLER id."""
+    model = {
+        "index_sets": {
+            "points": {"kind": "interval", "size": 2},
+            "generators": {"kind": "interval", "size": 3},
+        },
+        "variables": {
+            "gx": {"type": "parameter", "shape": ["generators"]},
+            "px": {"type": "parameter", "shape": ["points"]},
+            "far": {"type": "state", "shape": ["points"]},
+        },
+        "equations": [{
+            "lhs": {"op": "index", "args": ["far", "i"]},
+            "rhs": {
+                "op": "aggregate", "output_idx": ["i"],
+                "ranges": {"i": {"from": "points"}},
+                "expr": {
+                    "op": "argmax", "arg": "g",
+                    "ranges": {"g": {"from": "generators"}},
+                    "expr": {"op": "*", "args": [
+                        {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                        {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                    ]},
+                },
+            },
+        }],
+    }
+    ca = {"gx": np.array([0.0, 1.0, 2.0]), "px": np.array([0.0, 1.0])}
+    vi = materialize_value_invention(model, ca, {})
+    assert vi.assignments["far"] == [3, 1]
+
+
+def test_argmin_empty_candidate_set_is_error() -> None:
+    """A filter that excludes every candidate leaves the argmin undefined."""
+    model = {
+        "index_sets": {
+            "points": {"kind": "interval", "size": 1},
+            "generators": {"kind": "interval", "size": 2},
+        },
+        "variables": {
+            "gx": {"type": "parameter", "shape": ["generators"]},
+            "px": {"type": "parameter", "shape": ["points"]},
+            "assign": {"type": "state", "shape": ["points"]},
+        },
+        "equations": [{
+            "lhs": {"op": "index", "args": ["assign", "i"]},
+            "rhs": {
+                "op": "aggregate", "output_idx": ["i"],
+                "ranges": {"i": {"from": "points"}},
+                "expr": {
+                    "op": "argmin", "arg": "g",
+                    "ranges": {"g": {"from": "generators"}},
+                    "filter": {"op": "false", "args": []},
+                    "expr": {"op": "*", "args": [
+                        {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]},
+                },
+            },
+        }],
+    }
+    with pytest.raises(ValueInventionError):
+        materialize_value_invention(model, {"gx": np.array([0.0, 1.0]), "px": np.array([0.5])}, {})
+
+
+def test_argmin_continuous_assignment_is_rejected() -> None:
+    """§5.7 guard 2: an argmin whose distance reads a genuine `state` coordinate
+    classifies CONTINUOUS — a per-step assignment is out of scope for v1."""
+    model = {
+        "index_sets": {
+            "points": {"kind": "interval", "size": 1},
+            "generators": {"kind": "interval", "size": 2},
+        },
+        "variables": {
+            "gx": {"type": "state", "shape": ["generators"]},
+            "px": {"type": "parameter", "shape": ["points"]},
+            "assign": {"type": "state", "shape": ["points"]},
+        },
+        "equations": [{
+            "lhs": {"op": "index", "args": ["assign", "i"]},
+            "rhs": {
+                "op": "aggregate", "output_idx": ["i"],
+                "ranges": {"i": {"from": "points"}},
+                "expr": {
+                    "op": "argmin", "arg": "g",
+                    "ranges": {"g": {"from": "generators"}},
+                    "expr": {"op": "*", "args": [
+                        {"op": "index", "args": ["gx", "g"]}, {"op": "index", "args": ["gx", "g"]}]},
+                },
+            },
+        }],
+    }
+    with pytest.raises(ValueInventionError):
+        materialize_value_invention(model, {"gx": np.array([0.0, 1.0]), "px": np.array([0.5])}, {})

@@ -269,6 +269,8 @@
             "aggregate",
             "skolem",
             "rank",
+            "argmin",
+            "argmax",
             "intersect_polygon",
             "true",
             "makearray",
@@ -442,6 +444,10 @@
         "key": {
           "$ref": "#/$defs/Expression",
           "description": "For arrayop / aggregate: optional Skolem term — a deterministic, content-addressed key naming each member an index-set-producing (`distinct`) node emits (RFC semiring-faq-unified-ir §5.5). Typically a `{ \"op\": \"skolem\", \"args\": [<label>, <component>…] }` node; the components are canonicalized (a symmetric relation sorts its components, e.g. an undirected edge (min(u,v), max(u,v)); a directed one preserves order) so the same member is named identically across bindings (§5.7). Dense integer ids for the array backend then come from a `{ \"op\": \"rank\" }` over the resulting set. Floats are forbidden in keys (§5.7 / §A.5) — keys are integer or categorical ids."
+        },
+        "arg": {
+          "type": "string",
+          "description": "For the arg-witness reducers `argmin` / `argmax` (RFC semiring-faq-unified-ir §5.7 rule 6): names the contracted `ranges` index symbol whose value (a 1-based generator id) is RETURNED at the optimum. The op reduces its `expr` body (a declarative scalar FAQ, e.g. a squared-distance metric) over the inner `ranges` candidate domain — optionally pruned by a bin-Skolem `join` / `filter` — and emits the witnessing INDEX rather than the reduced value: `assign[i] = argmin_g dist(point_i, gen_g)`, the nearest-generator assignment. NET-NEW because the closed semiring registry (§5.1) returns values and the value-invention primitives distinct/skolem/rank (§5.5) return sets — neither returns the arg. Materialized at build time as an integer per-element buffer (CONST/DISCRETE cadence, like the §A.8 bin-Skolem `:map` buffers; a CONTINUOUS arg-witness is rejected by §5.7 guard 2). The NORMATIVE tie-break is the SMALLEST arg (smallest generator id): equal `expr` values resolve to the lower index, making the buffer byte-identical across bindings (§5.7). REQUIRED on `argmin` / `argmax`; ignored on any other op. An empty candidate set is an error (no index witnesses the optimum)."
         },
         "manifold": {
           "type": "string",

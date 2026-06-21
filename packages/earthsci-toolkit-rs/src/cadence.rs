@@ -69,8 +69,10 @@ fn join(classes: impl IntoIterator<Item = Cadence>) -> Cadence {
 }
 
 /// The relational / value-invention ops that may not run on the hot path (§5.7
-/// guard 2): one classifying `CONTINUOUS` is a hard error.
-const RELATIONAL_OPS: [&str; 4] = ["distinct", "join", "skolem", "rank"];
+/// guard 2): one classifying `CONTINUOUS` is a hard error. Includes the
+/// arg-witness reducers (`argmin`/`argmax`, §5.7 rule 6) — a state-dependent
+/// assignment is out of scope for v1, exactly like a state-dependent `distinct`.
+const RELATIONAL_OPS: [&str; 6] = ["distinct", "join", "skolem", "rank", "argmin", "argmax"];
 
 // === Leaf seeds + classification ==========================================
 

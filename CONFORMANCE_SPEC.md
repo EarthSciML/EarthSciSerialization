@@ -553,8 +553,10 @@ The comparison system categorizes divergences as:
 
 `earthsci-toolkit` is **parallel native implementations** (Julia, Rust,
 Python, …) verified by this suite — not one core behind FFI. The
-value-invention primitives `distinct`, `skolem`, and `rank`, together with
-value-equality and group-by joins, produce **index sets and dense IDs that
+value-invention primitives `distinct`, `skolem`, and `rank`, the arg-witness
+reducers `argmin`/`argmax` (§5.5.1 rule 6), together with
+value-equality and group-by joins, produce **index sets, dense IDs, and
+assignment buffers that
 other nodes consume**. Two bindings that disagree on the *order* or *numbering*
 of those outputs produce **different models**, not merely different formatting.
 This determinism is therefore **normative spec**, not an implementation detail,
@@ -614,6 +616,23 @@ on hash-table iteration order or a language-native hash value.
    cannot change the result. For a **floating-point** `⊕`, the per-bucket
    reduction MUST be done sequentially in canonical order to avoid last-ULP
    drift.
+
+6. **Arg-witness reducers (`argmin` / `argmax`).** A build-time reduction over a
+   contracted candidate range that emits the **arg** — the witnessing index — not
+   the reduced value (`assign[i] = argmin_g dist(point_i, gen_g)`, the
+   nearest-generator INDEX). The closed semiring registry (§5.6) reduces to
+   *values* and `distinct`/`skolem`/`rank` produce *sets*; neither yields the arg,
+   so this is a distinct primitive. The tie-break is **normative: the smallest arg
+   (smallest candidate id) wins** on an equal reduced value (`<` selects for
+   `argmin`, `>` for `argmax`; on an exact tie the smaller index). The comparison
+   is explicit — never enumeration order — so the emitted integer buffer is a pure
+   function of the candidate ids and the metric, byte-identical across bindings.
+   The reduced value is an ordinary FAQ over the candidate factors; a float value
+   participates only in the comparison, never in a key (use a squared metric, not
+   `sqrt`, to keep ties bit-exact). An empty candidate set is an error. The buffer
+   is a CONST/DISCRETE build-time materialization off the hot path; a continuous
+   (state-dependent) arg-witness is rejected by §5.7.6 guard 2, like a continuous
+   `distinct`.
 
 #### 5.5.2 The hash-randomization footguns this neutralizes
 
@@ -908,9 +927,10 @@ cadence, not equation tearing. This is a *checked* property:
 1. **Acyclicity.** The `≤ DISCRETE` subgraph MUST be a DAG; a cycle is an
    implicit/iterative solve, out of scope (use a `call` handler). Reject with a
    diagnostic **naming the cycle**.
-2. **No relational engine on the hot path.** A `distinct`/`join`/`skolem`/`rank`
+2. **No relational engine on the hot path.** A
+   `distinct`/`join`/`skolem`/`rank`/`argmin`/`argmax`
    node that classifies `CONTINUOUS` is **rejected** — state-dependent topology
-   may not run per step in v1.
+   (or a state-dependent arg-witness assignment) may not run per step in v1.
 3. **Optional author assertion.** `expect_cadence: "const"|"discrete"|
    "continuous"` on a node (`esm-schema.json`, the `expect_cadence` property on
    `ExpressionNode`) is a test/diagnostic hook only; the pass errors if the

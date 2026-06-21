@@ -298,8 +298,10 @@ two separate concerns:
 
 ### 5.7 Cross-binding determinism (normative)
 
-The value-invention primitives of §5.5 (`distinct`, `skolem`, `rank`) and the
-joins of §5.3 produce **index sets and dense IDs that other nodes consume**, so
+The value-invention primitives of §5.5 (`distinct`, `skolem`, `rank`), the
+arg-witness reducers (`argmin`/`argmax`, rule 6), and the
+joins of §5.3 produce **index sets, dense IDs, and assignment buffers that other
+nodes consume**, so
 two bindings that disagree on their order or numbering produce *different models*,
 not merely different formatting. Because `earthsci-toolkit` is parallel native
 implementations (Julia, Rust, Python, …) verified by a conformance suite — not one
@@ -307,9 +309,9 @@ core behind FFI — this determinism is **normative spec, stated here**, not an
 implementation detail deferred to an appendix. (Appendix A.5 keeps the per-language
 *rationale* and the hash-randomization footguns; the rules below are the contract.)
 
-**Governing principle.** Every emitted set, key, and dense ID is a **pure function
-of a defined total order over tuples**. No observable output may depend on
-hash-table iteration order or a language-native hash value.
+**Governing principle.** Every emitted set, key, dense ID, and arg-witness index is
+a **pure function of a defined total order over tuples**. No observable output may
+depend on hash-table iteration order or a language-native hash value.
 
 1. **Total order.** Lexicographic over tuple fields: integers by value; strings by
    Unicode code-point (UTF-8 byte) order, *not* locale collation. **Floats are
@@ -335,12 +337,33 @@ hash-table iteration order or a language-native hash value.
    combine duplicates must be associative + commutative (all registry ⊕s are), so
    input and parallel order cannot change the result; for floating-point ⊕, do the
    final reduction sequentially in canonical order to avoid last-ULP drift.
+6. **Arg-witness reducers (`argmin` / `argmax`).** A build-time reduction over a
+   contracted candidate range that emits the **arg** — the witnessing index — not
+   the reduced value: `assign[i] = argmin_g dist(point_i, gen_g)`, the
+   nearest-generator INDEX (the SCVT assignment step). This is **net-new**: the
+   closed semiring registry (§5.1) reduces to *values* and the value-invention
+   primitives `distinct`/`skolem`/`rank` produce *sets* — neither yields the arg.
+   The tie-break is **normative: the smallest arg (the smallest candidate id) wins**
+   when two candidates have an equal reduced value (`<` selects for `argmin`, `>`
+   for `argmax`; on an exact tie the smaller index). Like every rule here the
+   output is a pure function of a total order — the tie comparison is explicit,
+   never enumeration order — so the emitted integer buffer is byte-identical across
+   bindings. The reduced value is an ordinary FAQ over the candidate factors (e.g.
+   a squared-distance metric); a float value is permitted because it participates
+   only in the *comparison*, never in a key, and identical IEEE arithmetic in the
+   same operation order is bit-exact (use the squared metric, not `sqrt`, to keep
+   ties exact). An empty candidate set is an error (no index witnesses an empty
+   argmin). The buffer is a CONST/DISCRETE build-time materialization off the hot
+   path (§6.1) — the Lloyd/SCVT outer loop re-invokes the build with updated
+   generators; a state-dependent (continuous) arg-witness is rejected by guard 2,
+   exactly like a continuous `distinct`.
 
 Conformance (the suite must add this — it currently asserts only *semantic* graph
 equivalence and tolerates "minor formatting differences"): feed identical mesh /
-table inputs to all bindings and assert **byte-identical serialized index sets and
-identical dense-ID arrays**, including adversarial inputs (duplicate edges, reversed
-orientation, permuted input order) to prove order-independence.
+table inputs to all bindings and assert **byte-identical serialized index sets,
+identical dense-ID arrays, and identical arg-witness assignment buffers**, including
+adversarial inputs (duplicate edges, reversed orientation, permuted input order,
+equidistant ties) to prove order-independence.
 
 ## 6. Evaluator changes
 

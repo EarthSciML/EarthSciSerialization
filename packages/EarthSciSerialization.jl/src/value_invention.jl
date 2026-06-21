@@ -36,6 +36,15 @@ _vi_get(d, k, default=nothing) = isa(d, AbstractDict) ? get(d, k, default) : def
 # The relational body ops that mark a value-invention output (excluded from the ODE).
 const _VI_BODY_OPS = ("skolem", "rank", "distinct")
 
+# Arg-witness reducer ops (RFC §5.7 rule 6): a build-time reduction over a
+# contracted candidate range that emits the ARG — the witnessing index — rather
+# than the reduced value. The nearest-generator INDEX assignment. NET-NEW: the
+# closed semiring registry (§5.1) returns values and value-invention
+# (distinct/skolem/rank) returns sets — NEITHER returns the arg. Materialised as
+# an integer per-element buffer at CONST cadence, exactly like the `:map` skolem
+# bin buffers.
+const _VI_ARGWITNESS_OPS = ("argmin", "argmax")
+
 """
     _vi_node_kind(node) -> Symbol
 
@@ -46,6 +55,9 @@ Classify a raw aggregate node's value-invention role:
 - `:map`      — a per-element map whose body is `skolem` (e.g.
   `src_bin[i] = skolem("bin", floor(...), floor(...))`): a value-invention buffer
   the producer's `join`/`key` references; materialised so the join can gate on it.
+  Also a per-element map whose body is an arg-witness reducer (`argmin`/`argmax`,
+  e.g. `assign[i] = argmin_g dist(point_i, gen_g)`): an integer assignment buffer
+  emitted by the inner reduction (§5.7 rule 6).
 - `:exclude`  — another value-invention output (e.g. a `rank` dense-id buffer like
   `edge_dense_id`) that is dropped from the ODE but needs no setup materialisation
   (nothing downstream of the front-door consumes its values in v1).
@@ -58,7 +70,7 @@ function _vi_node_kind(node)
     body = _vi_get(node, "expr")
     if isa(body, AbstractDict)
         bop = _vi_get(body, "op")
-        bop == "skolem" && return :map
+        (bop == "skolem" || bop in _VI_ARGWITNESS_OPS) && return :map
         bop in _VI_BODY_OPS && return :exclude
     end
     key = _vi_get(node, "key")
@@ -347,6 +359,78 @@ function _vi_join_ok(join, producer_ranges, ctx::_ViCtx, bindings::AbstractDict)
     return true
 end
 
+# Arg-witness reducer (RFC §5.7 rule 6). Over the inner contracted `ranges`
+# (which EXTEND the outer map binding so `value` may read both the point and the
+# candidate), evaluate the scalar `value` body at each candidate and return the
+# `arg` index symbol's value at the optimum — `argmin` keeps the least value,
+# `argmax` the greatest. The NORMATIVE tie-break is the SMALLEST arg (the
+# smallest generator ID): equal values resolve to the lower candidate index, so
+# the emitted integer buffer is byte-identical across bindings irrespective of
+# enumeration order (the §5.7 byte-identical-determinism contract — this op's
+# analogue of the `distinct` sorted-order / `rank` numbering rules). An optional
+# `join` (a bin-Skolem broad-phase prune, §5.3) and/or `filter` restrict the
+# candidate set; an empty candidate set is an error (no index witnesses an empty
+# argmin — a point with no candidate generator is undefined).
+function _vi_argreduce(node, ctx::_ViCtx, outer_bindings::AbstractDict, outer_ranges)
+    op = _vi_get(node, "op")
+    inner_ranges = _vi_get(node, "ranges", Dict{String,Any}())
+    arg_sym = _vi_get(node, "arg")
+    arg_sym === nothing && throw(TreeWalkError("E_TREEWALK_VI_ARG",
+        "arg-witness op '$op' requires an `arg` naming the witnessing index symbol"))
+    arg_sym = String(arg_sym)
+    value_expr = _vi_get(node, "expr")
+    value_expr === nothing && throw(TreeWalkError("E_TREEWALK_VI_ARG",
+        "arg-witness op '$op' requires an `expr` body (the scalar to optimise)"))
+    haskey(inner_ranges, arg_sym) || throw(TreeWalkError("E_TREEWALK_VI_ARG",
+        "arg-witness `arg`='$arg_sym' must name one of the contracted `ranges` symbols"))
+    haskey(outer_bindings, arg_sym) && throw(TreeWalkError("E_TREEWALK_VI_ARG",
+        "arg-witness `arg`='$arg_sym' shadows an outer index symbol"))
+    filt = _vi_get(node, "filter")
+    join = _vi_get(node, "join")
+    # Combined ranges so a `join` column over an OUTER-indexed map buffer (the
+    # point's bin) resolves alongside the inner candidate's bin (§5.3 equi-join).
+    # `Base.merge` — the module shadows `merge` with an `EsmFile` method.
+    combined = Base.merge(Dict{String,Any}(outer_ranges), Dict{String,Any}(inner_ranges))
+    syms = _vi_order_syms(inner_ranges)
+    bindings = Dict{String,Any}(outer_bindings)
+    best_val = nothing
+    best_arg = nothing
+    function rec(k)
+        if k > length(syms)
+            if filt !== nothing
+                fv = _vi_eval(filt, ctx, bindings)
+                (fv === true || (isa(fv, Real) && fv > 0)) || return
+            end
+            if join !== nothing && !_vi_join_ok(join, combined, ctx, bindings)
+                return
+            end
+            v = Float64(_vi_eval(value_expr, ctx, bindings))
+            a = _vi_key_int(bindings[arg_sym])
+            if best_arg === nothing
+                best_val = v; best_arg = a
+            else
+                better = op == "argmax" ? (v > best_val) : (v < best_val)
+                # Strict improvement OR an exact tie resolved to the smaller arg.
+                if better || (v == best_val && a < best_arg)
+                    best_val = v; best_arg = a
+                end
+            end
+            return
+        end
+        s = syms[k]
+        for val in _vi_range_values(inner_ranges[s], ctx, bindings)
+            bindings[s] = val
+            rec(k + 1)
+        end
+        delete!(bindings, s)
+    end
+    rec(1)
+    best_arg === nothing && throw(TreeWalkError("E_TREEWALK_VI_ARGEMPTY",
+        "arg-witness op '$op' has an empty candidate set; no index witnesses the " *
+        "optimum (a point with no candidate generator is undefined)"))
+    return best_arg
+end
+
 # Materialise a per-element value-invention map var → Dict(output-index → value).
 function _vi_materialize_map!(ctx::_ViCtx, vname::AbstractString, node)
     output_idx = _vi_get(node, "output_idx", Any[])
@@ -355,10 +439,15 @@ function _vi_materialize_map!(ctx::_ViCtx, vname::AbstractString, node)
     body = _vi_get(node, "expr")
     body === nothing && throw(TreeWalkError("E_TREEWALK_VI_MAP",
         "value-invention map '$(vname)' has no `expr` body"))
+    outer_ranges = _vi_get(node, "ranges", Dict{String,Any}())
+    is_arg = isa(body, AbstractDict) && _vi_get(body, "op") in _VI_ARGWITNESS_OPS
     out = Dict{Any,Any}()
     sym = String(output_idx[1])
-    _vi_enumerate(_vi_get(node, "ranges", Dict{String,Any}()), ctx, bindings -> begin
-        out[bindings[sym]] = _vi_eval(body, ctx, bindings)
+    _vi_enumerate(outer_ranges, ctx, bindings -> begin
+        # An arg-witness body runs the inner reduction (with the outer point bound)
+        # and emits the witnessing INDEX; an ordinary body (skolem) emits its value.
+        out[bindings[sym]] = is_arg ? _vi_argreduce(body, ctx, bindings, outer_ranges) :
+                                      _vi_eval(body, ctx, bindings)
     end)
     ctx.maps[vname] = out
     return out
@@ -418,18 +507,24 @@ Run the build-time value-invention engine over a raw model document. Returns:
   cardinality (the dense extent `[1, n]` the tree-walk resolver consumes).
 - `members::Dict{String,Vector}` — `from_faq` producer id → the distinct member
   tuples in §5.5.1 sorted order (for byte-identity assertions).
+- `assignments::Dict{String,Vector{Int}}` — arg-witness map var → the integer
+  nearest-generator INDEX buffer, dense in output-index order (the SCVT
+  assignment; §5.7 rule 6, byte-identical across bindings).
 - `vi_var_names::Set{String}` — value-invention LHS vars to drop from the ODE.
 
 `const_arrays` supplies the build-time factor arrays (the connectivity / coords
 the keys are computed from); `params` supplies scalar parameter overrides. A
-producer that classifies CONTINUOUS is rejected (§5.7 guard 2).
+producer (or arg-witness assignment) that classifies CONTINUOUS is rejected
+(§5.7 guard 2).
 """
 function materialize_value_invention(model_json, const_arrays::AbstractDict,
                                      params::AbstractDict)
     det = _vi_detect(model_json)
     extents = Dict{String,Int}()
     members = Dict{String,Vector{Any}}()
-    det.has_vi || return (extents=extents, members=members, vi_var_names=det.vi_var_names)
+    assignments = Dict{String,Vector{Int}}()
+    det.has_vi || return (extents=extents, members=members, assignments=assignments,
+                          vi_var_names=det.vi_var_names)
 
     ctx = _ViCtx(
         Dict{String,Any}(String(k) => v for (k, v) in const_arrays),
@@ -438,18 +533,44 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
         Dict{String,Any}(Cadence.to_native(_vi_get(model_json, "variables", Dict{String,Any}()))),
         Dict{String,Dict{Any,Any}}())
 
-    # Maps first (a producer's join/key may reference them).
-    for (vname, node) in det.maps
-        _vi_materialize_map!(ctx, vname, node)
-    end
-
     # Cadence classification model: a value-invention MAP output (e.g. `src_bin`)
     # is a setup-materialized buffer, so its cadence is `class(its definition)` per
     # §6.1 (max over inputs) — NOT the seed of its declared `state`/`discrete`
     # kind. Re-type each map var to its body's class so the §5.7 guard 2 below
-    # classifies a producer that joins on it correctly (a CONST-derived bin map
-    # passes; a genuinely state-dependent one still classifies CONTINUOUS → reject).
+    # classifies a producer/arg-witness that joins on it correctly (a CONST-derived
+    # bin map passes; a genuinely state-dependent one still classifies CONTINUOUS →
+    # reject). It depends only on the model structure, so it is built before
+    # materialisation.
     cls_model = _vi_classification_model(model_json, det.maps)
+
+    # §5.7 guard 2 for arg-witness assignments: a state-dependent nearest-generator
+    # buffer (continuous cadence) may not be materialised at build time — its
+    # topology would change every step (out of scope for v1, like a continuous
+    # `distinct`). The Lloyd/SCVT outer loop re-invokes the build with updated
+    # generators; within one build the assignment is CONST/DISCRETE.
+    for (vname, node) in det.maps
+        body = _vi_get(node, "expr")
+        (isa(body, AbstractDict) && _vi_get(body, "op") in _VI_ARGWITNESS_OPS) || continue
+        Cadence.classify(node, cls_model) == "continuous" && throw(TreeWalkError(
+            "E_TREEWALK_VI_CONTINUOUS",
+            "arg-witness map '$vname' classifies CONTINUOUS — a build-time assignment " *
+            "buffer's inputs must be CONST/DISCRETE (RFC §5.7 guard 2)"))
+    end
+
+    # Maps first (a producer's join/key — or an arg-witness `join` — may reference them).
+    for (vname, node) in det.maps
+        _vi_materialize_map!(ctx, vname, node)
+    end
+
+    # Surface the arg-witness buffers (the integer nearest-generator INDEX
+    # assignment), dense in output-index order, for byte-identity assertions and
+    # the downstream grouped reduction the SCVT step consumes.
+    for (vname, node) in det.maps
+        body = _vi_get(node, "expr")
+        (isa(body, AbstractDict) && _vi_get(body, "op") in _VI_ARGWITNESS_OPS) || continue
+        m = ctx.maps[vname]
+        assignments[vname] = Int[Int(m[k]) for k in sort!(collect(keys(m)))]
+    end
 
     # `from_faq` id → derived index-set name (so we only materialise producers a
     # derived set actually names; geometry producers are handled elsewhere).
@@ -476,5 +597,6 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
         extents[id] = length(mem)
     end
 
-    return (extents=extents, members=members, vi_var_names=det.vi_var_names)
+    return (extents=extents, members=members, assignments=assignments,
+            vi_var_names=det.vi_var_names)
 end
