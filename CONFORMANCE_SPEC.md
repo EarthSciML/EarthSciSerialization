@@ -634,6 +634,22 @@ on hash-table iteration order or a language-native hash value.
    (state-dependent) arg-witness is rejected by §5.7.6 guard 2, like a continuous
    `distinct`.
 
+7. **Grouped reduction over an arg-witness key (the SCVT centroid step).** A
+   group-by aggregate (rule 5) MAY be keyed on an arg-witness assignment buffer
+   (rule 6): `num[g] = Σ_{p : assign[p]=g} ρ_p·x_p`, `den[g] = Σ_{p : assign[p]=g}
+   ρ_p`, `centroid[g] = num[g]/den[g]` — the per-generator density-weighted
+   centroid. The group KEY is the *value-dependent* `assign` buffer (not a loop
+   index), so it is a value-equality group-by and MUST follow rule 5 exactly:
+   bucket by the canonical integer key, reduce each bucket's floats sequentially in
+   canonical value order, and emit `0̄` for an empty group (an unattended generator
+   then has `den=0` and a NaN `centroid` — division is IEEE, never an exception, so
+   every binding agrees). The whole step is materialized off the hot path through
+   the value-invention front-door (the same CONST/DISCRETE point as the `assign`
+   buffer it consumes) and dropped from the ODE; `num`/`den`/`centroid` are pure
+   functions of the inputs and the rule-5/rule-6 orders, hence byte/tolerance-
+   identical across bindings. A grouped/derived buffer reading live ODE `state` is
+   rejected by §5.7.6 guard 2 (its inputs MUST be CONST/DISCRETE).
+
 #### 5.5.2 The hash-randomization footguns this neutralizes
 
 | Binding | Footgun | Effect |

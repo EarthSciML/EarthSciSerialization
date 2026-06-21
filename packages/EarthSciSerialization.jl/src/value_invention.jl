@@ -106,29 +106,126 @@ function _vi_model_assignments(model_json)
     return out
 end
 
+# Every `index` target name reachable in a sub-tree (the array a value reads from):
+# `{op:"index", args:[NAME, …]}` → NAME. A derived buffer (`centroid = num/den`) is
+# recognised by its body reading an upstream VI buffer name.
+function _vi_index_targets!(refs, node)
+    if isa(node, AbstractDict)
+        if _vi_get(node, "op") == "index"
+            args = _vi_get(node, "args", Any[])
+            !isempty(args) && isa(args[1], AbstractString) && push!(refs, args[1])
+        end
+        for (_, v) in node
+            _vi_index_targets!(refs, v)
+        end
+    elseif isa(node, AbstractVector)
+        for v in node
+            _vi_index_targets!(refs, v)
+        end
+    end
+    return refs
+end
+
+# The group KEY of a GROUPED reduction, or `nothing`. The SCVT group-by signature
+# is precise: a single-output-index `aggregate` whose `join.on` pairs the OUTPUT
+# index symbol with an already-known value-invention buffer (`num[g] = … join on
+# [["assign","g"]]` ⇒ key `assign`). This is deliberately narrower than "any join
+# touching a VI buffer" — a relational gather that joins two VI bin buffers to
+# EACH OTHER (`A_j = … join on [["src_bin","tgt_bin"]]`, the conservative
+# regridder) pairs neither column with its output index and is NOT a grouped
+# value-invention reduction; it stays an ordinary aggregate on the simulate path.
+function _vi_grouped_key(node, vi_var_names)
+    _vi_get(node, "op") == "aggregate" || return nothing
+    oi = _vi_get(node, "output_idx", Any[])
+    length(oi) == 1 || return nothing
+    gsym = String(oi[1])
+    join = _vi_get(node, "join")
+    join === nothing && return nothing
+    for clause in join, pair in _vi_get(clause, "on", Any[])
+        length(pair) == 2 || continue
+        a, b = String(pair[1]), String(pair[2])
+        a == gsym && b in vi_var_names && return b
+        b == gsym && a in vi_var_names && return a
+    end
+    return nothing
+end
+
+# True iff `node` is an elementwise DERIVED buffer over known value-invention
+# buffers: a single-output-index `aggregate` with NO join and NO contraction (every
+# range symbol is the output index) whose body reads an upstream VI buffer
+# (`centroid[g] = num[g]/den[g]`). The no-contraction / no-join guard keeps a
+# contracted or scalar aggregate (`mass_tgt = …`, output_idx `[]`) from being
+# mistaken for the centroid map.
+function _vi_is_derived(node, vi_var_names)
+    _vi_get(node, "op") == "aggregate" || return false
+    oi = _vi_get(node, "output_idx", Any[])
+    length(oi) == 1 || return false
+    gsym = String(oi[1])
+    _vi_get(node, "join") === nothing || return false
+    all(==(gsym), keys(_vi_get(node, "ranges", Dict{String,Any}()))) || return false
+    return !isempty(intersect(_vi_index_targets!(Set{String}(), _vi_get(node, "expr")),
+                              vi_var_names))
+end
+
 """
-    _vi_detect(model_json) -> (has_vi, vi_var_names, maps, producers)
+    _vi_detect(model_json) -> (has_vi, vi_var_names, maps, producers, chain)
 
 Scan a raw model for value-invention assignments. `vi_var_names` is the set of
-LHS variables produced by skolem/distinct/rank (excluded from the ODE state, as
-the geometry clip-ring vars are); `maps`/`producers` are `(lhs, node)` pairs to
-materialise.
+LHS variables produced by skolem/distinct/rank/argmin (and the downstream grouped
+reductions) — all excluded from the ODE state, as the geometry clip-ring vars are.
+`maps`/`producers` are `(lhs, node)` pairs to materialise.
+
+`chain` is the ordered list of `(lhs, node, kind)` build-time GROUPED / DERIVED
+buffers downstream of an arg-witness assignment — the SCVT centroid step. A plain
+numeric `aggregate` becomes value-invention by *data dependency*: if its `join.on`
+names an already-known VI buffer it is a `:grouped` semiring reduction keyed on
+that buffer (`num[g] = Σ_{p:assign=g} rho_p·x_p`); if its body merely reads VI
+buffers it is a `:derived` elementwise buffer (`centroid[g] = num[g]/den[g]`). The
+fixpoint discovery order is a valid materialisation (topological) order.
 """
 function _vi_detect(model_json)
     vi_var_names = Set{String}()
     maps = Tuple{String,Any}[]
     producers = Tuple{String,Any}[]
+    candidates = Tuple{String,Any}[]   # plain numeric aggregates — grouped/derived?
     for (lhs, rhs) in _vi_model_assignments(model_json)
-        kind = _vi_node_kind(rhs)
-        kind == :none && continue
         base = _vi_lhs_base(lhs)
         base === nothing && continue
+        kind = _vi_node_kind(rhs)
+        if kind == :none
+            isa(rhs, AbstractDict) && _vi_get(rhs, "op") == "aggregate" &&
+                push!(candidates, (base, rhs))
+            continue
+        end
         push!(vi_var_names, base)   # every value-invention output leaves the ODE
         kind == :producer && push!(producers, (base, rhs))
         kind == :map && push!(maps, (base, rhs))
     end
-    has_vi = !isempty(maps) || !isempty(producers)
-    return (has_vi=has_vi, vi_var_names=vi_var_names, maps=maps, producers=producers)
+    # Fixpoint over the data-dependency DAG: a candidate that depends on a known VI
+    # buffer in the SCVT centroid shape is itself a build-time buffer. A `join`
+    # pairing the output index with a VI buffer ⇒ :grouped; an elementwise body
+    # reading a VI buffer ⇒ :derived. Both signatures are narrow (see the helpers)
+    # so ordinary model aggregates — including the regridder's bin-to-bin gather —
+    # are left on the simulate path.
+    chain = Tuple{String,Any,Symbol}[]
+    changed = true
+    while changed
+        changed = false
+        rest = Tuple{String,Any}[]
+        for (base, node) in candidates
+            if _vi_grouped_key(node, vi_var_names) !== nothing
+                push!(vi_var_names, base); push!(chain, (base, node, :grouped)); changed = true
+            elseif _vi_is_derived(node, vi_var_names)
+                push!(vi_var_names, base); push!(chain, (base, node, :derived)); changed = true
+            else
+                push!(rest, (base, node))
+            end
+        end
+        candidates = rest
+    end
+    has_vi = !isempty(maps) || !isempty(producers) || !isempty(chain)
+    return (has_vi=has_vi, vi_var_names=vi_var_names, maps=maps, producers=producers,
+            chain=chain)
 end
 
 # ---- Build-time evaluation context -----------------------------------------
@@ -223,13 +320,26 @@ function _vi_eval(node, ctx::_ViCtx, bindings::AbstractDict)
 end
 
 # index(factor, i, …): gather from a const-array factor (1-based). The factor is
-# build-time data supplied in `const_arrays`.
+# build-time data supplied in `const_arrays`. A name that resolves to an already-
+# materialised value-invention buffer (an arg-witness assignment or an upstream
+# grouped/derived buffer in `ctx.maps`) is read from that buffer instead — this is
+# what lets a derived buffer read its inputs, e.g. `centroid[g] = num[g]/den[g]`.
 function _vi_index(node, ctx::_ViCtx, bindings::AbstractDict)
     args = _vi_get(node, "args", Any[])
     name = args[1]
+    if isa(name, AbstractString) && haskey(ctx.maps, name)
+        length(args) == 2 || throw(TreeWalkError("E_TREEWALK_VI_INDEX",
+            "materialised value-invention buffer '$name' is a 1-D buffer; expected one " *
+            "index, got $(length(args) - 1)"))
+        idx = _vi_key_int(_vi_eval(args[2], ctx, bindings))
+        haskey(ctx.maps[name], idx) || throw(TreeWalkError("E_TREEWALK_VI_INDEX",
+            "materialised value-invention buffer '$name' has no entry at index $idx"))
+        return ctx.maps[name][idx]
+    end
     isa(name, AbstractString) && haskey(ctx.const_arrays, name) ||
         throw(TreeWalkError("E_TREEWALK_VI_INDEX",
-            "value-invention index target '$(repr(name))' must be a const-array factor"))
+            "value-invention index target '$(repr(name))' must be a const-array factor " *
+            "or an already-materialised value-invention buffer"))
     arr = ctx.const_arrays[name]
     idxs = Tuple(Int(_vi_eval(a, ctx, bindings)) for a in args[2:end])
     # A factor carrying a declared per-dimension boundary policy resolves an
@@ -509,6 +619,110 @@ function _vi_classification_model(model_json, maps)
     return out
 end
 
+# ---- Grouped / derived build-time buffers (the SCVT centroid step) ----------
+
+# The ⊕ reducing function for a grouped semiring aggregate. `bool_and_or` (⊕=`or`)
+# is index-set-producing, not a numeric grouped reduction (mirrors the array path's
+# §5.5 reject), so only the four numeric ⊕s are accepted.
+function _vi_oplus_fn(spelling::AbstractString)
+    spelling == "+"   && return +
+    spelling == "*"   && return *
+    spelling == "max" && return max
+    spelling == "min" && return min
+    throw(TreeWalkError("E_TREEWALK_VI_SEMIRING",
+        "grouped value-invention reduction ⊕='$spelling' is unsupported; expected one of " *
+        "+, *, max, min (a numeric semiring — not the index-set-producing bool_and_or)"))
+end
+
+# §5.7 guard 2 for grouped / derived buffers: a build-time reduction may read only
+# build-time data — const-array factors (parameters) and already-materialised VI
+# buffers. Reading a live ODE `state` variable would make the buffer a per-step
+# (continuous) quantity, out of scope for v1 (the Lloyd/SCVT outer loop re-invokes
+# the build with updated generators instead of folding it into the hot path).
+function _vi_assert_buildtime(ctx::_ViCtx, vname, node, vi_var_names)
+    for r in _vi_index_targets!(Set{String}(), node)
+        r in vi_var_names && continue            # an already-materialised VI buffer
+        haskey(ctx.const_arrays, r) && continue  # a build-time const-array factor
+        v = get(ctx.variables, r, nothing)
+        v !== nothing && _vi_get(v, "type") == "state" && throw(TreeWalkError(
+            "E_TREEWALK_VI_CONTINUOUS",
+            "grouped/derived value-invention buffer '$vname' reads live state '$r' — a " *
+            "build-time reduction's inputs must be CONST/DISCRETE factors or materialised " *
+            "buffers (RFC §5.7 guard 2)"))
+    end
+    return
+end
+
+# Materialise a GROUPED semiring aggregate keyed on a value-invention buffer →
+# Dict(output-index → value). For each output `g`, fold (with the semiring ⊕) the
+# body over the contracted points whose group KEY (`assign[p]`, the arg-witness
+# buffer) equals `g`. The reduction runs through the determinism-correct
+# `Relational.group_aggregate` (§5.5 rule 5: bucket by key, sorted by canonical
+# key, per-bucket float ⊕ sequential in canonical value order) — the first time
+# the front-door calls it (it was a library helper only). Empty groups fold to 0̄.
+function _vi_materialize_grouped!(ctx::_ViCtx, vname::AbstractString, node)
+    output_idx = _vi_get(node, "output_idx", Any[])
+    length(output_idx) == 1 || throw(TreeWalkError("E_TREEWALK_VI_GROUP",
+        "grouped value-invention aggregate '$vname' must have a single output index; got $(output_idx)"))
+    gsym = String(output_idx[1])
+    ranges = _vi_get(node, "ranges", Dict{String,Any}())
+    haskey(ranges, gsym) || throw(TreeWalkError("E_TREEWALK_VI_GROUP",
+        "grouped aggregate '$vname' output index '$gsym' is not among its `ranges`"))
+    body = _vi_get(node, "expr")
+    body === nothing && throw(TreeWalkError("E_TREEWALK_VI_GROUP",
+        "grouped aggregate '$vname' has no `expr` body"))
+    join = _vi_get(node, "join")
+    join === nothing && throw(TreeWalkError("E_TREEWALK_VI_GROUP",
+        "grouped aggregate '$vname' needs a `join` pairing its group-key buffer with '$gsym'"))
+    # The group KEY buffer: the join column (paired with the output index `gsym`)
+    # that names a materialised VI buffer (`assign`). It is read at the contraction
+    # symbol that ranges over its 1-D index set.
+    keyvar = nothing
+    for clause in join, pair in _vi_get(clause, "on", Any[])
+        a, b = String(pair[1]), String(pair[2])
+        b == gsym && haskey(ctx.maps, a) && (keyvar = a)
+        a == gsym && haskey(ctx.maps, b) && (keyvar = b)
+    end
+    keyvar === nothing && throw(TreeWalkError("E_TREEWALK_VI_GROUP",
+        "grouped aggregate '$vname' `join.on` must pair a materialised value-invention " *
+        "buffer with the output index '$gsym'"))
+    keysym = _vi_join_index_sym(keyvar, ranges, ctx)
+    oplus_str, zerobar = _aggregate_oplus_identity(_vi_get(node, "semiring"), _vi_get(node, "reduce"))
+    op = _vi_oplus_fn(oplus_str)
+    # Contraction ranges: every range symbol except the output index.
+    contract = Dict{String,Any}(s => spec for (s, spec) in ranges if s != gsym)
+    rows = Tuple{Any,Float64}[]
+    _vi_enumerate(contract, ctx, bindings -> push!(rows,
+        (ctx.maps[keyvar][bindings[keysym]], Float64(_vi_eval(body, ctx, bindings)))))
+    agg = Dict{Any,Any}(Relational.group_aggregate(rows; key=first, value=last, op=op))
+    # Densify over the output index set; a generator with no assigned point is 0̄.
+    out = Dict{Any,Any}()
+    for g in _vi_range_values(ranges[gsym], ctx, Dict{String,Any}())
+        out[g] = Float64(get(agg, g, zerobar))
+    end
+    ctx.maps[vname] = out
+    return out
+end
+
+# Materialise a DERIVED elementwise buffer (`centroid[g] = num[g]/den[g]`) →
+# Dict(output-index → value). A per-output map whose body reads upstream
+# materialised buffers (resolved by `_vi_index` from `ctx.maps`).
+function _vi_materialize_derived!(ctx::_ViCtx, vname::AbstractString, node)
+    output_idx = _vi_get(node, "output_idx", Any[])
+    length(output_idx) == 1 || throw(TreeWalkError("E_TREEWALK_VI_DERIVED",
+        "derived value-invention aggregate '$vname' must have a single output index; got $(output_idx)"))
+    gsym = String(output_idx[1])
+    ranges = _vi_get(node, "ranges", Dict{String,Any}())
+    body = _vi_get(node, "expr")
+    body === nothing && throw(TreeWalkError("E_TREEWALK_VI_DERIVED",
+        "derived value-invention aggregate '$vname' has no `expr` body"))
+    out = Dict{Any,Any}()
+    _vi_enumerate(ranges, ctx, bindings -> (out[bindings[gsym]] =
+        Float64(_vi_eval(body, ctx, bindings))))
+    ctx.maps[vname] = out
+    return out
+end
+
 """
     materialize_value_invention(model_json, const_arrays, params) -> NamedTuple
 
@@ -521,6 +735,11 @@ Run the build-time value-invention engine over a raw model document. Returns:
 - `assignments::Dict{String,Vector{Int}}` — arg-witness map var → the integer
   nearest-generator INDEX buffer, dense in output-index order (the SCVT
   assignment; §5.7 rule 6, byte-identical across bindings).
+- `groups::Dict{String,Vector{Float64}}` — the downstream GROUPED / DERIVED
+  buffers keyed on an arg-witness assignment, dense in output-index order: a
+  grouped semiring reduction (`num[g] = Σ_{p:assign=g} rho_p·x_p`, run through
+  `Relational.group_aggregate`, §5.5 rule 5) and an elementwise derived buffer
+  (`centroid[g] = num[g]/den[g]`) — the SCVT centroid-update step.
 - `vi_var_names::Set{String}` — value-invention LHS vars to drop from the ODE.
 - `maps::Dict{String,Dict}` — materialised per-element map buffer (e.g. `src_bin`)
   → (1-based output position → bin-key value). A downstream FAQ's
@@ -532,8 +751,8 @@ Run the build-time value-invention engine over a raw model document. Returns:
 
 `const_arrays` supplies the build-time factor arrays (the connectivity / coords
 the keys are computed from); `params` supplies scalar parameter overrides. A
-producer (or arg-witness assignment) that classifies CONTINUOUS is rejected
-(§5.7 guard 2).
+producer (or arg-witness assignment) that classifies CONTINUOUS — or a grouped /
+derived buffer reading live state — is rejected (§5.7 guard 2).
 """
 function materialize_value_invention(model_json, const_arrays::AbstractDict,
                                      params::AbstractDict)
@@ -542,8 +761,9 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
     members = Dict{String,Vector{Any}}()
     assignments = Dict{String,Vector{Int}}()
     map_sets = Dict{String,String}()
+    groups = Dict{String,Vector{Float64}}()
     det.has_vi || return (extents=extents, members=members, assignments=assignments,
-                          vi_var_names=det.vi_var_names,
+                          groups=groups, vi_var_names=det.vi_var_names,
                           maps=Dict{String,Dict{Any,Any}}(), map_sets=map_sets)
 
     ctx = _ViCtx(
@@ -598,6 +818,21 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
         assignments[vname] = Int[Int(m[k]) for k in sort!(collect(keys(m)))]
     end
 
+    # The downstream GROUPED / DERIVED chain — the SCVT centroid step. Each buffer
+    # is materialised in dependency order (`_vi_detect`'s fixpoint discovery order):
+    # a `:grouped` semiring reduction keyed on a now-materialised arg-witness buffer
+    # (`num[g]`/`den[g]`, via `Relational.group_aggregate` — the front-door's first
+    # call of that previously library-only helper) and an elementwise `:derived`
+    # buffer reading upstream buffers (`centroid[g] = num[g]/den[g]`). Each reads
+    # only build-time data (guard 2). All are surfaced dense in output-index order.
+    for (vname, node, kind) in det.chain
+        _vi_assert_buildtime(ctx, vname, node, det.vi_var_names)
+        kind == :grouped ? _vi_materialize_grouped!(ctx, vname, node) :
+                           _vi_materialize_derived!(ctx, vname, node)
+        m = ctx.maps[vname]
+        groups[vname] = Float64[Float64(m[k]) for k in sort!(collect(keys(m)))]
+    end
+
     # `from_faq` id → derived index-set name (so we only materialise producers a
     # derived set actually names; geometry producers are handled elsewhere).
     faq_to_set = Dict{String,String}()
@@ -624,5 +859,6 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
     end
 
     return (extents=extents, members=members, assignments=assignments,
-            vi_var_names=det.vi_var_names, maps=ctx.maps, map_sets=map_sets)
+            groups=groups, vi_var_names=det.vi_var_names,
+            maps=ctx.maps, map_sets=map_sets)
 end

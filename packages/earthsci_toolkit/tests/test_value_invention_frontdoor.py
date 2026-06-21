@@ -351,3 +351,110 @@ def test_argmin_continuous_assignment_is_rejected() -> None:
     }
     with pytest.raises(ValueInventionError):
         materialize_value_invention(model, {"gx": np.array([0.0, 1.0]), "px": np.array([0.5])}, {})
+
+
+# --------------------------------------------------------------------------- #
+# Grouped-aggregate centroid front-door (bead ess-2u5, mpas-scvt)
+# --------------------------------------------------------------------------- #
+# RFC semiring-faq-unified-ir §5.5 rule 5 (group-by aggregate) + §5.7 rule 6.
+# The SCVT centroid-update STEP: a grouped `sum_product` reduction whose group KEY
+# is the data-dependent argmin assignment buffer (E1, ess-os1). The FIRST time the
+# value-invention front-door drives `relational.group_aggregate` (previously a
+# library helper only). The fixture factors here are IDENTICAL to the Julia / Rust
+# port-parity tests — agreement on num / den / centroid IS the conformance proof.
+
+CENTROID_REL = "tests/valid/aggregate/nearest_generator_centroid.esm"
+
+
+def test_centroid_group_aggregate_over_argmin_key() -> None:
+    mj = _load_model(CENTROID_REL, "NearestGeneratorCentroid")
+    # Generators at 0,1,2; points at 0,0.75,1.25,2.0 (exact dyadics, no ties) ⇒
+    # assign = [1,2,2,3]; density rho = [1,1,3,4]. Generator 2 owns points 2,3 ⇒
+    # centroid 4.5/4 = 1.125 (moved from its seed at 1.0).
+    ca = {
+        "gx": np.array([0.0, 1.0, 2.0]),
+        "px": np.array([0.0, 0.75, 1.25, 2.0]),
+        "rho": np.array([1.0, 1.0, 3.0, 4.0]),
+    }
+    vi = materialize_value_invention(mj, ca, {})
+    # The argmin group key (E1) — byte-identical integer buffer.
+    assert vi.assignments["assign"] == [1, 2, 2, 3]
+    # The grouped sum_product buffers — bit-exact (exact-dyadic inputs).
+    assert vi.groups["num"] == [0.0, 4.5, 8.0]
+    assert vi.groups["den"] == [1.0, 4.0, 4.0]
+    # The derived centroid buffer — the next Lloyd / SCVT generator positions.
+    assert vi.groups["centroid"] == [0.0, 1.125, 2.0]
+    # assign + the three grouped/derived buffers all leave the ODE (build-time).
+    assert vi.vi_var_names == {"assign", "num", "den", "centroid"}
+    # Pure function of inputs — re-running is identical.
+    assert materialize_value_invention(mj, ca, {}).groups["centroid"] == [0.0, 1.125, 2.0]
+
+
+def test_centroid_empty_group_folds_to_zerobar() -> None:
+    """Generators with no assigned point fold to the empty-⊕ identity 0; the
+    centroid 0/0 is NaN (an unattended generator — the caller keeps the old seed)."""
+    mj = _load_model(CENTROID_REL, "NearestGeneratorCentroid")
+    ca = {
+        "gx": np.array([0.0, 1.0, 2.0]),
+        "px": np.array([0.0, 0.1, 0.2, 0.3]),
+        "rho": np.array([2.0, 1.0, 1.0, 1.0]),
+    }
+    vi = materialize_value_invention(mj, ca, {})
+    assert vi.assignments["assign"] == [1, 1, 1, 1]
+    assert vi.groups["den"] == [5.0, 0.0, 0.0]  # 0̄ for the empty groups
+    assert vi.groups["num"][1] == 0.0 and vi.groups["num"][2] == 0.0
+    assert np.isnan(vi.groups["centroid"][1]) and np.isnan(vi.groups["centroid"][2])
+
+
+def test_regridder_aggregates_are_not_grouped_value_invention() -> None:
+    """Regression guard (ess-2u5): the conservative regridder's `A_j` joins two bin
+    buffers to EACH OTHER (neither to its output index `j`) and `mass_tgt` is a
+    scalar reduction — neither is the SCVT grouped/derived centroid shape, so the
+    chain must stay empty and they remain on the simulate path."""
+    mj = _load_model("tests/valid/geometry/conservative_regrid_overlap_join.esm",
+                     "ConservativeRegridOverlapJoin")
+    params = {"dx": 1.0, "dy": 1.0, "atol": 1e-12}
+    aligned = {
+        "src_lon": np.array([0.2, 1.2, 2.2]), "src_lat": np.array([0.0, 0.0, 0.0]),
+        "tgt_lon": np.array([0.2, 1.2, 2.2]), "tgt_lat": np.array([0.0, 0.0, 0.0]),
+    }
+    vi = materialize_value_invention(mj, aligned, params)
+    assert not vi.groups, "regridder must mint no grouped buffers"
+    assert "A_j" not in vi.vi_var_names
+    assert "mass_tgt" not in vi.vi_var_names
+
+
+def test_centroid_grouped_reduction_reading_state_is_rejected() -> None:
+    """§5.7 guard 2: `rho` retyped to `state` ⇒ the grouped numerator reads a
+    hot-path quantity; a build-time reduction's inputs must be CONST/DISCRETE."""
+    model = {
+        "index_sets": {
+            "points": {"kind": "interval", "size": 2},
+            "generators": {"kind": "interval", "size": 1},
+        },
+        "variables": {
+            "gx": {"type": "parameter", "shape": ["generators"]},
+            "px": {"type": "parameter", "shape": ["points"]},
+            "rho": {"type": "state", "shape": ["points"]},
+            "assign": {"type": "state", "shape": ["points"]},
+            "num": {"type": "state", "shape": ["generators"]},
+        },
+        "equations": [
+            {"lhs": {"op": "index", "args": ["assign", "i"]},
+             "rhs": {"op": "aggregate", "output_idx": ["i"], "ranges": {"i": {"from": "points"}},
+                     "args": ["px", "gx"],
+                     "expr": {"op": "argmin", "args": ["px", "gx"], "arg": "g",
+                              "ranges": {"g": {"from": "generators"}},
+                              "expr": {"op": "*", "args": [
+                                  {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                                  {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]}]}}}},
+            {"lhs": {"op": "index", "args": ["num", "g"]},
+             "rhs": {"op": "aggregate", "output_idx": ["g"],
+                     "ranges": {"g": {"from": "generators"}, "p": {"from": "points"}},
+                     "semiring": "sum_product", "join": [{"on": [["assign", "g"]]}],
+                     "args": ["assign", "rho"],
+                     "expr": {"op": "index", "args": ["rho", "p"]}}},
+        ],
+    }
+    with pytest.raises(ValueInventionError):
+        materialize_value_invention(model, {"gx": np.array([0.0]), "px": np.array([0.0, 1.0])}, {})

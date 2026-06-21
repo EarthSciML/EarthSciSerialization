@@ -357,13 +357,32 @@ depend on hash-table iteration order or a language-native hash value.
    path (§6.1) — the Lloyd/SCVT outer loop re-invokes the build with updated
    generators; a state-dependent (continuous) arg-witness is rejected by guard 2,
    exactly like a continuous `distinct`.
+7. **Grouped reduction over an arg-witness key (the SCVT centroid step).** A
+   group-by aggregate (rule 5) MAY be keyed on an arg-witness assignment buffer
+   (rule 6): the per-generator density-weighted centroid
+   `num[g] = Σ_{p : assign[p]=g} ρ_p·x_p`, `den[g] = Σ_{p : assign[p]=g} ρ_p`,
+   `centroid[g] = num[g]/den[g]`. The group KEY is the *value-dependent* `assign`
+   buffer, not a loop index — so this is a value-equality group-by, and like every
+   rule-5 reduction it MUST bucket by the canonical integer key and do the
+   floating-point `⊕` sequentially in canonical value order (byte-reproducible);
+   an empty group folds to the semiring's `0̄` (so an unattended generator has
+   `den=0` and a NaN centroid the caller detects). Because the key is a build-time
+   value-invention buffer, the whole step is materialized **off the hot path**
+   through the value-invention front-door — the same CONST/DISCRETE point (§6.1)
+   as the `assign` buffer it consumes — and is dropped from the ODE; the Lloyd/SCVT
+   outer loop re-invokes the build. `num`/`den` (grouped) and `centroid`
+   (elementwise `num/den`) are pure functions of the inputs and the rule-5/rule-6
+   total orders, so they are byte/tolerance-identical across bindings. A grouped or
+   derived buffer that reads live ODE `state` is rejected by guard 2 (its inputs
+   must be CONST/DISCRETE), exactly like a continuous arg-witness.
 
 Conformance (the suite must add this — it currently asserts only *semantic* graph
 equivalence and tolerates "minor formatting differences"): feed identical mesh /
 table inputs to all bindings and assert **byte-identical serialized index sets,
-identical dense-ID arrays, and identical arg-witness assignment buffers**, including
-adversarial inputs (duplicate edges, reversed orientation, permuted input order,
-equidistant ties) to prove order-independence.
+identical dense-ID arrays, identical arg-witness assignment buffers, and
+identical grouped-reduction / centroid buffers**, including adversarial inputs
+(duplicate edges, reversed orientation, permuted input order, equidistant ties)
+to prove order-independence.
 
 ## 6. Evaluator changes
 

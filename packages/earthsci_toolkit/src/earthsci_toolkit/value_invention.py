@@ -129,30 +129,123 @@ class _Detection:
     vi_var_names: Set[str]
     maps: List[Tuple[str, Any]]
     producers: List[Tuple[str, Any]]
+    # The grouped/derived chain in materialisation (fixpoint discovery) order:
+    # ``(lhs_base, node, "grouped" | "derived")``.
+    chain: List[Tuple[str, Any, str]]
+
+
+def _vi_index_targets(node: Any, out: Set[str]) -> Set[str]:
+    """Every ``index`` target name (the array a value reads from) reachable in a
+    subtree: ``{op:"index", args:[NAME, …]}`` → NAME."""
+    if isinstance(node, Mapping):
+        if node.get("op") == "index":
+            args = node.get("args") or []
+            if args and isinstance(args[0], str):
+                out.add(args[0])
+        for v in node.values():
+            _vi_index_targets(v, out)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            _vi_index_targets(v, out)
+    return out
+
+
+def _vi_grouped_key(node: Any, vi_var_names: Set[str]) -> Optional[str]:
+    """The group KEY of a GROUPED reduction, or ``None``. The SCVT group-by
+    signature is precise (mirror of Julia ``_vi_grouped_key``): a single-output-
+    index ``aggregate`` whose ``join.on`` pairs the OUTPUT index symbol with a
+    known value-invention buffer. Deliberately narrower than "any join touching a
+    VI buffer" so a bin-to-bin gather (the conservative regridder's ``A_j``) is
+    left on the simulate path."""
+    if not isinstance(node, Mapping) or node.get("op") != "aggregate":
+        return None
+    oi = node.get("output_idx") or []
+    if len(oi) != 1:
+        return None
+    gsym = oi[0]
+    join = node.get("join")
+    if not isinstance(join, (list, tuple)):
+        return None
+    for clause in join:
+        if not isinstance(clause, Mapping):
+            continue
+        for pair in clause.get("on", []):
+            if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                a, b = pair[0], pair[1]
+                if a == gsym and b in vi_var_names:
+                    return b
+                if b == gsym and a in vi_var_names:
+                    return a
+    return None
+
+
+def _vi_is_derived(node: Any, vi_var_names: Set[str]) -> bool:
+    """True iff ``node`` is an elementwise DERIVED buffer over known VI buffers
+    (mirror of Julia ``_vi_is_derived``): a single-output-index ``aggregate`` with
+    NO join and NO contraction whose body reads an upstream VI buffer."""
+    if not isinstance(node, Mapping) or node.get("op") != "aggregate":
+        return False
+    oi = node.get("output_idx") or []
+    if len(oi) != 1:
+        return False
+    gsym = oi[0]
+    if node.get("join") is not None:
+        return False
+    ranges = node.get("ranges") or {}
+    if any(k != gsym for k in ranges.keys()):
+        return False
+    return bool(_vi_index_targets(node.get("expr"), set()) & vi_var_names)
 
 
 def _vi_detect(model_json: Mapping[str, Any]) -> _Detection:
     """Scan a raw model for value-invention assignments. ``vi_var_names`` is the
-    set of LHS variables produced by skolem/distinct/rank (excluded from the ODE,
-    as the geometry clip-ring vars are); ``maps`` / ``producers`` are
-    ``(lhs_base, node)`` pairs to materialise."""
+    set of LHS variables produced by skolem/distinct/rank/argmin (and the
+    downstream grouped chain), all excluded from the ODE as the geometry clip-ring
+    vars are; ``maps`` / ``producers`` are ``(lhs_base, node)`` pairs to
+    materialise; ``chain`` is the grouped/derived SCVT centroid buffers."""
     vi_var_names: Set[str] = set()
     maps: List[Tuple[str, Any]] = []
     producers: List[Tuple[str, Any]] = []
+    candidates: List[Tuple[str, Any]] = []  # plain numeric aggregates — grouped/derived?
     for lhs, rhs in _vi_model_assignments(model_json):
-        kind = _vi_node_kind(rhs)
-        if kind == "none":
-            continue
         base = _vi_lhs_base(lhs)
         if base is None:
+            continue
+        kind = _vi_node_kind(rhs)
+        if kind == "none":
+            if isinstance(rhs, Mapping) and rhs.get("op") == "aggregate":
+                candidates.append((base, rhs))
             continue
         vi_var_names.add(base)  # every value-invention output leaves the ODE
         if kind == "producer":
             producers.append((base, rhs))
         elif kind == "map":
             maps.append((base, rhs))
-    has_vi = bool(maps) or bool(producers)
-    return _Detection(has_vi=has_vi, vi_var_names=vi_var_names, maps=maps, producers=producers)
+    # Fixpoint over the data-dependency DAG: a candidate that depends on a known VI
+    # buffer in the SCVT centroid shape is itself a build-time buffer. The
+    # signatures are narrow (see the helpers) so ordinary model aggregates —
+    # including the regridder's bin-to-bin gather — are left on the simulate path.
+    chain: List[Tuple[str, Any, str]] = []
+    changed = True
+    while changed:
+        changed = False
+        rest: List[Tuple[str, Any]] = []
+        for base, node in candidates:
+            if _vi_grouped_key(node, vi_var_names) is not None:
+                vi_var_names.add(base)
+                chain.append((base, node, "grouped"))
+                changed = True
+            elif _vi_is_derived(node, vi_var_names):
+                vi_var_names.add(base)
+                chain.append((base, node, "derived"))
+                changed = True
+            else:
+                rest.append((base, node))
+        candidates = rest
+    has_vi = bool(maps) or bool(producers) or bool(chain)
+    return _Detection(
+        has_vi=has_vi, vi_var_names=vi_var_names, maps=maps, producers=producers, chain=chain
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -243,7 +336,14 @@ def _vi_eval(node: Any, ctx: _ViCtx, bindings: Dict[str, Any]) -> Any:
         if op == "ceil":
             return int(np.ceil(float(_vi_eval(args[0], ctx, bindings))))
         if op == "/":
-            return float(_vi_eval(args[0], ctx, bindings)) / float(_vi_eval(args[1], ctx, bindings))
+            # IEEE 754 division (matches Julia / Rust f64): x/0 → ±inf, 0/0 → nan,
+            # never a ZeroDivisionError — an empty grouped denominator yields a NaN
+            # centroid the caller detects, not an exception. np.float64 is the same
+            # IEEE double as the other bindings, so finite results are bit-identical.
+            num = float(_vi_eval(args[0], ctx, bindings))
+            den = float(_vi_eval(args[1], ctx, bindings))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                return float(np.float64(num) / np.float64(den))
         if op == "*":
             acc = 1.0
             for a in args:
@@ -310,15 +410,33 @@ def _resolve_const_index(ctx: _ViCtx, name: str, d: int, i: int, n: int) -> int:
 
 def _vi_index(node: Mapping[str, Any], ctx: _ViCtx, bindings: Dict[str, Any]) -> float:
     """``index(factor, i, …)``: gather from a const-array factor (1-based). The
-    factor is build-time data supplied in ``const_arrays``. An out-of-range index
-    resolves per the array's declared per-dimension boundary policy (ess-gj4):
-    "periodic" wraps, "clamp" edge-extends, absent/"error" raises a structured
-    :class:`ValueInventionError` (so genuine OOB connectivity bugs stay caught)."""
+    factor is build-time data supplied in ``const_arrays``. A name that resolves
+    to an already-materialised value-invention buffer (an arg-witness assignment
+    or an upstream grouped/derived buffer) is read from that buffer — this is what
+    lets ``centroid[g] = num[g]/den[g]`` read its inputs. For a genuine const-array
+    factor, an out-of-range index resolves per the array's declared per-dimension
+    boundary policy (ess-gj4): "periodic" wraps, "clamp" edge-extends, absent/"error"
+    raises a structured :class:`ValueInventionError` (so genuine OOB connectivity
+    bugs stay caught)."""
     args = node.get("args") or []
     name = args[0]
+    if isinstance(name, str) and name in ctx.maps:
+        if len(args) != 2:
+            raise ValueInventionError(
+                f"materialised value-invention buffer {name!r} is a 1-D buffer; expected one "
+                f"index, got {len(args) - 1}"
+            )
+        idx = _vi_key_int(_vi_eval(args[1], ctx, bindings))
+        buf = ctx.maps[name]
+        if idx not in buf:
+            raise ValueInventionError(
+                f"materialised value-invention buffer {name!r} has no entry at index {idx}"
+            )
+        return buf[idx]
     if not isinstance(name, str) or name not in ctx.const_arrays:
         raise ValueInventionError(
-            f"value-invention index target {name!r} must be a const-array factor"
+            f"value-invention index target {name!r} must be a const-array factor "
+            f"or an already-materialised value-invention buffer"
         )
     arr = ctx.const_arrays[name]
     zero_idx = []
@@ -601,6 +719,159 @@ def _vi_materialize_producer(ctx: _ViCtx, node: Mapping[str, Any]) -> List[Any]:
     return relational.distinct(members)
 
 
+# --------------------------------------------------------------------------- #
+# Grouped / derived build-time buffers (the SCVT centroid step)
+# --------------------------------------------------------------------------- #
+
+_VI_OPLUS_FUNS = {"+": lambda a, b: a + b, "*": lambda a, b: a * b, "max": max, "min": min}
+_VI_SEMIRING_OPLUS = {
+    "sum_product": ("+", 0.0),
+    "max_product": ("max", float("-inf")),
+    "min_sum": ("min", float("inf")),
+    "max_sum": ("max", float("-inf")),
+    "bool_and_or": ("or", 0.0),
+}
+_VI_REDUCE_IDENTITY = {"+": 0.0, "*": 1.0, "max": float("-inf"), "min": float("inf")}
+
+
+def _vi_oplus(node: Mapping[str, Any]):
+    """The ``(⊕ function, 0̄ identity)`` for a grouped semiring aggregate.
+    ``bool_and_or`` (⊕=``or``) is index-set-producing, not a numeric grouped
+    reduction (mirrors the array path's §5.5 reject), so only the four numeric ⊕s
+    are accepted. ``semiring`` (if present) supersedes ``reduce``."""
+    semiring = node.get("semiring")
+    if semiring is not None:
+        sr = _VI_SEMIRING_OPLUS.get(semiring)
+        if sr is None:
+            raise ValueInventionError(
+                f"unknown semiring {semiring!r}; the closed registry is "
+                f"{sorted(_VI_SEMIRING_OPLUS)}"
+            )
+        spelling, zerobar = sr
+    else:
+        spelling = node.get("reduce") or "+"
+        if spelling not in _VI_REDUCE_IDENTITY:
+            raise ValueInventionError(
+                f"unsupported reduce={spelling!r}; expected +, *, max, min (or set `semiring`)"
+            )
+        zerobar = _VI_REDUCE_IDENTITY[spelling]
+    op = _VI_OPLUS_FUNS.get(spelling)
+    if op is None:
+        raise ValueInventionError(
+            f"grouped value-invention reduction ⊕={spelling!r} is unsupported; expected one of "
+            f"+, *, max, min (a numeric semiring — not the index-set-producing bool_and_or)"
+        )
+    return op, zerobar
+
+
+def _vi_assert_buildtime(ctx: _ViCtx, vname: str, node: Mapping[str, Any],
+                         vi_var_names: Set[str]) -> None:
+    """§5.7 guard 2 for grouped / derived buffers: a build-time reduction may read
+    only build-time data — const-array factors and already-materialised VI
+    buffers. Reading a live ODE ``state`` variable would make it a per-step
+    quantity, out of scope for v1 (the Lloyd/SCVT outer loop re-invokes the
+    build)."""
+    for r in _vi_index_targets(node, set()):
+        if r in vi_var_names or r in ctx.const_arrays:
+            continue
+        v = ctx.variables.get(r)
+        if isinstance(v, Mapping) and v.get("type") == "state":
+            raise ValueInventionError(
+                f"grouped/derived value-invention buffer {vname!r} reads live state {r!r} — a "
+                f"build-time reduction's inputs must be CONST/DISCRETE factors or materialised "
+                f"buffers (RFC §5.7 guard 2)"
+            )
+
+
+def _vi_materialize_grouped(ctx: _ViCtx, vname: str, node: Mapping[str, Any]) -> Dict[Any, Any]:
+    """Materialise a GROUPED semiring aggregate keyed on a value-invention buffer
+    → ``{output-index → value}``. For each output ``g``, fold (with the semiring
+    ⊕) the body over the contracted points whose group KEY (``assign[p]``) equals
+    ``g``. The reduction runs through the determinism-correct
+    :func:`relational.group_aggregate` (§5.5 rule 5) — the first time the
+    front-door calls it (a library helper only). Empty groups fold to 0̄."""
+    output_idx = node.get("output_idx") or []
+    if len(output_idx) != 1:
+        raise ValueInventionError(
+            f"grouped value-invention aggregate {vname!r} must have a single output index; "
+            f"got {output_idx}"
+        )
+    gsym = str(output_idx[0])
+    ranges = node.get("ranges") or {}
+    if gsym not in ranges:
+        raise ValueInventionError(
+            f"grouped aggregate {vname!r} output index {gsym!r} is not among its ranges"
+        )
+    body = node.get("expr")
+    if body is None:
+        raise ValueInventionError(f"grouped aggregate {vname!r} has no `expr` body")
+    join = node.get("join")
+    if join is None:
+        raise ValueInventionError(
+            f"grouped aggregate {vname!r} needs a `join` pairing its group-key buffer with {gsym!r}"
+        )
+    # The group KEY buffer: the join column paired with the output index that names
+    # a materialised VI buffer (`assign`).
+    keyvar: Optional[str] = None
+    for clause in join:
+        if not isinstance(clause, Mapping):
+            continue
+        for pair in clause.get("on", []):
+            if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                a, b = pair[0], pair[1]
+                if b == gsym and a in ctx.maps:
+                    keyvar = a
+                if a == gsym and b in ctx.maps:
+                    keyvar = b
+    if keyvar is None:
+        raise ValueInventionError(
+            f"grouped aggregate {vname!r} `join.on` must pair a materialised value-invention "
+            f"buffer with the output index {gsym!r}"
+        )
+    keysym = _vi_join_index_sym(keyvar, ranges, ctx)
+    op, zerobar = _vi_oplus(node)
+    contract = {s: spec for s, spec in ranges.items() if s != gsym}
+    rows: List[Tuple[int, float]] = []
+
+    def visit(bindings: Dict[str, Any]) -> None:
+        k = _vi_key_int(ctx.maps[keyvar][bindings[keysym]])
+        rows.append((k, float(_vi_eval(body, ctx, bindings))))
+
+    _vi_enumerate(contract, ctx, visit)
+    agg = dict(relational.group_aggregate(rows, key=lambda r: r[0], value=lambda r: r[1], op=op))
+    # Densify over the output index set; a generator with no assigned point is 0̄.
+    out: Dict[Any, Any] = {}
+    for g in _vi_range_values(ranges[gsym], ctx, {}):
+        out[g] = float(agg.get(g, zerobar))
+    ctx.maps[vname] = out
+    return out
+
+
+def _vi_materialize_derived(ctx: _ViCtx, vname: str, node: Mapping[str, Any]) -> Dict[Any, Any]:
+    """Materialise a DERIVED elementwise buffer (``centroid[g] = num[g]/den[g]``)
+    → ``{output-index → value}``. A per-output map whose body reads upstream
+    materialised buffers (resolved by :func:`_vi_index` from ``ctx.maps``)."""
+    output_idx = node.get("output_idx") or []
+    if len(output_idx) != 1:
+        raise ValueInventionError(
+            f"derived value-invention aggregate {vname!r} must have a single output index; "
+            f"got {output_idx}"
+        )
+    gsym = str(output_idx[0])
+    ranges = node.get("ranges") or {}
+    body = node.get("expr")
+    if body is None:
+        raise ValueInventionError(f"derived value-invention aggregate {vname!r} has no `expr` body")
+    out: Dict[Any, Any] = {}
+
+    def visit(bindings: Dict[str, Any]) -> None:
+        out[bindings[gsym]] = float(_vi_eval(body, ctx, bindings))
+
+    _vi_enumerate(ranges, ctx, visit)
+    ctx.maps[vname] = out
+    return out
+
+
 def _vi_classification_model(model_json: Mapping[str, Any],
                              maps: Sequence[Tuple[str, Any]]) -> Mapping[str, Any]:
     """A model copy whose value-invention MAP vars are re-typed to their body's
@@ -646,12 +917,18 @@ class ValueInventionResult:
     - ``assignments`` — arg-witness map var → the integer nearest-generator INDEX
       buffer, dense in output-index order (the SCVT assignment; §5.7 rule 6,
       byte-identical across bindings).
+    - ``groups`` — the downstream GROUPED / DERIVED buffers keyed on an arg-witness
+      assignment, dense in output-index order: a grouped semiring reduction
+      (``num[g] = Σ_{p:assign=g} rho_p·x_p``, run through
+      :func:`relational.group_aggregate`, §5.5 rule 5) and an elementwise derived
+      buffer (``centroid[g] = num[g]/den[g]``) — the SCVT centroid-update step.
     - ``vi_var_names`` — value-invention LHS vars to drop from the ODE.
     """
 
     extents: Dict[str, int] = field(default_factory=dict)
     members: Dict[str, List[Any]] = field(default_factory=dict)
     assignments: Dict[str, List[int]] = field(default_factory=dict)
+    groups: Dict[str, List[float]] = field(default_factory=dict)
     vi_var_names: Set[str] = field(default_factory=set)
 
 
@@ -731,6 +1008,22 @@ def materialize_value_invention(
             continue
         m = ctx.maps[vname]
         result.assignments[vname] = [int(m[k]) for k in sorted(m.keys())]
+
+    # The downstream GROUPED / DERIVED chain — the SCVT centroid step. Each buffer
+    # is materialised in dependency (fixpoint discovery) order: a grouped semiring
+    # reduction keyed on a now-materialised arg-witness buffer (``num[g]``/``den[g]``,
+    # through ``relational.group_aggregate`` — the front-door's first call of that
+    # previously library-only helper) and an elementwise derived buffer reading
+    # upstream buffers (``centroid[g] = num[g]/den[g]``). Each reads only build-time
+    # data (guard 2). All are surfaced dense in output-index order.
+    for vname, node, kind in det.chain:
+        _vi_assert_buildtime(ctx, vname, node, det.vi_var_names)
+        if kind == "grouped":
+            _vi_materialize_grouped(ctx, vname, node)
+        else:
+            _vi_materialize_derived(ctx, vname, node)
+        m = ctx.maps[vname]
+        result.groups[vname] = [float(m[k]) for k in sorted(m.keys())]
 
     # ``from_faq`` id → derived index-set name (so we only materialise producers a
     # derived set actually names; geometry producers are handled elsewhere).

@@ -30,8 +30,9 @@ use std::collections::{HashMap, HashSet};
 use ndarray::{ArrayD, IxDyn};
 use serde_json::{Map, Value};
 
+use crate::aggregate::{ReduceKind, effective_reduce_kind};
 use crate::cadence::{self, Cadence};
-use crate::relational::{self, Key};
+use crate::relational::{self, Key, Num, SemiringOp, group_aggregate};
 use crate::types::{Expr, Model};
 
 /// A value-invention build-time materialisation error (the Rust analog of
@@ -93,12 +94,18 @@ pub enum BoundaryKind {
 /// - `assignments` — arg-witness map var → the integer nearest-generator INDEX
 ///   buffer, dense in output-index order (the SCVT assignment; §5.7 rule 6,
 ///   byte-identical across bindings).
+/// - `groups` — the downstream GROUPED / DERIVED buffers keyed on an arg-witness
+///   assignment, dense in output-index order: a grouped semiring reduction
+///   (`num[g] = Σ_{p:assign=g} rho_p·x_p`, run through [`group_aggregate`], §5.5
+///   rule 5) and an elementwise derived buffer (`centroid[g] = num[g]/den[g]`) —
+///   the SCVT centroid-update step.
 /// - `vi_var_names` — value-invention LHS vars to drop from the ODE.
 #[derive(Debug, Clone, Default)]
 pub struct ValueInventionResult {
     pub extents: HashMap<String, i64>,
     pub members: HashMap<String, Vec<Key>>,
     pub assignments: HashMap<String, Vec<i64>>,
+    pub groups: HashMap<String, Vec<f64>>,
     pub vi_var_names: HashSet<String>,
 }
 
@@ -237,24 +244,134 @@ fn lhs_base_typed(expr: &Expr) -> Option<String> {
     }
 }
 
+/// A downstream build-time buffer keyed on / derived from an arg-witness
+/// assignment — the SCVT centroid step (mirror of Julia's `chain` kinds).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ChainKind {
+    /// A grouped semiring reduction keyed on a VI buffer (`num[g]`/`den[g]`).
+    Grouped,
+    /// An elementwise buffer over upstream VI buffers (`centroid[g]`).
+    Derived,
+}
+
 struct Detection {
     has_vi: bool,
     vi_var_names: HashSet<String>,
     maps: Vec<(String, Value)>,
     producers: Vec<(String, Value)>,
+    /// Plain numeric aggregates — grouped/derived candidates resolved by fixpoint.
+    candidates: Vec<(String, Value)>,
+    /// The grouped/derived chain in materialisation (fixpoint discovery) order.
+    chain: Vec<(String, Value, ChainKind)>,
+}
+
+/// Every `index` target name (the array a value reads from) reachable in a
+/// subtree: `{op:"index", args:[NAME, …]}` → NAME.
+fn vi_index_targets(node: &Value, out: &mut HashSet<String>) {
+    match node {
+        Value::Object(map) => {
+            if node_op(node) == Some("index")
+                && let Some(name) = node_args(node).first().and_then(|v| v.as_str())
+            {
+                out.insert(name.to_string());
+            }
+            for v in map.values() {
+                vi_index_targets(v, out);
+            }
+        }
+        Value::Array(items) => {
+            for v in items {
+                vi_index_targets(v, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The group KEY of a GROUPED reduction, or `None`. The SCVT group-by signature
+/// is precise (mirror of Julia `_vi_grouped_key`): a single-output-index
+/// `aggregate` whose `join.on` pairs the OUTPUT index symbol with a known VI
+/// buffer. Deliberately narrower than "any join touching a VI buffer" so a
+/// bin-to-bin gather (the conservative regridder's `A_j`) is left on the
+/// simulate path.
+fn vi_grouped_key(node: &Value, vi_var_names: &HashSet<String>) -> Option<String> {
+    if node_op(node) != Some("aggregate") {
+        return None;
+    }
+    let oi = node.get("output_idx").and_then(|v| v.as_array())?;
+    if oi.len() != 1 {
+        return None;
+    }
+    let gsym = oi[0].as_str()?;
+    let join = node.get("join").and_then(|v| v.as_array())?;
+    for clause in join {
+        let Some(pairs) = clause.get("on").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for pair in pairs {
+            let Some(p) = pair.as_array() else { continue };
+            if p.len() != 2 {
+                continue;
+            }
+            let (Some(a), Some(b)) = (p[0].as_str(), p[1].as_str()) else {
+                continue;
+            };
+            if a == gsym && vi_var_names.contains(b) {
+                return Some(b.to_string());
+            }
+            if b == gsym && vi_var_names.contains(a) {
+                return Some(a.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// True iff `node` is an elementwise DERIVED buffer over known VI buffers
+/// (mirror of Julia `_vi_is_derived`): a single-output-index `aggregate` with NO
+/// join and NO contraction whose body reads an upstream VI buffer.
+fn vi_is_derived(node: &Value, vi_var_names: &HashSet<String>) -> bool {
+    if node_op(node) != Some("aggregate") {
+        return false;
+    }
+    let Some(oi) = node.get("output_idx").and_then(|v| v.as_array()) else {
+        return false;
+    };
+    if oi.len() != 1 {
+        return false;
+    }
+    let Some(gsym) = oi[0].as_str() else {
+        return false;
+    };
+    if node.get("join").map(|v| !v.is_null()).unwrap_or(false) {
+        return false;
+    }
+    if let Some(ranges) = node.get("ranges").and_then(|v| v.as_object())
+        && !ranges.keys().all(|k| k == gsym)
+    {
+        return false;
+    }
+    let mut refs = HashSet::new();
+    if let Some(expr) = node.get("expr") {
+        vi_index_targets(expr, &mut refs);
+    }
+    refs.iter().any(|r| vi_var_names.contains(r))
 }
 
 /// Scan a raw model for value-invention assignments: the equation list (LHS base
 /// resolved from the node) plus the `expression` of each observed variable (the
 /// base is the variable name). `vi_var_names` is the set of LHS variables
-/// produced by skolem/distinct/rank (excluded from the ODE, as the geometry
-/// clip-ring vars are); `maps` / `producers` are `(base, node)` pairs.
+/// produced by skolem/distinct/rank/argmin (and the downstream grouped chain),
+/// all excluded from the ODE as the geometry clip-ring vars are; `maps` /
+/// `producers` are `(base, node)` pairs; `chain` is the grouped/derived buffers.
 fn vi_detect(model_json: &Value) -> Detection {
     let mut det = Detection {
         has_vi: false,
         vi_var_names: HashSet::new(),
         maps: Vec::new(),
         producers: Vec::new(),
+        candidates: Vec::new(),
+        chain: Vec::new(),
     };
     if let Some(eqs) = model_json.get("equations").and_then(|v| v.as_array()) {
         for eq in eqs {
@@ -273,13 +390,41 @@ fn vi_detect(model_json: &Value) -> Detection {
             }
         }
     }
-    det.has_vi = !det.maps.is_empty() || !det.producers.is_empty();
+    // Fixpoint over the data-dependency DAG: a candidate that depends on a known
+    // VI buffer in the SCVT centroid shape is itself a build-time buffer. The
+    // signatures are narrow (see the helpers) so ordinary model aggregates —
+    // including the regridder's bin-to-bin gather — are left on the simulate path.
+    let mut candidates = std::mem::take(&mut det.candidates);
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let mut rest = Vec::new();
+        for (base, node) in candidates.drain(..) {
+            if vi_grouped_key(&node, &det.vi_var_names).is_some() {
+                det.vi_var_names.insert(base.clone());
+                det.chain.push((base, node, ChainKind::Grouped));
+                changed = true;
+            } else if vi_is_derived(&node, &det.vi_var_names) {
+                det.vi_var_names.insert(base.clone());
+                det.chain.push((base, node, ChainKind::Derived));
+                changed = true;
+            } else {
+                rest.push((base, node));
+            }
+        }
+        candidates = rest;
+    }
+    det.has_vi = !det.maps.is_empty() || !det.producers.is_empty() || !det.chain.is_empty();
     det
 }
 
 fn classify_assignment(base: &str, rhs: &Value, det: &mut Detection) {
     let kind = vi_node_kind(rhs);
     if kind == NodeKind::None {
+        // A plain numeric aggregate is a grouped/derived candidate (resolved later).
+        if node_op(rhs) == Some("aggregate") {
+            det.candidates.push((base.to_string(), rhs.clone()));
+        }
         return;
     }
     det.vi_var_names.insert(base.to_string()); // every value-invention output leaves the ODE
@@ -447,9 +592,28 @@ fn vi_index(node: &Value, ctx: &ViCtx, bindings: &Bindings) -> Result<Val, Value
     let Some(name) = name else {
         return err("value-invention index target must be a const-array factor name");
     };
+    // A name that resolves to an already-materialised value-invention buffer (an
+    // arg-witness assignment or an upstream grouped/derived buffer) is read from
+    // that buffer — this is what lets `centroid[g] = num[g]/den[g]` read its inputs.
+    if let Some(buf) = ctx.maps.get(name) {
+        if args.len() != 2 {
+            return err(format!(
+                "materialised value-invention buffer {name:?} is a 1-D buffer; expected one index, \
+                 got {}",
+                args.len() - 1
+            ));
+        }
+        let idx = vi_eval(&args[1], ctx, bindings)?.key_int()?;
+        return buf.get(&idx).cloned().ok_or_else(|| {
+            ValueInventionError(format!(
+                "materialised value-invention buffer {name:?} has no entry at index {idx}"
+            ))
+        });
+    }
     let Some(arr) = ctx.const_arrays.get(name) else {
         return err(format!(
-            "value-invention index target {name:?} must be a const-array factor"
+            "value-invention index target {name:?} must be a const-array factor \
+             or an already-materialised value-invention buffer"
         ));
     };
     let shape = arr.shape();
@@ -933,6 +1097,239 @@ fn vi_materialize_producer(ctx: &ViCtx, node: &Value) -> Result<Vec<Key>, ValueI
     Ok(relational::distinct(&members))
 }
 
+// --------------------------------------------------------------------------- //
+// Grouped / derived build-time buffers (the SCVT centroid step)
+// --------------------------------------------------------------------------- //
+
+/// The (⊕ combiner, 0̄ identity) for a grouped semiring aggregate. `bool_and_or`
+/// (Or/And) is index-set-producing, not a numeric grouped reduction, so only the
+/// four numeric ⊕s are accepted (mirrors the array path's §5.5 reject).
+fn vi_oplus(node: &Value) -> Result<(SemiringOp, f64), ValueInventionError> {
+    let semiring = node.get("semiring").and_then(|v| v.as_str());
+    let reduce = node.get("reduce").and_then(|v| v.as_str());
+    let rk = effective_reduce_kind(semiring, reduce);
+    let op = match rk {
+        ReduceKind::Sum => SemiringOp::Sum,
+        ReduceKind::Product => SemiringOp::Prod,
+        ReduceKind::Max => SemiringOp::Max,
+        ReduceKind::Min => SemiringOp::Min,
+        ReduceKind::Or | ReduceKind::And => {
+            return err(
+                "grouped value-invention reduction ⊕ is index-set-producing (bool_and_or); \
+                 expected a numeric semiring (+, *, max, min)",
+            );
+        }
+    };
+    Ok((op, rk.identity()))
+}
+
+/// §5.7 guard 2 for grouped / derived buffers: a build-time reduction may read
+/// only build-time data — const-array factors and already-materialised VI
+/// buffers. Reading a live ODE `state` variable would make it a per-step
+/// quantity, out of scope for v1 (the Lloyd/SCVT outer loop re-invokes the build).
+fn vi_assert_buildtime(
+    ctx: &ViCtx,
+    vname: &str,
+    node: &Value,
+    vi_var_names: &HashSet<String>,
+) -> Result<(), ValueInventionError> {
+    let mut refs = HashSet::new();
+    vi_index_targets(node, &mut refs);
+    for r in &refs {
+        if vi_var_names.contains(r) || ctx.const_arrays.contains_key(r) {
+            continue;
+        }
+        let is_state = ctx
+            .variables
+            .get(r)
+            .and_then(|v| v.get("type"))
+            .and_then(|v| v.as_str())
+            == Some("state");
+        if is_state {
+            return err(format!(
+                "grouped/derived value-invention buffer {vname:?} reads live state {r:?} — a \
+                 build-time reduction's inputs must be CONST/DISCRETE factors or materialised \
+                 buffers (RFC §5.7 guard 2)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Materialise a GROUPED semiring aggregate keyed on a value-invention buffer →
+/// `{output-index → value}`. For each output `g`, fold (with the semiring ⊕) the
+/// body over the contracted points whose group KEY (`assign[p]`) equals `g`. The
+/// reduction runs through the determinism-correct [`group_aggregate`] (§5.5
+/// rule 5) — the first time the front-door calls it (a library helper only).
+/// Empty groups fold to 0̄.
+fn vi_materialize_grouped(
+    ctx: &mut ViCtx,
+    vname: &str,
+    node: &Value,
+) -> Result<(), ValueInventionError> {
+    let oi = node
+        .get("output_idx")
+        .and_then(|v| v.as_array())
+        .filter(|a| a.len() == 1)
+        .ok_or_else(|| {
+            ValueInventionError(format!(
+                "grouped value-invention aggregate {vname:?} must have a single output index"
+            ))
+        })?;
+    let gsym = oi[0]
+        .as_str()
+        .ok_or_else(|| ValueInventionError("grouped output index must be a string".into()))?
+        .to_string();
+    let empty = Map::new();
+    let ranges = node
+        .get("ranges")
+        .and_then(|v| v.as_object())
+        .unwrap_or(&empty);
+    if !ranges.contains_key(&gsym) {
+        return err(format!(
+            "grouped aggregate {vname:?} output index {gsym:?} is not among its ranges"
+        ));
+    }
+    let body = node.get("expr").ok_or_else(|| {
+        ValueInventionError(format!("grouped aggregate {vname:?} has no expr body"))
+    })?;
+    let join = node.get("join").and_then(|v| v.as_array()).ok_or_else(|| {
+        ValueInventionError(format!(
+            "grouped aggregate {vname:?} needs a join pairing its group-key buffer with {gsym:?}"
+        ))
+    })?;
+    // The group KEY buffer: the join column paired with the output index that
+    // names a materialised VI buffer (`assign`).
+    let mut keyvar: Option<String> = None;
+    for clause in join {
+        let Some(pairs) = clause.get("on").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for pair in pairs {
+            let Some(p) = pair.as_array() else { continue };
+            if p.len() != 2 {
+                continue;
+            }
+            let (Some(a), Some(b)) = (p[0].as_str(), p[1].as_str()) else {
+                continue;
+            };
+            if b == gsym && ctx.maps.contains_key(a) {
+                keyvar = Some(a.to_string());
+            }
+            if a == gsym && ctx.maps.contains_key(b) {
+                keyvar = Some(b.to_string());
+            }
+        }
+    }
+    let keyvar = keyvar.ok_or_else(|| {
+        ValueInventionError(format!(
+            "grouped aggregate {vname:?} join.on must pair a materialised value-invention buffer \
+             with the output index {gsym:?}"
+        ))
+    })?;
+    let keysym = vi_join_index_sym(&keyvar, ranges, ctx)?;
+    let (op, zerobar) = vi_oplus(node)?;
+    // Contraction ranges: every range symbol except the output index.
+    let mut contract = Map::new();
+    for (s, spec) in ranges {
+        if s != &gsym {
+            contract.insert(s.clone(), spec.clone());
+        }
+    }
+    let gspec = ranges[&gsym].clone();
+    let (rows, out_vals) = {
+        let ctx_imm: &ViCtx = ctx;
+        let mut rows: Vec<(Key, Num)> = Vec::new();
+        vi_enumerate(&contract, ctx_imm, |bindings| {
+            let p = *bindings.get(&keysym).ok_or_else(|| {
+                ValueInventionError(format!("grouped key index symbol {keysym:?} is unbound"))
+            })?;
+            let kval = ctx_imm
+                .maps
+                .get(&keyvar)
+                .and_then(|m| m.get(&p))
+                .ok_or_else(|| {
+                    ValueInventionError(format!(
+                        "grouped key buffer {keyvar:?} has no entry at index {p}"
+                    ))
+                })?;
+            let key = Key::Int(kval.key_int()?);
+            let v = vi_eval(body, ctx_imm, bindings)?.as_f64()?;
+            rows.push((key, Num::Float(v)));
+            Ok(())
+        })?;
+        let out_vals = vi_range_values(&gspec, ctx_imm, &HashMap::new())?;
+        (rows, out_vals)
+    };
+    let agg = group_aggregate(&rows, op);
+    let mut agg_map: HashMap<i64, f64> = HashMap::new();
+    for (k, n) in agg {
+        if let Key::Int(i) = k {
+            agg_map.insert(
+                i,
+                match n {
+                    Num::Float(f) => f,
+                    Num::Int(x) => x as f64,
+                },
+            );
+        }
+    }
+    // Densify over the output index set; a generator with no assigned point is 0̄.
+    let mut out: HashMap<i64, Val> = HashMap::new();
+    for g in out_vals {
+        out.insert(g, Val::Float(*agg_map.get(&g).unwrap_or(&zerobar)));
+    }
+    ctx.maps.insert(vname.to_string(), out);
+    Ok(())
+}
+
+/// Materialise a DERIVED elementwise buffer (`centroid[g] = num[g]/den[g]`) →
+/// `{output-index → value}`. A per-output map whose body reads upstream
+/// materialised buffers (resolved by [`vi_index`] from `ctx.maps`).
+fn vi_materialize_derived(
+    ctx: &mut ViCtx,
+    vname: &str,
+    node: &Value,
+) -> Result<(), ValueInventionError> {
+    let oi = node
+        .get("output_idx")
+        .and_then(|v| v.as_array())
+        .filter(|a| a.len() == 1)
+        .ok_or_else(|| {
+            ValueInventionError(format!(
+                "derived value-invention aggregate {vname:?} must have a single output index"
+            ))
+        })?;
+    let gsym = oi[0]
+        .as_str()
+        .ok_or_else(|| ValueInventionError("derived output index must be a string".into()))?
+        .to_string();
+    let empty = Map::new();
+    let ranges = node
+        .get("ranges")
+        .and_then(|v| v.as_object())
+        .unwrap_or(&empty);
+    let body = node.get("expr").ok_or_else(|| {
+        ValueInventionError(format!(
+            "derived value-invention aggregate {vname:?} has no expr body"
+        ))
+    })?;
+    let out = {
+        let ctx_imm: &ViCtx = ctx;
+        let mut out: HashMap<i64, Val> = HashMap::new();
+        vi_enumerate(ranges, ctx_imm, |bindings| {
+            let g = *bindings.get(&gsym).ok_or_else(|| {
+                ValueInventionError(format!("derived output index {gsym:?} is unbound"))
+            })?;
+            out.insert(g, Val::Float(vi_eval(body, ctx_imm, bindings)?.as_f64()?));
+            Ok(())
+        })?;
+        out
+    };
+    ctx.maps.insert(vname.to_string(), out);
+    Ok(())
+}
+
 /// A model copy whose value-invention MAP vars are re-typed to their body's
 /// cadence class (`const`→parameter, `discrete`→discrete), so a producer joining
 /// on a map buffer classifies by the buffer's true (input-derived) cadence rather
@@ -1089,6 +1486,33 @@ pub fn materialize_value_invention(
             })
             .collect();
         result.assignments.insert(vname.clone(), buf);
+    }
+
+    // The downstream GROUPED / DERIVED chain — the SCVT centroid step. Each buffer
+    // is materialised in dependency (fixpoint discovery) order: a grouped semiring
+    // reduction keyed on a now-materialised arg-witness buffer (`num[g]`/`den[g]`,
+    // through `group_aggregate` — the front-door's first call of that previously
+    // library-only helper) and an elementwise derived buffer reading upstream
+    // buffers (`centroid[g] = num[g]/den[g]`). Each reads only build-time data
+    // (guard 2). All are surfaced dense in output-index order.
+    for (vname, node, kind) in &det.chain {
+        vi_assert_buildtime(&ctx, vname, node, &det.vi_var_names)?;
+        match kind {
+            ChainKind::Grouped => vi_materialize_grouped(&mut ctx, vname, node)?,
+            ChainKind::Derived => vi_materialize_derived(&mut ctx, vname, node)?,
+        }
+        let m = &ctx.maps[vname];
+        let mut keys: Vec<i64> = m.keys().copied().collect();
+        keys.sort_unstable();
+        let buf: Vec<f64> = keys
+            .iter()
+            .map(|k| match m.get(k) {
+                Some(Val::Float(f)) => *f,
+                Some(Val::Int(i)) => *i as f64,
+                _ => 0.0,
+            })
+            .collect();
+        result.groups.insert(vname.clone(), buf);
     }
 
     // `from_faq` id → derived index-set name (so we only materialise producers a
@@ -1727,5 +2151,127 @@ mod tests {
         assert_eq!(gather(2, 0).unwrap(), 6.0); // mod1(0,3) = 3 -> (2,3)
         // both dims out of range, each resolved by its own policy.
         assert_eq!(gather(9, 4).unwrap(), 4.0); // clamp dim0 -> 2, mod1(4,3) -> 1 => (2,1)
+    }
+
+    // ── Grouped-aggregate centroid front-door (bead ess-2u5, mpas-scvt) ──────
+    // The SCVT centroid-update STEP: grouped `sum_product` reductions whose group
+    // KEY is the data-dependent argmin assignment buffer (E1, ess-os1), run
+    // through `group_aggregate` (a library helper only — never the front-door —
+    // until now). The fixture factors here are IDENTICAL to the Julia / Python
+    // port-parity tests; agreement on num / den / centroid IS the conformance proof.
+    const CENTROID_FIXTURE: &str =
+        include_str!("../../../tests/valid/aggregate/nearest_generator_centroid.esm");
+
+    #[test]
+    fn centroid_group_aggregate_over_argmin_key() {
+        let mj = model_json(CENTROID_FIXTURE, "NearestGeneratorCentroid");
+        // Generators at 0,1,2; points at 0,0.75,1.25,2.0 (exact dyadics, no ties)
+        // ⇒ assign = [1,2,2,3]; density rho = [1,1,3,4]. Generator 2 owns points
+        // 2,3 ⇒ centroid 4.5/4 = 1.125 (moved from its seed at 1.0).
+        let const_arrays = ca(vec![
+            ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
+            ("px", arr(&[4], vec![0.0, 0.75, 1.25, 2.0])),
+            ("rho", arr(&[4], vec![1.0, 1.0, 3.0, 4.0])),
+        ]);
+        let vi =
+            materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds()).unwrap();
+        // The argmin group key (E1) — byte-identical integer buffer.
+        assert_eq!(vi.assignments["assign"], vec![1, 2, 2, 3]);
+        // The grouped sum_product buffers — bit-exact (exact-dyadic inputs).
+        assert_eq!(vi.groups["num"], vec![0.0, 4.5, 8.0]);
+        assert_eq!(vi.groups["den"], vec![1.0, 4.0, 4.0]);
+        // The derived centroid buffer — the next Lloyd / SCVT generator positions.
+        assert_eq!(vi.groups["centroid"], vec![0.0, 1.125, 2.0]);
+        // assign + the three grouped/derived buffers all leave the ODE.
+        assert_eq!(
+            sorted(&vi.vi_var_names),
+            vec!["assign", "centroid", "den", "num"]
+        );
+    }
+
+    #[test]
+    fn centroid_empty_group_folds_to_zerobar() {
+        // Every point next to generator 1 ⇒ assign = [1,1,1,1]; generators 2,3 own
+        // no point, so num/den there are the empty-⊕ identity 0 and centroid is NaN.
+        let mj = model_json(CENTROID_FIXTURE, "NearestGeneratorCentroid");
+        let const_arrays = ca(vec![
+            ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
+            ("px", arr(&[4], vec![0.0, 0.1, 0.2, 0.3])),
+            ("rho", arr(&[4], vec![2.0, 1.0, 1.0, 1.0])),
+        ]);
+        let vi =
+            materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds()).unwrap();
+        assert_eq!(vi.assignments["assign"], vec![1, 1, 1, 1]);
+        assert_eq!(vi.groups["den"], vec![5.0, 0.0, 0.0]);
+        assert_eq!(vi.groups["num"][1], 0.0);
+        assert_eq!(vi.groups["num"][2], 0.0);
+        assert!(vi.groups["centroid"][1].is_nan());
+        assert!(vi.groups["centroid"][2].is_nan());
+    }
+
+    #[test]
+    fn regridder_aggregates_are_not_grouped_value_invention() {
+        // Regression guard (ess-2u5): the conservative regridder's `A_j` joins two
+        // bin buffers to EACH OTHER (neither to its output index `j`) and `mass_tgt`
+        // is a scalar reduction — neither is the SCVT grouped/derived centroid shape,
+        // so the chain must stay empty and they remain on the simulate path.
+        let mj = model_json(REGRID_FIXTURE, "ConservativeRegridOverlapJoin");
+        let p = params(&[("dx", 1.0), ("dy", 1.0), ("atol", 1e-12)]);
+        let aligned = ca(vec![
+            ("src_lon", arr(&[3], vec![0.2, 1.2, 2.2])),
+            ("src_lat", arr(&[3], vec![0.0, 0.0, 0.0])),
+            ("tgt_lon", arr(&[3], vec![0.2, 1.2, 2.2])),
+            ("tgt_lat", arr(&[3], vec![0.0, 0.0, 0.0])),
+        ]);
+        let vi = materialize_value_invention(&mj, &aligned, &p, &no_bounds()).unwrap();
+        assert!(
+            vi.groups.is_empty(),
+            "regridder must mint no grouped buffers"
+        );
+        assert!(!vi.vi_var_names.contains("A_j"));
+        assert!(!vi.vi_var_names.contains("mass_tgt"));
+    }
+
+    #[test]
+    fn centroid_grouped_reduction_reading_state_is_rejected() {
+        // §5.7 guard 2: `rho` retyped to `state` ⇒ the grouped numerator reads a
+        // hot-path quantity; a build-time reduction's inputs must be CONST/DISCRETE.
+        let model: Value = serde_json::json!({
+            "index_sets": {
+                "points": {"kind": "interval", "size": 2},
+                "generators": {"kind": "interval", "size": 1}
+            },
+            "variables": {
+                "gx": {"type": "parameter", "shape": ["generators"]},
+                "px": {"type": "parameter", "shape": ["points"]},
+                "rho": {"type": "state", "shape": ["points"]},
+                "assign": {"type": "state", "shape": ["points"]},
+                "num": {"type": "state", "shape": ["generators"]}
+            },
+            "equations": [
+                {"lhs": {"op": "index", "args": ["assign", "i"]},
+                 "rhs": {"op": "aggregate", "output_idx": ["i"], "ranges": {"i": {"from": "points"}},
+                    "args": ["px", "gx"],
+                    "expr": {"op": "argmin", "args": ["px", "gx"], "arg": "g",
+                        "ranges": {"g": {"from": "generators"}},
+                        "expr": {"op": "*", "args": [
+                            {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                            {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]}]}}}},
+                {"lhs": {"op": "index", "args": ["num", "g"]},
+                 "rhs": {"op": "aggregate", "output_idx": ["g"],
+                    "ranges": {"g": {"from": "generators"}, "p": {"from": "points"}},
+                    "semiring": "sum_product", "join": [{"on": [["assign", "g"]]}],
+                    "args": ["assign", "rho"],
+                    "expr": {"op": "index", "args": ["rho", "p"]}}}
+            ]
+        });
+        let const_arrays = ca(vec![
+            ("gx", arr(&[1], vec![0.0])),
+            ("px", arr(&[2], vec![0.0, 1.0])),
+        ]);
+        assert!(
+            materialize_value_invention(&model, &const_arrays, &HashMap::new(), &no_bounds())
+                .is_err()
+        );
     }
 }

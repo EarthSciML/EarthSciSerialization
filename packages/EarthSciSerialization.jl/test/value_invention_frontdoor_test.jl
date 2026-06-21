@@ -271,3 +271,88 @@ end
             model, Dict("gx" => Float64[0, 1], "px" => Float64[0.5]), Dict{String,Float64}())
     end
 end
+
+# ── Grouped-aggregate centroid front-door (bead ess-2u5, mpas-scvt) ────────────
+# RFC semiring-faq-unified-ir §5.5 rule 5 (group-by aggregate) + §5.7 rule 6;
+# CONFORMANCE_SPEC.md §5.5.1 rules 5-6. The SCVT centroid-update STEP: a grouped
+# `sum_product` reduction whose group KEY is the data-dependent argmin assignment
+# buffer (E1, ess-os1). This is the FIRST time the value-invention front-door
+# drives `Relational.group_aggregate` (previously a library helper only, never
+# reached by tree_walk / the front-door). The shared fixture factors are supplied
+# here and IDENTICALLY in the Rust / Python port-parity tests — agreement on the
+# emitted num / den / centroid buffers IS the cross-binding conformance proof.
+@testset "grouped-aggregate centroid front-door (ess-2u5)" begin
+
+    _CEN_REL = "tests/valid/aggregate/nearest_generator_centroid.esm"
+
+    @testset "centroid = group_aggregate(rho·x) / group_aggregate(rho) over argmin key" begin
+        mj = ESS._select_model_json(_vi_raw(_CEN_REL), "NearestGeneratorCentroid")
+        # Generators at 0,1,2; points at 0,0.75,1.25,2.0 (exact dyadics, no ties)
+        # ⇒ assign = [1,2,2,3]; density rho = [1,1,3,4]. Generator 2 owns points
+        # 2,3 (0.75 weight 1, 1.25 weight 3) ⇒ centroid 4.5/4 = 1.125 (moved from 1.0).
+        ca = Dict(
+            "gx" => Float64[0, 1, 2],
+            "px" => Float64[0.0, 0.75, 1.25, 2.0],
+            "rho" => Float64[1, 1, 3, 4])
+        vi = ESS.materialize_value_invention(mj, ca, Dict{String,Float64}())
+        # The argmin group key (E1) — byte-identical integer buffer.
+        @test vi.assignments["assign"] == [1, 2, 2, 3]
+        # The grouped sum_product buffers — bit-exact (exact-dyadic inputs).
+        @test vi.groups["num"] == [0.0, 4.5, 8.0]          # Σ rho·px per generator
+        @test vi.groups["den"] == [1.0, 4.0, 4.0]          # Σ rho per generator
+        # The derived centroid buffer — the next Lloyd / SCVT generator positions.
+        @test vi.groups["centroid"] == [0.0, 1.125, 2.0]
+        # assign + the three grouped/derived buffers all leave the ODE (build-time).
+        @test vi.vi_var_names == Set(["assign", "num", "den", "centroid"])
+        # Pure function of inputs — re-running is identical.
+        @test ESS.materialize_value_invention(mj, ca, Dict{String,Float64}()).groups["centroid"] ==
+              [0.0, 1.125, 2.0]
+    end
+
+    @testset "empty group folds to the 0̄ identity (no assigned points)" begin
+        # Move every point next to generator 1 ⇒ assign = [1,1,1,1]; generators 2,3
+        # own no point, so num/den there are the empty-⊕ identity 0, and centroid 0/0
+        # is NaN (an unattended generator — the caller drops it / keeps the old seed).
+        mj = ESS._select_model_json(_vi_raw(_CEN_REL), "NearestGeneratorCentroid")
+        ca = Dict(
+            "gx" => Float64[0, 1, 2],
+            "px" => Float64[0.0, 0.1, 0.2, 0.3],
+            "rho" => Float64[2, 1, 1, 1])
+        vi = ESS.materialize_value_invention(mj, ca, Dict{String,Float64}())
+        @test vi.assignments["assign"] == [1, 1, 1, 1]
+        @test vi.groups["den"] == [5.0, 0.0, 0.0]          # 0̄ for the empty groups
+        @test vi.groups["num"][2] == 0.0 && vi.groups["num"][3] == 0.0
+        @test isnan(vi.groups["centroid"][2]) && isnan(vi.groups["centroid"][3])
+    end
+
+    @testset "guard: a grouped reduction reading live state is rejected (§5.7 guard 2)" begin
+        # `rho` retyped to `state` ⇒ the grouped numerator reads a hot-path quantity;
+        # a build-time reduction's inputs must be CONST/DISCRETE.
+        model = ESS.Cadence.to_native(JSON3.read("""
+        {"index_sets": {"points": {"kind": "interval", "size": 2},
+                        "generators": {"kind": "interval", "size": 1}},
+         "variables": {"gx": {"type": "parameter", "shape": ["generators"]},
+                       "px": {"type": "parameter", "shape": ["points"]},
+                       "rho": {"type": "state", "shape": ["points"]},
+                       "assign": {"type": "state", "shape": ["points"]},
+                       "num": {"type": "state", "shape": ["generators"]}},
+         "equations": [
+           {"lhs": {"op": "index", "args": ["assign", "i"]},
+            "rhs": {"op": "aggregate", "output_idx": ["i"], "ranges": {"i": {"from": "points"}},
+              "args": ["px", "gx"],
+              "expr": {"op": "argmin", "args": ["px", "gx"], "arg": "g",
+                "ranges": {"g": {"from": "generators"}},
+                "expr": {"op": "*", "args": [
+                  {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]},
+                  {"op": "-", "args": [{"op": "index", "args": ["px", "i"]}, {"op": "index", "args": ["gx", "g"]}]}]}}}},
+           {"lhs": {"op": "index", "args": ["num", "g"]},
+            "rhs": {"op": "aggregate", "output_idx": ["g"],
+              "ranges": {"g": {"from": "generators"}, "p": {"from": "points"}},
+              "semiring": "sum_product", "join": [{"on": [["assign", "g"]]}],
+              "args": ["assign", "rho"],
+              "expr": {"op": "index", "args": ["rho", "p"]}}}]}
+        """))
+        @test_throws ESS.TreeWalkError ESS.materialize_value_invention(
+            model, Dict("gx" => Float64[0], "px" => Float64[0.0, 1.0]), Dict{String,Float64}())
+    end
+end
