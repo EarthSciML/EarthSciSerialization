@@ -522,6 +522,13 @@ Run the build-time value-invention engine over a raw model document. Returns:
   nearest-generator INDEX buffer, dense in output-index order (the SCVT
   assignment; §5.7 rule 6, byte-identical across bindings).
 - `vi_var_names::Set{String}` — value-invention LHS vars to drop from the ODE.
+- `maps::Dict{String,Dict}` — materialised per-element map buffer (e.g. `src_bin`)
+  → (1-based output position → bin-key value). A downstream FAQ's
+  `join.on [[src_bin, tgt_bin]]` gates on these buffers (§5.3): the broad-phase
+  bin key is data-derived, so it cannot be a categorical index-set member — the
+  tree-walk join resolver reads the key value per position from here.
+- `map_sets::Dict{String,String}` — map buffer → its 1-D shape index-set name,
+  so the join resolver can find the range symbol the buffer is indexed by.
 
 `const_arrays` supplies the build-time factor arrays (the connectivity / coords
 the keys are computed from); `params` supplies scalar parameter overrides. A
@@ -534,8 +541,10 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
     extents = Dict{String,Int}()
     members = Dict{String,Vector{Any}}()
     assignments = Dict{String,Vector{Int}}()
+    map_sets = Dict{String,String}()
     det.has_vi || return (extents=extents, members=members, assignments=assignments,
-                          vi_var_names=det.vi_var_names)
+                          vi_var_names=det.vi_var_names,
+                          maps=Dict{String,Dict{Any,Any}}(), map_sets=map_sets)
 
     ctx = _ViCtx(
         Dict{String,Any}(String(k) => v for (k, v) in const_arrays),
@@ -571,6 +580,12 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
     # Maps first (a producer's join/key — or an arg-witness `join` — may reference them).
     for (vname, node) in det.maps
         _vi_materialize_map!(ctx, vname, node)
+        # Record the buffer's 1-D shape index set so a downstream FAQ's
+        # `join.on [[vname, …]]` can find the range symbol it is indexed by.
+        v = get(ctx.variables, vname, nothing)
+        v === nothing && continue
+        shape = _vi_get(v, "shape", Any[])
+        length(shape) == 1 && (map_sets[vname] = String(shape[1]))
     end
 
     # Surface the arg-witness buffers (the integer nearest-generator INDEX
@@ -609,5 +624,5 @@ function materialize_value_invention(model_json, const_arrays::AbstractDict,
     end
 
     return (extents=extents, members=members, assignments=assignments,
-            vi_var_names=det.vi_var_names)
+            vi_var_names=det.vi_var_names, maps=ctx.maps, map_sets=map_sets)
 end

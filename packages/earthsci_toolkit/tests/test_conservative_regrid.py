@@ -326,8 +326,13 @@ def test_overlap_join_fixture_describes_this_assembly() -> None:
     repo = Path(__file__).resolve().parents[3]
     fixture = repo / "tests" / "valid" / "geometry" / "conservative_regrid_overlap_join.esm"
     model = load(str(fixture)).models["ConservativeRegridOverlapJoin"]
-    # The A.8 chain variables are all present.
-    for name in ("A_ij", "A_j", "F_src", "F_tgt", "src_bin", "tgt_bin", "pair_exists", "mass_tgt"):
+    # The A.8 chain variables are all present. The fixture is now the SINGLE
+    # end-to-end-evaluable document (bead ess-3lj.3): A_j / F_tgt are the
+    # arrayop-D-from-zero-IC assembly states gated on the materialised bin buffers,
+    # dst_areas is the build-once denominator, and narrow_phase_area consumes the
+    # spherical clip + Van Oosterom-Strackee polygon_area FAQ.
+    for name in ("A_ij", "A_j", "F_src", "F_tgt", "src_bin", "tgt_bin", "pair_exists",
+                 "dst_areas", "narrow_phase_area"):
         assert name in model.variables
     # The candidate set is a derived index set produced by the bin-Skolem join.
     assert model.index_sets["candidate_pairs"]["kind"] == "derived"

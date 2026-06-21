@@ -255,7 +255,12 @@ function build_evaluator(model::Model;
                          # from the ODE (the relational outputs run once at setup, off
                          # the hot path — never integrated). Empty on a direct call.
                          _vi_extents::AbstractDict=Dict{String,Int}(),
-                         _vi_vars=Set{String}())
+                         _vi_vars=Set{String}(),
+                         # Materialised value-invention map buffers (e.g. `src_bin`)
+                         # a downstream `join.on [[src_bin, tgt_bin]]` gates on, plus
+                         # each buffer's 1-D shape index set. Set by the AbstractDict
+                         # front-door; empty on a direct typed call (RFC §5.3 / §6.1).
+                         _vi_maps=_EMPTY_VI_MAPS)
     _has_value_invention = !isempty(_vi_vars)
     # ---- M4 geometry kernel detection (RFC §8.1), guarded ----
     # Active only when the model uses intersect_polygon — non-geometry files are
@@ -354,9 +359,9 @@ function build_evaluator(model::Model;
     # canonical bucket code per key-column position) BEFORE index-set ranges are
     # resolved away — categorical members are read from the still-present
     # `{from}` references here. No-op (byte-identical) for files without a join.
-    equations = _resolve_join_gates(_model_equations, model.index_sets)
+    equations = _resolve_join_gates(_model_equations, model.index_sets, _vi_maps)
     init_equations = _resolve_join_gates(model.initialization_equations,
-                                         model.index_sets)
+                                         model.index_sets, _vi_maps)
 
     # ---- Resolve index-set references in ranges (RFC §5.2) ----
     # Rewrite any `ranges[*]` `{from: <name>}` reference against the model's
@@ -827,6 +832,8 @@ function build_evaluator(esm::AbstractDict;
     return build_evaluator(file; model_name=model_name,
                            _vi_extents=(_vi === nothing ? Dict{String,Int}() : _vi.extents),
                            _vi_vars=(_vi === nothing ? Set{String}() : _vi.vi_var_names),
+                           _vi_maps=(_vi === nothing ? _EMPTY_VI_MAPS :
+                                     (maps=_vi.maps, map_sets=_vi.map_sets)),
                            kwargs...)
 end
 
@@ -1813,10 +1820,47 @@ function _encode_join_keys(vals_l::Vector{Any}, vals_r::Vector{Any})
     return (Int[code_of[v] for v in vals_l], Int[code_of[v] for v in vals_r])
 end
 
+# The empty value-invention map registry: no materialised buffers. A join over
+# categorical / interval members never consults it, so join resolution stays
+# byte-identical for every non-value-invention document.
+const _EMPTY_VI_MAPS = (maps=Dict{String,Any}(), map_sets=Dict{String,String}())
+
+# Resolve one join-key name to `(sym, positions, values)` — the range symbol it
+# denotes, the 1-based positions iterated for it, and the key VALUE at each
+# position. Two cases (RFC §5.3):
+#  - the key names a value-invention MAP buffer (e.g. `src_bin`, materialised by
+#    the front-door): the broad-phase bin key is DATA-DERIVED, so it is not a
+#    categorical index-set member — read the key value per position from the
+#    buffer `vi_maps.maps[key]`, and find the range symbol via the buffer's
+#    declared 1-D shape index set (`vi_maps.map_sets[key]`);
+#  - otherwise the key is a range symbol / index-set name whose key column is the
+#    categorical member (or interval integer index) from the document registry.
+function _join_key_sym_pos_vals(key::String, ranges::AbstractDict,
+                                index_sets::AbstractDict, sym_to_set::AbstractDict,
+                                vi_maps)
+    if haskey(vi_maps.maps, key)
+        setn = get(vi_maps.map_sets, key, nothing)
+        setn === nothing && throw(TreeWalkError("E_TREEWALK_JOIN_UNKNOWN_KEY",
+            "value-invention join key '$key' has no recorded 1-D shape index set " *
+            "(RFC semiring-faq-unified-ir §5.3)"))
+        sym = _join_sym_for_key(setn, ranges, sym_to_set)
+        positions = _join_key_positions(sym, ranges, index_sets)
+        buf = vi_maps.maps[key]
+        vals = Any[buf[p] for p in positions]
+        return (sym, positions, vals)
+    end
+    sym = _join_sym_for_key(key, ranges, sym_to_set)
+    positions = _join_key_positions(sym, ranges, index_sets)
+    vals = _key_member_values(sym, ranges, positions, index_sets)
+    return (sym, positions, vals)
+end
+
 # Resolve every join clause of an aggregate node into `_JoinGate`s (RFC §5.3).
 # Operates on the node's ORIGINAL ranges (index-set `{from}` refs intact) so it
-# can read categorical members from the document registry.
-function _resolve_join_gates_for(node::OpExpr, index_sets::AbstractDict)
+# can read categorical members from the document registry; a key that names a
+# value-invention map buffer gates on the materialised buffer values instead.
+function _resolve_join_gates_for(node::OpExpr, index_sets::AbstractDict,
+                                 vi_maps=_EMPTY_VI_MAPS)
     node.join === nothing && return nothing
     ranges = node.ranges === nothing ? Dict{String,Any}() : node.ranges
     sym_to_set = Dict{String,String}(
@@ -1824,12 +1868,8 @@ function _resolve_join_gates_for(node::OpExpr, index_sets::AbstractDict)
     gates = Vector{Any}()
     for clause in node.join            # clause :: Vector{Tuple{String,String}}
         for (lkey, rkey) in clause
-            sym_l = _join_sym_for_key(lkey, ranges, sym_to_set)
-            sym_r = _join_sym_for_key(rkey, ranges, sym_to_set)
-            pos_l = _join_key_positions(sym_l, ranges, index_sets)
-            pos_r = _join_key_positions(sym_r, ranges, index_sets)
-            vals_l = _key_member_values(sym_l, ranges, pos_l, index_sets)
-            vals_r = _key_member_values(sym_r, ranges, pos_r, index_sets)
+            sym_l, pos_l, vals_l = _join_key_sym_pos_vals(lkey, ranges, index_sets, sym_to_set, vi_maps)
+            sym_r, pos_r, vals_r = _join_key_sym_pos_vals(rkey, ranges, index_sets, sym_to_set, vi_maps)
             codes_l, codes_r = _encode_join_keys(vals_l, vals_r)
             push!(gates, _JoinGate(sym_l, sym_r,
                 Dict{Int,Int}(zip(pos_l, codes_l)),
@@ -1869,16 +1909,16 @@ _eq_has_join(eq::Equation) = _expr_has_join(eq.lhs) || _expr_has_join(eq.rhs)
 # present for member lookup. The wire `join`/`filter` fields are carried through
 # unchanged (serialization round-trips them); only the internal `join_gates` is
 # populated.
-function _resolve_join_in_expr(expr::OpExpr, index_sets::AbstractDict)
-    new_args = Expr[_resolve_join_in_expr(a, index_sets) for a in expr.args]
-    new_body = expr.expr_body === nothing ? nothing : _resolve_join_in_expr(expr.expr_body, index_sets)
+function _resolve_join_in_expr(expr::OpExpr, index_sets::AbstractDict, vi_maps=_EMPTY_VI_MAPS)
+    new_args = Expr[_resolve_join_in_expr(a, index_sets, vi_maps) for a in expr.args]
+    new_body = expr.expr_body === nothing ? nothing : _resolve_join_in_expr(expr.expr_body, index_sets, vi_maps)
     new_values = expr.values === nothing ? nothing :
-                 Expr[_resolve_join_in_expr(v, index_sets) for v in expr.values]
-    new_lower = expr.lower === nothing ? nothing : _resolve_join_in_expr(expr.lower, index_sets)
-    new_upper = expr.upper === nothing ? nothing : _resolve_join_in_expr(expr.upper, index_sets)
-    new_filter = expr.filter === nothing ? nothing : _resolve_join_in_expr(expr.filter, index_sets)
+                 Expr[_resolve_join_in_expr(v, index_sets, vi_maps) for v in expr.values]
+    new_lower = expr.lower === nothing ? nothing : _resolve_join_in_expr(expr.lower, index_sets, vi_maps)
+    new_upper = expr.upper === nothing ? nothing : _resolve_join_in_expr(expr.upper, index_sets, vi_maps)
+    new_filter = expr.filter === nothing ? nothing : _resolve_join_in_expr(expr.filter, index_sets, vi_maps)
     gates = (_is_aggregate_op(expr.op) && expr.join !== nothing) ?
-            _resolve_join_gates_for(expr, index_sets) : expr.join_gates
+            _resolve_join_gates_for(expr, index_sets, vi_maps) : expr.join_gates
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                   lower=new_lower, upper=new_upper,
@@ -1891,18 +1931,20 @@ function _resolve_join_in_expr(expr::OpExpr, index_sets::AbstractDict)
                   join=expr.join, filter=new_filter, join_gates=gates,
                   id=expr.id, manifold=expr.manifold)
 end
-_resolve_join_in_expr(expr::Expr, ::AbstractDict) = expr
+_resolve_join_in_expr(expr::Expr, ::AbstractDict, vi_maps=_EMPTY_VI_MAPS) = expr
 
-_resolve_join_in_eq(eq::Equation, index_sets::AbstractDict) =
-    Equation(_resolve_join_in_expr(eq.lhs, index_sets),
-             _resolve_join_in_expr(eq.rhs, index_sets);
+_resolve_join_in_eq(eq::Equation, index_sets::AbstractDict, vi_maps=_EMPTY_VI_MAPS) =
+    Equation(_resolve_join_in_expr(eq.lhs, index_sets, vi_maps),
+             _resolve_join_in_expr(eq.rhs, index_sets, vi_maps);
              _comment=eq._comment, region=eq.region)
 
 # Resolve join gates across a vector of equations. Returns the input unchanged
 # when no equation uses a `join` clause (byte-identical for join-free files).
-function _resolve_join_gates(eqs::Vector{Equation}, index_sets::AbstractDict)
+# `vi_maps` carries any value-invention map buffers a `join.on` gates on (RFC §5.3).
+function _resolve_join_gates(eqs::Vector{Equation}, index_sets::AbstractDict,
+                             vi_maps=_EMPTY_VI_MAPS)
     any(_eq_has_join, eqs) || return eqs
-    return Equation[_resolve_join_in_eq(eq, index_sets) for eq in eqs]
+    return Equation[_resolve_join_in_eq(eq, index_sets, vi_maps) for eq in eqs]
 end
 
 # ============================================================
