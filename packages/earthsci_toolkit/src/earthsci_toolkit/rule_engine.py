@@ -836,6 +836,17 @@ def _parse_expr(v: Any) -> Expr:
         wrt = v.get("wrt")
         dim = v.get("dim")
         fn = v.get("fn")
+        # Synthetic `bc` nodes (esm-spec §9.2) carry the BC side/kind under the
+        # authored keys `side`/`kind` — the natural BC vocabulary used by
+        # discretization rule patterns (e.g. ESD dirichlet_bc.json). Expose them
+        # as the generic `dim`/`fn` match fields so the kind/side matcher
+        # discriminates dirichlet vs neumann, xmin vs ymax. Explicit `dim`/`fn`
+        # win; `side`/`kind` are the bc-scoped fallback (ess-tox / G8).
+        if op == "bc":
+            if dim is None:
+                dim = v.get("side")
+            if fn is None:
+                fn = v.get("kind")
         return ExprNode(
             op=op,
             args=args,

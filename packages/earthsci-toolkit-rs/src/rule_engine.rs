@@ -856,8 +856,23 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
                 .get("wrt")
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string());
+            // Synthetic `bc` nodes (esm-spec §9.2) carry the boundary-condition
+            // side and kind under the authored keys `side`/`kind` — the natural
+            // BC vocabulary used by discretization rule patterns (e.g. ESD
+            // dirichlet_bc.json). Expose them as the generic `dim`/`fn` match
+            // fields so the rule engine's kind/side matcher discriminates
+            // dirichlet vs neumann, xmin vs ymax. Explicit `dim`/`fn` win;
+            // `side`/`kind` are the bc-scoped fallback (ess-tox / G8). `fn` is
+            // also the generic broadcast-op field, so read it for every op.
+            let is_bc = op == "bc";
             let dim = obj
                 .get("dim")
+                .or_else(|| if is_bc { obj.get("side") } else { None })
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            let broadcast_fn = obj
+                .get("fn")
+                .or_else(|| if is_bc { obj.get("kind") } else { None })
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string());
             Ok(Expr::Operator(ExpressionNode {
@@ -865,6 +880,7 @@ pub fn parse_expr(v: &serde_json::Value) -> Result<Expr, RuleEngineError> {
                 args,
                 wrt,
                 dim,
+                broadcast_fn,
                 ..Default::default()
             }))
         }

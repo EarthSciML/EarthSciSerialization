@@ -1338,11 +1338,24 @@ export function parseExpr(v: unknown): Expr {
     const node: ExprNode = { op, args }
     if (typeof obj.wrt === 'string') node.wrt = obj.wrt
     if (typeof obj.dim === 'string') node.dim = obj.dim
-    // Preserve other pass-through fields (kind, side, name, value, etc.)
+    // Preserve other pass-through fields (fn, name, value, etc.)
     // so pattern matching and replacement can observe them.
     for (const [k, val] of Object.entries(obj)) {
       if (k === 'op' || k === 'args' || k === 'wrt' || k === 'dim') continue
       node[k] = val
+    }
+    // Synthetic `bc` nodes (esm-spec §9.2) carry the BC side/kind under the
+    // authored keys `side`/`kind` — the natural BC vocabulary used by
+    // discretization rule patterns (e.g. ESD dirichlet_bc.json). Expose them as
+    // the generic `dim`/`fn` match fields so the kind/side matcher discriminates
+    // dirichlet vs neumann, xmin vs ymax. Explicit `dim`/`fn` win; `side`/`kind`
+    // are the bc-scoped fallback, and are removed once mapped (ess-tox / G8).
+    if (op === 'bc') {
+      const rec = node as Record<string, unknown>
+      if (node.dim === undefined && typeof rec.side === 'string') node.dim = rec.side
+      if (rec.fn === undefined && typeof rec.kind === 'string') rec.fn = rec.kind
+      delete rec.side
+      delete rec.kind
     }
     return node
   }

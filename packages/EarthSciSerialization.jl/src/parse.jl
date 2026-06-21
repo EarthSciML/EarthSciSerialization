@@ -144,6 +144,28 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     axis_int = axis_val === nothing ? nothing : Int(axis_val)
     fn_val = get(data, kfn, nothing)
     fn_str = fn_val === nothing ? nothing : string(fn_val)
+    # Synthetic `bc` nodes (esm-spec §9.2) carry the boundary-condition kind and
+    # side under the authored keys `kind`/`side` — the natural BC vocabulary used
+    # by discretization rule patterns (e.g. ESD dirichlet_bc.json:
+    # {op:bc, kind:"dirichlet", side:"$side", …}). Expose them on the parsed
+    # OpExpr as the generic `fn`/`dim` match fields so the rule engine's
+    # kind/side pattern matching (`_match_sibling_name`) discriminates dirichlet
+    # vs neumann, xmin vs ymax — without these the BC pattern matched ANY bc node
+    # regardless of kind/side. Explicit `fn`/`dim` (the production `_discretize_bc!`
+    # wrapper and the rule_engine conformance fixtures) take precedence; `kind`/
+    # `side` are the fallback so both spellings match identically (ess-tox / G8).
+    if op == "bc"
+        kkind = kop isa Symbol ? :kind : "kind"
+        kside = kop isa Symbol ? :side : "side"
+        if fn_str === nothing
+            kind_val = get(data, kkind, nothing)
+            kind_val === nothing || (fn_str = string(kind_val))
+        end
+        if dim === nothing
+            side_val = get(data, kside, nothing)
+            side_val === nothing || (dim = side_val)
+        end
+    end
     name_val = get(data, kname, nothing)
     name_str = name_val === nothing ? nothing : string(name_val)
     value_raw = get(data, kvalue, nothing)

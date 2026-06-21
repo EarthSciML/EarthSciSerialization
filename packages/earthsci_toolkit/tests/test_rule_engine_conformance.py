@@ -35,6 +35,18 @@ def _wire_to_expr(node):
     """Convert a JSON-deserialized fixture into an ESM expression tree."""
     if isinstance(node, dict) and "op" in node and "args" in node:
         kwargs = {k: v for k, v in node.items() if k not in ("op", "args")}
+        # Synthetic `bc` nodes (esm-spec §9.2) carry the BC side/kind under the
+        # authored keys `side`/`kind` — the natural BC vocabulary used by
+        # discretization rule patterns. Expose them as the generic `dim`/`fn`
+        # match fields (mirroring the library parser) so the kind/side matcher
+        # discriminates. Explicit `dim`/`fn` win (ess-tox / G8).
+        if node["op"] == "bc":
+            side = kwargs.pop("side", None)
+            kind = kwargs.pop("kind", None)
+            if side is not None and "dim" not in kwargs:
+                kwargs["dim"] = side
+            if kind is not None and "fn" not in kwargs:
+                kwargs["fn"] = kind
         return ExprNode(
             op=node["op"],
             args=[_wire_to_expr(a) for a in node["args"]],

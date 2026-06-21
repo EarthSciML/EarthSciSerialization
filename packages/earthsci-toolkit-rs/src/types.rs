@@ -407,8 +407,12 @@ pub struct ExpressionNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wrt: Option<String>,
 
-    /// Dimensional analysis hint
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Dimensional analysis hint. Also accepts the authored boundary-condition
+    /// `side` key on synthetic `bc` nodes (esm-spec §9.2) — the natural BC
+    /// vocabulary used by discretization rule patterns — so the rule engine's
+    /// kind/side matcher discriminates xmin/xmax/… ; serialized canonically as
+    /// `dim` (ess-tox / G8).
+    #[serde(alias = "side", skip_serializing_if = "Option::is_none")]
     pub dim: Option<String>,
 
     /// Integration variable name for the `integral` op (spatial dimension being integrated over).
@@ -498,8 +502,12 @@ pub struct ExpressionNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub axis: Option<i64>,
 
-    /// Elementwise operator name for `broadcast` (serialized as `fn`).
-    #[serde(default, rename = "fn", skip_serializing_if = "Option::is_none")]
+    /// Elementwise operator name for `broadcast` (serialized as `fn`). Also
+    /// carries the boundary-condition kind on synthetic `bc` nodes, accepted
+    /// under the authored `kind` key (esm-spec §9.2) so the rule engine's
+    /// kind/side matcher discriminates dirichlet/neumann/robin/… ; serialized
+    /// canonically as `fn` (ess-tox / G8).
+    #[serde(default, rename = "fn", alias = "kind", skip_serializing_if = "Option::is_none")]
     pub broadcast_fn: Option<String>,
 
     /// For the `fn` op: dotted module path of the closed-registry function to

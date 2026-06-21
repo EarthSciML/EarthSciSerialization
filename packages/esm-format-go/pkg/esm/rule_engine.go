@@ -863,6 +863,10 @@ func rewritePass(expr Expression, rules []Rule, ctx RuleContext, changed *bool) 
 		Args:  newArgs,
 		Wrt:   node.Wrt,
 		Dim:   node.Dim,
+		// `Fn` carries the boundary-condition kind on synthetic `bc` nodes
+		// (esm-spec §9.2); preserve it when a node is rebuilt after rewriting
+		// its args so a passed-through bc node keeps its kind (ess-tox / G8).
+		Fn:    node.Fn,
 		Name:  node.Name,
 		Value: node.Value,
 	}
@@ -1790,6 +1794,30 @@ func parseExprValue(v interface{}) (Expression, error) {
 			if fs, ok := f.(string); ok {
 				s := fs
 				node.Fn = &s
+			}
+		}
+		// Synthetic `bc` nodes (esm-spec §9.2) carry the BC side/kind under the
+		// authored keys `side`/`kind` — the natural BC vocabulary used by
+		// discretization rule patterns (e.g. ESD dirichlet_bc.json). Expose them
+		// as the generic `dim`/`fn` match fields so the kind/side matcher
+		// discriminates dirichlet vs neumann, xmin vs ymax. Explicit `dim`/`fn`
+		// win; `side`/`kind` are the bc-scoped fallback (ess-tox / G8).
+		if op == "bc" {
+			if node.Dim == nil {
+				if s, has := x["side"]; has {
+					if ss, ok := s.(string); ok {
+						v := ss
+						node.Dim = &v
+					}
+				}
+			}
+			if node.Fn == nil {
+				if k, has := x["kind"]; has {
+					if ks, ok := k.(string); ok {
+						v := ks
+						node.Fn = &v
+					}
+				}
 			}
 		}
 		return node, nil

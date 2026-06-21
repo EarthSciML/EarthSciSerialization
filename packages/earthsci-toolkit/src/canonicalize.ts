@@ -360,6 +360,14 @@ function emitNodeJson(n: Node): string {
   if ('dim' in n && (n as Record<string, unknown>).dim !== undefined) {
     entries.push(['dim', JSON.stringify((n as Record<string, unknown>).dim)])
   }
+  if ('fn' in n && (n as Record<string, unknown>).fn !== undefined) {
+    // `fn` carries the boundary-condition kind on synthetic `bc` nodes
+    // (esm-spec §9.2). Emit it symmetrically with `dim`/`wrt` so the kind is
+    // preserved in the canonical form — otherwise bc(u,dirichlet,xmin) and
+    // bc(u,neumann,xmin) collapse to the same canonical JSON, making the
+    // kind/side matcher's canonical equality kind-blind (ess-tox / G8).
+    entries.push(['fn', JSON.stringify((n as Record<string, unknown>).fn)])
+  }
   if ('name' in n && (n as Record<string, unknown>).name !== undefined) {
     entries.push(['name', JSON.stringify((n as Record<string, unknown>).name)])
   }

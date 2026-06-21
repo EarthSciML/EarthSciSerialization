@@ -34,3 +34,10 @@ canonicalize the output, and assert byte-for-byte equality with
 
 Additional fixtures exercise the §5.2.4 guard vocabulary, non-linear
 patterns (§5.2.2), and sibling-field pattern variables (§5.2.4).
+
+The `bc_*` fixtures (tag `kind_side`) exercise the boundary-condition
+kind/side matcher (§9.2): a synthetic `bc` node's authored `kind`/`side`
+keys are exposed as the generic `fn`/`dim` match fields, so a BC rule
+pattern discriminates dirichlet vs. neumann and xmin vs. ymax (rather than
+matching any `bc` node). `bc_passthrough_preserves_kind` additionally pins
+that the canonical form retains the kind under `fn`.

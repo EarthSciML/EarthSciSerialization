@@ -20,7 +20,11 @@
     {"id": "guard_bind_side_axis", "path": "guard_bind_side_axis.json", "tags": ["guard", "bind_side_axis"]},
     {"id": "guard_bind_side_spacing", "path": "guard_bind_side_spacing.json", "tags": ["guard", "bind_side_spacing"]},
     {"id": "guard_bind_side_dim_size", "path": "guard_bind_side_dim_size.json", "tags": ["guard", "bind_side_dim_size"]},
-    {"id": "mesh_boundary_bc", "path": "mesh_boundary_bc.json", "tags": ["region", "mask_field", "unstructured", "mpas", "bc"]}
+    {"id": "mesh_boundary_bc", "path": "mesh_boundary_bc.json", "tags": ["region", "mask_field", "unstructured", "mpas", "bc"]},
+    {"id": "bc_kind_side_match", "path": "bc_kind_side_match.json", "tags": ["guard", "bc", "kind_side"]},
+    {"id": "bc_kind_discriminates", "path": "bc_kind_discriminates.json", "tags": ["guard", "bc", "kind_side"]},
+    {"id": "bc_side_literal_discriminates", "path": "bc_side_literal_discriminates.json", "tags": ["guard", "bc", "kind_side"]},
+    {"id": "bc_passthrough_preserves_kind", "path": "bc_passthrough_preserves_kind.json", "tags": ["guard", "bc", "kind_side", "canonical"]}
   ],
   "bindings_required": ["julia", "rust"],
   "bindings_optional": ["python", "go", "typescript"],

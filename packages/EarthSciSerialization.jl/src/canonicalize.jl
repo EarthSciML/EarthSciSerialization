@@ -281,6 +281,14 @@ function _emit_node_json(n::OpExpr)::String
     if n.dim !== nothing
         push!(entries, ("dim", _json_string(n.dim::String)))
     end
+    if n.fn !== nothing
+        # `fn` carries the boundary-condition kind on synthetic `bc` nodes
+        # (esm-spec §9.2). Emit it symmetrically with `dim`/`wrt` so the kind is
+        # preserved in the canonical form — otherwise bc(u,dirichlet,xmin) and
+        # bc(u,neumann,xmin) collapse to the same canonical JSON, making the
+        # kind/side matcher's canonical equality kind-blind (ess-tox / G8).
+        push!(entries, ("fn", _json_string(n.fn::String)))
+    end
     if n.name !== nothing
         push!(entries, ("name", _json_string(n.name::String)))
     end

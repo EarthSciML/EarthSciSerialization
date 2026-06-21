@@ -69,6 +69,10 @@ func canonOp(node ExprNode) (Expression, error) {
 		Args:  newArgs,
 		Wrt:   node.Wrt,
 		Dim:   node.Dim,
+		// `Fn` carries the boundary-condition kind on synthetic `bc` nodes
+		// (esm-spec §9.2); preserve it through canonicalization so the kind
+		// survives into the canonical form (symmetric with `Dim`, ess-tox/G8).
+		Fn:    node.Fn,
 		Name:  node.Name,
 		Value: node.Value,
 	}
@@ -476,6 +480,15 @@ func emitExprNodeJSON(n ExprNode) (string, error) {
 	if n.Dim != nil {
 		b, _ := json.Marshal(*n.Dim)
 		kv = append(kv, [2]string{"dim", string(b)})
+	}
+	if n.Fn != nil {
+		// `fn` carries the boundary-condition kind on synthetic `bc` nodes
+		// (esm-spec §9.2). Emit it symmetrically with `dim`/`wrt` so the kind
+		// is preserved in the canonical form — otherwise bc(u,dirichlet,xmin)
+		// and bc(u,neumann,xmin) collapse to the same canonical JSON, making
+		// the kind/side matcher's canonical equality kind-blind (ess-tox/G8).
+		b, _ := json.Marshal(*n.Fn)
+		kv = append(kv, [2]string{"fn", string(b)})
 	}
 	if n.Name != nil {
 		b, _ := json.Marshal(*n.Name)

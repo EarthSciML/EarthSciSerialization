@@ -277,6 +277,13 @@ def _emit_node_json(n: ExprNode) -> str:
         entries.append(("wrt", _json_string(n.wrt)))
     if n.dim is not None:
         entries.append(("dim", _json_string(n.dim)))
+    if getattr(n, "fn", None) is not None:
+        # `fn` carries the boundary-condition kind on synthetic `bc` nodes
+        # (esm-spec §9.2). Emit it symmetrically with `dim`/`wrt` so the kind is
+        # preserved in the canonical form — otherwise bc(u,dirichlet,xmin) and
+        # bc(u,neumann,xmin) collapse to the same canonical JSON, making the
+        # kind/side matcher's canonical equality kind-blind (ess-tox / G8).
+        entries.append(("fn", _json_string(n.fn)))
     if getattr(n, "handler_id", None) is not None:
         entries.append(("handler_id", _json_string(n.handler_id)))
     if getattr(n, "name", None) is not None:
