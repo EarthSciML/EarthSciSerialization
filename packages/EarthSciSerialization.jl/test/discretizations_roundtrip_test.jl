@@ -1,7 +1,6 @@
 """
 discretizations_roundtrip_test.jl — Round-trip coverage for the §7
-`discretizations` top-level schema, including the §7.4
-`CrossMetricStencilRule` composite variant (esm-vwo).
+`discretizations` top-level schema.
 
 These tests load the canonical discretization fixtures, re-serialize,
 reload, and assert the discretizations tree survives intact at the JSON
@@ -36,7 +35,6 @@ end
                 "upwind_1st_advection.esm",
                 "periodic_bc.esm",
                 "mpas_cell_div.esm",
-                "cross_metric_cartesian.esm",
                 "grid_dispatch_ppm.esm",
                 "multi_output_ppm_reconstruction.esm"]
 
@@ -69,25 +67,6 @@ end
             end
         end
     end
-end
-
-@testset "RFC §7.4 cross-metric composite structure" begin
-    path = joinpath(_DISC_FIXTURES_DIR, "cross_metric_cartesian.esm")
-    esm = EarthSciSerialization.load(path)
-
-    @test haskey(esm.discretizations, "laplacian_full_covariant_toy")
-    composite = esm.discretizations["laplacian_full_covariant_toy"]
-
-    @test composite["kind"] == "cross_metric"
-    @test composite["axes"] == ["xi", "eta"]
-    @test composite["terms"] isa AbstractVector
-    @test length(composite["terms"]) == 2
-    # Composite entries do NOT carry a stencil key.
-    @test !haskey(composite, "stencil")
-
-    # Per-axis stencils should still be present and carry a stencil key.
-    @test haskey(esm.discretizations["d2_dxi2_uniform"], "stencil")
-    @test haskey(esm.discretizations["d2_deta2_uniform"], "stencil")
 end
 
 @testset "RFC §7.8 grid_dispatch structure" begin

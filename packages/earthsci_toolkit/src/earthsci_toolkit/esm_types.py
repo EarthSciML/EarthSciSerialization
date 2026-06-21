@@ -927,8 +927,8 @@ class EsmFile:
     # Named discretization schemes (RFC §7). Held as opaque dicts because
     # stencil coefficients and applies_to patterns carry pattern-variable
     # strings ($u, $x, $target, ...) that don't map onto the Expression
-    # coercion pipeline. This preserves round-trip fidelity for both standard
-    # Discretization (§7.1) and CrossMetricStencilRule (§7.5) entries.
+    # coercion pipeline. This preserves round-trip fidelity for standard
+    # Discretization (§7.1) entries.
     discretizations: Dict[str, Any] = field(default_factory=dict)
 
     @property

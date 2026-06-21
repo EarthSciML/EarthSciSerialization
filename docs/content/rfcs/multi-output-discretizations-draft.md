@@ -81,9 +81,9 @@ resolution** (recommended; resolution of former open question 2 — see
 
    On first reference the engine instantiates the provider with the
    consumer's **inherited bindings** (the same §7.2.1 name-flow protocol
-   that `dimensional_split.inner_rule` and `cross_metric.axis_stencil`
-   already use — this is the fourth instance of sibling-scheme
-   reference, not a new mechanism) and emits the observed equations.
+   that `dimensional_split.inner_rule` already uses — another instance of
+   sibling-scheme reference, not a new mechanism) and emits the observed
+   equations.
    Resolution is recursive (limiter → reconstruction → flux chains),
    with a resolution stack for cycle detection (`E_SCHEME_CYCLE`).
    Providers nobody demands never emit.

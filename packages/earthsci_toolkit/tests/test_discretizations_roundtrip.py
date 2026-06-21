@@ -1,6 +1,5 @@
 """
-Round-trip tests for the §7 ``discretizations`` top-level schema, including
-the §7.4 ``CrossMetricStencilRule`` composite variant (esm-vwo).
+Round-trip tests for the §7 ``discretizations`` top-level schema.
 
 Exercises the Python binding's parse + round-trip contract for each
 shared discretization fixture at ``tests/discretizations/*.esm``. The
@@ -28,7 +27,6 @@ FIXTURES = [
     "upwind_1st_advection",
     "periodic_bc",
     "mpas_cell_div",
-    "cross_metric_cartesian",
     "grid_dispatch_ppm",
     "multi_output_ppm_reconstruction",
 ]
@@ -57,26 +55,6 @@ def test_discretization_roundtrip(fixture_name: str) -> None:
     assert reserialized2["discretizations"] == original["discretizations"], (
         f"{fixture_name}: drift on second-hop round-trip"
     )
-
-
-def test_cross_metric_composite_structure() -> None:
-    """The §7.4 composite entry is structurally recognizable after parse."""
-    fixture_path = DISC_DIR / "cross_metric_cartesian.esm"
-    esm = load(fixture_path)
-
-    assert "laplacian_full_covariant_toy" in esm.discretizations
-    composite = esm.discretizations["laplacian_full_covariant_toy"]
-    assert composite["kind"] == "cross_metric"
-    assert composite["axes"] == ["xi", "eta"]
-    assert isinstance(composite["terms"], list)
-    assert len(composite["terms"]) == 2
-    # Composite entries do NOT carry a stencil key (it is the standard-
-    # discretization variant's discriminator).
-    assert "stencil" not in composite
-
-    # Per-axis stencils should still be present and carry a stencil key.
-    assert esm.discretizations["d2_dxi2_uniform"]["stencil"]
-    assert esm.discretizations["d2_deta2_uniform"]["stencil"]
 
 
 def test_grid_dispatch_structure() -> None:

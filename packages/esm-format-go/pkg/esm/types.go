@@ -869,10 +869,6 @@ type FunctionTable struct {
 //     template per RFC §7.1.
 //   - "dimensional_split" composes a 1D inner scheme along several orthogonal
 //     axes via Strang/Lie operator splitting per RFC §7.5.
-//   - "cross_metric" is a CrossMetricStencilRule composite (RFC §7.6) that
-//     combines per-axis 1D stencils with metric-tensor components for
-//     covariant operators on curvilinear grids; activated by a nonempty
-//     Terms field (the Kind="cross_metric" discriminator is optional).
 //   - "flux_form_semi_lagrangian" is a flux-form semi-Lagrangian (FFSL)
 //     advection scheme (Lin & Rood 1996) per RFC §7.7 that uses
 //     Reconstruction / Remap / Limiter / CflPolicy / Dimensions instead of
@@ -889,10 +885,6 @@ type Discretization struct {
 	//   "" or "stencil"             = classic neighbor-combination template (§7.1)
 	//   "dimensional_split"         = axis-sweep composite (§7.5); activates
 	//                                 InnerRule / Splitting / OrderOfSweeps
-	//   "cross_metric"              = CrossMetricStencilRule composite (§7.6);
-	//                                 activates Terms / BoundaryFallback. Optional
-	//                                 discriminator — presence of Terms is the
-	//                                 authoritative signal for the composite.
 	//   "flux_form_semi_lagrangian" = FFSL advection rule (§7.7); activates
 	//                                 Reconstruction / Remap / Limiter /
 	//                                 CflPolicy / Dimensions.
@@ -913,8 +905,8 @@ type Discretization struct {
 	// Mutually exclusive with Stencil; expanded by the Julia loader at parse time.
 	StencilGen         *StencilGen       `json:"stencil_gen,omitempty"`
 
-	// Axes is the ordered coordinate-axis list shared by both composite
-	// kinds: "dimensional_split" (§7.5) and "cross_metric" (§7.6).
+	// Axes is the ordered coordinate-axis list for a "dimensional_split"
+	// composite (§7.5).
 	Axes               []string          `json:"axes,omitempty"`
 
 	// InnerRule, Splitting, OrderOfSweeps apply to "dimensional_split"
@@ -922,16 +914,6 @@ type Discretization struct {
 	InnerRule          string            `json:"inner_rule,omitempty"`
 	Splitting          string            `json:"splitting,omitempty"`
 	OrderOfSweeps      string            `json:"order_of_sweeps,omitempty"`
-
-	// Terms is the array of CrossMetricTerm entries for a "cross_metric"
-	// composite (§7.6). Mutually exclusive with Stencil; nonempty Terms
-	// signals the composite variant.
-	Terms              []CrossMetricTerm `json:"terms,omitempty"`
-
-	// BoundaryFallback names another discretization (in the same block) to
-	// apply at edges / corners where the composite
-	// stencil cannot be evaluated. Cross-metric composite only.
-	BoundaryFallback   string            `json:"boundary_fallback,omitempty"`
 
 	// Reconstruction (FFSL §7.7): sub-cell reconstruction — string rule-ref
 	// or inline {order, parameters} object.
@@ -1065,37 +1047,10 @@ type DiscretizationVariant struct {
 	Dimensions     []string        `json:"dimensions,omitempty"`
 }
 
-// IsCrossMetric reports whether this Discretization is a CrossMetricStencilRule
-// composite (RFC §7.6) rather than a standard stencil template.
-func (d *Discretization) IsCrossMetric() bool {
-	return len(d.Terms) > 0
-}
-
 // IsMultiOutput reports whether this Discretization is a multi-output stencil
 // rule (RFC §7.9): kind="multi_output_stencil" or MultiOutputStencil is populated.
 func (d *Discretization) IsMultiOutput() bool {
 	return d.Kind == "multi_output_stencil" || len(d.MultiOutputStencil) > 0
-}
-
-// CrossMetricTerm is one term of a CrossMetricStencilRule composite (RFC §7.6).
-// Semantically contributes `Sign * MetricComponent(target) * AxisStencil(field)`
-// to the composite's combined sum.
-type CrossMetricTerm struct {
-	// AxisStencil names a per-axis Discretization (in the same discretizations
-	// block) whose expansion supplies this term's 1D directional derivative.
-	AxisStencil string `json:"axis_stencil"`
-
-	// MetricComponent names a metric array (entry of the grid's metric_arrays
-	// block, e.g. "J", "g_xixi", "g_etaeta", "g_xieta", "ginv_xixi") resolved
-	// point-wise at $target via the grid accessor's metric_eval contract.
-	MetricComponent string `json:"metric_component"`
-
-	// Sign is +1 (default) or -1, applied to this term's contribution.
-	// Omitted from JSON when zero-valued so defaulting surfaces at the
-	// consumer; callers should treat a missing Sign as +1 per the spec.
-	Sign int `json:"sign,omitempty"`
-
-	Description string `json:"description,omitempty"`
 }
 
 // FfslRemap is the `remap` field of a flux-form semi-Lagrangian rule

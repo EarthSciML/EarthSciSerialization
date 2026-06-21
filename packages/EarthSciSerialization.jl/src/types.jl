@@ -1300,8 +1300,8 @@ struct EsmFile
     # Named discretization schemes (RFC §7). Held opaquely as Dict{String,Any}
     # because stencil coefficients and applies_to patterns carry pattern-
     # variable strings (\$u, \$x, \$target) that don't map onto the Expression
-    # coercion pipeline. Standard Discretization (§7.1) and
-    # CrossMetricStencilRule (§7.5) entries pass through unchanged.
+    # coercion pipeline. Standard Discretization (§7.1) entries pass through
+    # unchanged.
     discretizations::Union{Dict{String,Any},Nothing}
     # File-local enum mappings used by the `enum` AST op (esm-spec §9.3).
     # Keys are enum names; each value maps a symbol → positive integer.

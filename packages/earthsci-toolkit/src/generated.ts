@@ -233,7 +233,7 @@ export type ExpressionNode = ExpressionNode1 & {
    */
   key?: number | string | ExpressionNode1;
   /**
-   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
+   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. Great-circle-edge assumption: under "spherical"/"geodesic" every edge — including a lon-lat edge running along a parallel, which is a small circle, not a great circle — is modelled as a great-circle geodesic, so a coarse polar cell carries a real area error (~4% for a 30° cell next to the pole, growing with the square of the cell's longitude width; RFC §B.4 / §5.8.4). The per-binding kernels offer an opt-in densification of parallel edges into short great-circle segments (`densify_parallel_edges`) to reduce it; it is off by default, so default clip behaviour is unchanged. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
    */
   manifold?: "planar" | "spherical" | "geodesic";
   /**
@@ -844,7 +844,7 @@ export type Discretization = Discretization1 & {
     [k: string]: string;
   };
   /**
-   * RFC §7.8: family-keyed variant table. When present, the scheme declares one or more grid-family-specific bodies in place of an inline one — each variant carries its own `grid_family` plus the body fields (stencil / kind / axes / inner_rule / splitting / order_of_sweeps / terms / boundary_fallback / reconstruction / remap / limiter / cfl_policy / dimensions / combine) that would otherwise live on the parent. The loader picks the variant whose `grid_family` matches the active grid family at expansion time and substitutes its body in place of the parent's. Top-level `grid_family` and any inline body field MUST be absent when `grid_dispatch` is present; shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) remain on the parent and apply to every variant. Each variant's `grid_family` MUST be unique within the array; ordering is not significant. The use case is operators whose form differs across grid topologies — e.g. different cartesian vs. unstructured stencils — without forking the scheme name.
+   * RFC §7.8: family-keyed variant table. When present, the scheme declares one or more grid-family-specific bodies in place of an inline one — each variant carries its own `grid_family` plus the body fields (stencil / kind / axes / inner_rule / splitting / order_of_sweeps / reconstruction / remap / limiter / cfl_policy / dimensions / combine) that would otherwise live on the parent. The loader picks the variant whose `grid_family` matches the active grid family at expansion time and substitutes its body in place of the parent's. Top-level `grid_family` and any inline body field MUST be absent when `grid_dispatch` is present; shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) remain on the parent and apply to every variant. Each variant's `grid_family` MUST be unique within the array; ordering is not significant. The use case is operators whose form differs across grid topologies — e.g. different cartesian vs. unstructured stencils — without forking the scheme name.
    *
    * @minItems 1
    */
@@ -930,7 +930,7 @@ export type NeighborSelector1 = {
   [k: string]: unknown;
 };
 /**
- * RFC §7.8: one entry of a Discretization's `grid_dispatch` block. Declares a per-grid-family body that replaces the parent's inline body when the active grid's family matches `grid_family`. The body fields (`kind`, `combine`, `stencil`, `axes`, `inner_rule`, `splitting`, `order_of_sweeps`, `reconstruction`, `remap`, `limiter`, `cfl_policy`, `dimensions`) follow the same kind-discriminated semantics and mutual-exclusion rules as the parent Discretization. Shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) live on the parent and are not duplicated here. A variant whose `grid_family` matches no active grid is inert. CrossMetricStencilRule entries (RFC §7.6) are a sibling top-level shape and not eligible for `grid_dispatch`; author per-family CrossMetric rules as separate `discretizations` entries instead.
+ * RFC §7.8: one entry of a Discretization's `grid_dispatch` block. Declares a per-grid-family body that replaces the parent's inline body when the active grid's family matches `grid_family`. The body fields (`kind`, `combine`, `stencil`, `axes`, `inner_rule`, `splitting`, `order_of_sweeps`, `reconstruction`, `remap`, `limiter`, `cfl_policy`, `dimensions`) follow the same kind-discriminated semantics and mutual-exclusion rules as the parent Discretization. Shared fields (`applies_to`, `accuracy`, `order`, `requires_locations`, `emits_location`, `target_binding`, `ghost_vars`, `free_variables`, `description`, `reference`) live on the parent and are not duplicated here. A variant whose `grid_family` matches no active grid is inert.
  */
 export type DiscretizationVariant = DiscretizationVariant1 & {
   /**
@@ -952,7 +952,7 @@ export type DiscretizationVariant = DiscretizationVariant1 & {
    */
   stencil?: [StencilEntry, ...StencilEntry[]];
   /**
-   * Variant: dimensional_split axes (or cross_metric axes when terms is present).
+   * Variant: dimensional_split axes.
    *
    * @minItems 1
    */
@@ -1177,7 +1177,7 @@ export type ExpressionNode2 = {
    */
   key?: number | string | ExpressionNode1;
   /**
-   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
+   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. Great-circle-edge assumption: under "spherical"/"geodesic" every edge — including a lon-lat edge running along a parallel, which is a small circle, not a great circle — is modelled as a great-circle geodesic, so a coarse polar cell carries a real area error (~4% for a 30° cell next to the pole, growing with the square of the cell's longitude width; RFC §B.4 / §5.8.4). The per-binding kernels offer an opt-in densification of parallel edges into short great-circle segments (`densify_parallel_edges`) to reduce it; it is off by default, so default clip behaviour is unchanged. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
    */
   manifold?: "planar" | "spherical" | "geodesic";
   /**
@@ -1423,10 +1423,10 @@ export interface ESMFormat2 {
     [k: string]: Interface;
   };
   /**
-   * Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (§7.1) or a CrossMetricStencilRule composite (§7.6) that combines per-axis stencils and metric components for covariant operators on curvilinear grids, or a MultiOutputStencilRule (§7.9) that emits multiple named output fields from one stencil application, or a DiscretizationRef (§4.7.1) {ref} pointer to an external ESD rule file.
+   * Named stencil templates (discretization schemes) that map PDE operators to concrete AST transforms over a grid. Each entry is either a standard stencil-template Discretization (§7.1) or a MultiOutputStencilRule (§7.9) that emits multiple named output fields from one stencil application, or a DiscretizationRef (§4.7.1) {ref} pointer to an external ESD rule file.
    */
   discretizations?: {
-    [k: string]: Discretization | CrossMetricStencilRule | MultiOutputStencilRule | DiscretizationRef;
+    [k: string]: Discretization | MultiOutputStencilRule | DiscretizationRef;
   };
   /**
    * Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured topology with dimensions, staggering locations, metric arrays, and (for unstructured) connectivity tables. See docs/rfcs/discretization.md §6.
@@ -2551,93 +2551,6 @@ export interface GhostVarDecl {
   description?: string;
 }
 /**
- * Cross-metric composite stencil rule (RFC §7.4). Expresses operators whose discretization does not fit the single-axis stencil shape — specifically covariant PDE operators on curvilinear grids where metric-tensor components (J, g_xixi, g_etaeta, g_xieta, ginv_*) weight a sum of per-axis stencil applications. The canonical example is the full covariant Laplacian on a curvilinear grid, which combines ∂/∂ξ and ∂/∂η stencils with metric weights in a 9-point composite.
- *
- * Expansion semantics: given a rule match at $target, the composite expands to `Σ_terms[ sign_t · metric_component_t($target) · axis_stencil_t(field, axes_t) ]`, where each `axis_stencil_t` is the expansion of the referenced Discretization at $target along its declared axis. The composite's own `combine` field (default '+') determines how terms are combined.
- */
-export interface CrossMetricStencilRule {
-  /**
-   * Discriminator for bindings that need to distinguish this rule type from a standard Discretization. Optional (presence of `terms` is sufficient), but recommended for statically-typed bindings.
-   */
-  kind?: "cross_metric";
-  /**
-   * A shallow AST pattern (discretization RFC §5.2, §7.1). Values may be number literals, pattern variables ($name) or concrete strings, or object-form expression patterns. depth-1 constraint is not enforced by the schema — it is checked by the rule engine per §7.2.1.
-   */
-  applies_to:
-    | number
-    | string
-    | boolean
-    | null
-    | {
-        [k: string]: unknown;
-      }
-    | PatternNode[];
-  /**
-   * Grid family this composite targets. In practice cross-metric composites are primarily used on curvilinear grids; 'cartesian' is a conformance-friendly degenerate case where off-diagonal metric components vanish.
-   */
-  grid_family: "cartesian" | "unstructured";
-  /**
-   * Ordered list of coordinate axes the composition spans (e.g. ['xi','eta']). Each axis name must match an axis referenced by one of the composite's terms' axis_stencil. The order is informational (binding-readable) and does not affect expansion.
-   *
-   * @minItems 1
-   */
-  axes: [string, ...string[]];
-  /**
-   * How the composite's terms are combined. Defaults to '+' (the natural choice for a summed tensor expansion).
-   */
-  combine?: "+" | "*" | "min" | "max";
-  /**
-   * Array of CrossMetricTerm entries. Must contain at least one term.
-   *
-   * @minItems 1
-   */
-  terms: [CrossMetricTerm, ...CrossMetricTerm[]];
-  /**
-   * Name of another Discretization or CrossMetricStencilRule (in the same discretizations block) to apply at edges or corners where the composite's full stencil cannot be evaluated (e.g. corner halos with incomplete metric support). Optional — when omitted, boundary handling falls through to the model's boundary_conditions.
-   */
-  boundary_fallback?: string;
-  /**
-   * Informational: truncation order (e.g. 'O(dx^2)').
-   */
-  accuracy?: string;
-  /**
-   * If set, the operand variable must carry one of these staggered-grid locations (mirrors Discretization.requires_locations).
-   */
-  requires_locations?: string[];
-  /**
-   * Staggered-grid location the composite emits (mirrors Discretization.emits_location).
-   */
-  emits_location?: string;
-  /**
-   * Reserved name for the target index binding (mirrors Discretization.target_binding).
-   */
-  target_binding?: string;
-  /**
-   * Optional list of free pattern-variable names (e.g. ['$u']) that the composite expects the triggering rule to bind; informational / for validator use.
-   */
-  free_variables?: string[];
-  description?: string;
-  reference?: Reference;
-}
-/**
- * One term of a CrossMetricStencilRule composite expansion (RFC §7.4). Semantically, the term contributes `sign * metric_component(target) * axis_stencil(field, axis)` to the composite, where `axis_stencil` names another Discretization whose expansion is substituted point-wise and `metric_component` names a metric array from the grid's metric_arrays block. Terms with identical `axis_stencil` but distinct `metric_component` are how cross-derivative composites (e.g. g_xieta · ∂²/∂ξ∂η) are assembled.
- */
-export interface CrossMetricTerm {
-  /**
-   * Name of a per-axis Discretization entry (in the same discretizations block) whose expansion supplies this term's 1D directional derivative. Must resolve to a Discretization whose grid_family is compatible with the composite's grid_family.
-   */
-  axis_stencil: string;
-  /**
-   * Name of a metric array (entry of the grid's metric_arrays block, e.g. 'J', 'g_xixi', 'g_etaeta', 'g_xieta', 'ginv_xixi'). Resolved point-wise at $target via the grid accessor's metric_eval contract.
-   */
-  metric_component: string;
-  /**
-   * Sign applied to this term's contribution; defaults to +1.
-   */
-  sign?: -1 | 1;
-  description?: string;
-}
-/**
  * Multi-output stencil rule (RFC §7.9). A scheme kind that emits multiple named output fields from one stencil application — the canonical use case is PPM reconstruction, which produces q_left_edge and q_right_edge from a single reconstruct(q, dim=x) operator match.
  *
  * Expansion has two trigger paths:
@@ -2656,7 +2569,7 @@ export interface CrossMetricTerm {
  */
 export interface MultiOutputStencilRule {
   /**
-   * Discriminator for bindings that need to distinguish this rule type from a standard Discretization or CrossMetricStencilRule. Optional (presence of `outputs` plus an object-valued `stencil` is sufficient), but recommended for statically-typed bindings.
+   * Discriminator for bindings that need to distinguish this rule type from a standard Discretization. Optional (presence of `outputs` plus an object-valued `stencil` is sufficient), but recommended for statically-typed bindings.
    */
   kind?: "multi_output_stencil";
   /**

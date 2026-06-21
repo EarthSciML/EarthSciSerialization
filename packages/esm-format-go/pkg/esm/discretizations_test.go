@@ -41,13 +41,13 @@ func assertJSONEqual(t *testing.T, a, b interface{}, name string) {
 func TestDiscretizationsRoundTrip(t *testing.T) {
 	repoRoot := filepath.Join("..", "..", "..", "..")
 	fixtures := []struct {
-		id              string
-		path            string
-		schemeName      string
-		gridFamily      string
-		stencilLen      int
-		wantOrder       *int
-		wantStencilGen  bool
+		id             string
+		path           string
+		schemeName     string
+		gridFamily     string
+		stencilLen     int
+		wantOrder      *int
+		wantStencilGen bool
 	}{
 		// centered_2nd_uniform.esm was migrated to stencil_gen (ess-bq1); stencil array is gone.
 		{"centered_2nd_uniform", "tests/discretizations/centered_2nd_uniform.esm", "centered_2nd_uniform", "cartesian", 0, nil, true},
@@ -62,12 +62,6 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 		// so the generic stencil assertions still apply; TestDimensionalSplitScheme
 		// below checks the dimensional-split fields round-trip.
 		{"dim_split_2d_strang", "tests/discretizations/dim_split_2d_strang.esm", "centered_2nd_uniform", "cartesian", 2, nil, false},
-		// Cross-metric composite (RFC §7.6): the named entry has no stencil
-		// (stencilLen 0 routes into the composite assertion below); the
-		// per-axis schemes referenced via Terms are exercised separately.
-		{"cross_metric_cartesian_composite", "tests/discretizations/cross_metric_cartesian.esm", "laplacian_full_covariant_toy", "cartesian", 0, nil, false},
-		{"cross_metric_cartesian_dxi2", "tests/discretizations/cross_metric_cartesian.esm", "d2_dxi2_uniform", "cartesian", 3, nil, false},
-		{"cross_metric_cartesian_deta2", "tests/discretizations/cross_metric_cartesian.esm", "d2_deta2_uniform", "cartesian", 3, nil, false},
 	}
 	for _, f := range fixtures {
 		t.Run(f.id, func(t *testing.T) {
@@ -102,19 +96,6 @@ func TestDiscretizationsRoundTrip(t *testing.T) {
 				t.Errorf("order absent, want %d", *f.wantOrder)
 			case f.wantOrder != nil && scheme.Order != nil && *scheme.Order != *f.wantOrder:
 				t.Errorf("order = %d, want %d", *scheme.Order, *f.wantOrder)
-			}
-
-			// For cross-metric composite entries (stencilLen == 0, no Stencil, no
-			// StencilGen) we expect a nonempty Terms array and IsCrossMetric()==
-			// true (RFC §7.6). Skip for dimensional_split (uses InnerRule) and
-			// stencil_gen schemes (no stencil by design — the loader expands it).
-			if f.stencilLen == 0 && len(scheme.Stencil) == 0 && scheme.Kind != "dimensional_split" && !f.wantStencilGen {
-				if !scheme.IsCrossMetric() {
-					t.Errorf("scheme %q: expected composite (Terms nonempty), got Terms=%v", f.schemeName, scheme.Terms)
-				}
-				if len(scheme.Axes) == 0 {
-					t.Errorf("scheme %q: composite must declare axes", f.schemeName)
-				}
 			}
 
 			out, err := json.Marshal(&parsed)

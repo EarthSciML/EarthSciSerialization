@@ -486,8 +486,8 @@ function coerce_esm_file(data::Any)::EsmFile
     end
 
     # Discretization schemes (RFC §7). Held opaquely as Dict{String,Any} —
-    # standard stencil templates and CrossMetricStencilRule composites (§7.5)
-    # both pass through unchanged. Schema-level validation already ran above.
+    # standard stencil templates pass through unchanged. Schema-level
+    # validation already ran above.
     discretizations = if haskey(data, :discretizations) && data.discretizations !== nothing
         d = _to_native_json(data.discretizations)::Dict{String,Any}
         d

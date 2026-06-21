@@ -68,7 +68,7 @@ The full authoring stance, normatively:
 | `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
 | `grids` | | Named discretization grids (cartesian / unstructured) — see docs/rfcs/discretization.md §6 |
 | `staggering_rules` | | Named staggering conventions that declare where quantities live on a grid (e.g. MPAS unstructured C-grid) — see docs/rfcs/discretization.md §7.4 |
-| `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) or cross-metric composites for curvilinear covariant operators (§7.4) — see docs/rfcs/discretization.md §7 |
+| `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) — see docs/rfcs/discretization.md §7 |
 
 The `operators` and `registered_functions` blocks present in earlier drafts are **removed** in this revision. State-mutating numerical schemes (advection, gridded diffusion) are now expressed as discretization schemes (`discretizations`) with PDE operators in the model equations; pure functions are drawn from the closed function registry (Section 9) via the `fn` op. See `docs/rfcs/closed-function-registry.md` for the migration plan.
 

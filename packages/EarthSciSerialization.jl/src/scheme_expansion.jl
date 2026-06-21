@@ -337,7 +337,7 @@ function parse_schemes(raw, base_path::String = "",
         elseif kind == "stencil"
             out[sk] = parse_scheme(sk, v)
         else
-            # Defer other kinds (cross_metric, dimensional_split, grid_dispatch, …).
+            # Defer other kinds (dimensional_split, grid_dispatch, …).
             continue
         end
     end
@@ -967,7 +967,7 @@ RFC §7.9 trigger 2 — demand-driven provider instantiation. Called from
 
 Uses the consumer's inherited `bindings` to determine the provider's operand
 and axis (§7.2.1 name-flow, same mechanism as sibling-scheme refs in
-`dimensional_split` and `cross_metric`). Emits one observed arrayop equation
+`dimensional_split`). Emits one observed arrayop equation
 per declared output into `ctx.emitted_equations` and auto-declares the output
 variables into `ctx.emitted_variables`.
 

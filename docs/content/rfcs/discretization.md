@@ -1561,136 +1561,31 @@ conformance manifest adds `tests/discretizations/dim_split_2d_strang.esm`
 — a 2D Strang-split scheme over `centered_2nd_uniform` — as the
 cross-binding fixture.
 
-### 7.6 Cross-metric stencil composition (resolves esm-vwo)
+### 7.6 Cross-metric stencil composition — removed (was esm-vwo; retired by ess-oqx)
 
-A class of covariant PDE operators on curvilinear grids — most
-prominently the full covariant Laplacian on a curvilinear grid — does
-not fit the single-axis `stencil` shape of §7.1. Their discretization
-requires combining **per-axis 1D stencils** with **metric-tensor
-components** (J, g_xixi, g_etaeta, g_xieta, ginv_*) in a structural way:
-"apply stencil A along ξ and stencil B along η and weight by
-g_xieta(i,j)" as one rule, not as a rule-engine artifact.
-
-v0.2.0 introduces the `CrossMetricStencilRule` as a sibling type of
-`Discretization` under `discretizations.<name>`. The two are
-distinguished by the presence of `terms` (and, optionally, `kind:
-"cross_metric"`) on the composite rule. Existing standard
-`Discretization` entries parse unchanged.
-
-#### 7.6.1 Shape
-
-```jsonc
-{
-  "discretizations": {
-    "<name>": {
-      "kind": "cross_metric",              // optional discriminator
-      "applies_to": { "op": "laplacian", "args": ["$u"] },
-      "grid_family": "cartesian",
-      "axes": ["xi", "eta"],
-      "combine": "+",
-      "terms": [
-        { "axis_stencil": "<scheme>", "metric_component": "<metric>", "sign": 1 },
-        ...
-      ],
-      "boundary_fallback": "<scheme-or-composite>"   // optional
-    }
-  }
-}
-```
-
-**Fields.** `applies_to`, `grid_family`, `accuracy`,
-`requires_locations`, `emits_location`, `target_binding`,
-`free_variables`, `description`, and `reference` mirror §7.1 exactly.
-The composite-specific fields are:
-
-| Field | Required | Description |
-|---|---|---|
-| `kind` | | Discriminator literal `"cross_metric"`. Optional (presence of `terms` is sufficient), but recommended for statically-typed bindings. |
-| `axes` | ✓ | Ordered list of coordinate axes the composition spans (e.g. `["xi", "eta"]`). Informational; the order does not affect expansion. |
-| `combine` | | How terms are combined. Defaults to `"+"` — the natural choice for a summed tensor expansion. |
-| `terms` | ✓ | Non-empty array of `CrossMetricTerm` entries. |
-| `boundary_fallback` | | Name of another entry in the same `discretizations` block to apply at edges / corners where the full stencil cannot be evaluated (e.g. corner halos with incomplete metric support). When omitted, boundary handling falls through to the model's `boundary_conditions` (§9). |
-
-Each `CrossMetricTerm` has:
-
-| Field | Required | Description |
-|---|---|---|
-| `axis_stencil` | ✓ | Name of a per-axis `Discretization` (in the same `discretizations` block) whose expansion supplies this term's 1D directional derivative. |
-| `metric_component` | ✓ | Name of a metric array (entry of the grid's `metric_arrays` block — e.g. `J`, `g_xixi`, `g_etaeta`, `g_xieta`, `ginv_xixi`). Resolved point-wise at `$target`. |
-| `sign` | | `+1` or `-1`; defaults to `+1`. |
-| `description` | | Informational. |
-
-#### 7.6.2 Expansion semantics
-
-Given a rule match at `$target`, a `CrossMetricStencilRule` expands to
-
-```
-combine_t( sign_t · metric_component_t($target) · axis_stencil_t(field, axis_t) )
-```
-
-where, for each term `t`:
-
-- `axis_stencil_t` is the expansion of the referenced `Discretization`
-  at `$target` — per §7.2 / §7.2.1 with the outer rule's pattern-variable
-  bindings in scope. The referenced scheme's `applies_to` must agree on
-  the operand variable by name (per §7.2.1); the composite does not
-  rebind.
-- `metric_component_t($target)` is an `index` node into the named
-  metric array, resolved via the grid's `metric_eval` accessor contract
-  (§6.5). Metric arrays of rank > 0 are indexed by `$target`'s
-  components; rank-0 (scalar) metrics are emitted bare.
-- `sign_t` is a multiplicative ±1.
-- `combine_t` is the composite's `combine` (default `+`).
-
-This is a pure AST transform: no runtime array data is touched. The
-composite reduces to a sum of standard §4.3.1 `arrayop` nodes after one
-lowering step, so every `CrossMetricStencilRule` is observationally
-equivalent to the §4 architectural claim that "discretization = AST
-rewrite".
-
-**Pattern-variable flow.** Bindings flow by name from the triggering
-rule into the composite (identical protocol to §7.2.1). Each term's
-`axis_stencil` is invoked with the same inherited bindings; the
-referenced per-axis scheme sees `$u` / `$target` / `$x` just as if it
-had been selected directly.
-
-**Boundary handling.** When a term's `axis_stencil` cannot be
-materialized at `$target` (edge or corner where the
-required neighbors or metric values are undefined), the engine falls
-back to the composite's `boundary_fallback` if set; otherwise the
-model's `boundary_conditions` (§9) are consulted. Authors are expected
-to ensure that at least one of these resolves the gap for every target
-in the domain.
-
-#### 7.6.3 Worked full-covariant Laplacian
-
-On a uniform cartesian grid the cross-derivative metric `g_xieta ≡ 0`
-and `g_xixi = g_etaeta = 1`, so a `CrossMetricStencilRule` for the
-Laplacian reduces to the standard 5-point Laplacian. The conformance
-fixture `tests/discretizations/cross_metric_cartesian.esm` exercises
-this case and is the cross-language round-trip anchor for §7.6.
-
-#### 7.6.4 Validation
-
-Bindings MUST:
-
-1. Accept a `discretizations.<name>` whose value matches the
-   `CrossMetricStencilRule` shape, alongside standard
-   `Discretization` entries, and round-trip the composite structure
-   losslessly (parse → serialize → parse returns the same JSON
-   structure, modulo whitespace and number formatting).
-2. Resolve each term's `axis_stencil` to an entry in the same
-   `discretizations` block. An unresolved reference is an authoring
-   error (`E_UNKNOWN_AXIS_STENCIL`), caught at loader time.
-3. When `boundary_fallback` is set, resolve it to an entry in the
-   same `discretizations` block (same error code family,
-   `E_UNKNOWN_BOUNDARY_FALLBACK`).
-
-Bindings MAY defer actual expansion of the composite to the
-runtime engine; round-trip fidelity is the language-agnostic
-contract. Conformance tests in
-`tests/conformance/discretization/` verify parse + round-trip
-only.
+> **Status: removed.** The `CrossMetricStencilRule` composite
+> (`kind: "cross_metric"`) introduced for esm-vwo has been withdrawn from
+> the schema and from every binding's type mirror. It was a
+> naming/composition convenience for a sum of
+> `sign · metric_component(i,j) · per-axis-1D-stencil` terms that — by its
+> own former expansion semantics — reduced to a sum of standard §4.3.1
+> `arrayop` nodes after a single lowering step. It was never an
+> irreducible primitive, and it had no production consumers at removal
+> time.
+>
+> The covariant operators it was meant for — the full covariant Laplacian
+> and gradient on curvilinear / lat–lon grids — are now expressed directly
+> as generic **`arrayop`-einsum replacement rules** built from base AST
+> ops only: multi-axis `index` gathers (including the four NE/NW/SE/SW
+> corner gathers for the off-diagonal `g_xieta` cross-derivative),
+> arithmetic, and `const`-array metric coefficients. No dedicated
+> composite scheme kind is required. Authors needing a covariant operator
+> should compose it from the §4.3.1 `arrayop` / `index` ops (see the ESD
+> covariant finite-volume rule set) rather than a discretization
+> composite.
+>
+> Section numbers §7.7–§7.9 are intentionally left unchanged so existing
+> cross-references stay valid.
 
 ### 7.7 Flux-form semi-Lagrangian schemes (new; resolves esm-1rj)
 
@@ -1806,12 +1701,6 @@ time and substitutes its body in place of the parent's. Shared metadata
   not significant. A variant whose `grid_family` matches no active grid is
   inert.
 
-`grid_dispatch` is orthogonal to §7.6 cross-metric composites: a
-`CrossMetricStencilRule` entry is a sibling top-level shape (not a
-Discretization `kind`), and `grid_dispatch` does not nest cross-metric
-variants. Authors who need per-family cross-metric composites declare two
-sibling `discretizations` entries instead.
-
 **Worked example.** A single PPM scheme covering both a Cartesian interior
 and an unstructured mesh:
 
@@ -1868,7 +1757,7 @@ rule match replaces one expression occurrence with one expression, and two rules
 with the same pattern cannot both fire on a single occurrence.
 
 `kind: "multi_output_stencil"` adds a new top-level scheme shape (a sibling of
-`Discretization` and `CrossMetricStencilRule` in the `discretizations` value
+`Discretization` in the `discretizations` value
 space). It shares the `applies_to` / `grid_family` / `emits_location` /
 `accuracy` / `free_variables` / `target_binding` fields with §7.1 but replaces
 the flat `stencil` array with a **stencil object keyed by output name**, plus an
@@ -1939,8 +1828,8 @@ carry a `requires` map:
 ```
 
 The engine instantiates the referenced provider with the consumer's inherited
-bindings (the same §7.2.1 name-flow used by `dimensional_split.inner_rule` and
-`cross_metric.axis_stencil`) and emits the observed equations on first reference.
+bindings (the same §7.2.1 name-flow used by `dimensional_split.inner_rule`)
+and emits the observed equations on first reference.
 The local names are ordinary shaped variables after emission — the consumer's own
 stencil/coeff expressions reference them by name.
 

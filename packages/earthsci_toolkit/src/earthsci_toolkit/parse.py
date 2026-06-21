@@ -1662,8 +1662,8 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                     events.append(_parse_continuous_event(event_data))
 
     # Discretization schemes (RFC §7). Held opaquely — standard stencil
-    # templates and CrossMetricStencilRule composites (§7.4) both pass through
-    # unchanged. Schema-level validation already ran above in `validate(...)`.
+    # templates pass through unchanged. Schema-level validation already ran
+    # above in `validate(...)`.
     discretizations = {}
     if "discretizations" in data and data["discretizations"] is not None:
         discretizations = copy.deepcopy(data["discretizations"])
