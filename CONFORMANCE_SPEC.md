@@ -476,12 +476,18 @@ After individual language test runners complete, a comparison script analyzes re
 | **Graph Structure** | 95% | Node/edge sets must match; property differences acceptable |
 | **Simulation** | 90% | Numerical tolerance for ODE solutions |
 | **Relational index sets / dense IDs** | 100% (byte-identical) | Outputs of the value-invention primitives (`distinct`, `skolem`, `rank`) and group-by / value-equality joins. Governed by the **§5.5 cross-binding determinism contract** and **NOT** subject to the "minor formatting differences" tolerances above — these outputs are consumed by other nodes, so a divergence is a different *model*, not different formatting. |
+| **Conservative-regridding geometry (areas / weights)** | Invariants exact; areas within rel + abs tol | The M4 geometry kernel (`intersect_polygon`, the `polygon_area` FAQ, the weights `W_ij`) is **tolerance-based** — FP polygon clipping cannot be made bit-identical. Gated primarily on the physical invariants (conservation + partition-of-unity), with a combined rel + abs area tolerance and a sliver floor; the integer **candidate overlap-pair index set** stays byte-identical (§5.5). Governed by the **§5.8 geometry tolerance contract**. |
 
 > **Note.** The thresholds above for display/graph/simulation deliberately
 > tolerate cosmetic and numerical differences. The determinism contract in
-> **§5.5** is the exception: relational index sets and dense-ID arrays must be
-> **byte-identical** across bindings. See §5.5 for the normative rules and the
-> adversarial harness that enforces them.
+> **§5.5** is the exception in one direction: relational index sets and dense-ID
+> arrays must be **byte-identical** across bindings. See §5.5 for the normative
+> rules and the adversarial harness that enforces them. The geometry tolerance
+> contract in **§5.8** is the exception in the *other* direction: the M4
+> conservative-regridding kernel is irreducibly floating-point, so its areas /
+> weights are **tolerance-based** by contract — gated on physical invariants —
+> while only its integer **candidate overlap-pair set** falls back under the §5.5
+> byte-identity rule.
 
 ### 5.3 Divergence Analysis
 
@@ -489,10 +495,16 @@ The comparison system categorizes divergences as:
 
 - **Critical**: Different validation results, expression structure changes, **any
   byte-level difference in a relational index set or any difference in a
-  dense-ID array** (the §5.5 determinism contract — these are never "minor")
+  dense-ID array** (the §5.5 determinism contract — these are never "minor"), a
+  **byte-level difference in the bin-Skolem candidate overlap set** or a
+  **conservation / partition-of-unity invariant violation** in the M4 geometry
+  kernel (the §5.8 tolerance contract)
 - **Major**: Significant display formatting differences, graph topology changes
 - **Minor**: Cosmetic differences in formatting, property metadata
-- **Acceptable**: Known implementation limitations or language-specific constraints
+- **Acceptable**: Known implementation limitations or language-specific
+  constraints, and **sub-`atol` sliver-area disagreement** between geometry
+  bindings (the §5.8 snapping / tie-break regime: "present-but-tiny" and "absent"
+  both pass)
 
 ### 5.4 Compatibility Report Format
 
@@ -949,6 +961,175 @@ committed fixture `tests/invalid/aggregate/continuous_relational_node.esm` — a
 schema-valid document (accepted by Go / TypeScript, marked `resolver_only`) whose
 state-dependent `distinct` classifies `CONTINUOUS` and is rejected by the
 partition pass in all three evaluators.
+
+### 5.8 Conservative-Regridding Geometry Tolerance Contract (normative)
+
+> This is the normative form of RFC `semiring-faq-unified-ir` §8.1 and
+> Appendix B (especially **B.5**). It is the deliberate **inverse** of the
+> byte-identity contracts in §5.5–§5.7: the M4 conservative-regridding geometry
+> kernel — the `intersect_polygon` leaf, the `polygon_area` FAQ built on it, and
+> the regridding weights `W_ij` — is the **one** place where floating-point
+> polygon clipping makes bit-for-bit cross-binding identity *unachievable*, so
+> its conformance is **tolerance-based**. The rules below are the contract; the
+> M4 conformance gate (`ess-my4.4.8`) and the per-binding kernels (`ess-my4.4.3`
+> Julia, `ess-my4.4.4` Python, `ess-my4.4.11`/`.12` Rust) implement them.
+
+**Why geometry is the exception.** The relational engine (§5.5) is made
+byte-identical by sorting integer tuples; that lever does not exist here.
+`intersect_polygon` produces a **floating-point area from polygon clipping**, and
+FP clipping is irreducibly implementation-dependent — intersection ordering,
+area-summation order, robust-predicate strategy, and snapping all differ between
+independent spherical-geometry stacks (Julia → GeometryOps.jl, Python →
+spherely/S2, Rust → an S2 FFI binding). Bit-identity across them is **not
+pursued** (no shared C++ core, no compute-once-and-serialize): each binding uses
+its language's best native stack and cross-binding conformance is tolerance-based
+(RFC §B.1).
+
+**Governing principle.** Conservation of the *physics* is the contract, not
+agreement on the *geometry*. Conformance has **two exact anchors** and **one
+tolerance band**:
+
+1. **Exact (combinatorial).** The **candidate overlap-pair index set** — the
+   broad-phase spatial join, expressed as a **bin-Skolem equi-join on integer
+   spatial-bin keys** — is **byte-identical** across bindings, governed by the
+   §5.5 determinism contract.
+2. **Exact (physical invariants).** Global **conservation** and
+   **partition-of-unity** are the **primary** gate (§5.8.3).
+3. **Tolerance (geometry).** Per-pair overlap **areas** `A_ij` and the **weights**
+   `W_ij` built from them satisfy a combined relative + absolute tolerance with a
+   **sliver floor** (§5.8.2).
+
+The §5.2 display / graph / simulation tolerances are about *cosmetic and
+numerical formatting*; they neither apply to nor substitute for the geometry
+tolerance defined here.
+
+#### 5.8.1 What is exact and what is tolerance-based
+
+| Output | Conformance mode | Governed by |
+|---|---|---|
+| candidate overlap-pair set `{(i, j)}` (bin-Skolem spatial join) | **byte-identical** (integer keys) | §5.5 determinism contract |
+| `manifold` flag (`planar` / `spherical` / `geodesic`) | **exact** match — compare same-manifold only | §5.8.4 |
+| global conservation `Σ_j A_j·F_tgt[j] = Σ_i A_i·F_src[i]` | invariant gate (tight tol) | §5.8.3 |
+| partition-of-unity `Σ_i W_ij = 1` | **exact by construction** | §5.8.3 |
+| per-pair overlap area `A_ij`, weight `W_ij` | rel + abs tolerance + sliver floor | §5.8.2 |
+
+This is the §8.1 split made testable: the clip's **combinatorial** structure
+(*which* pairs are candidates) is integer and deterministic; only its
+**geometric** result (the *area* of each overlap) is floating point.
+
+#### 5.8.2 Area / weight tolerance and the sliver floor
+
+Per overlap area, the conformance test is a **combined relative + absolute
+tolerance** against the reference binding:
+
+```
+|A_x − A_ref| ≤ atol + rtol·A_ref
+```
+
+- `atol ≈ 1e-15·R²` (R = sphere radius / characteristic length) is a real
+  **sliver floor**, not a formality. Near-tangent overlaps are the regime where
+  two clippers legitimately disagree on whether a tiny intersection even
+  *exists*; `atol` absorbs that. **Sub-`atol` areas are treated as
+  equal-to-zero** — "present-but-tiny" and "absent" **both pass**. This snapping /
+  tie-break regime MUST NOT fail conformance, and it does not affect weights.
+- `rtol` is **empirically calibrated** and MUST accommodate the **loosest binding
+  pair**. Python and Rust share the **same S2 core** and agree to a much tighter
+  `rtol` than either agrees with Julia/GeometryOps; the spec tolerance is set by
+  the GeometryOps-vs-S2 pair, never the S2-vs-S2 pair.
+
+Per-pair area equality is **secondary**: it is precisely the unstable sliver
+regime, which is why the primary gate is the invariants (§5.8.3), not per-pair
+agreement.
+
+#### 5.8.3 The primary gate: physical invariants
+
+The **primary** cross-binding conformance test is the pair of physical
+invariants, not per-pair `A_ij` agreement:
+
+1. **Global conservation.** `Σ_j A_j·F_tgt[j] = Σ_i A_i·F_src[i]` for the
+   regridded field — the remap neither creates nor destroys mass.
+2. **Partition-of-unity.** `Σ_i W_ij = 1` for every target cell `j`. This holds
+   **by construction**: the weights are normalized by `dst_areas = Σ_i A_ij` — the
+   **row-sum of the *computed* overlap areas**, not the *true* target-cell area
+   (`ConservativeRegridding.jl`'s construction). Partition-of-unity is therefore
+   exact *regardless of edge-model error*, and every binding that follows the
+   construction satisfies it identically.
+
+A subtlety the precedent surfaces: first-order conservation is exact only if
+computed cell areas equal true areas, which great-circle-edge approximations
+violate; established tools restore exact conservation with a **post-hoc
+area / global-mean correction**, and the residual shrinks with resolution. So the
+**conservation tolerance is application-set and resolution-dependent, not a fixed
+epsilon** — partition-of-unity-by-construction is the part that is exact
+everywhere.
+
+#### 5.8.4 Manifold declaration
+
+The geometry interpretation is part of the op's contract: `intersect_polygon`
+carries a **`manifold` flag** — `planar`, `spherical`, or `geodesic`
+(`esm-schema.json`; additive schema in `ess-my4.4.2`) — matching
+`ConservativeRegridding.jl`'s `Manifold`. **Two bindings may be compared only
+under the same declared manifold.** The clip must be done on the sphere (a flat
+lat-lon plane is wrong at the poles and the antimeridian). Because GeometryOps
+(Julia) and S2 (Python, Rust) share the **great-circle-edge** assumption, the
+three bindings share the *same geometric model* — their residual differences are
+floating-point, not modelling, which is what keeps the §5.8.2 tolerances small. A
+lat-lon edge along a parallel is a *small circle*, not a great circle, so coarse
+polar cells carry a real edge-model error (RFC §B.4); the contract offers
+**densification** of parallel edges into short great-circle segments where polar
+accuracy matters.
+
+#### 5.8.5 The byte-identical candidate set
+
+Even though areas are tolerance-based, the **candidate overlap-pair set is not**.
+The broad phase of the spatial (θ-) join is expressed as a **bin-Skolem
+equi-join**: each cell is assigned an **integer** spatial-bin key, and the
+candidate pairs are the equi-join of source and target cells sharing a bin. That
+key set is a relational index set over **integer** keys, so it falls squarely
+under the §5.5 determinism contract — sorted total order, no floats in keys, no
+native-hash iteration order — and MUST be **byte-identical** across bindings
+(reusing the M3 determinism machinery; the overlap-join idiom is specified in
+`ess-my4.4.5`).
+
+Two consequences are load-bearing:
+
+- **No FP comparison in the broad phase.** The bin key MUST be integer and
+  reproducibly derived (e.g. from the cells' own integer grid indices, or an
+  exactly-defined integer quantization), **never** a raw floating-point
+  coordinate comparison — otherwise a cell near a bin boundary could be bucketed
+  differently per binding and the candidate set would diverge. Floating-point
+  coordinates enter **only** the narrow-phase area (§5.8.2).
+- **Candidate set ≠ surviving-overlap set.** The byte-identity guarantee is on the
+  *candidate* set (broad phase). After clipping, *which* candidates have a
+  **nonzero** overlap MAY differ between bindings in the sliver regime — that is
+  expected and **passes**, because sub-`atol` areas are equal-to-zero (§5.8.2).
+
+#### 5.8.6 Conformance requirement
+
+The M4 conformance gate (`ess-my4.4.8`) feeds **identical** mesh inputs to every
+producing binding under a **declared manifold** and asserts, in priority order:
+
+1. **Candidate set** — byte-identical bin-Skolem candidate overlap-pair index set
+   across bindings (§5.8.5; the §5.5 harness machinery applies verbatim,
+   including the adversarial **permuted-input-order** variant, which MUST collapse
+   to the identical candidate set).
+2. **Invariants** — global conservation within the application / resolution
+   tolerance, and partition-of-unity `Σ_i W_ij = 1` to a tight epsilon (exact by
+   construction, §5.8.3).
+3. **Per-pair areas / weights** — within `atol + rtol·A_ref`, with sub-`atol`
+   slivers treated as zero (§5.8.2).
+
+Adversarial inputs target the geometry failure modes specifically: **near-tangent
+slivers** (must pass via the floor), **antimeridian- and pole-crossing cells**
+(must be clipped on the sphere, not the plane), and **permuted input order** (the
+candidate set must stay byte-identical). The first cut gates **Julia + Python**
+(both native spherical stacks); **Rust** folds into the same gate once its S2 FFI
+binding lands (`ess-my4.4.10`/`.11`/`.12`). The golden inputs and per-binding
+adapter contract live under `tests/conformance/geometry/`, established by the gate
+bead — the tolerance-mode analogue of `tests/conformance/determinism/` (§5.5.4).
+Unlike the determinism and cadence gates, the assertion is **tolerance +
+invariant** on areas / weights and **byte-identity** only on the integer
+candidate index set.
 
 ## 6. CI Integration
 
