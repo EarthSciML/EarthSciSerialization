@@ -64,6 +64,26 @@ const VI_BODY_OPS: [&str; 3] = ["skolem", "rank", "distinct"];
 /// `_VI_ARGWITNESS_OPS`.
 const VI_ARGWITNESS_OPS: [&str; 2] = ["argmin", "argmax"];
 
+/// Per-dimension boundary policy for an out-of-range const-array stencil gather
+/// (bead ess-gj4). Mirrors the Julia `_CONST_BOUNDARY_KINDS` (`:periodic` /
+/// `:clamp` / `:error`): a gather at a 1-based index outside `1..=n` resolves
+/// declaratively per the dimension's policy instead of panicking.
+///
+/// - [`BoundaryKind::Periodic`] — wrap into `1..=n` via 1-based mod (`mod1`);
+///   correct for a periodic axis (a lon-periodic metric factor).
+/// - [`BoundaryKind::Clamp`] — edge-extend (clamp to `1..=n`); the correct finite
+///   policy for a metric / geometry factor at a non-periodic boundary (NOT a
+///   zero-ghost, which is physically wrong for a metric).
+/// - [`BoundaryKind::Error`] — return a structured [`ValueInventionError`] (also
+///   the default for any dimension WITHOUT a declared policy), so genuine
+///   out-of-bounds bugs in connectivity / stencil-weight factors stay caught.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundaryKind {
+    Periodic,
+    Clamp,
+    Error,
+}
+
 /// Result of [`materialize_value_invention`].
 ///
 /// - `extents` — `from_faq` producer id → derived index-set cardinality (the
@@ -279,11 +299,26 @@ struct ViCtx<'a> {
     params: &'a HashMap<String, f64>,
     index_sets: &'a Map<String, Value>,
     variables: &'a Map<String, Value>,
+    /// Per-const-array, per-dimension out-of-range boundary policy (ess-gj4). A
+    /// `(name, d)` absent from this map (or beyond the declared vec) defaults to
+    /// [`BoundaryKind::Error`] — the throw-on-OOB behavior that catches genuine
+    /// connectivity / stencil-weight bugs.
+    const_array_boundaries: &'a HashMap<String, Vec<BoundaryKind>>,
     /// materialised map var → {output-index value → key value}
     maps: HashMap<String, HashMap<i64, Val>>,
 }
 
 impl<'a> ViCtx<'a> {
+    /// The declared boundary policy for dimension `d` of const array `name`,
+    /// defaulting to [`BoundaryKind::Error`] when no policy is declared.
+    fn boundary(&self, name: &str, d: usize) -> BoundaryKind {
+        self.const_array_boundaries
+            .get(name)
+            .and_then(|dims| dims.get(d))
+            .copied()
+            .unwrap_or(BoundaryKind::Error)
+    }
+
     fn param(&self, name: &str) -> Result<f64, ValueInventionError> {
         if let Some(v) = self.params.get(name) {
             return Ok(*v);
@@ -400,6 +435,12 @@ fn vi_eval_op(node: &Value, ctx: &ViCtx, bindings: &Bindings) -> Result<Val, Val
 
 /// `index(factor, i, …)`: gather from a const-array factor (1-based). The factor
 /// is build-time data supplied in `const_arrays`.
+///
+/// An out-of-range 1-based index resolves per the dimension's declared boundary
+/// policy (ess-gj4) rather than panicking: [`BoundaryKind::Periodic`] wraps via
+/// 1-based mod, [`BoundaryKind::Clamp`] edge-extends, and an undeclared policy /
+/// [`BoundaryKind::Error`] returns a structured [`ValueInventionError`]. In-range
+/// indices are byte-identical to the prior `arr[(i-1)]` gather.
 fn vi_index(node: &Value, ctx: &ViCtx, bindings: &Bindings) -> Result<Val, ValueInventionError> {
     let args = node_args(node);
     let name = args.first().and_then(|v| v.as_str());
@@ -411,12 +452,44 @@ fn vi_index(node: &Value, ctx: &ViCtx, bindings: &Bindings) -> Result<Val, Value
             "value-invention index target {name:?} must be a const-array factor"
         ));
     };
+    let shape = arr.shape();
     let mut idx = Vec::with_capacity(args.len() - 1);
-    for a in &args[1..] {
+    for (d, a) in args[1..].iter().enumerate() {
         let one_based = vi_eval(a, ctx, bindings)?.key_int()?;
-        idx.push((one_based - 1) as usize);
+        let n = shape.get(d).copied().unwrap_or(0) as i64;
+        let resolved = resolve_const_index(ctx, name, d, one_based, n)?;
+        idx.push((resolved - 1) as usize);
     }
     Ok(Val::Float(arr[IxDyn(&idx)]))
+}
+
+/// Resolve a possibly-out-of-range 1-based index `one_based` in dimension `d`
+/// (extent `n`) of const array `name` against its declared boundary policy
+/// (ess-gj4). In-range indices (`1..=n`) pass through unchanged. Mirrors the Julia
+/// reference `_resolve_const_index`. Returns a 1-based resolved index.
+fn resolve_const_index(
+    ctx: &ViCtx,
+    name: &str,
+    d: usize,
+    one_based: i64,
+    n: i64,
+) -> Result<i64, ValueInventionError> {
+    if (1..=n).contains(&one_based) {
+        return Ok(one_based);
+    }
+    // An empty dimension (n == 0) can never be wrapped or clamped into a valid
+    // 1-based index — always an error, regardless of declared policy.
+    if n >= 1 {
+        match ctx.boundary(name, d) {
+            // 1-based periodic wrap == Julia `mod1(i, n)`.
+            BoundaryKind::Periodic => return Ok((one_based - 1).rem_euclid(n) + 1),
+            BoundaryKind::Clamp => return Ok(one_based.clamp(1, n)),
+            BoundaryKind::Error => {}
+        }
+    }
+    err(format!(
+        "const array '{name}' index {one_based} out of range 1..{n} in dim {d}"
+    ))
 }
 
 /// `skolem(tag?, c1, c2, …)` → the canonical key tuple. A leading STRING literal
@@ -914,12 +987,20 @@ fn vi_classification_model(
 /// coordinates the keys are computed from); `params` supplies scalar parameter
 /// overrides. A producer that classifies CONTINUOUS is rejected (§5.7 guard 2).
 ///
+/// `const_array_boundaries` supplies an optional per-const-array, per-dimension
+/// out-of-range boundary policy (ess-gj4): a gather at a 1-based index outside
+/// `1..=n` resolves via the named dimension's [`BoundaryKind`] (periodic-wrap /
+/// edge-extend) instead of erroring. A const array absent from this map (or a
+/// dimension beyond its declared vec) keeps the throw-on-OOB default. Pass an
+/// empty map for the prior behavior.
+///
 /// A no-op (empty result) for a model with no skolem/distinct/rank node — the
 /// evaluator front-door then behaves byte-identically to before.
 pub fn materialize_value_invention(
     model_json: &Value,
     const_arrays: &HashMap<String, ArrayD<f64>>,
     params: &HashMap<String, f64>,
+    const_array_boundaries: &HashMap<String, Vec<BoundaryKind>>,
 ) -> Result<ValueInventionResult, ValueInventionError> {
     let det = vi_detect(model_json);
     let mut result = ValueInventionResult {
@@ -944,6 +1025,7 @@ pub fn materialize_value_invention(
         params,
         index_sets,
         variables,
+        const_array_boundaries,
         maps: HashMap::new(),
     };
 
@@ -1154,6 +1236,15 @@ mod tests {
         pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect()
     }
 
+    /// The default empty per-const-array boundary map (throw-on-OOB everywhere).
+    fn no_bounds() -> HashMap<String, Vec<BoundaryKind>> {
+        HashMap::new()
+    }
+
+    fn bounds(pairs: Vec<(&str, Vec<BoundaryKind>)>) -> HashMap<String, Vec<BoundaryKind>> {
+        pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
+    }
+
     fn sorted(set: &HashSet<String>) -> Vec<String> {
         let mut v: Vec<String> = set.iter().cloned().collect();
         v.sort();
@@ -1182,7 +1273,8 @@ mod tests {
             ("dc", arr(&[5], vec![2.0, 3.0, 5.0, 7.0, 11.0])),
             ("dv", arr(&[5], vec![13.0, 17.0, 19.0, 23.0, 29.0])),
         ]);
-        let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new()).unwrap();
+        let vi =
+            materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds()).unwrap();
 
         // The derived `edges` set materializes via the relational engine,
         // BYTE-IDENTICAL to the M3 determinism golden.
@@ -1216,7 +1308,8 @@ mod tests {
             ),
         ]);
         for const_arrays in [base, rev] {
-            let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new()).unwrap();
+            let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds())
+                .unwrap();
             assert_eq!(
                 canonical_index_set_json(&vi.members["edge_set"]),
                 EDGE_GOLDEN
@@ -1236,7 +1329,7 @@ mod tests {
             ("tgt_lon", arr(&[3], vec![0.2, 1.2, 2.2])),
             ("tgt_lat", arr(&[3], vec![0.0, 0.0, 0.0])),
         ]);
-        let vi = materialize_value_invention(&mj, &aligned, &p).unwrap();
+        let vi = materialize_value_invention(&mj, &aligned, &p, &no_bounds()).unwrap();
         assert_eq!(vi.members["candidate_set"], vec![k(1, 1), k(2, 2), k(3, 3)]);
         assert_eq!(vi.extents["candidate_set"], 3);
         assert_eq!(
@@ -1256,7 +1349,7 @@ mod tests {
             ("tgt_lon", arr(&[3], vec![1.2, 2.2, 9.9])),
             ("tgt_lat", arr(&[3], vec![0.0, 0.0, 0.0])),
         ]);
-        let vi2 = materialize_value_invention(&mj, &shifted, &p).unwrap();
+        let vi2 = materialize_value_invention(&mj, &shifted, &p, &no_bounds()).unwrap();
         assert_eq!(vi2.members["candidate_set"], vec![k(2, 1), k(3, 2)]);
     }
 
@@ -1273,7 +1366,8 @@ mod tests {
                 arr(&[2, 3], vec![1.0, 2.0, 3.0, 2.0, 3.0, 4.0]),
             ),
         ]);
-        let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new()).unwrap();
+        let vi =
+            materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds()).unwrap();
 
         let mut file = crate::parse::load(EDGE_FIXTURE).expect("fixture loads");
         let model = file
@@ -1319,7 +1413,10 @@ mod tests {
             }]
         });
         let const_arrays = ca(vec![("u", arr(&[2], vec![1.0, 2.0]))]);
-        assert!(materialize_value_invention(&model, &const_arrays, &HashMap::new()).is_err());
+        assert!(
+            materialize_value_invention(&model, &const_arrays, &HashMap::new(), &no_bounds())
+                .is_err()
+        );
     }
 
     #[test]
@@ -1328,7 +1425,9 @@ mod tests {
             "variables": {"x": {"type": "state", "shape": []}},
             "equations": [{"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": -1.0}]
         });
-        let vi = materialize_value_invention(&plain, &HashMap::new(), &HashMap::new()).unwrap();
+        let vi =
+            materialize_value_invention(&plain, &HashMap::new(), &HashMap::new(), &no_bounds())
+                .unwrap();
         assert!(vi.extents.is_empty());
         assert!(vi.vi_var_names.is_empty());
         assert!(vi.assignments.is_empty());
@@ -1352,7 +1451,8 @@ mod tests {
             ("px", arr(&[4], vec![0.0, 1.0, 1.5, 2.0])),
             ("py", arr(&[4], vec![0.0, 0.5, 0.0, 0.0])),
         ]);
-        let vi = materialize_value_invention(&mj, &const_arrays, &HashMap::new()).unwrap();
+        let vi =
+            materialize_value_invention(&mj, &const_arrays, &HashMap::new(), &no_bounds()).unwrap();
         // 1-based nearest-generator ids; the tie at point 3 → the SMALLER id (2).
         assert_eq!(vi.assignments["assign"], vec![1, 2, 2, 3]);
         assert_eq!(sorted(&vi.vi_var_names), vec!["assign"]);
@@ -1370,7 +1470,7 @@ mod tests {
             ("px", arr(&[4], vec![0.1, 1.1, 2.1, 1.9])),
             ("py", arr(&[4], vec![0.0, 0.0, 0.0, 0.0])),
         ]);
-        let vi = materialize_value_invention(&mj, &const_arrays, &p).unwrap();
+        let vi = materialize_value_invention(&mj, &const_arrays, &p, &no_bounds()).unwrap();
         assert_eq!(vi.assignments["assign_binned"], vec![1, 2, 3, 2]);
         assert_eq!(
             sorted(&vi.vi_var_names),
@@ -1410,7 +1510,8 @@ mod tests {
             ("gx", arr(&[3], vec![0.0, 1.0, 2.0])),
             ("px", arr(&[2], vec![0.0, 1.0])),
         ]);
-        let vi = materialize_value_invention(&model, &const_arrays, &HashMap::new()).unwrap();
+        let vi = materialize_value_invention(&model, &const_arrays, &HashMap::new(), &no_bounds())
+            .unwrap();
         assert_eq!(vi.assignments["far"], vec![3, 1]);
     }
 
@@ -1444,7 +1545,10 @@ mod tests {
             ("gx", arr(&[2], vec![0.0, 1.0])),
             ("px", arr(&[1], vec![0.5])),
         ]);
-        assert!(materialize_value_invention(&model, &const_arrays, &HashMap::new()).is_err());
+        assert!(
+            materialize_value_invention(&model, &const_arrays, &HashMap::new(), &no_bounds())
+                .is_err()
+        );
     }
 
     #[test]
@@ -1477,6 +1581,151 @@ mod tests {
             ("gx", arr(&[2], vec![0.0, 1.0])),
             ("px", arr(&[1], vec![0.5])),
         ]);
-        assert!(materialize_value_invention(&model, &const_arrays, &HashMap::new()).is_err());
+        assert!(
+            materialize_value_invention(&model, &const_arrays, &HashMap::new(), &no_bounds())
+                .is_err()
+        );
+    }
+
+    // ----------------------------------------------------------------------- //
+    // Const-array boundary policy (bead ess-gj4) — port-parity counterpart of
+    // the Julia `tree_walk_const_array_boundary_test.jl`. A `vi_index` gather at
+    // an out-of-range 1-based index resolves declaratively per the dimension's
+    // declared `BoundaryKind` instead of panicking; an undeclared policy errors.
+    //
+    // Numeric reference mirrors the Julia test for M = [10, 20, 30, 40]:
+    //   clamp(index 5)  = M[4] = 40   (edge-extend)
+    //   periodic(index 5) = M[1] = 10 (mod1(5,4) = 1)
+    //   periodic(index 0) = M[4] = 40 (mod1(0,4) = 4)
+    // ----------------------------------------------------------------------- //
+
+    /// Gather `index(name, one_based)` against a 1-D const array under `bnds`.
+    fn gather_1d(
+        name: &str,
+        data: &ArrayD<f64>,
+        one_based: i64,
+        bnds: &HashMap<String, Vec<BoundaryKind>>,
+    ) -> Result<f64, ValueInventionError> {
+        let const_arrays = ca(vec![(name, data.clone())]);
+        let params: HashMap<String, f64> = HashMap::new();
+        let empty = Map::new();
+        let ctx = ViCtx {
+            const_arrays: &const_arrays,
+            params: &params,
+            index_sets: &empty,
+            variables: &empty,
+            const_array_boundaries: bnds,
+            maps: HashMap::new(),
+        };
+        let node = serde_json::json!({"op": "index", "args": [name, one_based]});
+        match vi_index(&node, &ctx, &HashMap::new())? {
+            Val::Float(f) => Ok(f),
+            other => panic!("expected Float gather, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn const_array_in_range_gather_unchanged() {
+        // In-range gathers are byte-identical to the prior `arr[(i-1)]` behavior,
+        // independent of any declared policy.
+        let m = arr(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let clamp = bounds(vec![("M", vec![BoundaryKind::Clamp])]);
+        for (i, want) in [(1, 10.0), (2, 20.0), (3, 30.0), (4, 40.0)] {
+            assert_eq!(gather_1d("M", &m, i, &no_bounds()).unwrap(), want);
+            assert_eq!(gather_1d("M", &m, i, &clamp).unwrap(), want);
+        }
+    }
+
+    #[test]
+    fn const_array_clamp_edge_extends() {
+        // clamp: low OOB -> first element, high OOB -> last element.
+        let m = arr(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let clamp = bounds(vec![("M", vec![BoundaryKind::Clamp])]);
+        assert_eq!(gather_1d("M", &m, 0, &clamp).unwrap(), 10.0); // clamp(0) -> M[1]
+        assert_eq!(gather_1d("M", &m, -3, &clamp).unwrap(), 10.0); // clamp(-3) -> M[1]
+        assert_eq!(gather_1d("M", &m, 5, &clamp).unwrap(), 40.0); // clamp(5) -> M[4]
+        assert_eq!(gather_1d("M", &m, 99, &clamp).unwrap(), 40.0); // clamp(99) -> M[4]
+    }
+
+    #[test]
+    fn const_array_periodic_wraps() {
+        // periodic: size 4: index 5 -> element 1 (10), index 0 -> element 4 (40).
+        let m = arr(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let per = bounds(vec![("M", vec![BoundaryKind::Periodic])]);
+        assert_eq!(gather_1d("M", &m, 5, &per).unwrap(), 10.0); // mod1(5,4) = 1
+        assert_eq!(gather_1d("M", &m, 0, &per).unwrap(), 40.0); // mod1(0,4) = 4
+        assert_eq!(gather_1d("M", &m, -1, &per).unwrap(), 30.0); // mod1(-1,4) = 3
+        assert_eq!(gather_1d("M", &m, 9, &per).unwrap(), 10.0); // mod1(9,4) = 1
+    }
+
+    #[test]
+    fn const_array_no_policy_errors_not_panics() {
+        // No declared policy (and explicit Error) -> structured Err, never a panic.
+        let m = arr(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let err_pol = bounds(vec![("M", vec![BoundaryKind::Error])]);
+        for bnds in [&no_bounds(), &err_pol] {
+            let e = gather_1d("M", &m, 5, bnds).unwrap_err();
+            assert!(
+                e.0.contains("const array 'M' index 5 out of range 1..4 in dim 0"),
+                "unexpected error message: {}",
+                e.0
+            );
+            assert!(gather_1d("M", &m, 0, bnds).is_err());
+        }
+    }
+
+    #[test]
+    fn const_array_empty_dim_errors_under_any_policy() {
+        // An empty dimension (n == 0) can never wrap/clamp into a valid index.
+        let m = ArrayD::from_shape_vec(IxDyn(&[0]), Vec::<f64>::new()).unwrap();
+        for kind in [
+            BoundaryKind::Periodic,
+            BoundaryKind::Clamp,
+            BoundaryKind::Error,
+        ] {
+            let bnds = bounds(vec![("M", vec![kind])]);
+            assert!(gather_1d("M", &m, 1, &bnds).is_err());
+        }
+    }
+
+    #[test]
+    fn const_array_2d_mixed_policy_resolves_per_dim() {
+        // 2D row-major array, shape [2, 3] (dim 0 clamp, dim 1 periodic):
+        //   [[1, 2, 3],
+        //    [4, 5, 6]]
+        let m = arr(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let mixed = bounds(vec![(
+            "M",
+            vec![BoundaryKind::Clamp, BoundaryKind::Periodic],
+        )]);
+        let const_arrays = ca(vec![("M", m)]);
+        let params: HashMap<String, f64> = HashMap::new();
+        let empty = Map::new();
+        let ctx = ViCtx {
+            const_arrays: &const_arrays,
+            params: &params,
+            index_sets: &empty,
+            variables: &empty,
+            const_array_boundaries: &mixed,
+            maps: HashMap::new(),
+        };
+        let gather = |i: i64, j: i64| -> Result<f64, ValueInventionError> {
+            let node = serde_json::json!({"op": "index", "args": ["M", i, j]});
+            match vi_index(&node, &ctx, &HashMap::new())? {
+                Val::Float(f) => Ok(f),
+                other => panic!("expected Float, got {other:?}"),
+            }
+        };
+        // in range
+        assert_eq!(gather(1, 1).unwrap(), 1.0);
+        assert_eq!(gather(2, 3).unwrap(), 6.0);
+        // dim 0 clamp: row 0 -> row 1, row 3 -> row 2.
+        assert_eq!(gather(0, 1).unwrap(), 1.0); // clamp dim0 -> (1,1)
+        assert_eq!(gather(5, 2).unwrap(), 5.0); // clamp dim0 -> (2,2)
+        // dim 1 periodic: col 4 -> col 1, col 0 -> col 3.
+        assert_eq!(gather(1, 4).unwrap(), 1.0); // mod1(4,3) = 1 -> (1,1)
+        assert_eq!(gather(2, 0).unwrap(), 6.0); // mod1(0,3) = 3 -> (2,3)
+        // both dims out of range, each resolved by its own policy.
+        assert_eq!(gather(9, 4).unwrap(), 4.0); // clamp dim0 -> 2, mod1(4,3) -> 1 => (2,1)
     }
 }

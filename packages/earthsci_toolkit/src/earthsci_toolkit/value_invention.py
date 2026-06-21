@@ -166,6 +166,11 @@ class _ViCtx:
     params: Dict[str, float]
     index_sets: Dict[str, Any]
     variables: Dict[str, Any]
+    # Per-const-array boundary policy (ess-gj4): array name → per-dimension policy
+    # strings (each one of "periodic" | "clamp" | "error"). An array absent from
+    # this map keeps the strict default ("error" in every dim), so genuine
+    # out-of-bounds bugs in connectivity / stencil-weight factors stay caught.
+    const_array_boundaries: Dict[str, List[str]] = field(default_factory=dict)
     # materialised map var → {output-index value → key value}
     maps: Dict[str, Dict[Any, Any]] = field(default_factory=dict)
 
@@ -270,9 +275,45 @@ def _vi_eval(node: Any, ctx: _ViCtx, bindings: Dict[str, Any]) -> Any:
     raise ValueInventionError(f"unevaluable value-invention node {node!r}")
 
 
+# Per-dimension const-array boundary policy (ess-gj4), mirror of the Julia
+# reference ``_CONST_BOUNDARY_KINDS`` / ``_resolve_const_index`` in tree_walk.jl:
+#   "periodic" — wrap the 1-based index into 1..n via 1-based modulo (== Julia
+#                ``mod1``); correct for a periodic axis.
+#   "clamp"    — edge-extend (clamp to 1..n); the correct finite policy for a
+#                metric/geometry factor at a non-periodic boundary (NOT zero-ghost).
+#   "error"    — raise (the default for any array WITHOUT a declared policy, so
+#                genuine out-of-bounds bugs are never masked).
+_CONST_BOUNDARY_KINDS = ("periodic", "clamp", "error")
+
+
+def _resolve_const_index(ctx: _ViCtx, name: str, d: int, i: int, n: int) -> int:
+    """Resolve a possibly-out-of-range 1-based index ``i`` in dimension ``d``
+    (size ``n``) of const array ``name`` per its boundary policy, returning a
+    1-based index. In-range indices pass through; an out-of-range index resolves
+    via the declared per-dimension policy or raises (mirror of Julia
+    ``_resolve_const_index``)."""
+    if 1 <= i <= n:
+        return i
+    pol = "error"
+    dims = ctx.const_array_boundaries.get(name)
+    if dims is not None and 0 <= d < len(dims):
+        pol = dims[d]
+    if n >= 1:
+        if pol == "periodic":
+            return ((i - 1) % n) + 1  # 1-based modulo == Julia mod1(i, n)
+        if pol == "clamp":
+            return min(max(i, 1), n)
+    raise ValueInventionError(
+        f"const array '{name}' index {i} out of range 1..{n} in dim {d}"
+    )
+
+
 def _vi_index(node: Mapping[str, Any], ctx: _ViCtx, bindings: Dict[str, Any]) -> float:
     """``index(factor, i, …)``: gather from a const-array factor (1-based). The
-    factor is build-time data supplied in ``const_arrays``."""
+    factor is build-time data supplied in ``const_arrays``. An out-of-range index
+    resolves per the array's declared per-dimension boundary policy (ess-gj4):
+    "periodic" wraps, "clamp" edge-extends, absent/"error" raises a structured
+    :class:`ValueInventionError` (so genuine OOB connectivity bugs stay caught)."""
     args = node.get("args") or []
     name = args[0]
     if not isinstance(name, str) or name not in ctx.const_arrays:
@@ -280,8 +321,12 @@ def _vi_index(node: Mapping[str, Any], ctx: _ViCtx, bindings: Dict[str, Any]) ->
             f"value-invention index target {name!r} must be a const-array factor"
         )
     arr = ctx.const_arrays[name]
-    zero_idx = tuple(int(_vi_eval(a, ctx, bindings)) - 1 for a in args[1:])
-    return arr[zero_idx]
+    zero_idx = []
+    for d, a in enumerate(args[1:]):
+        i = int(_vi_eval(a, ctx, bindings))  # 1-based subscript
+        n = arr.shape[d]
+        zero_idx.append(_resolve_const_index(ctx, name, d, i, n) - 1)
+    return arr[tuple(zero_idx)]
 
 
 def _vi_skolem(node: Mapping[str, Any], ctx: _ViCtx, bindings: Dict[str, Any]) -> Any:
@@ -614,6 +659,7 @@ def materialize_value_invention(
     model_json: Mapping[str, Any],
     const_arrays: Optional[Mapping[str, Any]] = None,
     params: Optional[Mapping[str, Any]] = None,
+    const_array_boundaries: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> ValueInventionResult:
     """Run the build-time value-invention engine over a raw model document.
 
@@ -621,11 +667,21 @@ def materialize_value_invention(
     coordinates the keys are computed from); ``params`` supplies scalar parameter
     overrides. A producer that classifies CONTINUOUS is rejected (§5.7 guard 2).
 
+    ``const_array_boundaries`` (ess-gj4) optionally declares a per-const-array,
+    per-dimension out-of-range gather policy: a mapping of array name → an
+    iterable of per-dimension policy strings, each one of "periodic" | "clamp" |
+    "error". A const-array gather at an out-of-range 1-based index then resolves
+    declaratively ("periodic" wraps via 1-based modulo, "clamp" edge-extends);
+    any array WITHOUT a declared policy (or one with "error") keeps raising a
+    structured :class:`ValueInventionError`, so genuine out-of-bounds bugs in
+    connectivity / stencil-weight factors stay caught.
+
     A no-op (empty result) for a model with no skolem/distinct/rank node — the
     evaluator front-door then behaves byte-identically to before.
     """
     const_arrays = const_arrays or {}
     params = params or {}
+    const_array_boundaries = const_array_boundaries or {}
     det = _vi_detect(model_json)
     result = ValueInventionResult(vi_var_names=set(det.vi_var_names))
     if not det.has_vi:
@@ -636,6 +692,9 @@ def materialize_value_invention(
         params={str(k): float(v) for k, v in params.items()},
         index_sets=dict(model_json.get("index_sets", {}) or {}),
         variables=dict(model_json.get("variables", {}) or {}),
+        const_array_boundaries={
+            str(k): [str(p) for p in v] for k, v in const_array_boundaries.items()
+        },
     )
 
     # Cadence classification model (built before materialisation — it depends only

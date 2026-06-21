@@ -232,6 +232,17 @@ function _vi_index(node, ctx::_ViCtx, bindings::AbstractDict)
             "value-invention index target '$(repr(name))' must be a const-array factor"))
     arr = ctx.const_arrays[name]
     idxs = Tuple(Int(_vi_eval(a, ctx, bindings)) for a in args[2:end])
+    # A factor carrying a declared per-dimension boundary policy resolves an
+    # out-of-range gather declaratively (periodic-wrap / edge-extend), exactly
+    # as the tree_walk const_array gather does (ess-gj4). Plain factors keep the
+    # existing behavior, so genuine connectivity OOB still surfaces.
+    if isa(arr, BoundedConstArray)
+        ndims(arr) == length(idxs) ||
+            throw(TreeWalkError("E_TREEWALK_CONSTARRAY_NDIM",
+                "const array '$(name)' is $(ndims(arr))D but got $(length(idxs)) indices"))
+        idxs = ntuple(d -> _resolve_const_index(arr, String(name), d, idxs[d], size(arr, d)),
+                      length(idxs))
+    end
     return arr[idxs...]
 end
 

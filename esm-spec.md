@@ -358,6 +358,8 @@ This mirrors the `@makearray` example in `SymbolicUtils/src/arraymaker.jl`.
 
 Non-affine index expressions are legal; it is the author's responsibility to ensure runtime access is in-bounds (cf. `SymbolicUtils/src/arrayop.jl` § "Axis offsets"). Sparsity and other structured-array optimizations are runtime concerns and are not represented in the schema.
 
+A stencil gather of a **const array** (a pre-computed factor: Fornberg weights, mesh connectivity, or a per-cell metric / geometry array) at an out-of-range index resolves per a declared **per-dimension boundary policy** — `periodic` (wrap, `mod1`), `clamp` (edge-extend), or the `error` default (raise `E_TREEWALK_CONSTARRAY_OOB`). This mirrors the grid periodicity honored by a state-variable gather and is normative across bindings; see `CONFORMANCE_SPEC.md` §5.5.5.
+
 #### 4.3.4 `broadcast`
 
 `broadcast` applies a scalar operator element-wise to one or more broadcast-compatible arrays. The operator is named in the `fn` field; the operands are in `args`.

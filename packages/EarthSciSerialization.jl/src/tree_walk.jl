@@ -167,12 +167,87 @@ const _EMPTY_DERIVED_EXTENTS = Dict{String,Int}()
 # also scalar.
 _is_array_shape(shape) = shape !== nothing && !isempty(shape)
 
+# ---- Const-array boundary policy (ess-gj4) ----
+# A const array (Fornberg weights, mesh connectivity, a per-cell metric factor)
+# may carry a per-dimension boundary policy so that a stencil gather at an
+# out-of-range index resolves declaratively instead of erroring. This mirrors the
+# state-variable gather, which honors grid periodicity (periodic-wrap) and applies
+# a finite boundary policy at non-periodic edges. The covariant-FV connection
+# terms gather metric factors at lat±1 / lon±1 offsets; on a lon-periodic metric
+# those must WRAP, and at a non-periodic lat pole they must edge-extend — the
+# zero-ghost convention is physically wrong for a metric.
+#
+# Per-dimension policy symbols:
+#   :periodic — wrap the index into 1..N via mod1; correct for a periodic axis.
+#   :clamp    — edge-extend (clamp to 1..N); the correct finite policy for a
+#               metric/geometry factor at a non-periodic boundary.
+#   :error    — throw E_TREEWALK_CONSTARRAY_OOB (default for any array WITHOUT a
+#               declared policy, so genuine out-of-bounds bugs in connectivity /
+#               stencil-weight factors are never masked).
+const _CONST_BOUNDARY_KINDS = (:periodic, :clamp, :error)
+
+# A const array tagged with a per-dimension boundary policy. It IS an
+# `AbstractArray{Float64,N}` (forwards size/getindex to `data`), so it flows
+# through the existing `const_arrays` threading transparently; only the gather's
+# out-of-range handling branches on the wrapper via `_const_dim_boundary`.
+struct BoundedConstArray{N} <: AbstractArray{Float64,N}
+    data::Array{Float64,N}
+    boundary::NTuple{N,Symbol}   # per-dim: :periodic | :clamp | :error
+end
+Base.size(a::BoundedConstArray) = size(a.data)
+Base.IndexStyle(::Type{<:BoundedConstArray}) = IndexLinear()
+Base.@propagate_inbounds Base.getindex(a::BoundedConstArray, i::Int) = a.data[i]
+
+# Per-dimension boundary policy: declared dims for a BoundedConstArray, :error
+# (throw on OOB) for any plain const array.
+_const_dim_boundary(a::BoundedConstArray, d::Int) = a.boundary[d]
+_const_dim_boundary(::AbstractArray, ::Int) = :error
+
+# Resolve a possibly-out-of-range 1-based index `i` in dimension `d` (size `n`) of
+# const array `name` per its boundary policy. In-range indices pass through.
+function _resolve_const_index(arr::AbstractArray, name::AbstractString,
+                              d::Int, i::Int, n::Int)
+    (1 <= i <= n) && return i
+    pol = _const_dim_boundary(arr, d)
+    if n >= 1
+        pol === :periodic && return mod1(i, n)
+        pol === :clamp && return clamp(i, 1, n)
+    end
+    throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
+          "const array '$(name)' index $(i) out of range 1..$(n) in dim $(d)"))
+end
+
+# Wrap a const array with a declared per-dimension boundary policy. `boundary` is
+# an iterable of per-dim policy symbols (or strings); its length must equal the
+# array rank and each entry must be one of `_CONST_BOUNDARY_KINDS`.
+function _wrap_bounded_const(arr::Array{Float64,N}, boundary, name::AbstractString) where {N}
+    syms = Symbol[Symbol(b) for b in boundary]
+    length(syms) == N ||
+        throw(TreeWalkError("E_TREEWALK_CONSTARRAY_BOUNDARY_NDIM",
+              "const array '$(name)' boundary has $(length(syms)) dims but array is $(N)D"))
+    for s in syms
+        s in _CONST_BOUNDARY_KINDS ||
+            throw(TreeWalkError("E_TREEWALK_CONSTARRAY_BOUNDARY_KIND",
+                  "const array '$(name)' boundary '$(s)' must be one of $(_CONST_BOUNDARY_KINDS)"))
+    end
+    return BoundedConstArray{N}(arr, NTuple{N,Symbol}(syms))
+end
+
 function build_evaluator(model::Model;
                          initial_conditions::AbstractDict=Dict{String,Float64}(),
                          parameter_overrides::AbstractDict=Dict{String,Float64}(),
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
                          registered_functions::AbstractDict=Dict{String,Function}(),
                          const_arrays::AbstractDict=Dict{String,Vector{Float64}}(),
+                         # Per-const-array boundary policy (ess-gj4): name → an
+                         # iterable of per-dimension policy symbols (:periodic |
+                         # :clamp | :error). A const array named here is wrapped so
+                         # an out-of-range stencil gather resolves declaratively
+                         # (periodic-wrap / edge-extend) instead of throwing.
+                         # Arrays absent from this map keep the throw-on-OOB
+                         # default. Mirrors the grid periodicity honored by the
+                         # state-variable gather.
+                         const_array_boundaries::AbstractDict=Dict{String,Any}(),
                          # Internal: value-invention materialisation results, set by
                          # the AbstractDict front-door (RFC §6.1). `_vi_extents` maps a
                          # `from_faq` producer id to its materialised derived-index-set
@@ -440,15 +515,16 @@ function build_evaluator(model::Model;
     # ---- Pre-computed constant arrays (Fornberg weights, mesh connectivity, etc.) ----
     # Supports both 1D (Fornberg weights) and ND (connectivity matrices for
     # mesh reductions).  1D entries are stored as Vector{Float64}; higher-rank
-    # entries as plain Array{Float64,N}.
+    # entries as plain Array{Float64,N}. An array named in `const_array_boundaries`
+    # is wrapped in a BoundedConstArray so OOB stencil gathers resolve per its
+    # declared per-dimension policy (ess-gj4).
+    _const_boundaries = Dict{String,Any}(String(k) => v for (k, v) in const_array_boundaries)
     _const_arrays = Dict{String,AbstractArray{Float64}}()
     for (k, v) in const_arrays
         k_str = String(k)
-        if ndims(v) == 1
-            _const_arrays[k_str] = Vector{Float64}(v)
-        else
-            _const_arrays[k_str] = Array{Float64}(v)
-        end
+        arr = ndims(v) == 1 ? Vector{Float64}(v) : Array{Float64}(v)
+        bnd = get(_const_boundaries, k_str, nothing)
+        _const_arrays[k_str] = bnd === nothing ? arr : _wrap_bounded_const(arr, bnd, k_str)
     end
     # M4 (RFC §8.1): register each materialized intersect_polygon clip ring as a
     # 2D const_array under its observed-variable name, so the polygon_area FAQ body
@@ -1485,10 +1561,7 @@ function _eval_const_int(expr::OpExpr, idx_env::Dict{String,Int},
                 "const array '$(first.name)' is $(ndims(arr))D but got $(length(idx_args)) indices"))
         int_indices = [_eval_const_int(a, idx_env, const_arrays) for a in idx_args]
         for d in 1:ndims(arr)
-            (int_indices[d] >= 1 && int_indices[d] <= size(arr, d)) ||
-                throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
-                    "const array '$(first.name)' index $(int_indices[d]) " *
-                    "out of range 1..$(size(arr,d)) in dim $d"))
+            int_indices[d] = _resolve_const_index(arr, first.name, d, int_indices[d], size(arr, d))
         end
         return Int(round(arr[int_indices...]))
     end
@@ -2192,10 +2265,7 @@ function _resolve_indices(expr::OpExpr,
             int_indices = [_eval_const_int(a, Dict{String,Int}(), const_arrays)
                            for a in idx_args_expr]
             for d in 1:ndims(vals)
-                (int_indices[d] >= 1 && int_indices[d] <= size(vals, d)) ||
-                    throw(TreeWalkError("E_TREEWALK_CONSTARRAY_OOB",
-                          "const array '$(first_arg.name)' index $(int_indices[d]) " *
-                          "out of range 1..$(size(vals,d)) in dim $d"))
+                int_indices[d] = _resolve_const_index(vals, first_arg.name, d, int_indices[d], size(vals, d))
             end
             return NumExpr(Float64(vals[int_indices...]))
         end

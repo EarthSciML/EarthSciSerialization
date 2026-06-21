@@ -168,7 +168,8 @@ pub use validate::{
     validate_complete,
 };
 pub use value_invention::{
-    ValueInventionError, ValueInventionResult, apply_value_invention, materialize_value_invention,
+    BoundaryKind, ValueInventionError, ValueInventionResult, apply_value_invention,
+    materialize_value_invention,
 };
 
 pub use edit::{

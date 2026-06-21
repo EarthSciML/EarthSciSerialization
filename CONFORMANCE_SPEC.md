@@ -688,6 +688,32 @@ golden example in `tests/conformance/determinism/manifest.json`, in two layers:
   drives all three. See `tests/conformance/determinism/README.md` for the
   adapter contract.
 
+#### 5.5.5 Const-array gather boundary policy (normative)
+
+A **const-array gather** — `index(factor, e_1, …, e_D)` reading a pre-computed
+factor (Fornberg weights, mesh connectivity, a per-cell metric / geometry array)
+— may resolve an **out-of-range** index `e_d ∉ 1..N_d` declaratively, exactly as
+the state-variable stencil gather honors grid periodicity. This is governed by a
+**declared per-factor, per-dimension boundary policy** (one symbol per array
+dimension); the policy is supplied alongside the factor data (the evaluator
+`const_array_boundaries` input, derivable from the grid's periodic dimensions and
+the factor's declared `dims`). The closed set of per-dimension policies and their
+**byte-identical** 1-based resolution:
+
+| Policy | Out-of-range `i` (dim size `N`) resolves to | Use |
+|---|---|---|
+| `periodic` | `mod1(i, N)` = `((i − 1) mod N) + 1` | A periodic axis (e.g. longitude); matches the state-variable periodic fold. |
+| `clamp` | `clamp(i, 1, N)` = edge-extend | The correct finite policy for a metric / geometry factor at a non-periodic boundary (e.g. a latitude pole). **NOT** the zero-ghost convention, which is physically wrong for a metric. |
+| `error` *(default)* | throw / raise `E_TREEWALK_CONSTARRAY_OOB` | Any factor **without** a declared policy. Genuine out-of-bounds bugs in connectivity / stencil-weight factors stay caught. |
+
+In-range gathers are unaffected. The zero-ghost convention (`u[OOB] → 0`) remains
+the state-**variable** gather's boundary default and is **never** applied to a
+const-array gather. All evaluating bindings (Julia, Rust, Python) MUST agree
+byte-for-byte on the resolved gather; the reference numerics for `M = [10,20,30,40]`
+are `clamp(M, 5) = 40`, `periodic(M, 5) = 10`, `periodic(M, 0) = 40`. (Bead
+`ess-gj4`; enables the covariant-FV connection-term metric gathers of the
+discretization RFC to run unmodified through the evaluator.)
+
 ### 5.6 Closed Semiring Registry (normative)
 
 > This is the normative form of RFC `semiring-faq-unified-ir` §5.1 / §5.2 / §5.6.
