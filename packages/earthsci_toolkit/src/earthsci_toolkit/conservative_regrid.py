@@ -45,6 +45,7 @@ ess-my4.4.13; the M4 cross-binding conformance gate is ess-my4.4.8.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple
 
@@ -171,6 +172,82 @@ def _shoelace_area_faq() -> ExprNode:
     )
 
 
+# Degrees→radians factor — the same constant ``math.radians`` applies, so the
+# FAQ's lon-lat→sphere map matches the imperative oracle to the last ULP.
+_DEG2RAD = math.pi / 180.0
+
+
+def _clip_unit_vec(idx: object) -> Tuple[ExprNode, ExprNode, ExprNode]:
+    """AST for the unit 3-vector of clip-ring vertex ``idx`` (lon = col 1, lat =
+    col 2, degrees): ``(cosφ·cosλ, cosφ·sinλ, sinφ)`` — the same lon-lat→sphere map
+    the oracle :func:`geometry._lonlat_to_unit` uses, built from the ``sin`` / ``cos``
+    scalar leaves so the per-triangle excess is a closed-form AST (no new op)."""
+    def col(c: int) -> ExprNode:
+        return ExprNode(op="index", args=["overlap_clip", idx, c])
+
+    lon = ExprNode(op="*", args=[col(1), _DEG2RAD])
+    lat = ExprNode(op="*", args=[col(2), _DEG2RAD])
+    cos_lat = ExprNode(op="cos", args=[lat])
+    return (
+        ExprNode(op="*", args=[cos_lat, ExprNode(op="cos", args=[lon])]),
+        ExprNode(op="*", args=[cos_lat, ExprNode(op="sin", args=[lon])]),
+        ExprNode(op="sin", args=[lat]),
+    )
+
+
+def _dot3(u: Tuple[ExprNode, ...], v: Tuple[ExprNode, ...]) -> ExprNode:
+    """AST for the 3-vector dot product ``u·v``."""
+    return ExprNode(op="+", args=[
+        ExprNode(op="*", args=[u[0], v[0]]),
+        ExprNode(op="*", args=[u[1], v[1]]),
+        ExprNode(op="*", args=[u[2], v[2]]),
+    ])
+
+
+def _cross3(u: Tuple[ExprNode, ...], v: Tuple[ExprNode, ...]) -> Tuple[ExprNode, ExprNode, ExprNode]:
+    """AST for the 3-vector cross product ``u×v``."""
+    return (
+        ExprNode(op="-", args=[ExprNode(op="*", args=[u[1], v[2]]), ExprNode(op="*", args=[u[2], v[1]])]),
+        ExprNode(op="-", args=[ExprNode(op="*", args=[u[2], v[0]]), ExprNode(op="*", args=[u[0], v[2]])]),
+        ExprNode(op="-", args=[ExprNode(op="*", args=[u[0], v[1]]), ExprNode(op="*", args=[u[1], v[0]])]),
+    )
+
+
+def _spherical_excess(
+    a: Tuple[ExprNode, ...], b: Tuple[ExprNode, ...], c: Tuple[ExprNode, ...]
+) -> ExprNode:
+    """AST for the Van Oosterom–Strackee signed solid angle of triangle ``a,b,c``:
+    ``2·atan2(a·(b×c), 1 + a·b + b·c + c·a)`` (the per-triangle term of the
+    spherical-excess fan). Exact for great-circle edges, matching the spherical
+    clip's geodesic-edge model (§5.8.4)."""
+    triple = _dot3(a, _cross3(b, c))
+    denom = ExprNode(op="+", args=[1.0, _dot3(a, b), _dot3(b, c), _dot3(c, a)])
+    return ExprNode(op="*", args=[2.0, ExprNode(op="atan2", args=[triple, denom])])
+
+
+def _spherical_area_faq() -> ExprNode:
+    """The spherical ``polygon_area`` FAQ over the derived clip ring: the
+    great-circle fan triangulation ``Σ_v E(v_1, v_v, v_{v+1})`` of Van
+    Oosterom–Strackee spherical excesses — an ordinary ``sum_product`` aggregate
+    (§8.1), the spherical sibling of :func:`_shoelace_area_faq`.
+
+    Ranging the *full* closed clip ring is exact: the two degenerate fan endpoints
+    contribute zero excess — ``v=1`` gives ``E(v_1, v_1, v_2)`` and ``v=n`` gives
+    ``E(v_1, v_n, v_{n+1}=v_1)``, both with a collinear-with-apex vertex — so the
+    sum collapses to the ``Σ_{i=2}^{n-1}`` fan the oracle
+    (:func:`geometry._spherical_signed_area`) computes. This is the same trick the
+    planar shoelace uses (the wrap edge ``v=n`` reads the closing vertex). Unit
+    sphere (radius 1), matching the ``polygon_area`` default."""
+    v_next = ExprNode(op="+", args=["v", 1])
+    return ExprNode(
+        op="aggregate", semiring="sum_product", output_idx=[], args=["overlap_clip"],
+        ranges={"v": {"from": "clip_ring"}},
+        expr=_spherical_excess(
+            _clip_unit_vec(1), _clip_unit_vec("v"), _clip_unit_vec(v_next),
+        ),
+    )
+
+
 def overlap_area(
     poly_a: Polygon,
     poly_b: Polygon,
@@ -182,11 +259,13 @@ def overlap_area(
 
     The clip is the ``intersect_polygon`` kernel leaf (evaluated through
     :func:`.eval_expr`, which registers the derived ring); the area is the
-    ``polygon_area`` ``sum_product`` FAQ — the planar shoelace evaluated through
-    the *same* interpreter for ``planar`` (the FAQ made executable), and the
-    closed-form Van Oosterom–Strackee spherical excess kernel for
+    ``polygon_area`` ``sum_product`` FAQ evaluated through the *same* interpreter —
+    the planar shoelace (:func:`_shoelace_area_faq`) for ``planar`` and the
+    Van Oosterom–Strackee spherical-excess fan (:func:`_spherical_area_faq`) for
     ``spherical`` / ``geodesic`` (§8.1's "shoelace / Gauss–Green / spherical
-    excess"). Sub-``atol`` slivers snap to exactly zero (§5.8.2).
+    excess"). Both are ordinary FAQs over the derived clip ring — the imperative
+    :func:`geometry.polygon_area` is now only the cross-check oracle. Sub-``atol``
+    slivers snap to exactly zero (§5.8.2).
     """
     ctx = _clip_ctx(poly_a, poly_b)
     clip_node = ExprNode(
@@ -194,13 +273,14 @@ def overlap_area(
         args=["poly_a", "poly_b"],
     )
     closed = eval_expr(clip_node, ctx)  # materializes ctx.derived_rings["overlap_clip"]
-    if np.asarray(closed).shape[0] <= 1:  # empty / degenerate clip → no overlap
+    # The closed ring has n+1 rows for n distinct vertices; < 3 distinct vertices
+    # (an empty or degenerate-sliver clip) is no overlap — the FAQ's degenerate
+    # fan would otherwise sum FP-noise instead of an exact zero.
+    if np.asarray(closed).shape[0] - 1 < 3:
         return 0.0
 
-    if manifold == "planar":
-        area = abs(float(eval_expr(_shoelace_area_faq(), ctx)))
-    else:
-        area = abs(geometry.polygon_area(np.asarray(closed), manifold))
+    faq = _shoelace_area_faq() if manifold == "planar" else _spherical_area_faq()
+    area = abs(float(eval_expr(faq, ctx)))
 
     return 0.0 if area <= atol else area
 

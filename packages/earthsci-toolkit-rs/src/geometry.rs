@@ -231,13 +231,14 @@ pub fn spherical_area(ring: &[(f64, f64)]) -> Result<f64, GeometryError> {
     Ok(p.area())
 }
 
-/// Unsigned `polygon_area` of an overlap ring under `manifold` — the value the
-/// `polygon_area` `sum_product` FAQ computes (RFC §8.1). Planar ⇒ shoelace /
-/// Gauss–Green; spherical / geodesic ⇒ the great-circle-edge area in **steradians**
-/// (unit sphere) via `s2geometry`. A degenerate (< 3 vertex) ring — an empty clip —
-/// is `0.0`. This is the reference area the conservative-regridding assembly
-/// ([`crate::regrid`]) consumes as the build-once factor `A_ij`, the same formula
-/// the FAQ body encodes (mirrors Python `geometry.polygon_area`).
+/// Unsigned `polygon_area` of an overlap ring under `manifold` — the imperative
+/// **cross-check oracle** for the `polygon_area` `sum_product` FAQ (RFC §8.1).
+/// Planar ⇒ shoelace / Gauss–Green; spherical / geodesic ⇒ the great-circle-edge
+/// area in **steradians** (unit sphere) via `s2geometry`. A degenerate (< 3
+/// vertex) ring — an empty clip — is `0.0`. The conservative-regridding assembly
+/// ([`crate::regrid`]) now computes the build-once factor `A_ij` through the FAQ
+/// ([`crate::area_faq::polygon_area_faq`]); this function is the same value that
+/// FAQ encodes, kept as the independent oracle (mirrors Python `geometry.polygon_area`).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn polygon_area(ring: &[(f64, f64)], manifold: Manifold) -> Result<f64, GeometryError> {
     match manifold {

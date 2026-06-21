@@ -230,6 +230,12 @@ empty `0×2` array when the cells do not overlap. `planar` is dependency-free;
 `spherical` / `geodesic` delegate the clip to `GeometryOps.jl` via the
 `EarthSciSerializationGeometryOpsExt` extension.
 """
+# True when the GeometryOps backend (the `EarthSciSerializationGeometryOpsExt`
+# extension) is loaded, so the spherical / geodesic clip is callable. The area FAQ
+# needs no backend — only the spherical *clip* does.
+_spherical_clip_available() =
+    hasmethod(_spherical_clip_geometryops, Tuple{Matrix{Float64},Matrix{Float64},String})
+
 function intersect_polygon(poly_a, poly_b, manifold::AbstractString)::Matrix{Float64}
     manifold in GEOMETRY_MANIFOLDS || throw(GeometryError(
         "unknown manifold $(repr(manifold)); the closed set is $(GEOMETRY_MANIFOLDS)"))
@@ -241,7 +247,7 @@ function intersect_polygon(poly_a, poly_b, manifold::AbstractString)::Matrix{Flo
     # spherical / geodesic — great-circle clip via GeometryOps (extension). Both
     # share the great-circle-edge model (RFC §B.4), so geodesic reuses the
     # spherical clip, matching the Python sibling.
-    if !hasmethod(_spherical_clip_geometryops, Tuple{Matrix{Float64},Matrix{Float64},String})
+    if !_spherical_clip_available()
         throw(GeometryError(
             "$(manifold) intersect_polygon requires the GeometryOps backend; " *
             "load it with `import GeometryOps, GeoInterface` to trigger the " *
@@ -364,12 +370,13 @@ end
 """
     polygon_area(ring, manifold; radius=1.0) -> Float64
 
-Reference (unsigned) area of an overlap ring under `manifold`. Planar ⇒ shoelace /
-Gauss–Green; spherical / geodesic ⇒ the spherical-excess sum (`radius` = sphere
-radius / characteristic length, default the unit sphere). Returns `0.0` for a
-degenerate (< 3 vertex) ring — an empty clip. This mirrors the `sum_product`
-`polygon_area` FAQ body and is used to cross-check it and to serve the spherical
-manifolds.
+Imperative **cross-check oracle** for the `sum_product` `polygon_area` FAQ. Planar
+⇒ shoelace / Gauss–Green; spherical / geodesic ⇒ the spherical-excess sum
+(`radius` = sphere radius / characteristic length, default the unit sphere).
+Returns `0.0` for a degenerate (< 3 vertex) ring — an empty clip. The production
+overlap area now routes through the FAQ ([`overlap_area`](@ref) →
+[`_polygon_area_via_faq`](@ref)) for both manifolds; this function encodes the same
+formula the FAQ body does, kept as the independent oracle.
 """
 function polygon_area(ring::AbstractMatrix, manifold::AbstractString; radius::Real=1.0)::Float64
     r = Matrix{Float64}(ring)

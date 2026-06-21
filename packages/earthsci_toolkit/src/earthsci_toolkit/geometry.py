@@ -451,8 +451,10 @@ def polygon_area(ring: np.ndarray, manifold: str, radius: float = 1.0) -> float:
     Planar ⇒ shoelace / Gauss–Green; spherical / geodesic ⇒ the spherical-excess
     sum (``radius`` = sphere radius / characteristic length, default the unit
     sphere). Returns ``0.0`` for a degenerate (< 3 vertex) ring — an empty clip.
-    This mirrors the ``sum_product`` ``polygon_area`` FAQ body and is used to
-    cross-check it and to serve the spherical manifold.
+    This is the imperative **cross-check oracle** for the ``sum_product``
+    ``polygon_area`` FAQ: the production overlap area now routes through that FAQ
+    (:func:`earthsci_toolkit.conservative_regrid.overlap_area`) for both manifolds,
+    and this function encodes the same formula the FAQ body does.
     """
     ring = np.asarray(ring, dtype=float)
     if ring.shape[0] >= 2 and np.allclose(ring[0], ring[-1]):

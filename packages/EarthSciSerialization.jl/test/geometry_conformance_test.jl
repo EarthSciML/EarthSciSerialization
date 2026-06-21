@@ -143,6 +143,43 @@ _vertset(ring) = Set((round(ring[i, 1]; digits=9), round(ring[i, 2]; digits=9))
         @test ESS.polygon_area(octant, "geodesic") == ESS.polygon_area(octant, "spherical")
     end
 
+    # --- spherical polygon_area as a sum_product FAQ over the clip ring ---
+    # The production overlap_area routes the per-pair area through the generic
+    # aggregate machinery (_polygon_area_via_faq → _resolve_indices → evaluate_expr);
+    # the imperative polygon_area / _spherical_signed_area loops are now only the
+    # cross-check oracle. The spherical sibling of the planar shoelace FAQ (ess-d4g.1).
+    @testset "spherical area FAQ (Van Oosterom–Strackee fan) evaluates octant to π/2" begin
+        octant = [0.0 0.0; 90.0 0.0; 0.0 90.0]
+        faq = ESS._polygon_area_via_faq(ESS.close_ring(octant), "spherical")
+        @test isapprox(faq, π / 2; atol=1e-12)
+    end
+
+    @testset "area FAQ matches the imperative oracle (planar + spherical + geodesic)" begin
+        # A general (non-rectangular, non-degenerate) ring exercises every fan term.
+        ring = [10.0 20.0; 30.0 22.0; 28.0 40.0; 8.0 38.0]
+        closed = ESS.close_ring(ring)
+        for manifold in ("planar", "spherical", "geodesic")
+            faq = ESS._polygon_area_via_faq(closed, manifold)
+            oracle = ESS.polygon_area(ring, manifold)
+            @test isapprox(faq, oracle; rtol=1e-12, atol=1e-14)
+        end
+    end
+
+    @testset "overlap_area spherical path equals the FAQ over the clipped ring" begin
+        # overlap_area clips then areas-via-FAQ; with GeometryOps the spherical clip
+        # of two squares is the [1,2]² box, whose spherical-excess area the FAQ and
+        # the oracle agree on to the great-circle tolerance.
+        if ESS._spherical_clip_available()
+            oa = ESS.overlap_area(_SQUARE_A, _SQUARE_B, "spherical")
+            clipped = ESS.intersect_polygon(_SQUARE_A, _SQUARE_B, "spherical")
+            faq = ESS._polygon_area_via_faq(ESS.close_ring(clipped), "spherical")
+            @test isapprox(oa, faq; rtol=1e-12, atol=1e-14)
+            @test ESS.area_tolerance_ok(oa, ESS.polygon_area(clipped, "spherical"); rtol=1e-9)
+        else
+            @test_skip "GeometryOps spherical clip extension not loaded"
+        end
+    end
+
     # --- polar-edge densification — great-circle-edge accuracy (ess-my4.4.9) ---
     # Exact area of a lon-lat cell on the unit sphere (small-circle parallel
     # edges): A = Δλ·(sinφ₂ − sinφ₁). The great-circle-edge model (the spherical

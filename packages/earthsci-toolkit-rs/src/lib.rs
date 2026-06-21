@@ -84,6 +84,12 @@ pub mod simulate;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod simulate_array;
 
+// `polygon_area` as a sum_product FAQ over the clip ring — evaluated through the
+// array simulator, so native-only like `simulate_array` (the wasm regridder keeps
+// the imperative `geometry::polygon_area`).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod area_faq;
+
 // Re-export main types
 pub use cadence::{
     Cadence, CadenceError, ClassSummary, MaterializationPoint, Partition, classify, compute_fold,

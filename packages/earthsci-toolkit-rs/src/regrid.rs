@@ -22,10 +22,12 @@
 //!    follow-on (a physical-operator concern), out of scope here; the exhaustive
 //!    [`ConservativeRegridder::build`] is the correctness baseline.
 //! 2. **`A_ij`** — the [`crate::geometry::intersect_polygon`] kernel leaf + the
-//!    [`crate::geometry::polygon_area`] `sum_product` FAQ (the narrow phase): one
-//!    clip per candidate pair fills each entry of the build-once sparse
-//!    overlap-area matrix (`ConservativeRegridding.jl`'s `intersections` of **raw**
-//!    areas). A candidate that clips to a **sub-`atol` sliver** is treated as
+//!    `polygon_area` `sum_product` FAQ (the narrow phase), evaluated through the
+//!    generic aggregate machinery by [`crate::area_faq::polygon_area_faq`] (the
+//!    imperative [`crate::geometry::polygon_area`] is now only its cross-check
+//!    oracle): one clip per candidate pair fills each entry of the build-once
+//!    sparse overlap-area matrix (`ConservativeRegridding.jl`'s `intersections` of
+//!    **raw** areas). A candidate that clips to a **sub-`atol` sliver** is treated as
 //!    equal-to-zero (§5.8.2) and dropped — this is the §5.8.5
 //!    *candidate set ≠ surviving-overlap set* boundary made explicit.
 //! 3. **`A_j = Σ_i A_ij`** — the group-by-`j` row-sums (`dst_areas`).
@@ -78,6 +80,24 @@ pub struct ConservativeRegridder {
     overlaps: Vec<Overlap>,
     /// `A_j = Σ_i A_ij` per target cell (`dst_areas`).
     tgt_areas: Vec<f64>,
+}
+
+/// The narrow-phase per-pair overlap area `A_ij = polygon_area(src ∩ tgt)`.
+///
+/// On native targets this is the `polygon_area` `sum_product` FAQ evaluated
+/// through the generic aggregate machinery ([`crate::area_faq::polygon_area_faq`]);
+/// the imperative [`geometry::polygon_area`] is then only the cross-check oracle
+/// (RFC §8.1, bead ess-d4g.1). On `wasm32` the array simulator (and thus the FAQ
+/// evaluator) is not built, so the regridder falls back to the imperative area
+/// there — planar works; spherical / geodesic error, exactly as before.
+#[cfg(not(target_arch = "wasm32"))]
+fn overlap_ring_area(ring: &[(f64, f64)], manifold: Manifold) -> Result<f64, GeometryError> {
+    Ok(crate::area_faq::polygon_area_faq(ring, manifold))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn overlap_ring_area(ring: &[(f64, f64)], manifold: Manifold) -> Result<f64, GeometryError> {
+    geometry::polygon_area(ring, manifold)
 }
 
 impl ConservativeRegridder {
@@ -157,7 +177,7 @@ impl ConservativeRegridder {
             if ring.len() < 3 {
                 continue; // disjoint / edge-touching: empty clip, no contribution
             }
-            let area = geometry::polygon_area(&ring, manifold)?;
+            let area = overlap_ring_area(&ring, manifold)?;
             // §5.8.2 sliver floor: a sub-`atol` overlap is treated as
             // equal-to-zero — the candidate→surviving boundary (§5.8.5).
             if area <= atol {

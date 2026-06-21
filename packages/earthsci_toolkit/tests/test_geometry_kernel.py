@@ -33,6 +33,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pytest
 
+from earthsci_toolkit import conservative_regrid as cr
 from earthsci_toolkit import geometry as geom
 from earthsci_toolkit.esm_types import ExprNode
 from earthsci_toolkit.numpy_interpreter import (
@@ -227,6 +228,57 @@ def test_spherical_area_matches_planar_for_tiny_cell() -> None:
 def test_geodesic_uses_same_great_circle_area_as_spherical() -> None:
     octant = np.array([[0.0, 0.0], [90.0, 0.0], [0.0, 90.0]])
     assert geom.polygon_area(octant, "geodesic") == geom.polygon_area(octant, "spherical")
+
+
+# --------------------------------------------------------------------------- #
+# 2c-faq. Spherical polygon_area as a sum_product FAQ over the derived clip ring
+#         (the spherical sibling of the planar shoelace FAQ; ess-d4g.1). The
+#         FAQ is what the production overlap_area now evaluates; the imperative
+#         geometry.polygon_area is its cross-check oracle.
+# --------------------------------------------------------------------------- #
+
+def _spherical_faq_area(ring: np.ndarray) -> float:
+    """Evaluate the production spherical-area FAQ over ``ring`` through eval_expr,
+    registering ``ring`` as the derived clip ring (no spherely needed — the area
+    FAQ is closed-form)."""
+    closed = np.vstack([ring, ring[:1]])
+    ctx = EvalContext(
+        state_layout={}, state_shapes={}, param_values={}, observed_values={},
+        y=np.zeros(0), t=0.0,
+        index_sets={"clip_ring": {"kind": "derived", "from_faq": "overlap_clip"}},
+    )
+    ctx.derived_rings["overlap_clip"] = closed
+    return abs(float(eval_expr(cr._spherical_area_faq(), ctx)))
+
+
+def test_spherical_area_faq_octant_via_eval_expr() -> None:
+    """The spherical ``polygon_area`` FAQ (Van Oosterom–Strackee fan excess)
+    evaluates the octant to π/2 through the generic ``sum_product`` machinery —
+    the spherical sibling of the planar ``test_polygon_area_faq_over_derived_clip_ring``."""
+    octant = np.array([[0.0, 0.0], [90.0, 0.0], [0.0, 90.0]])
+    assert math.isclose(_spherical_faq_area(octant), math.pi / 2, abs_tol=1e-12)
+
+
+@pytest.mark.parametrize("manifold", ["spherical", "geodesic"])
+def test_spherical_area_faq_matches_imperative_oracle(manifold: str) -> None:
+    """The FAQ-evaluated spherical area equals the imperative
+    ``geometry.polygon_area`` oracle for a general (non-degenerate) ring — the
+    oracle is now only the cross-check, the FAQ is the production path."""
+    ring = np.array([[10.0, 20.0], [30.0, 22.0], [28.0, 40.0], [8.0, 38.0]])
+    assert math.isclose(
+        _spherical_faq_area(ring), geom.polygon_area(ring, manifold), rel_tol=1e-12,
+    )
+
+
+def test_overlap_area_spherical_path_uses_the_faq() -> None:
+    """``overlap_area`` (the production caller) routes the spherical clip's area
+    through the FAQ and matches the imperative oracle on the clipped ring."""
+    if not _HAVE_SPHERELY:
+        pytest.skip("spherely (S2) not installed; the spherical clip cannot run")
+    a = _spherical_faq_area(geom.intersect_polygon(_SQUARE_A, _SQUARE_B, "spherical"))
+    assert math.isclose(
+        cr.overlap_area(_SQUARE_A, _SQUARE_B, "spherical"), a, rel_tol=1e-12,
+    )
 
 
 def test_spherical_clip_without_backend_raises_unavailable() -> None:
