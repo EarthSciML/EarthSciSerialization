@@ -55,6 +55,7 @@ using JSON3
     include("reference_graph_test.jl")
     include("cadence_test.jl")
     include("aggregate_conformance_test.jl")
+    include("inverse_trig_conformance_test.jl")
     include("tree_walk_join_test.jl")
     include("cartesian_2d_diffusion_e2e_test.jl")
     include("latlon_diffusion_e2e_test.jl")

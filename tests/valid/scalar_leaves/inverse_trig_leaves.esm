@@ -1,0 +1,76 @@
+{
+  "esm": "0.6.0",
+  "metadata": {
+    "name": "inverse_trig_leaves",
+    "description": "Cross-binding conformance fixture (bead ess-9x1) for the four inverse-trigonometric scalar leaf ops acos / asin / atan / atan2. Each state variable integrates a CONSTANT inverse-trig RHS from a zero initial condition, so y(t=1) = rate*1 = rate exactly — no integrator-tolerance dependency and all bindings (Julia tree_walk, Python numpy simulate, Rust simulate) must agree on the same inline `tests[].assertions[].expected`. asin(0.5)=pi/6, acos(0.5)=pi/3, atan(1)=pi/4, and atan2(1,-1)=3pi/4 (second quadrant — this distinguishes the 2-arg atan2 from atan(1/-1)=atan(-1)=-pi/4, exercising the quadrant resolution rather than a bare ratio). These leaves back the spherical-geometry FAQs (great-circle arc = R*acos, lat/lon = asin/atan2) used by M4 polygon_area (ess-my4.4.3) and the ESD-DUO geometry beads.",
+    "authors": [
+      "EarthSciSerialization/polecats/gastown.furiosa"
+    ],
+    "tags": [
+      "scalar-leaves",
+      "inverse-trig",
+      "acos",
+      "asin",
+      "atan",
+      "atan2",
+      "geometry-leaves",
+      "conformance",
+      "ess-9x1"
+    ]
+  },
+  "models": {
+    "InverseTrigLeaves": {
+      "tolerance": {
+        "rel": 1e-6,
+        "abs": 1e-9
+      },
+      "variables": {
+        "asin_v": { "type": "state", "default": 0.0 },
+        "acos_v": { "type": "state", "default": 0.0 },
+        "atan_v": { "type": "state", "default": 0.0 },
+        "atan2_v": { "type": "state", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "_comment": "D(asin_v)/dt = asin(0.5) = pi/6. asin_v(1) = 0.5235987755982989.",
+          "lhs": { "op": "D", "args": ["asin_v"], "wrt": "t" },
+          "rhs": { "op": "asin", "args": [0.5] }
+        },
+        {
+          "_comment": "D(acos_v)/dt = acos(0.5) = pi/3. acos_v(1) = 1.0471975511965979.",
+          "lhs": { "op": "D", "args": ["acos_v"], "wrt": "t" },
+          "rhs": { "op": "acos", "args": [0.5] }
+        },
+        {
+          "_comment": "D(atan_v)/dt = atan(1.0) = pi/4. atan_v(1) = 0.7853981633974483.",
+          "lhs": { "op": "D", "args": ["atan_v"], "wrt": "t" },
+          "rhs": { "op": "atan", "args": [1.0] }
+        },
+        {
+          "_comment": "D(atan2_v)/dt = atan2(1.0, -1.0) = 3pi/4. atan2_v(1) = 2.356194490192345.",
+          "lhs": { "op": "D", "args": ["atan2_v"], "wrt": "t" },
+          "rhs": { "op": "atan2", "args": [1.0, -1.0] }
+        }
+      ],
+      "tests": [
+        {
+          "id": "inverse_trig_t1",
+          "description": "Constant inverse-trig RHS integrated from zero ICs over [0,1]; each var equals its op's value at t=1.",
+          "initial_conditions": {
+            "InverseTrigLeaves.asin_v": 0.0,
+            "InverseTrigLeaves.acos_v": 0.0,
+            "InverseTrigLeaves.atan_v": 0.0,
+            "InverseTrigLeaves.atan2_v": 0.0
+          },
+          "time_span": { "start": 0.0, "end": 1.0 },
+          "assertions": [
+            { "variable": "InverseTrigLeaves.asin_v", "time": 1.0, "expected": 0.5235987755982989 },
+            { "variable": "InverseTrigLeaves.acos_v", "time": 1.0, "expected": 1.0471975511965979 },
+            { "variable": "InverseTrigLeaves.atan_v", "time": 1.0, "expected": 0.7853981633974483 },
+            { "variable": "InverseTrigLeaves.atan2_v", "time": 1.0, "expected": 2.356194490192345 }
+          ]
+        }
+      ]
+    }
+  }
+}
