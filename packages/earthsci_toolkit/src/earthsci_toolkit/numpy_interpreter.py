@@ -67,6 +67,14 @@ class EvalContext:
     # CLOSED ring ndarray (first vertex repeated) of shape [n+1, 2]; the derived
     # set's extent is the n distinct vertices. Empty ⇒ none materialized yet.
     derived_rings: Dict[str, np.ndarray] = field(default_factory=dict)
+    # Build-time value-invention derived-index-set extents (RFC §6.1 / §5.5),
+    # keyed by the producing aggregate's `id` (the `from_faq` target). Populated
+    # ONCE at setup by `value_invention.materialize_value_invention` — the
+    # skolem/distinct/rank engine runs off the per-step hot path and hands its
+    # distinct-set cardinality here, generalizing the geometry clip-ring handoff
+    # (`derived_rings`) to the relational engine. A `kind:"derived"` set whose
+    # `from_faq` is here resolves to the dense extent `[1, n]`. Empty ⇒ none.
+    derived_extents: Dict[str, int] = field(default_factory=dict)
 
 
 class NumpyInterpreterError(Exception):
@@ -258,23 +266,31 @@ def _resolve_range_spec(spec: Any, ctx: EvalContext) -> Any:
             offsets=entry["offsets"], values=entry.get("values"),
         )
     if kind == "derived":
-        # A data-derived index set (RFC §5.5 / §8.1) resolves its extent from
-        # the ring its producing node materialized at runtime. The `intersect_polygon`
-        # clip-ring case is wired here: from_faq names the producer's `id`, and
-        # the derived set's extent is the n distinct vertices of the registered
-        # (closed, n+1-row) ring. The producer must have been evaluated first —
-        # observed clip variables are evaluated before the FAQ that consumes them.
+        # A data-derived index set (RFC §5.5 / §8.1) resolves its extent from a
+        # producer materialized off the per-step hot path. Two front-doors share
+        # this resolution, exactly as in the Julia reference:
+        #   (a) the build-time value-invention engine (skolem/distinct/rank via
+        #       the relational engine, §6.1) hands its distinct-set cardinality in
+        #       `ctx.derived_extents`, keyed by the producer `id`; and
+        #   (b) the `intersect_polygon` clip case materializes a closed ring into
+        #       `ctx.derived_rings` at runtime (the producer is evaluated first —
+        #       observed clip variables run before the FAQ that consumes them).
+        # The derived set's extent is the dense `[1, n]` either way.
         faq = entry.get("from_faq")
         if faq is None:
             raise NumpyInterpreterError(
                 f"derived index set {name!r} is missing 'from_faq' (RFC §5.5)"
             )
+        extent = ctx.derived_extents.get(faq)
+        if extent is not None:
+            return [1, int(extent)]
         ring = ctx.derived_rings.get(faq)
         if ring is None:
             raise NumpyInterpreterError(
                 f"derived index set {name!r} (from_faq {faq!r}) is not materialized; "
                 f"its producing node has not been evaluated. Materialized rings: "
-                f"{sorted(ctx.derived_rings)} (RFC §8.1)"
+                f"{sorted(ctx.derived_rings)}, value-invention extents: "
+                f"{sorted(ctx.derived_extents)} (RFC §5.5 / §8.1)"
             )
         n_vertices = max(int(ring.shape[0]) - 1, 0)  # closed ring has n+1 rows
         return [1, n_vertices]

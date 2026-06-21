@@ -210,6 +210,14 @@ from .cadence import (
     partition,
 )
 
+# Build-time value-invention front-door — derived index-sets (skolem/distinct/
+# rank) resolved via the relational engine, ONCE at setup (RFC §6.1 / §5.5).
+from .value_invention import (
+    ValueInventionError,
+    ValueInventionResult,
+    materialize_value_invention,
+)
+
 # Analysis tier - unit validation
 from .units import (
     validate_units,
@@ -511,6 +519,10 @@ __all__ = [
     "CadenceError",
     "Partition",
     "partition",
+    # Build-time value-invention front-door (derived index-sets via relational engine)
+    "ValueInventionError",
+    "ValueInventionResult",
+    "materialize_value_invention",
 
     # Unit validation
     "validate_units",
