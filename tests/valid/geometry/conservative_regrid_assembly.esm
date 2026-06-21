@@ -1,0 +1,226 @@
+{
+  "esm": "0.6.0",
+  "metadata": {
+    "name": "conservative_regrid_assembly",
+    "description": "M4 EVALUABLE conservative-regridding ASSEMBLY (RFC semiring-faq-unified-ir §A.8 / §8.1 / §6.1; CONFORMANCE_SPEC.md §5.8; bead ess-my4.4.6, the Julia assembly). The companion-and-counterpart to the STRUCTURAL conservative_regrid_overlap_join.esm (ess-my4.4.5): that document expresses the FULL idiom including the bin-Skolem broad phase (skolem + a distinct/bool_and_or candidate-set aggregate) and is schema-only — `skolem`/`distinct` are resolver concerns no numeric evaluator runs. THIS document drops the value-invention half and keeps the part the Julia tree-walk evaluator actually RUNS: the numeric assembly `F_tgt[j] = (1/A_j[j])·Σ_i A_ij[i,j]·F_src[i]`, verified end-to-end on a concrete fixture grid pair (the dedicated Julia test geometry_assembly_conformance_test.jl builds A_ij from the cell polygons via the landed planar intersect_polygon + polygon_area kernel, then drives this fixture through build_evaluator with A_ij / F_src / dst_areas supplied as const_arrays). The A.8 mapping, piece by piece: (1) OVERLAP PAIRS {(i,j):A_ij>0} — the bin-Skolem overlap join. The broad-phase candidate set is the value-equality `join.on [[i,j]]`: each cell's integer broad-phase BIN key (the content-addressed id that skolem(\"bin\", floor(lon/dx), floor(lat/dy)) would mint) is carried as the CATEGORICAL MEMBER of its cell in `src_cells`/`tgt_cells` (member = bin key, POSITION = cell ordinal indexing A_ij/F_src), so the equi-join admits a pair iff src and tgt share a bin (the same data-derived join idiom as join_disaggregation_m2m.esm). The tolerance-dependent SURVIVING-overlap set is then the `filter A_ij[i,j] > atol` that drops sub-sliver candidates (§5.8.5: candidate set ⊋ surviving set). (2) A_ij — built ONCE by the narrow phase `polygon_area(intersect_polygon(src_i, tgt_j))` and consumed here as the static-partition (§6.1) overlap-area FACTOR (ConservativeRegridding.jl's `intersections` matrix of RAW areas). Its per-entry provenance is demonstrated on a representative candidate pair by the `clip`/`A_ij_rep` narrow-phase observeds (the landed ess-my4.4.3 kernel); the dedicated test asserts the representative area equals the matching A_ij entry. (3) A_j = Σ_i A_ij — the group-by-`j` `sum_product` FAQ (ConservativeRegridding.jl's row-sums → `dst_areas`); the `A_j` state recomputes it from the SAME areas that feed the apply, so the partition-of-unity Σ_i A_ij/A_j = 1 holds by construction (§5.8.3). (4) APPLY Σ_i A_ij·F_src[i] — the `sum_product` FAQ over the surviving overlap set (the sparse mat-vec `mul!(dst, intersections, src)`). (5) NORMALIZE /A_j — folded into the apply body as the `/ dst_areas[j]` factor (elementwise, build-time-foldable per A.8; ConservativeRegridding.jl's `dst ./= dst_areas`). `dst_areas` is the build-once stored denominator; the `A_j` FAQ verifies the row-sum reproduces it. Because every state is a D-equation from a zero IC the derivative du = f!(u0) the evaluator returns IS the assembled value (A_j, F_tgt) and the narrow-phase area — exact, no integrator. NO inline `tests` block: this fixture is supplied A_ij / F_src / dst_areas as const_arrays at evaluation time and so is not generically simulatable from inline initial_conditions alone; per CONFORMANCE_SPEC.md §5.8 it is therefore SCHEMA-and-structurally-validated by the Python/Rust/Go/TypeScript geometry loaders (the same gate as intersect_polygon_planar_area.esm) and numerically EVALUATED only by the Julia assembly test. The per-binding apply is ess-my4.4.6 (Julia, this) / .7 / .12.",
+    "authors": [
+      "EarthSciSerialization/polecats/gastown.nux"
+    ],
+    "tags": [
+      "geometry",
+      "conservative-regridding",
+      "assembly",
+      "overlap-join",
+      "bin-skolem",
+      "intersect_polygon",
+      "polygon-area",
+      "sum_product",
+      "join",
+      "filter",
+      "partition-of-unity",
+      "conservation",
+      "dst-areas",
+      "end-to-end",
+      "evaluable",
+      "ess-my4.4.6"
+    ]
+  },
+  "models": {
+    "ConservativeRegridAssembly": {
+      "index_sets": {
+        "coord": {
+          "kind": "interval",
+          "size": 2
+        },
+        "cell_verts": {
+          "kind": "interval",
+          "size": 4
+        },
+        "src_cells": {
+          "kind": "categorical",
+          "members": ["b0", "b0", "b1", "b1"]
+        },
+        "tgt_cells": {
+          "kind": "categorical",
+          "members": ["b0", "b0", "b1", "b1"]
+        },
+        "clip_ring": {
+          "kind": "derived",
+          "from_faq": "overlap_clip"
+        }
+      },
+      "variables": {
+        "A_ij": {
+          "type": "parameter",
+          "shape": ["src_cells", "tgt_cells"],
+          "description": "The build-once sparse overlap-area matrix A_ij = polygon_area(intersect_polygon(src_i, tgt_j)) — ConservativeRegridding.jl's `intersections` matrix of RAW areas, the static-partition (§6.1) NARROW-phase output the assembly consumes as a factor. Supplied as a const_array at evaluation time (the dedicated Julia test fills it by running the landed planar clip kernel over the fixture grid pair). Entries for non-candidate (different-bin) pairs and sub-`atol` slivers are 0; both are excluded by the join + zero-area filter of the assembly aggregates."
+        },
+        "F_src": {
+          "type": "parameter",
+          "shape": ["src_cells"],
+          "description": "The source field being remapped (a build-once `parameter` here; time-varying F_src is the dynamic-cadence case of §6.1, where the apply FAQ becomes continuous). Supplied as a const_array."
+        },
+        "dst_areas": {
+          "type": "parameter",
+          "shape": ["tgt_cells"],
+          "description": "The build-once target-cell area denominator A_j = Σ_i A_ij stored at regridder-build time — ConservativeRegridding.jl's `dst_areas`. The NORMALIZE factor: the apply body divides by dst_areas[j] (the `dst ./= dst_areas` step folded into the FAQ). Supplied as a const_array; the `A_j` FAQ state recomputes the same row-sum to prove the group-by reproduces it (partition-of-unity by construction, §5.8.3)."
+        },
+        "atol": {
+          "type": "parameter",
+          "shape": [],
+          "description": "Sliver floor (§5.8.2): an overlap area at or below `atol` is treated as equal-to-zero. The threshold of the zero-area `filter` that turns the byte-identical CANDIDATE set (from the bin join) into the tolerance-dependent SURVIVING-overlap set (§5.8.5)."
+        },
+        "src_poly_rep": {
+          "type": "parameter",
+          "shape": ["cell_verts", "coord"],
+          "description": "A representative source cell as a closed lon-lat vertex ring — the `poly_a` operand of the narrow-phase clip demo. Supplied as a const_array. In the full mesh there is one ring per source cell and the clip runs once per candidate pair to fill each A_ij entry; here it is shown on one representative pair."
+        },
+        "tgt_poly_rep": {
+          "type": "parameter",
+          "shape": ["cell_verts", "coord"],
+          "description": "A representative target cell ring — the `poly_b` operand of the clip demo (the target cell that overlaps src_poly_rep on a fractional sub-cell area)."
+        },
+        "clip": {
+          "type": "observed",
+          "shape": ["clip_ring", "coord"],
+          "description": "NARROW-PHASE DEMO: the clipped overlap ring A ∩ B for the representative candidate pair — the `intersect_polygon` leaf output, a vertex ring of data-dependent length whose vertices are the derived `clip_ring` index set. One such clip per candidate pair fills the build-once A_ij factor.",
+          "expression": {
+            "op": "intersect_polygon",
+            "id": "overlap_clip",
+            "manifold": "planar",
+            "args": ["src_poly_rep", "tgt_poly_rep"]
+          }
+        },
+        "A_ij_rep": {
+          "type": "observed",
+          "shape": [],
+          "description": "NARROW-PHASE DEMO: the representative overlap area A_ij = polygon_area(clip) — an ORDINARY sum_product FAQ over the clipped ring (planar shoelace / Gauss-Green cross-term 0.5·Σ_v (x_v·y_{v+1} − x_{v+1}·y_v) over the closed ring). This is how each entry of the build-once A_ij factor is produced; the dedicated Julia test asserts it equals the matching A_ij[i,j] supplied to the assembly.",
+          "expression": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": [],
+            "ranges": {
+              "v": { "from": "clip_ring" }
+            },
+            "args": ["clip"],
+            "expr": {
+              "op": "*",
+              "args": [
+                0.5,
+                {
+                  "op": "-",
+                  "args": [
+                    {
+                      "op": "*",
+                      "args": [
+                        { "op": "index", "args": ["clip", "v", 1] },
+                        { "op": "index", "args": ["clip", { "op": "+", "args": ["v", 1] }, 2] }
+                      ]
+                    },
+                    {
+                      "op": "*",
+                      "args": [
+                        { "op": "index", "args": ["clip", { "op": "+", "args": ["v", 1] }, 1] },
+                        { "op": "index", "args": ["clip", "v", 2] }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "narrow_phase_area": {
+          "type": "state",
+          "shape": [],
+          "description": "Tracer that consumes the representative narrow-phase area so the clip + polygon_area FAQ evaluate in a well-formed ODE: d(narrow_phase_area)/dt = A_ij_rep from a zero IC, so du = A_ij_rep. The dedicated test checks it equals the representative overlap area (and the matching A_ij entry)."
+        },
+        "A_j": {
+          "type": "state",
+          "shape": ["tgt_cells"],
+          "description": "Target-cell area denominator A_j = Σ_i A_ij — the group-by-`j` row-sum of the overlap-area matrix (ConservativeRegridding.jl's `dst_areas`), recomputed by the FAQ from the SAME A_ij that feeds the apply. d(A_j[j])/dt from a zero IC, so du = A_j[j]. The test asserts it reproduces the supplied `dst_areas`, which is the partition-of-unity-by-construction proof (§5.8.3)."
+        },
+        "F_tgt": {
+          "type": "state",
+          "shape": ["tgt_cells"],
+          "description": "The regridded field F_tgt[j] = (1/A_j[j])·Σ_i A_ij[i,j]·F_src[i] = Σ_i W_ij·F_src[i] with W_ij = A_ij/A_j — the apply FAQ (sparse mat-vec) with the normalize `/ dst_areas[j]` folded into the body. d(F_tgt[j])/dt from a zero IC, so du = F_tgt[j]. The test asserts conservation Σ_j A_j·F_tgt[j] = Σ_i A_i·F_src[i] and partition-of-unity Σ_i W_ij = 1."
+        }
+      },
+      "equations": [
+        {
+          "_comment": "NARROW-PHASE DEMO consumer: d(narrow_phase_area)/dt = A_ij_rep (the representative polygon_area(intersect_polygon(...)) overlap area). A_ij_rep is a scalar observed substituted inline; from a zero IC du = A_ij_rep.",
+          "lhs": { "op": "D", "args": ["narrow_phase_area"], "wrt": "t" },
+          "rhs": "A_ij_rep"
+        },
+        {
+          "_comment": "(1)+(3) A_j[j] = Σ_i A_ij[i,j] — the group-by-`j` sum_product FAQ (row-sums → dst_areas). The OVERLAP JOIN restricts the contraction to bin-Skolem CANDIDATE pairs: join.on [[i,j]] admits (i,j) iff member(src_cells[i]) == member(tgt_cells[j]) (shared bin key). The `filter A_ij[i,j] > atol` drops sub-atol slivers → the SURVIVING-overlap set. LHS output range is dense [1,4] (sizes A_j); the contracted source index i and the joined target index j draw {from} the categorical bin sets so the join reads bin members. Zero IC ⇒ du[A_j[j]] = A_j[j].",
+          "lhs": {
+            "op": "aggregate",
+            "args": [],
+            "output_idx": ["j"],
+            "expr": { "op": "D", "args": [{ "op": "index", "args": ["A_j", "j"] }], "wrt": "t" },
+            "ranges": { "j": [1, 4] }
+          },
+          "rhs": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": ["j"],
+            "ranges": {
+              "i": { "from": "src_cells" },
+              "j": { "from": "tgt_cells" }
+            },
+            "join": [
+              { "on": [["i", "j"]] }
+            ],
+            "filter": {
+              "op": ">",
+              "args": [{ "op": "index", "args": ["A_ij", "i", "j"] }, "atol"]
+            },
+            "args": ["A_ij"],
+            "expr": { "op": "index", "args": ["A_ij", "i", "j"] }
+          }
+        },
+        {
+          "_comment": "(4)+(5) APPLY + NORMALIZE — F_tgt[j] = Σ_i A_ij[i,j]·F_src[i] / dst_areas[j]. The sum_product FAQ over the surviving overlap set (same bin join + zero-area filter as A_j) is the sparse mat-vec `mul!(dst, intersections, src)`; the elementwise `/ dst_areas[j]` factor folded into the body is the normalize `dst ./= dst_areas` (dst_areas is the build-once stored denominator A_j). Together F_tgt = Σ_i W_ij·F_src[i], W_ij = A_ij/A_j, Σ_i W_ij = 1 by construction. Zero IC ⇒ du[F_tgt[j]] = F_tgt[j].",
+          "lhs": {
+            "op": "aggregate",
+            "args": [],
+            "output_idx": ["j"],
+            "expr": { "op": "D", "args": [{ "op": "index", "args": ["F_tgt", "j"] }], "wrt": "t" },
+            "ranges": { "j": [1, 4] }
+          },
+          "rhs": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": ["j"],
+            "ranges": {
+              "i": { "from": "src_cells" },
+              "j": { "from": "tgt_cells" }
+            },
+            "join": [
+              { "on": [["i", "j"]] }
+            ],
+            "filter": {
+              "op": ">",
+              "args": [{ "op": "index", "args": ["A_ij", "i", "j"] }, "atol"]
+            },
+            "args": ["A_ij", "F_src", "dst_areas"],
+            "expr": {
+              "op": "/",
+              "args": [
+                {
+                  "op": "*",
+                  "args": [
+                    { "op": "index", "args": ["A_ij", "i", "j"] },
+                    { "op": "index", "args": ["F_src", "i"] }
+                  ]
+                },
+                { "op": "index", "args": ["dst_areas", "j"] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
