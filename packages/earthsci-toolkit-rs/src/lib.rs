@@ -90,6 +90,10 @@ pub mod simulate_array;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod area_faq;
 
+// Build-time value-invention front-door — derived index-sets (skolem/distinct/
+// rank) resolved via the relational engine, ONCE at setup (RFC §6.1 / §5.5).
+pub mod value_invention;
+
 // Re-export main types
 pub use cadence::{
     Cadence, CadenceError, ClassSummary, MaterializationPoint, Partition, classify, compute_fold,
@@ -162,6 +166,9 @@ pub use types::{
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,
     validate_complete,
+};
+pub use value_invention::{
+    ValueInventionError, ValueInventionResult, apply_value_invention, materialize_value_invention,
 };
 
 pub use edit::{
