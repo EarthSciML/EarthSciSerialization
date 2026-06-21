@@ -259,6 +259,97 @@ pub fn polygon_area(ring: &[(f64, f64)], manifold: Manifold) -> Result<f64, Geom
     }
 }
 
+// --------------------------------------------------------------------------- //
+// Polar-edge densification — opt-in pre-clip (RFC §B.4 / CONFORMANCE_SPEC §5.8.4)
+// --------------------------------------------------------------------------- //
+
+/// Default tolerance (degrees of latitude) for judging an edge to lie along a
+/// parallel in [`densify_parallel_edges`]. Matches the Julia/Python kernels'
+/// `lat_atol` default so the three bindings densify identical rings identically.
+pub const DEFAULT_LAT_ATOL: f64 = 1e-9;
+
+/// Subdivide each *parallel* edge (constant latitude) of a lon/lat `ring` into
+/// great-circle segments at most `max_segment_deg` degrees of longitude wide,
+/// inserting the intermediate vertices **on the parallel** (linear in lon/lat).
+///
+/// The `spherical` / `geodesic` manifolds model every polygon edge — the clip's
+/// and the `polygon_area` FAQ's — as a **great-circle geodesic** (§5.8.4, RFC
+/// §B.4). A lon/lat cell edge running along a parallel is a *small circle*, not a
+/// great circle, so a single wide great-circle edge bows off the parallel and a
+/// coarse polar cell carries a real area error: ≈4% for a 30° cell next to the
+/// pole, ≈1% at 15°, scaling with the **square of the cell's longitude width**.
+/// Replacing one wide parallel edge with many short great-circle chords that each
+/// stay on the parallel drives that error toward zero — the standard mitigation
+/// (XIOS) for coarse polar lon/lat grids.
+///
+/// This is an **opt-in pre-clip** step: apply it to each operand before
+/// [`intersect_polygon`] (and the `polygon_area` FAQ) when polar accuracy
+/// matters. It is **off by default** — nothing in the evaluator calls it — so the
+/// default clip / area behaviour is unchanged. Only parallel edges are touched: a
+/// meridian already lies on a great circle, and a slanted edge is not a parallel,
+/// so both are returned whole. `max_segment_deg` must be positive; `lat_atol`
+/// (degrees, default [`DEFAULT_LAT_ATOL`]) is the tolerance for judging an edge to
+/// lie along a parallel. Returns the densified ring as `n` *distinct* `(lon, lat)`
+/// vertices (implicit closure preserved). Mirrors Julia/Python
+/// `densify_parallel_edges`.
+pub fn densify_parallel_edges(
+    ring: &[(f64, f64)],
+    max_segment_deg: f64,
+    lat_atol: f64,
+) -> Result<Vec<(f64, f64)>, GeometryError> {
+    // Reject a non-positive *or NaN* cap, matching the Julia/Python `> 0` guard
+    // (`NaN > 0` is false there, so NaN is rejected — keep that branch explicit).
+    if max_segment_deg <= 0.0 || max_segment_deg.is_nan() {
+        return Err(GeometryError::new(format!(
+            "densify_parallel_edges max_segment_deg must be positive, got {max_segment_deg}"
+        )));
+    }
+    let r = as_distinct_ring(ring)?;
+    let n = r.len();
+    let mut out: Vec<(f64, f64)> = Vec::with_capacity(n);
+    for i in 0..n {
+        let (ax, ay) = r[i];
+        let (bx, by) = r[(i + 1) % n];
+        out.push((ax, ay));
+        let dlon = bx - ax;
+        if (ay - by).abs() <= lat_atol && dlon.abs() > max_segment_deg {
+            // |dlon| > max_segment_deg ⇒ nseg ≥ 2, so ≥1 interior vertex is added.
+            let nseg = (dlon.abs() / max_segment_deg).ceil() as usize;
+            for k in 1..nseg {
+                let t = k as f64 / nseg as f64;
+                out.push((ax + t * dlon, ay + t * (by - ay)));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// numpy-`allclose`-style point comparison (`atol = 1e-8`, `rtol = 1e-5`, the
+/// relative term scaled by `b`) — the closure-stripping test shared with the
+/// Julia/Python `_as_ring` siblings.
+fn allclose_pt(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() <= 1e-8 + 1e-5 * b.0.abs() && (a.1 - b.1).abs() <= 1e-8 + 1e-5 * b.1.abs()
+}
+
+/// Coerce an input ring to its `n` *distinct* lon/lat vertices: drop a closing
+/// duplicate final vertex (`ring[last] ≈ ring[0]`) so closure stays implicit,
+/// then require ≥3 vertices. Mirrors the Julia/Python `_as_ring` coercion that
+/// `densify_parallel_edges` applies before walking the edges.
+fn as_distinct_ring(ring: &[(f64, f64)]) -> Result<&[(f64, f64)], GeometryError> {
+    let r = if ring.len() >= 2 && allclose_pt(ring[0], ring[ring.len() - 1]) {
+        &ring[..ring.len() - 1]
+    } else {
+        ring
+    };
+    if r.len() < 3 {
+        return Err(GeometryError::new(format!(
+            "densify_parallel_edges ring needs ≥3 distinct vertices, got {}",
+            r.len()
+        )));
+    }
+    Ok(r)
+}
+
 /// The B.5 / §5.8.2 **sliver floor** factor: `atol ≈ 1e-15·R²`. Near-tangent
 /// overlaps are the regime where two clippers legitimately disagree on whether a
 /// tiny intersection even exists, so sub-`atol` areas are treated as
@@ -458,5 +549,139 @@ mod tests {
     fn sliver_floor_scales_with_radius_squared() {
         assert_eq!(sliver_atol(1.0), 1e-15);
         assert!((sliver_atol(1000.0) - 1e-15 * 1e6).abs() < 1e-30);
+    }
+
+    // ----- Polar-edge densification (RFC §B.4 / §5.8.4) -----
+    //
+    // The area oracle below is a **pure** spherical-excess fan (Van
+    // Oosterom–Strackee) — the same great-circle-edge area model Python's pure
+    // `polygon_area` uses, exact for great-circle edges. It needs NO s2bindings
+    // backend, so the densification test runs on every target.
+
+    fn lonlat_to_unit(lon_deg: f64, lat_deg: f64) -> (f64, f64, f64) {
+        let lon = lon_deg.to_radians();
+        let lat = lat_deg.to_radians();
+        let cos_lat = lat.cos();
+        (cos_lat * lon.cos(), cos_lat * lon.sin(), lat.sin())
+    }
+
+    fn triangle_excess(a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> f64 {
+        let cross = (
+            b.1 * c.2 - b.2 * c.1,
+            b.2 * c.0 - b.0 * c.2,
+            b.0 * c.1 - b.1 * c.0,
+        );
+        let triple = a.0 * cross.0 + a.1 * cross.1 + a.2 * cross.2;
+        let dot_ab = a.0 * b.0 + a.1 * b.1 + a.2 * b.2;
+        let dot_bc = b.0 * c.0 + b.1 * c.1 + b.2 * c.2;
+        let dot_ca = c.0 * a.0 + c.1 * a.1 + c.2 * a.2;
+        2.0 * triple.atan2(1.0 + dot_ab + dot_bc + dot_ca)
+    }
+
+    /// Pure spherical-excess area (steradians, unit sphere) via a great-circle
+    /// fan triangulation — the backend-free oracle mirroring Python's pure
+    /// `polygon_area` spherical body.
+    fn spherical_excess_area(ring: &[(f64, f64)]) -> f64 {
+        let n = ring.len();
+        if n < 3 {
+            return 0.0;
+        }
+        let v: Vec<(f64, f64, f64)> = ring
+            .iter()
+            .map(|&(lo, la)| lonlat_to_unit(lo, la))
+            .collect();
+        let mut total = 0.0;
+        for i in 1..n - 1 {
+            total += triangle_excess(v[0], v[i], v[i + 1]);
+        }
+        total.abs()
+    }
+
+    /// Closed-form true area of a lon/lat cell whose top and bottom run along
+    /// parallels (the small-circle ground truth): `Δlon · (sin lat2 − sin lat1)`.
+    fn true_cell_area(lon1: f64, lon2: f64, lat1: f64, lat2: f64) -> f64 {
+        (lon2 - lon1).to_radians() * (lat2.to_radians().sin() - lat1.to_radians().sin())
+    }
+
+    #[test]
+    fn densification_reduces_coarse_polar_cell_area_error() {
+        // A 30°-wide coarse cell at high latitude.
+        let cell = [(0.0, 60.0), (30.0, 60.0), (30.0, 80.0), (0.0, 80.0)];
+        let a_true = true_cell_area(0.0, 30.0, 60.0, 80.0);
+        let a_coarse = spherical_excess_area(&cell);
+        let err_coarse = (a_coarse - a_true).abs() / a_true;
+        // The undensified great-circle cell really is off by a few percent
+        // (≈3.6% here — the ~4% the RFC quotes for a 30° polar cell).
+        assert!(err_coarse > 0.02, "err_coarse was {err_coarse}");
+        // Densify the parallels to ≤1° segments → the error collapses.
+        let dense = densify_parallel_edges(&cell, 1.0, DEFAULT_LAT_ATOL).expect("densify");
+        assert!(dense.len() > cell.len(), "vertices were inserted");
+        let a_dense = spherical_excess_area(&dense);
+        let err_dense = (a_dense - a_true).abs() / a_true;
+        assert!(err_dense < err_coarse, "densification reduces the error");
+        assert!(
+            err_dense < 1e-3,
+            "converges to the true area: err_dense {err_dense}"
+        );
+        // Monotone: finer densification ⇒ smaller error.
+        let dense5 = densify_parallel_edges(&cell, 5.0, DEFAULT_LAT_ATOL).expect("densify");
+        let err_5 = (spherical_excess_area(&dense5) - a_true).abs() / a_true;
+        assert!(
+            err_dense < err_5 && err_5 < err_coarse,
+            "monotone densification: {err_dense} < {err_5} < {err_coarse}"
+        );
+    }
+
+    #[test]
+    fn densification_only_touches_parallel_edges_and_is_opt_in() {
+        // Two meridian edges (constant lon) + two 1°-wide parallel edges.
+        let quad = [(0.0, 0.0), (0.0, 10.0), (1.0, 10.0), (1.0, 0.0)];
+        let dense = densify_parallel_edges(&quad, 0.5, DEFAULT_LAT_ATOL).expect("densify");
+        // Only the two parallels split (1° > 0.5° ⇒ one interior point each); the
+        // two 10° meridians are left whole — a meridian is already a great circle.
+        assert_eq!(dense.len(), 4 + 2);
+        // A cell already finer than the segment cap is unchanged.
+        assert_eq!(
+            densify_parallel_edges(&quad, 5.0, DEFAULT_LAT_ATOL)
+                .unwrap()
+                .len(),
+            4
+        );
+        // Off-by-default opt-in: a non-positive cap is rejected.
+        assert!(densify_parallel_edges(&quad, 0.0, DEFAULT_LAT_ATOL).is_err());
+    }
+
+    #[test]
+    fn densified_vertices_stay_on_the_parallel() {
+        // Inserted vertices lie exactly on the parallel (constant latitude).
+        let cell = [(0.0, 70.0), (40.0, 70.0), (40.0, 71.0), (0.0, 71.0)];
+        let dense = densify_parallel_edges(&cell, 10.0, DEFAULT_LAT_ATOL).expect("densify");
+        // Every vertex shares a latitude with one of the two parallel edges.
+        for &(_, lat) in &dense {
+            assert!(
+                (lat - 70.0).abs() < 1e-9 || (lat - 71.0).abs() < 1e-9,
+                "vertex latitude {lat} is not on either parallel"
+            );
+        }
+    }
+
+    #[test]
+    fn densify_strips_closing_duplicate_and_rejects_degenerate() {
+        // An explicitly-closed quad (last vertex repeats the first) is coerced to
+        // its 4 distinct vertices before densifying — matching Julia/Python `_as_ring`.
+        let closed = [
+            (0.0, 50.0),
+            (20.0, 50.0),
+            (20.0, 51.0),
+            (0.0, 51.0),
+            (0.0, 50.0),
+        ];
+        let dense = densify_parallel_edges(&closed, 5.0, DEFAULT_LAT_ATOL).expect("densify");
+        // 4 distinct corners + 3 interior points on each of the two 20°-wide
+        // parallels (20°/5° = 4 segments ⇒ 3 inserts each).
+        assert_eq!(dense.len(), 4 + 3 + 3);
+        // A ring with fewer than 3 distinct vertices is rejected.
+        let degenerate = [(0.0, 0.0), (1.0, 0.0)];
+        assert!(densify_parallel_edges(&degenerate, 1.0, DEFAULT_LAT_ATOL).is_err());
     }
 }
