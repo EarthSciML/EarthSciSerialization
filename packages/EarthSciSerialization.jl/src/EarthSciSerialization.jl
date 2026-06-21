@@ -52,6 +52,7 @@ include("conservative_regrid.jl")
 include("tree_walk.jl")
 include("reference_graph.jl")
 include("cadence.jl")
+include("value_invention.jl")
 include("gdd.jl")
 include("run_tests.jl")
 

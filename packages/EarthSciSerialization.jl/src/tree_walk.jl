@@ -172,7 +172,16 @@ function build_evaluator(model::Model;
                          parameter_overrides::AbstractDict=Dict{String,Float64}(),
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
                          registered_functions::AbstractDict=Dict{String,Function}(),
-                         const_arrays::AbstractDict=Dict{String,Vector{Float64}}())
+                         const_arrays::AbstractDict=Dict{String,Vector{Float64}}(),
+                         # Internal: value-invention materialisation results, set by
+                         # the AbstractDict front-door (RFC §6.1). `_vi_extents` maps a
+                         # `from_faq` producer id to its materialised derived-index-set
+                         # extent; `_vi_vars` are the value-invention LHS vars to drop
+                         # from the ODE (the relational outputs run once at setup, off
+                         # the hot path — never integrated). Empty on a direct call.
+                         _vi_extents::AbstractDict=Dict{String,Int}(),
+                         _vi_vars=Set{String}())
+    _has_value_invention = !isempty(_vi_vars)
     # ---- M4 geometry kernel detection (RFC §8.1), guarded ----
     # Active only when the model uses intersect_polygon — non-geometry files are
     # byte-identical. Observed variables may be defined by their `expression`
@@ -211,15 +220,21 @@ function build_evaluator(model::Model;
     observed_names = String[]
     state_var_names = Set{String}()
     for (name, v) in model.variables
+        # Value-invention outputs (skolem/distinct/rank) are materialized once at
+        # setup (RFC §6.1) and never enter the ODE — drop them from every
+        # partition, exactly as a geometry clip-ring observed is not a scalar.
+        name in _vi_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
             if _is_array_shape(v.shape)
                 # An array-shaped parameter is supported only when supplied as
                 # const data (e.g. the polygon operands of an intersect_polygon
-                # clip; RFC Appendix B.1). It is const_array-backed, not a scalar
-                # parameter, so it is NOT added to param_names.
-                (_has_geometry && haskey(const_arrays, name)) ||
+                # clip, RFC Appendix B.1; or the connectivity / coordinate factors
+                # a value-invention key is computed from, §5.2). It is
+                # const_array-backed, not a scalar parameter, so it is NOT added to
+                # param_names.
+                ((_has_geometry || _has_value_invention) && haskey(const_arrays, name)) ||
                     throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
             else
                 push!(param_names, name)
@@ -246,11 +261,18 @@ function build_evaluator(model::Model;
     # `from_faq` key to its distinct-vertex count so the derived clip-ring index
     # set resolves to `[1, n]` for the polygon_area FAQ.
     _geom_rings = Dict{String,Matrix{Float64}}()
-    _derived_extents = _EMPTY_DERIVED_EXTENTS
+    _derived_extents = (_has_geometry || _has_value_invention) ?
+        Dict{String,Int}() : _EMPTY_DERIVED_EXTENTS
     if _has_geometry
-        _geom_rings, _derived_extents =
+        _geom_rings, geom_extents =
             _materialize_geometry_rings(_model_equations, const_arrays, _geom_ring_vars)
+        merge!(_derived_extents, geom_extents)
     end
+    # Value-invention derived index sets (skolem/distinct/rank) materialized via
+    # the relational engine in the AbstractDict front-door (RFC §6.1 / §5.5):
+    # supply each producer's distinct-set cardinality as the resolver's dense
+    # extent `[1, n]`, generalizing the geometry handoff to the relational engine.
+    merge!(_derived_extents, Dict{String,Int}(String(k) => Int(v) for (k, v) in _vi_extents))
 
     # ---- Resolve value-equality joins (RFC §5.3) ----
     # Rewrite each aggregate's `join` clauses into build-time `join_gates` (a
@@ -270,6 +292,18 @@ function build_evaluator(model::Model;
     init_equations = _resolve_index_set_ranges(init_equations,
                                                model.index_sets, _derived_extents)
 
+    # ---- Drop value-invention equations from the ODE (RFC §6.1) ----
+    # The skolem/distinct/rank LHS vars are materialized at setup, not integrated;
+    # their defining equations (a relational aggregate RHS) must not reach the
+    # numeric pipeline. Their derived index-set extents were already harvested
+    # above, so the index-set ranges resolved before this filter.
+    if _has_value_invention
+        equations = Equation[eq for eq in equations
+                             if !(_vi_typed_lhs_base(eq.lhs) in _vi_vars)]
+        init_equations = Equation[eq for eq in init_equations
+                                  if !(_vi_typed_lhs_base(eq.lhs) in _vi_vars)]
+    end
+
     # ---- Discover array cells from equations and initial conditions ----
     # Array variable detection: a variable is treated as an array if it has
     # an explicit non-empty shape, OR if it appears inside index(var, k...)
@@ -278,7 +312,8 @@ function build_evaluator(model::Model;
     # explicit empty shape (`[]`, rank-0) is scalar, not an array.
     array_var_names_declared = Set{String}(n for (n, v) in model.variables
                                            if v.type == StateVariable &&
-                                              _is_array_shape(v.shape))
+                                              _is_array_shape(v.shape) &&
+                                              !(n in _vi_vars))
     # Detect array usage from equations even when shape is not declared.
     array_var_names = _detect_array_vars(equations, state_var_names,
                                          initial_conditions)
@@ -677,6 +712,10 @@ function build_evaluator(file::EsmFile;
     return build_evaluator(model; kwargs...)
 end
 
+# Direct EsmFile/Model entry points carry no raw JSON, so value-invention
+# materialisation can only run through the AbstractDict front-door; default the
+# internal extents/vars to empty here so a direct typed call is unchanged.
+
 """
     build_evaluator(esm::AbstractDict; model_name=nothing, kwargs...)
 
@@ -696,7 +735,36 @@ function build_evaluator(esm::AbstractDict;
     # getters). Round-trip through JSON3 so raw Julia Dict inputs — the
     # signature from the bead description — work.
     file = coerce_esm_file(JSON3.read(JSON3.write(esm)))
-    return build_evaluator(file; model_name=model_name, kwargs...)
+
+    # ---- Value-invention front-door (RFC §6.1) ----
+    # The raw JSON (NOT the typed IR, which drops the aggregate `key`/`distinct`)
+    # is the only place the value-invention vocabulary survives, so materialise
+    # any derived index set here and thread the extents into the typed path. A
+    # no-op (and byte-identical) for models without a skolem/distinct/rank node.
+    kwd = Dict{Symbol,Any}(kwargs)
+    model_json = _select_model_json(esm, model_name)
+    _vi = model_json === nothing ? nothing :
+          materialize_value_invention(model_json,
+              get(kwd, :const_arrays, Dict{String,Any}()),
+              get(kwd, :parameter_overrides, Dict{String,Float64}()))
+
+    return build_evaluator(file; model_name=model_name,
+                           _vi_extents=(_vi === nothing ? Dict{String,Int}() : _vi.extents),
+                           _vi_vars=(_vi === nothing ? Set{String}() : _vi.vi_var_names),
+                           kwargs...)
+end
+
+# Select one raw model document (native dict) from a raw ESM dict, mirroring
+# `_select_model` for the typed path. Returns `nothing` when no model matches.
+function _select_model_json(esm::AbstractDict, model_name)
+    doc = Cadence.to_native(esm)
+    models = get(doc, "models", nothing)
+    isa(models, AbstractDict) && !isempty(models) || return nothing
+    if model_name !== nothing
+        return get(models, String(model_name), nothing)
+    end
+    length(models) == 1 && return first(values(models))
+    return nothing
 end
 
 """

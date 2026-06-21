@@ -54,6 +54,7 @@ using JSON3
     include("tree_walk_semiring_test.jl")
     include("reference_graph_test.jl")
     include("cadence_test.jl")
+    include("value_invention_frontdoor_test.jl")
     include("aggregate_conformance_test.jl")
     include("inverse_trig_conformance_test.jl")
     include("geometry_conformance_test.jl")
