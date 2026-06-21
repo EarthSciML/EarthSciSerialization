@@ -1088,8 +1088,12 @@ candidate pairs are the equi-join of source and target cells sharing a bin. That
 key set is a relational index set over **integer** keys, so it falls squarely
 under the §5.5 determinism contract — sorted total order, no floats in keys, no
 native-hash iteration order — and MUST be **byte-identical** across bindings
-(reusing the M3 determinism machinery; the overlap-join idiom is specified in
-`ess-my4.4.5`).
+(reusing the M3 determinism machinery; the overlap-join idiom is the worked
+fixture `tests/valid/geometry/conservative_regrid_overlap_join.esm`, bead
+`ess-my4.4.5`, which composes the broad-phase join with the `A_ij → A_j →
+apply → normalize` assembly and makes the candidate-vs-surviving boundary
+explicit — the `join.on` produces this byte-identical candidate set, a
+`filter: A_ij > atol` produces the tolerance-dependent surviving-overlap set).
 
 Two consequences are load-bearing:
 
