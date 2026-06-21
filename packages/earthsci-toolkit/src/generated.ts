@@ -127,6 +127,7 @@ export type ExpressionNode = ExpressionNode1 & {
     | "aggregate"
     | "skolem"
     | "rank"
+    | "intersect_polygon"
     | "true"
     | "makearray"
     | "index"
@@ -140,6 +141,14 @@ export type ExpressionNode = ExpressionNode1 & {
     | "bc"
     | "table_lookup"
     | "apply_expression_template";
+  /**
+   * Stable node identity (RFC semiring-faq-unified-ir §6.1): an optional, author-assigned identifier that makes this expression node addressable as a vertex in the inter-node dependency DAG the partition pass walks. Its primary use is to be the referent of a derived index set: an `index_sets` entry of kind "derived" names, via `from_faq`, the index-set-producing `aggregate` node that materializes it — and it names it by this id. When present it MUST be unique among the expression nodes of its model; the build-time reference-resolution pass errors on a duplicate id and on a `from_faq` that names no node. Absent ⇒ the node is addressed only by its structural path and cannot be the target of a `from_faq`. Purely additive: a file using no `id` validates and resolves exactly as before.
+   */
+  id?: string;
+  /**
+   * Optional author assertion on this node's cadence class, checked by the dependency-partition pass (RFC semiring-faq-unified-ir §6.1; CONFORMANCE_SPEC.md §5.7). A diagnostic/test hook ONLY — it changes no semantics. The pass derives every node's class from the data-dependency DAG (`class(node) = max` over inputs; `const ⊏ discrete ⊏ continuous`); when `expect_cadence` is present the pass errors if the DERIVED class disagrees with it. "const" = never changes, folded into the artifact (parameter / literal); "discrete" = changes only at discrete events, recomputed by the per-event handler (a `discrete` variable, e.g. loaded met / reloadable mesh); "continuous" = changes every step, evaluated in the hot per-step tree (integrated state `u`, or an explicit continuous-`t` forcing). Absent ⇒ no assertion. Purely additive: a file using no `expect_cadence` validates and partitions exactly as before.
+   */
+  expect_cadence?: "const" | "discrete" | "continuous";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (aggregate / arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -223,6 +232,10 @@ export type ExpressionNode = ExpressionNode1 & {
    * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
   key?: number | string | ExpressionNode1;
+  /**
+   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
+   */
+  manifold?: "planar" | "spherical" | "geodesic";
   /**
    * For makearray: list of sub-region boxes of the output array. Each region is an array of [start, stop] pairs, one per output dimension. The nth region is filled with the nth entry of values. Overlapping regions are permitted; later regions overwrite earlier ones. Mirrors SymbolicUtils.ArrayMaker.regions.
    */
@@ -473,7 +486,7 @@ export type Plot1 = {
  */
 export type IndexSet = IndexSet1 & {
   /**
-   * Which of the four index-set forms this entry is. "interval": a dense [1..size] grid axis. "categorical": an explicit enumeration of members. "derived": a data-derived set materialized from an index-set-producing aggregate node. "ragged": a per-parent (dependent) inner set backed by CSR offsets/values factors.
+   * Which of the four index-set forms this entry is. "interval": a dense [1..size] grid axis. "categorical": an explicit enumeration of members. "derived": a data-derived set materialized from an index-set-producing node (a `distinct` `aggregate`, or an `intersect_polygon` ring leaf whose clipped ring has a data-dependent vertex count, §8.1). "ragged": a per-parent (dependent) inner set backed by CSR offsets/values factors.
    */
   kind: "interval" | "categorical" | "derived" | "ragged";
   /**
@@ -485,7 +498,7 @@ export type IndexSet = IndexSet1 & {
    */
   members?: unknown[];
   /**
-   * derived: the id of the index-set-producing aggregate node (RFC §5.5) that materializes this set (e.g. the unique edges discovered from a face→vertex relation). Required when kind is "derived".
+   * derived: the id of the index-set-producing node (RFC §5.5) that materializes this set, named by its `id`. Usually an `aggregate` node (`distinct: true`) — e.g. the unique edges discovered from a face→vertex relation. It MAY also be an `intersect_polygon` geometry-kernel leaf (RFC §8.1): the clipped overlap ring it returns has a data-dependent number of vertices, so the ring's vertex set is exactly such a derived index set, and `polygon_area` is then an ordinary `sum_product` FAQ over it. Required when kind is "derived".
    */
   from_faq?: string;
   /**
@@ -1058,6 +1071,7 @@ export type ExpressionNode2 = {
     | "aggregate"
     | "skolem"
     | "rank"
+    | "intersect_polygon"
     | "true"
     | "makearray"
     | "index"
@@ -1071,6 +1085,14 @@ export type ExpressionNode2 = {
     | "bc"
     | "table_lookup"
     | "apply_expression_template";
+  /**
+   * Stable node identity (RFC semiring-faq-unified-ir §6.1): an optional, author-assigned identifier that makes this expression node addressable as a vertex in the inter-node dependency DAG the partition pass walks. Its primary use is to be the referent of a derived index set: an `index_sets` entry of kind "derived" names, via `from_faq`, the index-set-producing `aggregate` node that materializes it — and it names it by this id. When present it MUST be unique among the expression nodes of its model; the build-time reference-resolution pass errors on a duplicate id and on a `from_faq` that names no node. Absent ⇒ the node is addressed only by its structural path and cannot be the target of a `from_faq`. Purely additive: a file using no `id` validates and resolves exactly as before.
+   */
+  id?: string;
+  /**
+   * Optional author assertion on this node's cadence class, checked by the dependency-partition pass (RFC semiring-faq-unified-ir §6.1; CONFORMANCE_SPEC.md §5.7). A diagnostic/test hook ONLY — it changes no semantics. The pass derives every node's class from the data-dependency DAG (`class(node) = max` over inputs; `const ⊏ discrete ⊏ continuous`); when `expect_cadence` is present the pass errors if the DERIVED class disagrees with it. "const" = never changes, folded into the artifact (parameter / literal); "discrete" = changes only at discrete events, recomputed by the per-event handler (a `discrete` variable, e.g. loaded met / reloadable mesh); "continuous" = changes every step, evaluated in the hot per-step tree (integrated state `u`, or an explicit continuous-`t` forcing). Absent ⇒ no assertion. Purely additive: a file using no `expect_cadence` validates and partitions exactly as before.
+   */
+  expect_cadence?: "const" | "discrete" | "continuous";
   /**
    * Operand list. For most ops these are sub-expressions. Array ops use args for the input array operands (aggregate / arrayop, broadcast, index, reshape, transpose, concat). makearray has no natural args and uses an empty array.
    *
@@ -1154,6 +1176,10 @@ export type ExpressionNode2 = {
    * Mathematical expression: a number literal, a variable/parameter reference string, or an operator node.
    */
   key?: number | string | ExpressionNode1;
+  /**
+   * For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. "planar": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. "spherical": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. "geodesic": ellipsoidal-geodesic edges. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.
+   */
+  manifold?: "planar" | "spherical" | "geodesic";
   /**
    * For makearray: list of sub-region boxes of the output array. Each region is an array of [start, stop] pairs, one per output dimension. The nth region is filled with the nth entry of values. Overlapping regions are permitted; later regions overwrite earlier ones. Mirrors SymbolicUtils.ArrayMaker.regions.
    */

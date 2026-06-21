@@ -1,0 +1,44 @@
+{
+  "esm": "0.6.0",
+  "metadata": {
+    "name": "intersect_polygon_bad_manifold",
+    "description": "INVALID (bead ess-my4.4.2): an `intersect_polygon` node whose `manifold` is \"flat\" — not a member of the closed enum {planar, spherical, geodesic} (RFC semiring-faq-unified-ir §8.1; CONFORMANCE_SPEC.md §5.8.4). The manifold is a discrete label matched EXACTLY across bindings, so its value set is a closed registry; an unknown manifold is a pure schema (enum) violation. \"flat\" is a common mistake for \"planar\". Caught by every binding at validation time.",
+    "authors": [
+      "EarthSciSerialization/polecats/gastown.furiosa"
+    ],
+    "tags": [
+      "geometry",
+      "intersect_polygon",
+      "manifold",
+      "invalid",
+      "schema",
+      "ess-my4.4.2"
+    ]
+  },
+  "models": {
+    "BadManifold": {
+      "index_sets": {
+        "verts": { "kind": "interval", "size": 4 }
+      },
+      "variables": {
+        "poly_a": { "type": "parameter", "shape": ["verts"] },
+        "poly_b": { "type": "parameter", "shape": ["verts"] },
+        "u": { "type": "state" },
+        "clip": {
+          "type": "observed",
+          "expression": {
+            "op": "intersect_polygon",
+            "manifold": "flat",
+            "args": ["poly_a", "poly_b"]
+          }
+        }
+      },
+      "equations": [
+        {
+          "lhs": { "op": "D", "args": ["u"], "wrt": "t" },
+          "rhs": { "op": "-", "args": ["u"] }
+        }
+      ]
+    }
+  }
+}

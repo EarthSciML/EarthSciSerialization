@@ -289,6 +289,7 @@ export const schema: AnySchemaObject = {
             "aggregate",
             "skolem",
             "rank",
+            "intersect_polygon",
             "true",
             "makearray",
             "index",
@@ -461,6 +462,15 @@ export const schema: AnySchemaObject = {
         "key": {
           "$ref": "#/$defs/Expression",
           "description": "For arrayop / aggregate: optional Skolem term — a deterministic, content-addressed key naming each member an index-set-producing (`distinct`) node emits (RFC semiring-faq-unified-ir §5.5). Typically a `{ \"op\": \"skolem\", \"args\": [<label>, <component>…] }` node; the components are canonicalized (a symmetric relation sorts its components, e.g. an undirected edge (min(u,v), max(u,v)); a directed one preserves order) so the same member is named identically across bindings (§5.7). Dense integer ids for the array backend then come from a `{ \"op\": \"rank\" }` over the resulting set. Floats are forbidden in keys (§5.7 / §A.5) — keys are integer or categorical ids."
+        },
+        "manifold": {
+          "type": "string",
+          "description": "For the `intersect_polygon` geometry-kernel leaf op (RFC semiring-faq-unified-ir §8.1 / Appendix B; CONFORMANCE_SPEC.md §5.8.4): the geometry interpretation under which the two operand polygons are clipped, and the part of the op's contract that makes its tolerance-based conformance comparable. \"planar\": Cartesian/flat clipping (Sutherland–Hodgman / Foster–Hormann) — straight edges in the coordinate plane; wrong at the poles and across the antimeridian, valid only for a small projected patch. \"spherical\": great-circle edges on the unit sphere (the ConservativeRegridding.jl / GeometryOps.jl / S2 default for lon-lat earth meshes) — the correct model for global regridding. \"geodesic\": ellipsoidal-geodesic edges. REQUIRED on every `intersect_polygon` node (the op carries no default — the manifold must be declared, never inferred). Two bindings' clip results may be compared ONLY under the same declared manifold; the flag itself is matched EXACTLY across bindings (it is a discrete label, not a tolerance-based quantity). Meaningful only for `intersect_polygon`; ignored on any other op.",
+          "enum": [
+            "planar",
+            "spherical",
+            "geodesic"
+          ]
         },
         "regions": {
           "type": "array",
@@ -811,6 +821,30 @@ export const schema: AnySchemaObject = {
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "intersect_polygon"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "manifold"
+            ],
+            "properties": {
+              "args": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2
               }
             }
           }
@@ -3150,7 +3184,7 @@ export const schema: AnySchemaObject = {
       "properties": {
         "kind": {
           "type": "string",
-          "description": "Which of the four index-set forms this entry is. \"interval\": a dense [1..size] grid axis. \"categorical\": an explicit enumeration of members. \"derived\": a data-derived set materialized from an index-set-producing aggregate node. \"ragged\": a per-parent (dependent) inner set backed by CSR offsets/values factors.",
+          "description": "Which of the four index-set forms this entry is. \"interval\": a dense [1..size] grid axis. \"categorical\": an explicit enumeration of members. \"derived\": a data-derived set materialized from an index-set-producing node (a `distinct` `aggregate`, or an `intersect_polygon` ring leaf whose clipped ring has a data-dependent vertex count, §8.1). \"ragged\": a per-parent (dependent) inner set backed by CSR offsets/values factors.",
           "enum": [
             "interval",
             "categorical",
@@ -3168,7 +3202,7 @@ export const schema: AnySchemaObject = {
         },
         "from_faq": {
           "type": "string",
-          "description": "derived: the id of the index-set-producing aggregate node (RFC §5.5) that materializes this set (e.g. the unique edges discovered from a face→vertex relation). Required when kind is \"derived\"."
+          "description": "derived: the id of the index-set-producing node (RFC §5.5) that materializes this set, named by its `id`. Usually an `aggregate` node (`distinct: true`) — e.g. the unique edges discovered from a face→vertex relation. It MAY also be an `intersect_polygon` geometry-kernel leaf (RFC §8.1): the clipped overlap ring it returns has a data-dependent number of vertices, so the ring's vertex set is exactly such a derived index set, and `polygon_area` is then an ordinary `sum_product` FAQ over it. Required when kind is \"derived\"."
         },
         "of": {
           "type": "array",
