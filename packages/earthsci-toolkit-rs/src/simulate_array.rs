@@ -45,6 +45,7 @@ use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
 use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, RangeSpec, VariableType};
 use indexmap::IndexMap;
 use ndarray::{ArrayD, IxDyn};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use diffsol::{
@@ -109,34 +110,45 @@ enum ContractDim {
     /// Ragged `[1, offsets[of…]]` — `offsets` names the per-parent length
     /// factor; `of` names the parent index variables that address it.
     Ragged { offsets: String, of: Vec<String> },
+    /// Derived `[1, |ring(from_faq)|]` — `from_faq` names the FAQ producer node
+    /// (the `intersect_polygon` clip) whose materialized overlap ring sizes this
+    /// contraction. The upper bound is the ring's distinct-vertex count, read at
+    /// eval time from the runtime ring registry (RFC §8.1).
+    Derived { from_faq: String },
 }
 
 impl ContractDim {
     /// Build a contracted dim from a resolved range spec: a [`RangeSpec::RaggedDyn`]
-    /// becomes [`ContractDim::Ragged`]; anything else falls back to its static
+    /// becomes [`ContractDim::Ragged`], a [`RangeSpec::DerivedDyn`] becomes
+    /// [`ContractDim::Derived`]; anything else falls back to its static
     /// `[lo, hi]` bounds (`[0, 0]` — an empty reduction — if unresolved).
     fn from_range(spec: &RangeSpec) -> Self {
-        match spec.ragged() {
-            Some((offsets, of)) => ContractDim::Ragged {
+        if let Some((offsets, of)) = spec.ragged() {
+            return ContractDim::Ragged {
                 offsets: offsets.to_string(),
                 of: of.to_vec(),
-            },
-            None => {
-                let r = spec.bounds().unwrap_or([0, 0]);
-                ContractDim::Static(r[0], r[1])
-            }
+            };
         }
+        if let Some(from_faq) = spec.derived() {
+            return ContractDim::Derived {
+                from_faq: from_faq.to_string(),
+            };
+        }
+        let r = spec.bounds().unwrap_or([0, 0]);
+        ContractDim::Static(r[0], r[1])
     }
 
     /// Resolve to a concrete inclusive `(lo, hi)` range under the current loop
     /// binds. A ragged dim gathers its parent index value(s) from `ctx` and
-    /// reads `offsets[parent…]`; an empty bound (`lo > hi`, e.g. an isolated
-    /// cell with zero neighbours) yields no contraction tuples, so the
-    /// reduction returns the semiring's additive identity 0̄.
+    /// reads `offsets[parent…]`; a derived dim reads the materialized ring's
+    /// vertex count from the runtime registry; an empty bound (`lo > hi`, e.g.
+    /// an isolated cell with zero neighbours, or a disjoint clip) yields no
+    /// contraction tuples, so the reduction returns the additive identity 0̄.
     fn concrete(&self, ctx: &EvalCtx) -> (i64, i64) {
         match self {
             ContractDim::Static(lo, hi) => (*lo, *hi),
             ContractDim::Ragged { offsets, of } => (1, ragged_upper_bound(offsets, of, ctx)),
+            ContractDim::Derived { from_faq } => (1, derived_ring_extent(from_faq, ctx)),
         }
     }
 }
@@ -585,6 +597,17 @@ impl ArrayCompiled {
             }
         }
 
+        // (6b) Dependency-order the observed rules so each is evaluated only
+        //      after the observeds it reads (RFC §8.1): the geometry chain
+        //      `const` polygons → `clip = intersect_polygon` → `area = FAQ(clip)`
+        //      must materialize the ring before the FAQ over it. Observeds are
+        //      collected above in sorted/equation order, which is NOT dependency
+        //      order, so the array driver would otherwise evaluate `area` before
+        //      `clip` exists. A stable Kahn sweep preserves declaration order
+        //      among independent observeds (mirrors Python
+        //      `simulation._order_observed_equations`).
+        observed_rules = dependency_order_observed(observed_rules);
+
         // (7) Build RHS rules. Each equation with a derivative LHS produces
         //     either a scalar slot write, an indexed scalar slot write, or
         //     an array loop.
@@ -884,7 +907,7 @@ impl ArrayCompiled {
             SolverChoice::Erk => "Erk",
         };
 
-        let (time, state) = match opts.solver {
+        let (time, mut state) = match opts.solver {
             SolverChoice::Bdf => {
                 let mut solver: Bdf<'_, _, NewtonNonlinearSolver<_, FaerLU<f64>, _>> = problem
                     .bdf::<FaerLU<f64>>()
@@ -909,10 +932,62 @@ impl ArrayCompiled {
             }
         };
 
+        // Expose scalar observed trajectories (e.g. an `area` FAQ) alongside the
+        // states so inline conformance assertions can read algebraic quantities
+        // (RFC §8.1; CONFORMANCE_SPEC.md §5.8). The integrator carries only the
+        // state vector, so re-evaluate the (dependency-ordered, derived-ring-aware)
+        // observeds from the state trajectory at each output node and append the
+        // scalar ones. Array-valued observeds (the clip ring, the const polygons)
+        // are not scalar rows and are skipped. Mirrors the Python
+        // `_simulate_with_numpy` output-observed exposure.
+        let mut state_variable_names = self.scalar_state_names.clone();
+        if !self.observed_rules.is_empty() && !time.is_empty() {
+            // Which observeds resolve to scalars? Materialize once at the first
+            // node, preserving the dependency-ordered rule order.
+            let obs_at = |k: usize| -> HashMap<String, ArrayD<f64>> {
+                let flat: Vec<f64> = (0..n_states).map(|i| state[i][k]).collect();
+                let sa = build_state_arrays(&self.var_shapes, &flat);
+                let dr: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
+                materialize_observeds(
+                    &self.observed_rules,
+                    &sa,
+                    &param_vec,
+                    &self.param_names,
+                    time[k],
+                    &dr,
+                )
+            };
+            let obs0 = obs_at(0);
+            let scalar_obs: Vec<String> = self
+                .observed_rules
+                .iter()
+                .map(|r| observed_rule_var(r).clone())
+                .filter(|name| obs0.get(name).map(|a| a.ndim() == 0).unwrap_or(false))
+                .collect();
+            if !scalar_obs.is_empty() {
+                let mut rows: Vec<Vec<f64>> =
+                    vec![Vec::with_capacity(time.len()); scalar_obs.len()];
+                for k in 0..time.len() {
+                    let obs = if k == 0 { obs0.clone() } else { obs_at(k) };
+                    for (j, name) in scalar_obs.iter().enumerate() {
+                        rows[j].push(
+                            obs.get(name)
+                                .and_then(|a| a.first().copied())
+                                .unwrap_or(f64::NAN),
+                        );
+                    }
+                }
+                for (name, row) in scalar_obs.into_iter().zip(rows) {
+                    state_variable_names.push(name);
+                    state.push(row);
+                }
+            }
+        }
+
         Ok(Solution {
             time,
             state,
-            state_variable_names: self.scalar_state_names.clone(),
+            state_variable_names,
             metadata: SolutionMetadata {
                 solver: solver_name.to_string(),
                 ..Default::default()
@@ -921,23 +996,122 @@ impl ArrayCompiled {
     }
 }
 
+/// The target variable an observed algebraic rule defines.
+fn observed_rule_var(rule: &AlgebraicRule) -> &String {
+    match rule {
+        AlgebraicRule::Scalar { var, .. } | AlgebraicRule::ArrayLoop { var, .. } => var,
+    }
+}
+
+/// The defining body expression of an observed algebraic rule.
+fn observed_rule_body(rule: &AlgebraicRule) -> &Expr {
+    match rule {
+        AlgebraicRule::Scalar { body, .. } | AlgebraicRule::ArrayLoop { body, .. } => body,
+    }
+}
+
+/// Collect every variable-reference leaf (`Expr::Variable`) in `expr`, walking
+/// `args`, the aggregate `expr` body, makearray `values`, table `axes`, the join
+/// `filter`, and the `lower`/`upper` bounds so a dependency edge is never missed.
+/// Loop indices and other non-observed names are gathered too; the caller
+/// intersects with the observed-name set to keep only the meaningful edges.
+fn collect_expr_var_refs(expr: &Expr, out: &mut HashSet<String>) {
+    match expr {
+        Expr::Variable(name) => {
+            out.insert(name.clone());
+        }
+        Expr::Operator(node) => {
+            for a in &node.args {
+                collect_expr_var_refs(a, out);
+            }
+            if let Some(b) = &node.expr {
+                collect_expr_var_refs(b, out);
+            }
+            if let Some(l) = &node.lower {
+                collect_expr_var_refs(l, out);
+            }
+            if let Some(u) = &node.upper {
+                collect_expr_var_refs(u, out);
+            }
+            if let Some(vals) = &node.values {
+                for v in vals {
+                    collect_expr_var_refs(v, out);
+                }
+            }
+            if let Some(axes) = &node.axes {
+                for v in axes.values() {
+                    collect_expr_var_refs(v, out);
+                }
+            }
+            if let Some(f) = &node.filter {
+                collect_expr_var_refs(f, out);
+            }
+        }
+        Expr::Number(_) | Expr::Integer(_) => {}
+    }
+}
+
+/// Stable topological sort of observed algebraic rules so each follows every
+/// observed its body references (RFC §8.1). Independent observeds keep their
+/// original order; any rule left in a dependency cycle is appended in original
+/// order so the build still proceeds (the evaluator then surfaces a clear
+/// unresolved read rather than the driver hanging). Mirrors the Python
+/// `simulation._order_observed_equations`.
+fn dependency_order_observed(rules: Vec<AlgebraicRule>) -> Vec<AlgebraicRule> {
+    let names: HashSet<String> = rules.iter().map(|r| observed_rule_var(r).clone()).collect();
+    // Per-rule dependency set, restricted to *other* observed names.
+    let deps: Vec<HashSet<String>> = rules
+        .iter()
+        .map(|r| {
+            let mut refs = HashSet::new();
+            collect_expr_var_refs(observed_rule_body(r), &mut refs);
+            let self_name = observed_rule_var(r);
+            refs.retain(|n| names.contains(n) && n != self_name);
+            refs
+        })
+        .collect();
+
+    let mut placed: HashSet<String> = HashSet::new();
+    let mut order: Vec<usize> = Vec::with_capacity(rules.len());
+    let mut remaining: Vec<usize> = (0..rules.len()).collect();
+    while !remaining.is_empty() {
+        let mut progress = false;
+        let mut still: Vec<usize> = Vec::new();
+        for i in std::mem::take(&mut remaining) {
+            if deps[i].iter().all(|d| placed.contains(d)) {
+                placed.insert(observed_rule_var(&rules[i]).clone());
+                order.push(i);
+                progress = true;
+            } else {
+                still.push(i);
+            }
+        }
+        remaining = still;
+        if !progress {
+            break; // a cycle — append the rest in original order below
+        }
+    }
+    order.extend(remaining);
+
+    // Reassemble in the computed order, moving each rule out exactly once.
+    let mut slots: Vec<Option<AlgebraicRule>> = rules.into_iter().map(Some).collect();
+    order
+        .into_iter()
+        .map(|i| slots[i].take().expect("each index visited once"))
+        .collect()
+}
+
 // ============================================================================
 // Runtime: evaluate one RHS call.
 // ============================================================================
 
-fn evaluate_rhs(
-    rhs_rules: &[RhsRule],
-    observed_rules: &[AlgebraicRule],
-    observed_shapes: &HashMap<String, VarShape>,
+/// Build per-variable ndarray views from the flat state vector (owned copies —
+/// fast enough at fixture sizes). A scalar variable becomes a 0-D array; an
+/// array variable is read column-major over its inferred shape.
+fn build_state_arrays(
     var_shapes: &IndexMap<String, VarShape>,
-    param_names: &[String],
     state: &[f64],
-    params: &[f64],
-    t: f64,
-    dy: &mut [f64],
-) {
-    // (a) Build state ndarray views (owned copies — fast enough at fixture
-    //     sizes).
+) -> HashMap<String, ArrayD<f64>> {
     let mut state_arrays: HashMap<String, ArrayD<f64>> = HashMap::new();
     for (name, vs) in var_shapes {
         let total = vs.shape.iter().copied().product::<usize>().max(1);
@@ -949,22 +1123,42 @@ fn evaluate_rhs(
             state_arrays.insert(name.clone(), col_major_to_arrayd(block, &vs.shape));
         }
     }
+    state_arrays
+}
 
-    // (b) Evaluate observed algebraic rules in order into observed_arrays.
+/// Evaluate the observed algebraic rules (already dependency-ordered at build
+/// time) at the given state/time into a name→array map, registering any
+/// FAQ-materialized derived ring under its producer id in `derived_rings`. An
+/// observed whose body yields an array (a `const` polygon, the clip ring) is
+/// stored as an array so downstream `index(...)` reads address it; a scalar body
+/// (an `area` FAQ) is a 0-D array. Shared by the RHS driver ([`evaluate_rhs`])
+/// and the output-time observed exposure ([`ArrayCompiled::simulate`]) so both
+/// see identical observed values.
+fn materialize_observeds(
+    observed_rules: &[AlgebraicRule],
+    state_arrays: &HashMap<String, ArrayD<f64>>,
+    params: &[f64],
+    param_names: &[String],
+    t: f64,
+    derived_rings: &RefCell<HashMap<String, ArrayD<f64>>>,
+) -> HashMap<String, ArrayD<f64>> {
     let mut observed_arrays: HashMap<String, ArrayD<f64>> = HashMap::new();
     for rule in observed_rules {
         match rule {
             AlgebraicRule::Scalar { var, body } => {
                 let mut ctx = EvalCtx {
-                    state_arrays: &state_arrays,
+                    state_arrays,
                     observed_arrays: &observed_arrays,
                     params,
                     param_names,
                     loop_binds: HashMap::new(),
                     t,
+                    derived_rings,
                 };
-                let v = eval(body, &mut ctx);
-                let arr = ArrayD::from_elem(IxDyn(&[]), v.as_scalar().unwrap_or(f64::NAN));
+                let arr = match eval(body, &mut ctx) {
+                    Value::Array(a) => a,
+                    Value::Scalar(s) => ArrayD::from_elem(IxDyn(&[]), s),
+                };
                 observed_arrays.insert(var.clone(), arr);
             }
             AlgebraicRule::ArrayLoop {
@@ -973,10 +1167,10 @@ fn evaluate_rhs(
                 output_ranges,
                 body,
             } => {
-                // Size the storage as 1-based (origin 1) with max_index
-                // extent per dimension so downstream `index(v, k)` always
-                // computes offset `k - 1` regardless of the range's lo.
-                // Positions below the defined range are left at 0.
+                // Size the storage as 1-based (origin 1) with max_index extent
+                // per dimension so downstream `index(v, k)` always computes
+                // offset `k - 1` regardless of the range's lo. Positions below
+                // the defined range are left at 0.
                 let padded_shape: Vec<usize> =
                     output_ranges.iter().map(|(_, hi)| *hi as usize).collect();
                 let padded_origin: Vec<i64> = vec![1i64; padded_shape.len()];
@@ -984,12 +1178,13 @@ fn evaluate_rhs(
                 let mut buf = vec![0.0f64; total];
                 for tuple in cartesian_range(output_ranges) {
                     let mut ctx = EvalCtx {
-                        state_arrays: &state_arrays,
+                        state_arrays,
                         observed_arrays: &observed_arrays,
                         params,
                         param_names,
                         loop_binds: HashMap::new(),
                         t,
+                        derived_rings,
                     };
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
@@ -1005,6 +1200,42 @@ fn evaluate_rhs(
             }
         }
     }
+    observed_arrays
+}
+
+fn evaluate_rhs(
+    rhs_rules: &[RhsRule],
+    observed_rules: &[AlgebraicRule],
+    observed_shapes: &HashMap<String, VarShape>,
+    var_shapes: &IndexMap<String, VarShape>,
+    param_names: &[String],
+    state: &[f64],
+    params: &[f64],
+    t: f64,
+    dy: &mut [f64],
+) {
+    // (a) Build per-variable state ndarray views from the flat state vector.
+    let state_arrays = build_state_arrays(var_shapes, state);
+
+    // FAQ-materialized derived rings (RFC §8.1), keyed by producer node id. An
+    // `intersect_polygon` clip self-registers its closed overlap ring here as it
+    // evaluates (see `eval_intersect_polygon`); a downstream `aggregate` over a
+    // `kind:"derived"` index set then sizes its contraction from the ring's
+    // vertex count. Shared (interior-mutable) across the observed materialization
+    // and the RHS rules so a ring registered while `clip` materializes is visible
+    // both when `area` runs and in any state derivative that reads a derived set.
+    let derived_rings: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
+
+    // (b) Materialize observed algebraic rules (dependency-ordered at build time)
+    //     into observed_arrays before the state derivatives reference them.
+    let observed_arrays = materialize_observeds(
+        observed_rules,
+        &state_arrays,
+        params,
+        param_names,
+        t,
+        &derived_rings,
+    );
 
     // Emit observed shapes we need for downstream variable lookups.
     let _ = observed_shapes; // kept for future consistency checks
@@ -1020,6 +1251,7 @@ fn evaluate_rhs(
                     param_names,
                     loop_binds: HashMap::new(),
                     t,
+                    derived_rings: &derived_rings,
                 };
                 let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
                 dy[*slot] = v;
@@ -1032,6 +1264,7 @@ fn evaluate_rhs(
                     param_names,
                     loop_binds: HashMap::new(),
                     t,
+                    derived_rings: &derived_rings,
                 };
                 let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
                 dy[*slot] = v;
@@ -1057,6 +1290,7 @@ fn evaluate_rhs(
                         param_names,
                         loop_binds: HashMap::new(),
                         t,
+                        derived_rings: &derived_rings,
                     };
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
@@ -1094,6 +1328,29 @@ struct EvalCtx<'a> {
     param_names: &'a [String],
     loop_binds: HashMap<String, i64>,
     t: f64,
+    /// Runtime registry of FAQ-materialized derived rings (RFC §8.1): an
+    /// `intersect_polygon` clip self-registers its closed overlap ring here
+    /// under its node `id`, so a downstream `aggregate` over a `kind:"derived"`
+    /// index set (`from_faq: <id>`) resolves its extent (the distinct-vertex
+    /// count) via [`derived_ring_extent`]. Interior-mutable so the producer can
+    /// register while the same borrow chain reads it; empty for models with no
+    /// derived sets (byte-identical to the pre-geometry path).
+    derived_rings: &'a RefCell<HashMap<String, ArrayD<f64>>>,
+}
+
+/// The distinct-vertex extent of the FAQ-materialized ring registered under
+/// `from_faq` (RFC §8.1): the producing `intersect_polygon` clip stores the
+/// **closed** ring (`n+1` rows, first vertex repeated so the `polygon_area`
+/// shoelace can read the wrap edge as an ordinary `index(ring, v+1, …)`), so the
+/// number of distinct vertices is `rows − 1`. An unmaterialized producer or an
+/// empty (disjoint) clip yields `0` — an empty contraction reducing to the
+/// additive identity 0̄, matching the evaluator's ghost-read convention and the
+/// Python reference (`numpy_interpreter._resolve_range_spec`).
+fn derived_ring_extent(from_faq: &str, ctx: &EvalCtx) -> i64 {
+    match ctx.derived_rings.borrow().get(from_faq) {
+        Some(ring) if ring.ndim() >= 1 => (ring.shape()[0] as i64 - 1).max(0),
+        _ => 0,
+    }
 }
 
 fn eval(expr: &Expr, ctx: &mut EvalCtx) -> Value {
@@ -1231,6 +1488,11 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         ),
 
         "Pre" => eval(&node.args[0], ctx),
+
+        // Inline literal (esm-spec §4): a number → scalar; a nested numeric
+        // array → a row-major array (e.g. a polygon's `[verts, 2]` lon/lat ring
+        // held as a constant observed input feeding an `intersect_polygon` clip).
+        "const" => eval_const(node),
 
         // Array ops.
         "index" => eval_index(node, ctx),
@@ -1511,6 +1773,68 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     }
 }
 
+/// Evaluate a `const` op: the inline literal in the node's `value` field. A JSON
+/// number yields a [`Value::Scalar`]; a nested numeric array yields a row-major
+/// [`Value::Array`]. A missing, ragged, or non-numeric literal is unevaluable
+/// (NaN sentinel), matching the evaluator's convention for malformed nodes.
+fn eval_const(node: &ExpressionNode) -> Value {
+    node.value
+        .as_ref()
+        .and_then(json_to_value)
+        .unwrap_or(Value::Scalar(f64::NAN))
+}
+
+/// Convert an inline JSON literal to a runtime [`Value`]: a number → scalar; a
+/// (possibly nested) numeric array → a row-major dynamic-rank array. `None` for
+/// a non-numeric leaf or a ragged literal (a row whose length disagrees with its
+/// siblings), so a malformed `const` surfaces as the NaN sentinel.
+fn json_to_value(v: &serde_json::Value) -> Option<Value> {
+    use serde_json::Value as J;
+    match v {
+        J::Number(n) => Some(Value::Scalar(n.as_f64()?)),
+        J::Array(_) => {
+            let mut shape: Vec<usize> = Vec::new();
+            let mut flat: Vec<f64> = Vec::new();
+            collect_json_array(v, 0, &mut shape, &mut flat)?;
+            ArrayD::from_shape_vec(IxDyn(&shape), flat)
+                .ok()
+                .map(Value::Array)
+        }
+        _ => None,
+    }
+}
+
+/// Walk a nested JSON numeric array, recording its shape (from the first branch
+/// at each depth) and pushing every leaf number in row-major order. `None` on a
+/// non-numeric leaf or a sub-array whose length disagrees with the recorded
+/// shape at that depth (a ragged literal).
+fn collect_json_array(
+    v: &serde_json::Value,
+    depth: usize,
+    shape: &mut Vec<usize>,
+    flat: &mut Vec<f64>,
+) -> Option<()> {
+    use serde_json::Value as J;
+    match v {
+        J::Array(items) => {
+            if depth == shape.len() {
+                shape.push(items.len());
+            } else if shape[depth] != items.len() {
+                return None; // ragged: this row's length disagrees with its siblings
+            }
+            for item in items {
+                collect_json_array(item, depth + 1, shape, flat)?;
+            }
+            Some(())
+        }
+        J::Number(n) => {
+            flat.push(n.as_f64()?);
+            Some(())
+        }
+        _ => None,
+    }
+}
+
 /// Evaluate the `intersect_polygon` leaf op (RFC `semiring-faq-unified-ir` §8.1):
 /// clip the two polygon operands on the node's declared `manifold` and return
 /// the overlap ring as an `[N, 2]` array of `(lon, lat)` rows. `N` is
@@ -1545,11 +1869,44 @@ fn eval_intersect_polygon(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         _ => return Value::Scalar(f64::NAN),
     };
     match crate::geometry::intersect_polygon(&va, &vb, manifold) {
-        Ok(ring) => Value::Array(lonlat_to_arrayd(&ring)),
+        Ok(ring) => {
+            // Return the ring **closed** (first vertex repeated) so the
+            // `polygon_area` shoelace FAQ reads the wrap edge n→1 as an ordinary
+            // `index(ring, v+1, …)` with no modular arithmetic in the AST —
+            // matching the Python reference (`numpy_interpreter._eval_intersect_polygon`
+            // → `geometry.close_ring`). The pure kernel `crate::geometry::intersect_polygon`
+            // still returns the n distinct vertices; closure is the op's contract.
+            let closed = close_ring(&ring);
+            let arr = lonlat_to_arrayd(&closed);
+            // Self-register the closed ring under the node `id` (RFC §8.1) so a
+            // downstream `aggregate` over a `kind:"derived"` index set
+            // (`from_faq: <id>`) sizes its contraction from this ring's
+            // distinct-vertex count (`rows − 1`); see [`derived_ring_extent`].
+            if let Some(id) = &node.id {
+                ctx.derived_rings
+                    .borrow_mut()
+                    .insert(id.clone(), arr.clone());
+            }
+            Value::Array(arr)
+        }
         // A degenerate input ring or unavailable backend surfaces as NaN, the
         // same not-a-value sentinel the evaluator uses for unevaluable nodes.
         Err(_) => Value::Scalar(f64::NAN),
     }
+}
+
+/// Close a ring by repeating its first vertex (RFC §8.1; mirrors Python
+/// `geometry.close_ring`) so a `polygon_area` shoelace FAQ reads the wrap edge
+/// `n→1` as an ordinary `index(ring, v+1, …)`. An empty (disjoint-clip) ring
+/// stays empty, so its derived index set has extent 0 and the FAQ reduces to 0̄.
+fn close_ring(ring: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    if ring.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(ring.len() + 1);
+    out.extend_from_slice(ring);
+    out.push(ring[0]);
+    out
 }
 
 /// Read a `[V, 2]` lon/lat coordinate array into a `Vec<(lon, lat)>`. Returns
@@ -1598,6 +1955,7 @@ pub fn eval_expression(
     t: f64,
 ) -> Value {
     let empty: HashMap<String, ArrayD<f64>> = HashMap::new();
+    let derived_rings: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
     let mut ctx = EvalCtx {
         state_arrays: &empty,
         observed_arrays: inputs,
@@ -1605,6 +1963,7 @@ pub fn eval_expression(
         param_names,
         loop_binds: HashMap::new(),
         t,
+        derived_rings: &derived_rings,
     };
     eval(expr, &mut ctx)
 }
@@ -2555,6 +2914,17 @@ mod geometry_eval_tests {
         ArrayD::from_shape_vec(IxDyn(&[ring.len(), 2]), flat).unwrap()
     }
 
+    /// Drop a trailing vertex equal to the first — the closed-ring form the
+    /// `intersect_polygon` AST op now returns — so an oracle that expects the `n`
+    /// distinct vertices (e.g. s2 `spherical_area`, which rejects a degenerate
+    /// duplicate-vertex edge) sees the open ring.
+    fn distinct_vertices(ring: &[(f64, f64)]) -> Vec<(f64, f64)> {
+        match ring.last() {
+            Some(last) if ring.len() >= 2 && *last == ring[0] => ring[..ring.len() - 1].to_vec(),
+            _ => ring.to_vec(),
+        }
+    }
+
     /// Clip two polygons through the public evaluator path — `eval_expression`
     /// → [`eval_op`] → `intersect_polygon` arm — exactly as a model's observed
     /// `clip` variable would be evaluated. Returns the overlap ring vertices.
@@ -2661,7 +3031,12 @@ mod geometry_eval_tests {
         let tgt = [(45.0, 0.0), (135.0, 0.0), (45.0, 90.0)];
         let ring = clip_via_evaluator(&src, &tgt, "spherical");
         assert!(ring.len() >= 3, "the s2 spherical clip should be non-empty");
-        let area = crate::geometry::spherical_area(&ring).expect("spherical area");
+        // The AST op returns the ring CLOSED (first vertex repeated) for the
+        // shoelace FAQ's `v+1` wrap; the `spherical_area` oracle wants the `n`
+        // distinct vertices (s2 rejects a duplicate-vertex edge), so drop the
+        // closing copy before the analytic comparison.
+        let area =
+            crate::geometry::spherical_area(&distinct_vertices(&ring)).expect("spherical area");
         assert!(
             (area - std::f64::consts::FRAC_PI_4).abs() < 1e-9,
             "spherical overlap area = {area}, expected π/4"

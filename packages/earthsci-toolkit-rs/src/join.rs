@@ -563,6 +563,17 @@ fn key_column(
                  dense interval / categorical columns (RFC semiring-faq-unified-ir §5.3)"
             ),
         }),
+        // A resolved derived column's extent is materialized per-eval by its FAQ
+        // producer, so its key values are not a single enumerable set — the same
+        // restriction as the ragged case above. Defensive: join resolution runs
+        // before range resolution, so a join key is still an `IndexSetRef` here.
+        Some(RangeSpec::DerivedDyn { .. }) => Err(CompileError::UnsupportedFeatureError {
+            feature: "value-equality join over a derived key column".to_string(),
+            message: format!(
+                "join key '{sym}' is a derived (FAQ-materialized, data-dependent) column; equi-join \
+                 keys must be dense interval / categorical columns (RFC semiring-faq-unified-ir §5.3)"
+            ),
+        }),
         None => Err(CompileError::InterpreterBuildError {
             details: format!("join key '{sym}' has no declared range on this aggregate"),
         }),

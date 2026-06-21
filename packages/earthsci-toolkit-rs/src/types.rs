@@ -330,16 +330,34 @@ pub enum RangeSpec {
         /// Parent index variables whose bound values address `offsets`.
         of: Vec<String>,
     },
+    /// A resolved **derived** (FAQ-materialized) inner range (RFC
+    /// `semiring-faq-unified-ir` §5.5 / §8.1): the lower bound is implicitly `1`
+    /// and the upper bound is the data-dependent vertex count of the ring its
+    /// producing FAQ node materialized at runtime, looked up by that node's id
+    /// (`from_faq`). Produced only by [`crate::aggregate::resolve_aggregate_ranges`]
+    /// on the simulation clone (it bakes the producer's id into the range so the
+    /// evaluator needs no registry); like [`RangeSpec::RaggedDyn`] it is never
+    /// authored in or serialized back to a file, so it appears **last** in this
+    /// untagged enum (no authored range carries a `from_faq` field, so existing
+    /// `[lo,hi]` / `{from}` inputs still parse to `Interval` / `IndexSetRef`).
+    DerivedDyn {
+        /// FAQ producer node id (the `intersect_polygon` clip's `id`) whose
+        /// materialized overlap ring sizes this contraction at eval time.
+        from_faq: String,
+    },
 }
 
 impl RangeSpec {
     /// The concrete `[lo, hi]` bounds if this range is (or has been resolved
     /// to) a dense interval; `None` for an unresolved index-set reference or a
-    /// dynamic (ragged) range whose upper bound is only known per output tuple.
+    /// dynamic (ragged / derived) range whose upper bound is only known per
+    /// output tuple / after the producing FAQ node runs.
     pub fn bounds(&self) -> Option<[i64; 2]> {
         match self {
             RangeSpec::Interval(iv) => Some(*iv),
-            RangeSpec::IndexSetRef { .. } | RangeSpec::RaggedDyn { .. } => None,
+            RangeSpec::IndexSetRef { .. }
+            | RangeSpec::RaggedDyn { .. }
+            | RangeSpec::DerivedDyn { .. } => None,
         }
     }
 
@@ -349,6 +367,16 @@ impl RangeSpec {
     pub fn ragged(&self) -> Option<(&str, &[String])> {
         match self {
             RangeSpec::RaggedDyn { offsets, of } => Some((offsets.as_str(), of.as_slice())),
+            _ => None,
+        }
+    }
+
+    /// The FAQ producer node id if this is a resolved derived range; `None`
+    /// otherwise. The evaluator uses it to look up the materialized ring's
+    /// vertex count (RFC §8.1) as the dynamic upper bound of the contraction.
+    pub fn derived(&self) -> Option<&str> {
+        match self {
+            RangeSpec::DerivedDyn { from_faq } => Some(from_faq.as_str()),
             _ => None,
         }
     }

@@ -234,7 +234,9 @@ fn resolve_expr_ranges(
             let is_output = output_names.contains(idx_name);
             let resolved = match spec {
                 // Already-concrete and already-resolved forms are idempotent.
-                RangeSpec::Interval(_) | RangeSpec::RaggedDyn { .. } => continue,
+                RangeSpec::Interval(_)
+                | RangeSpec::RaggedDyn { .. }
+                | RangeSpec::DerivedDyn { .. } => continue,
                 RangeSpec::IndexSetRef { from, of } => {
                     resolve_index_set_ref(from, of.as_deref(), idx_name, is_output, index_sets)?
                 }
@@ -242,6 +244,7 @@ fn resolve_expr_ranges(
             *spec = match resolved {
                 ResolvedRange::Static(iv) => RangeSpec::Interval(iv),
                 ResolvedRange::Ragged { offsets, of } => RangeSpec::RaggedDyn { offsets, of },
+                ResolvedRange::Derived { from_faq } => RangeSpec::DerivedDyn { from_faq },
             };
         }
     }
@@ -278,7 +281,16 @@ fn resolve_expr_ranges(
 #[derive(Debug)]
 enum ResolvedRange {
     Static([i64; 2]),
-    Ragged { offsets: String, of: Vec<String> },
+    Ragged {
+        offsets: String,
+        of: Vec<String>,
+    },
+    /// A FAQ-materialized derived range (RFC §5.5 / §8.1): its extent is the
+    /// vertex count of the ring the `from_faq` producer node materializes at
+    /// eval time, so it carries only the producer id (resolved dynamically).
+    Derived {
+        from_faq: String,
+    },
 }
 
 /// Resolve one `{ from, of }` reference.
@@ -296,9 +308,12 @@ enum ResolvedRange {
 /// from the set definition; the member gather through `values` is authored in
 /// the node body, so it is not consulted here.
 ///
-/// A `derived` (FAQ-materialized) set is rejected: it is resolved by the
-/// build-time relational layer (the reference graph), not the per-timestep
-/// evaluator, mirroring the Julia tree-walk reference.
+/// A `derived` (FAQ-materialized) set resolves to a [`ResolvedRange::Derived`]
+/// dynamic bound carrying its `from_faq` producer id — but, like a ragged set,
+/// only as a contracted (inner) index: a derived *output* index is rejected
+/// (`is_output`), since the result array's extent must be statically known. The
+/// per-eval upper bound is the vertex count of the ring the `from_faq` node
+/// materializes at runtime (RFC §8.1).
 fn resolve_index_set_ref(
     from: &str,
     of: Option<&[String]>,
@@ -374,15 +389,36 @@ fn resolve_index_set_ref(
                 of: parents.to_vec(),
             })
         }
-        "derived" => Err(CompileError::UnsupportedFeatureError {
-            feature: "derived index set".to_string(),
-            message: format!(
-                "index set '{from}' (aggregate range '{idx_name}') has kind \"derived\"; \
-                 FAQ-materialized index sets are resolved by the build-time relational layer (the \
-                 reference graph), not the per-timestep evaluator — mirroring the Julia reference \
-                 (M2+; RFC semiring-faq-unified-ir §5.5)"
-            ),
-        }),
+        "derived" => {
+            // A FAQ-materialized derived set (RFC §5.5 / §8.1) sizes itself from
+            // the ring its producer node materializes at runtime (the
+            // `intersect_polygon` clip-ring case): `from_faq` names that producer's
+            // `id`, and the derived set's extent is the count of distinct vertices
+            // of the registered ring, read per-eval. Like a ragged set it has no
+            // statically-known extent, so it may size a reduction (contracted
+            // index) but not an output array (`is_output`).
+            if is_output {
+                return Err(CompileError::UnsupportedFeatureError {
+                    feature: "derived output index".to_string(),
+                    message: format!(
+                        "aggregate output index '{idx_name}' references derived index set '{from}'; \
+                         a derived (FAQ-materialized) set's extent is data-dependent and may only \
+                         be a contracted (reduction) index, not an output index (RFC \
+                         semiring-faq-unified-ir §5.5 / §8.1)"
+                    ),
+                });
+            }
+            let from_faq =
+                set.from_faq
+                    .clone()
+                    .ok_or_else(|| CompileError::InterpreterBuildError {
+                        details: format!(
+                            "derived index set '{from}' (aggregate range '{idx_name}') is missing \
+                             `from_faq` naming its producing FAQ node (RFC semiring-faq-unified-ir §5.5)"
+                        ),
+                    })?;
+            Ok(ResolvedRange::Derived { from_faq })
+        }
         other => Err(CompileError::InterpreterBuildError {
             details: format!("index set '{from}' has unknown kind '{other}'"),
         }),
@@ -422,6 +458,7 @@ mod tests {
         match r {
             ResolvedRange::Static(iv) => iv,
             ResolvedRange::Ragged { .. } => panic!("expected a static range, got ragged"),
+            ResolvedRange::Derived { .. } => panic!("expected a static range, got derived"),
         }
     }
 
@@ -553,6 +590,9 @@ mod tests {
                 assert_eq!(of, vec!["i".to_string()]);
             }
             ResolvedRange::Static(iv) => panic!("expected ragged, got static {iv:?}"),
+            ResolvedRange::Derived { from_faq } => {
+                panic!("expected ragged, got derived {from_faq}")
+            }
         }
     }
 
@@ -589,27 +629,59 @@ mod tests {
     }
 
     #[test]
-    fn derived_index_set_is_rejected_by_the_evaluator() {
-        // `derived` is resolved by the build-time relational layer, not the
-        // per-timestep evaluator (mirrors the Julia tree-walk reference).
+    fn derived_index_set_resolves_as_contracted_but_rejects_as_output() {
+        // A `derived` (FAQ-materialized) set sizes a reduction from the ring its
+        // `from_faq` producer materializes at runtime (RFC §8.1): as a contracted
+        // index it resolves to a deferred `Derived` bound; as an output index it
+        // is rejected (its extent is not statically known to size the result).
         let mut index_sets = HashMap::new();
         index_sets.insert(
-            "edge_set".to_string(),
+            "clip_ring".to_string(),
             IndexSet {
                 kind: "derived".into(),
                 size: None,
                 members: None,
-                from_faq: Some("edge_faq_node".into()),
+                from_faq: Some("overlap_clip".into()),
                 of: None,
                 offsets: None,
                 values: None,
             },
         );
-        let err = resolve_index_set_ref("edge_set", None, "e", false, &index_sets).unwrap_err();
+        // Contracted (is_output=false): resolves, carrying the producer id.
+        match resolve_index_set_ref("clip_ring", None, "v", false, &index_sets).unwrap() {
+            ResolvedRange::Derived { from_faq } => assert_eq!(from_faq, "overlap_clip"),
+            other => panic!("expected Derived, got {other:?}"),
+        }
+        // Output (is_output=true): rejected.
+        let err = resolve_index_set_ref("clip_ring", None, "v", true, &index_sets).unwrap_err();
         let msg = format!("{err:?}");
         assert!(
-            msg.contains("derived"),
-            "error should mention derived: {msg}"
+            msg.contains("derived output index"),
+            "error should reject a derived output index: {msg}"
+        );
+    }
+
+    #[test]
+    fn derived_index_set_without_from_faq_is_rejected() {
+        // A `derived` set must name its producer node via `from_faq`.
+        let mut index_sets = HashMap::new();
+        index_sets.insert(
+            "bad_set".to_string(),
+            IndexSet {
+                kind: "derived".into(),
+                size: None,
+                members: None,
+                from_faq: None,
+                of: None,
+                offsets: None,
+                values: None,
+            },
+        );
+        let err = resolve_index_set_ref("bad_set", None, "e", false, &index_sets).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("from_faq"),
+            "error should mention the missing from_faq: {msg}"
         );
     }
 }
