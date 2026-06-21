@@ -42,7 +42,7 @@ use crate::aggregate::{
 };
 use crate::simulate::{CompileError, SimulateError, SimulateOptions, SolutionMetadata};
 use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
-use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, VariableType};
+use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, RangeSpec, VariableType};
 use indexmap::IndexMap;
 use ndarray::{ArrayD, IxDyn};
 use std::collections::{HashMap, HashSet};
@@ -97,6 +97,50 @@ pub struct VarShape {
     pub flat_offset: usize,
 }
 
+/// One contracted (reduction) index's loop bound in an `aggregate`/`arrayop`
+/// einsum. Either a static inclusive interval, or a **ragged** bound whose
+/// upper limit `offsets[of…]` is gathered per output tuple at eval time
+/// (RFC `semiring-faq-unified-ir` §5.2 — variable-valence / unstructured-mesh
+/// reductions). The lower bound of a ragged dim is implicitly `1`.
+#[derive(Debug, Clone)]
+enum ContractDim {
+    /// Static inclusive `[lo, hi]` (interval / categorical index sets).
+    Static(i64, i64),
+    /// Ragged `[1, offsets[of…]]` — `offsets` names the per-parent length
+    /// factor; `of` names the parent index variables that address it.
+    Ragged { offsets: String, of: Vec<String> },
+}
+
+impl ContractDim {
+    /// Build a contracted dim from a resolved range spec: a [`RangeSpec::RaggedDyn`]
+    /// becomes [`ContractDim::Ragged`]; anything else falls back to its static
+    /// `[lo, hi]` bounds (`[0, 0]` — an empty reduction — if unresolved).
+    fn from_range(spec: &RangeSpec) -> Self {
+        match spec.ragged() {
+            Some((offsets, of)) => ContractDim::Ragged {
+                offsets: offsets.to_string(),
+                of: of.to_vec(),
+            },
+            None => {
+                let r = spec.bounds().unwrap_or([0, 0]);
+                ContractDim::Static(r[0], r[1])
+            }
+        }
+    }
+
+    /// Resolve to a concrete inclusive `(lo, hi)` range under the current loop
+    /// binds. A ragged dim gathers its parent index value(s) from `ctx` and
+    /// reads `offsets[parent…]`; an empty bound (`lo > hi`, e.g. an isolated
+    /// cell with zero neighbours) yields no contraction tuples, so the
+    /// reduction returns the semiring's additive identity 0̄.
+    fn concrete(&self, ctx: &EvalCtx) -> (i64, i64) {
+        match self {
+            ContractDim::Static(lo, hi) => (*lo, *hi),
+            ContractDim::Ragged { offsets, of } => (1, ragged_upper_bound(offsets, of, ctx)),
+        }
+    }
+}
+
 /// An equation rule compiled for runtime RHS evaluation.
 #[derive(Debug, Clone)]
 enum RhsRule {
@@ -118,7 +162,9 @@ enum RhsRule {
         lhs_idx_exprs: Vec<Expr>,
         body: Box<Expr>,
         contract_names: Vec<String>,
-        contract_ranges: Vec<(i64, i64)>,
+        /// Per-contracted-index loop bounds. A [`ContractDim::Ragged`] dim is
+        /// expanded to its dynamic `[1, offsets[of…]]` extent per output tuple.
+        contract_dims: Vec<ContractDim>,
         reduce: ReduceKind,
         /// Optional `filter` predicate (§5.3): combinations for which it is
         /// false contribute the additive identity 0̄. `None` ⇒ no gating.
@@ -553,7 +599,7 @@ impl ArrayCompiled {
                 lhs_idx_exprs,
                 body,
                 contract_names,
-                contract_ranges,
+                contract_dims,
                 reduce,
                 filter,
             )) = extract_derivative_arrayop(&eq.lhs, &eq.rhs)
@@ -589,7 +635,7 @@ impl ArrayCompiled {
                     lhs_idx_exprs,
                     body: Box::new(body),
                     contract_names,
-                    contract_ranges,
+                    contract_dims,
                     reduce,
                     filter,
                 });
@@ -997,7 +1043,7 @@ fn evaluate_rhs(
                 lhs_idx_exprs,
                 body,
                 contract_names,
-                contract_ranges,
+                contract_dims,
                 reduce,
                 filter,
             } => {
@@ -1015,30 +1061,16 @@ fn evaluate_rhs(
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
                     }
-                    // Generalized einsum: if contracted indices are present, unroll
-                    // them at eval time and combine terms with the reduce operator.
-                    let v = if contract_names.is_empty() {
-                        // A filtered-out pointwise cell contributes 0̄ (§5.3).
-                        if filter_excludes(filter, &mut ctx) {
-                            reduce.identity()
-                        } else {
-                            eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN)
-                        }
-                    } else {
-                        let mut acc: f64 = reduce.identity();
-                        for k_tuple in cartesian_range(contract_ranges) {
-                            for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
-                                ctx.loop_binds.insert(kn.clone(), *kv);
-                            }
-                            // A filtered-out combination contributes 0̄ (§5.3).
-                            if filter_excludes(filter, &mut ctx) {
-                                continue;
-                            }
-                            let term = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
-                            acc = reduce.combine(acc, term);
-                        }
-                        acc
-                    };
+                    // Generalized einsum: contracted indices (incl. ragged
+                    // per-cell dynamic bounds) are unrolled and ⊕-combined here.
+                    let v = reduce_contraction(
+                        contract_names,
+                        contract_dims,
+                        body,
+                        *reduce,
+                        filter,
+                        &mut ctx,
+                    );
                     let actual_multi: Vec<i64> = lhs_idx_exprs
                         .iter()
                         .map(|e| eval_simple_index(e, &ctx.loop_binds))
@@ -1589,6 +1621,75 @@ fn filter_excludes(filter: Option<&Expr>, ctx: &mut EvalCtx) -> bool {
     }
 }
 
+/// Evaluate one output cell's value: the pointwise body when there are no
+/// contracted indices, otherwise the semiring ⊕-reduction of the body over the
+/// Cartesian product of the contracted dims. Each dim is resolved to its
+/// concrete bound *under the current output tuple*, so a [`ContractDim::Ragged`]
+/// dim uses this cell's dynamic per-parent extent (an empty extent reduces to
+/// the additive identity 0̄). `ctx.loop_binds` must already hold the output-index
+/// tuple; the contracted indices are bound here. This is the single contraction
+/// kernel shared by the standalone-aggregate ([`eval_arrayop`]) and compiled
+/// array-op-derivative ([`RhsRule::ArrayLoop`]) paths, mirroring the Julia
+/// `_expand_int_range_dyn` einsum loop and the Python `_expand_ragged` gather.
+fn reduce_contraction(
+    contract_names: &[String],
+    contract_dims: &[ContractDim],
+    body: &Expr,
+    reduce: ReduceKind,
+    filter: Option<&Expr>,
+    ctx: &mut EvalCtx,
+) -> f64 {
+    if contract_names.is_empty() {
+        // Pointwise: a filtered-out cell contributes the additive identity 0̄.
+        return if filter_excludes(filter, ctx) {
+            reduce.identity()
+        } else {
+            eval(body, ctx).as_scalar().unwrap_or(f64::NAN)
+        };
+    }
+    // Resolve each contracted dim to a concrete (lo, hi) under the current
+    // output tuple — ragged dims read their per-parent length here.
+    let ranges: Vec<(i64, i64)> = contract_dims.iter().map(|d| d.concrete(ctx)).collect();
+    let mut acc: f64 = reduce.identity();
+    for k_tuple in cartesian_range(&ranges) {
+        for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
+            ctx.loop_binds.insert(kn.clone(), *kv);
+        }
+        // A filtered-out combination contributes 0̄ (acc ⊕ 0̄ = acc) (§5.3).
+        if filter_excludes(filter, ctx) {
+            continue;
+        }
+        let term = eval(body, ctx).as_scalar().unwrap_or(f64::NAN);
+        acc = reduce.combine(acc, term);
+    }
+    acc
+}
+
+/// Gather the ragged per-parent length `offsets[of…]` for the current output
+/// tuple: read each parent index variable from `ctx.loop_binds`, address the
+/// `offsets` factor array (1-based → 0-based), and round to an integer count.
+/// A scalar/0-D `offsets` factor is a constant valence for every parent. A
+/// missing/unbound parent, a rank mismatch, or an out-of-bounds gather yields
+/// `0` — an empty reduction (the additive identity 0̄), matching the evaluator's
+/// homogeneous-ghost convention for out-of-bounds reads.
+fn ragged_upper_bound(offsets: &str, of: &[String], ctx: &EvalCtx) -> i64 {
+    let arr = match lookup_variable(offsets, ctx) {
+        Value::Scalar(s) => return s.round() as i64,
+        Value::Array(a) => a,
+    };
+    if of.len() != arr.ndim() {
+        return 0;
+    }
+    let mut idx = Vec::with_capacity(of.len());
+    for p in of {
+        match ctx.loop_binds.get(p) {
+            Some(pv) if *pv >= 1 => idx.push((*pv - 1) as usize),
+            _ => return 0,
+        }
+    }
+    arr.get(IxDyn(&idx)).map(|v| v.round() as i64).unwrap_or(0)
+}
+
 fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     // Standalone arrayop (embedded as an expression, not as the top-level
     // of an equation LHS/RHS). Build the output array by iterating
@@ -1618,12 +1719,9 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         .collect();
     sorted_contract_keys.sort();
     let contract_names: Vec<String> = sorted_contract_keys.iter().map(|k| (*k).clone()).collect();
-    let contract_ranges: Vec<(i64, i64)> = sorted_contract_keys
+    let contract_dims: Vec<ContractDim> = sorted_contract_keys
         .iter()
-        .map(|k| {
-            let r = ranges_map[*k].bounds().unwrap_or([0, 0]);
-            (r[0], r[1])
-        })
+        .map(|k| ContractDim::from_range(&ranges_map[*k]))
         .collect();
     let reduce = effective_reduce_kind(node.semiring.as_deref(), node.reduce.as_deref());
     // §5.3 filter: a boolean predicate gating which index combinations
@@ -1647,29 +1745,7 @@ fn eval_arrayop(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         for (name, val) in idx_names.iter().zip(tuple.iter()) {
             ctx.loop_binds.insert(name.clone(), *val);
         }
-        let v = if contract_names.is_empty() {
-            // A filtered-out pointwise cell contributes the additive identity 0̄.
-            if filter_excludes(filter, ctx) {
-                reduce.identity()
-            } else {
-                eval(&body, ctx).as_scalar().unwrap_or(f64::NAN)
-            }
-        } else {
-            let mut acc: f64 = reduce.identity();
-            for k_tuple in cartesian_range(&contract_ranges) {
-                for (kn, kv) in contract_names.iter().zip(k_tuple.iter()) {
-                    ctx.loop_binds.insert(kn.clone(), *kv);
-                }
-                // A filtered-out combination contributes 0̄ (acc ⊕ 0̄ = acc),
-                // i.e. it is simply omitted from the reduction (§5.3).
-                if filter_excludes(filter, ctx) {
-                    continue;
-                }
-                let term = eval(&body, ctx).as_scalar().unwrap_or(f64::NAN);
-                acc = reduce.combine(acc, term);
-            }
-            acc
-        };
+        let v = reduce_contraction(&contract_names, &contract_dims, &body, reduce, filter, ctx);
         let flat = multi_to_flat_col_major(&tuple, &shape, &origin);
         buf[flat] = v;
     }
@@ -1869,7 +1945,7 @@ fn extract_derivative_arrayop(
     Vec<Expr>,
     Expr,
     Vec<String>,
-    Vec<(i64, i64)>,
+    Vec<ContractDim>,
     ReduceKind,
     Option<Box<Expr>>,
 )> {
@@ -1911,26 +1987,27 @@ fn extract_derivative_arrayop(
     // RHS body: assume rhs is also arrayop with body, or pass through as
     // scalar-valued expr that evaluates at each tuple.
     // Also extract contracted (reduction) indices and the semiring ⊕ reducer.
-    let (rhs_body, contract_names, contract_ranges, reduce, filter) = match rhs {
+    let (rhs_body, contract_names, contract_dims, reduce, filter) = match rhs {
         Expr::Operator(rnode) if is_aggregate_op(&rnode.op) => {
             let b = rnode.expr.as_ref().map(|b| b.as_ref().clone())?;
             let rop = effective_reduce_kind(rnode.semiring.as_deref(), rnode.reduce.as_deref());
             let mut c_names: Vec<String> = Vec::new();
-            let mut c_ranges: Vec<(i64, i64)> = Vec::new();
+            let mut c_dims: Vec<ContractDim> = Vec::new();
             if let Some(rhs_ranges) = &rnode.ranges {
                 let mut sorted_keys: Vec<&String> = rhs_ranges.keys().collect();
                 sorted_keys.sort();
                 for n in sorted_keys {
                     if !idx_names.contains(n) {
-                        let r = rhs_ranges[n].bounds().unwrap_or([0, 0]);
+                        // A ragged contracted index keeps its dynamic bound; all
+                        // others collapse to a static interval here.
                         c_names.push(n.clone());
-                        c_ranges.push((r[0], r[1]));
+                        c_dims.push(ContractDim::from_range(&rhs_ranges[n]));
                     }
                 }
             }
             // §5.3 filter rides on the RHS aggregate; carry it into the rule so
             // the contraction gates on it (otherwise it would be silently lost).
-            (b, c_names, c_ranges, rop, rnode.filter.clone())
+            (b, c_names, c_dims, rop, rnode.filter.clone())
         }
         other => (other.clone(), Vec::new(), Vec::new(), ReduceKind::Sum, None),
     };
@@ -1941,7 +2018,7 @@ fn extract_derivative_arrayop(
         lhs_idx_exprs,
         rhs_body,
         contract_names,
-        contract_ranges,
+        contract_dims,
         reduce,
         filter,
     ))
@@ -2621,6 +2698,78 @@ mod geometry_eval_tests {
         match eval_expression(&node, &inputs, &[], &[], 0.0) {
             Value::Scalar(s) => assert!(s.is_nan(), "missing manifold should be NaN, got {s}"),
             Value::Array(_) => panic!("missing manifold must not produce a ring"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod ragged_eval_tests {
+    //! Dynamic per-parent (ragged) contraction bounds in the array evaluator
+    //! (bead ess-787; RFC `semiring-faq-unified-ir` §5.2). A `RangeSpec::RaggedDyn`
+    //! contracted index reads its per-parent length `offsets[of…]` from a factor
+    //! array at eval time, so each output cell reduces over its own dynamic
+    //! extent — mirroring the Julia `_expand_int_range_dyn` einsum loop and the
+    //! Python `_expand_ragged` reference (`test_ragged_index_set_dynamic_per_parent_bound`).
+    use super::*;
+    use serde_json::json;
+
+    /// Build the standalone aggregate `out[i] = ⊕_{k∈edges(i)} k` with `k`'s
+    /// range resolved to a ragged bound over the `nedges` factor. A file never
+    /// authors a `RaggedDyn` range (the resolver produces it), so we parse the
+    /// node and inject the resolved range directly.
+    fn ragged_sum_node() -> Expr {
+        let mut agg: Expr = serde_json::from_value(json!({
+            "op": "aggregate",
+            "args": [],
+            "semiring": "sum_product",
+            "output_idx": ["i"],
+            "expr": "k",
+            "ranges": { "i": [1, 2], "k": [1, 1] }
+        }))
+        .unwrap();
+        if let Expr::Operator(node) = &mut agg {
+            node.ranges.as_mut().unwrap().insert(
+                "k".to_string(),
+                RangeSpec::RaggedDyn {
+                    offsets: "nedges".into(),
+                    of: vec!["i".into()],
+                },
+            );
+        }
+        agg
+    }
+
+    fn nedges(values: &[f64]) -> HashMap<String, ArrayD<f64>> {
+        HashMap::from([(
+            "nedges".to_string(),
+            ArrayD::from_shape_vec(IxDyn(&[values.len()]), values.to_vec()).unwrap(),
+        )])
+    }
+
+    /// `nedges = [2, 3]` ⇒ `out = [1+2, 1+2+3] = [3, 6]` — the per-parent bound
+    /// is read fresh for each output cell.
+    #[test]
+    fn ragged_contraction_uses_per_parent_dynamic_bound() {
+        match eval_expression(&ragged_sum_node(), &nedges(&[2.0, 3.0]), &[], &[], 0.0) {
+            Value::Array(a) => {
+                assert_eq!(a.shape(), [2]);
+                assert_eq!(a[IxDyn(&[0])], 3.0);
+                assert_eq!(a[IxDyn(&[1])], 6.0);
+            }
+            Value::Scalar(s) => panic!("expected a [3, 6] array, got scalar {s}"),
+        }
+    }
+
+    /// An isolated parent (zero-length ragged segment) reduces to the semiring's
+    /// additive identity 0̄: `nedges = [0, 2]` ⇒ `out = [0, 1+2] = [0, 3]`.
+    #[test]
+    fn ragged_empty_segment_yields_additive_identity() {
+        match eval_expression(&ragged_sum_node(), &nedges(&[0.0, 2.0]), &[], &[], 0.0) {
+            Value::Array(a) => {
+                assert_eq!(a[IxDyn(&[0])], 0.0);
+                assert_eq!(a[IxDyn(&[1])], 3.0);
+            }
+            Value::Scalar(s) => panic!("expected a [0, 3] array, got scalar {s}"),
         }
     }
 }

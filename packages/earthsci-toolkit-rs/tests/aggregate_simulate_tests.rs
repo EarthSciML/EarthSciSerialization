@@ -358,3 +358,87 @@ fn shared_invalid_undeclared_from_fixture_is_rejected() {
         "error should name the undeclared set: {msg}"
     );
 }
+
+/// §5.2 ragged (bead ess-787): a contracted index whose per-parent length is a
+/// backing factor drives a *dynamic* reduction bound through the full
+/// compile→simulate pipeline (`resolve_aggregate_ranges` resolves the ragged
+/// `{from}` to a `RaggedDyn`, `extract_derivative_arrayop` builds a ragged
+/// `RhsRule::ArrayLoop`, and the contraction reads `nedges[i]` per output cell).
+///
+/// `nedges = [2, 3]` is held as a constant state (`D=0`) so it is a runtime
+/// array the bound can gather; then `D(y[i]) = Σ_{k=1..nedges[i]} k` gives the
+/// triangular numbers `y[1](1) = 1+2 = 3` and `y[2](1) = 1+2+3 = 6`. This is the
+/// Rust port of the Python reference `test_ragged_index_set_dynamic_per_parent_bound`.
+#[test]
+fn ragged_index_set_drives_dynamic_reduction_bound() {
+    let model = r#"{
+      "esm": "0.6.0",
+      "metadata": { "name": "ragged_dynamic_bound" },
+      "models": { "M": {
+        "index_sets": {
+          "cells": { "kind": "interval", "size": 2 },
+          "edges_of_cell": { "kind": "ragged", "of": ["cells"],
+                             "offsets": "nedges", "values": "nedges" }
+        },
+        "variables": {
+          "y": { "type": "state", "shape": ["i"] },
+          "nedges": { "type": "state", "shape": ["i"] }
+        },
+        "equations": [
+          { "lhs": { "op": "aggregate", "args": [], "output_idx": ["i"],
+                     "expr": { "op": "D", "args": [{ "op": "index", "args": ["y", "i"] }], "wrt": "t" },
+                     "ranges": { "i": { "from": "cells" } } },
+            "rhs": { "op": "aggregate", "args": [], "output_idx": ["i"], "semiring": "sum_product",
+                     "expr": "k",
+                     "ranges": { "i": { "from": "cells" },
+                                 "k": { "from": "edges_of_cell", "of": ["i"] } } } },
+          { "lhs": { "op": "arrayop", "args": [], "output_idx": ["i"],
+                     "expr": { "op": "D", "args": [{ "op": "index", "args": ["nedges", "i"] }], "wrt": "t" },
+                     "ranges": { "i": [1, 2] } },
+            "rhs": { "op": "arrayop", "args": [], "output_idx": ["i"],
+                     "expr": 0, "ranges": { "i": [1, 2] } } }
+        ]
+      } }
+    }"#;
+    let file = load(model).unwrap_or_else(|e| panic!("load ragged model: {e}"));
+    let opts = SimulateOptions {
+        solver: SolverChoice::Bdf,
+        abstol: 1e-10,
+        reltol: 1e-8,
+        max_steps: 100_000,
+        output_times: Some(vec![1.0]),
+    };
+    let ics: HashMap<String, f64> = HashMap::from([
+        ("y[1]".to_string(), 0.0),
+        ("y[2]".to_string(), 0.0),
+        ("nedges[1]".to_string(), 2.0),
+        ("nedges[2]".to_string(), 3.0),
+    ]);
+    let sol = simulate(&file, (0.0, 1.0), &HashMap::new(), &ics, &opts)
+        .unwrap_or_else(|e| panic!("simulate ragged: {e}"));
+    let at_t1 = |name: &str| -> f64 {
+        let slot = sol
+            .state_variable_names
+            .iter()
+            .position(|n| n == name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "state slot '{name}' not found: {:?}",
+                    sol.state_variable_names
+                )
+            });
+        let tix = sol
+            .time
+            .iter()
+            .enumerate()
+            .min_by(|(_, x), (_, y)| (*x - 1.0).abs().partial_cmp(&(*y - 1.0).abs()).unwrap())
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        sol.state[slot][tix]
+    };
+    assert_close(at_t1("y[1]"), 3.0, "y[1] = Σ_{k=1..2} k");
+    assert_close(at_t1("y[2]"), 6.0, "y[2] = Σ_{k=1..3} k");
+    // The connectivity factor is held constant by D=0.
+    assert_close(at_t1("nedges[1]"), 2.0, "nedges[1] constant");
+    assert_close(at_t1("nedges[2]"), 3.0, "nedges[2] constant");
+}

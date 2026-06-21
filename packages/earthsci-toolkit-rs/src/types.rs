@@ -315,15 +315,41 @@ pub enum RangeSpec {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         of: Option<Vec<String>>,
     },
+    /// A resolved **ragged** inner range (RFC `semiring-faq-unified-ir` §5.2):
+    /// the lower bound is implicitly `1` and the upper bound is the per-parent
+    /// length `offsets[of…]`, gathered dynamically per output tuple at eval
+    /// time. Produced only by [`crate::aggregate::resolve_aggregate_ranges`] on
+    /// the simulation clone (it bakes the index set's `offsets` backing-factor
+    /// name into the range so the evaluator needs no registry); it is never
+    /// authored in or serialized back to a file, so it appears **last** in this
+    /// untagged enum and existing `[lo,hi]` / `{from}` inputs still parse to
+    /// `Interval` / `IndexSetRef` exactly as before.
+    RaggedDyn {
+        /// Name of the keyed factor giving `|set(of…)|` for each parent tuple.
+        offsets: String,
+        /// Parent index variables whose bound values address `offsets`.
+        of: Vec<String>,
+    },
 }
 
 impl RangeSpec {
     /// The concrete `[lo, hi]` bounds if this range is (or has been resolved
-    /// to) a dense interval; `None` for an unresolved index-set reference.
+    /// to) a dense interval; `None` for an unresolved index-set reference or a
+    /// dynamic (ragged) range whose upper bound is only known per output tuple.
     pub fn bounds(&self) -> Option<[i64; 2]> {
         match self {
             RangeSpec::Interval(iv) => Some(*iv),
-            RangeSpec::IndexSetRef { .. } => None,
+            RangeSpec::IndexSetRef { .. } | RangeSpec::RaggedDyn { .. } => None,
+        }
+    }
+
+    /// The `(offsets-factor-name, parent-index-names)` pair if this is a
+    /// resolved ragged range; `None` otherwise. The evaluator uses this to
+    /// compute the dynamic per-output-tuple upper bound `offsets[of…]`.
+    pub fn ragged(&self) -> Option<(&str, &[String])> {
+        match self {
+            RangeSpec::RaggedDyn { offsets, of } => Some((offsets.as_str(), of.as_slice())),
+            _ => None,
         }
     }
 }

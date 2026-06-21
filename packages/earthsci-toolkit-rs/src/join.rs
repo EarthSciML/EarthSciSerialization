@@ -551,6 +551,18 @@ fn key_column(
             let vals = positions.iter().map(|p| JoinKey::Int(*p)).collect();
             Ok((positions, vals))
         }
+        // A resolved ragged column is per-parent dynamic, so its key values are
+        // not a single enumerable set — the same restriction as the unresolved
+        // `IndexSetRef`-with-`of` case above. Join resolution runs before range
+        // resolution, so this is defensive: a join key is still an `IndexSetRef`
+        // here in practice.
+        Some(RangeSpec::RaggedDyn { .. }) => Err(CompileError::UnsupportedFeatureError {
+            feature: "value-equality join over a ragged key column".to_string(),
+            message: format!(
+                "join key '{sym}' is a ragged (per-parent dynamic) column; equi-join keys must be \
+                 dense interval / categorical columns (RFC semiring-faq-unified-ir §5.3)"
+            ),
+        }),
         None => Err(CompileError::InterpreterBuildError {
             details: format!("join key '{sym}' has no declared range on this aggregate"),
         }),

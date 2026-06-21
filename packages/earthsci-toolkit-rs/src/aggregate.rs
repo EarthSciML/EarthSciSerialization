@@ -11,12 +11,17 @@
 //!   the semiring wins when present, otherwise the legacy `reduce` string
 //!   drives it exactly as before (the strict-superset promise).
 //! - **§5.2 Index sets.** [`resolve_aggregate_ranges`] rewrites every
-//!   `{ "from": <name> }` range reference into a concrete `[lo, hi]` interval
-//!   against the model `index_sets` registry, **erroring on an undeclared
-//!   name** (no implicit interval inference). `interval` and `categorical`
-//!   sets resolve to dense static bounds; `ragged`/`derived` sets (which need
-//!   per-parent dynamic bounds + gather) are not yet implemented in the Rust
-//!   evaluator and produce a clear error.
+//!   `{ "from": <name> }` range reference against the model `index_sets`
+//!   registry, **erroring on an undeclared name** (no implicit interval
+//!   inference). `interval` and `categorical` sets resolve to dense static
+//!   `[lo, hi]` intervals; a `ragged` set (a contracted/inner index only)
+//!   resolves to a self-describing [`RangeSpec::RaggedDyn`] carrying its
+//!   `offsets` backing-factor name, which the evaluator expands to the dynamic
+//!   per-parent bound `[1, offsets[of…]]` per output tuple (the gather through
+//!   the `values` factor is authored in the node body). `derived`
+//!   (FAQ-materialized) sets are resolved by the build-time relational layer,
+//!   not the per-timestep evaluator (mirroring the Julia reference), so they
+//!   still produce a clear error here.
 //! - **§5.6 Op tag.** [`is_aggregate_op`] accepts the canonical `"aggregate"`
 //!   tag and the deprecated `"arrayop"` alias identically.
 
@@ -168,15 +173,17 @@ pub fn is_aggregate_op(op: &str) -> bool {
     op == "arrayop" || op == "aggregate"
 }
 
-/// Rewrite every `{ "from": <name> }` range reference in `model` into a
-/// concrete `[lo, hi]` interval, resolved against the model `index_sets`
-/// registry (RFC §5.2). Operates in place; call once on an owned model before
-/// shape inference and rule building so every downstream consumer sees only
-/// [`RangeSpec::Interval`].
+/// Rewrite every `{ "from": <name> }` range reference in `model` against the
+/// model `index_sets` registry (RFC §5.2). Operates in place; call once on an
+/// owned model before shape inference and rule building so every downstream
+/// consumer sees only resolved [`RangeSpec::Interval`] / [`RangeSpec::RaggedDyn`]
+/// forms (never an `IndexSetRef`).
 ///
-/// Errors on an undeclared `from` name (no implicit interval inference) and on
-/// `ragged`/`derived` sets, which require machinery not yet present in the Rust
-/// evaluator.
+/// Interval/categorical sets resolve to static intervals; a `ragged` contracted
+/// index resolves to a [`RangeSpec::RaggedDyn`] dynamic bound. Errors on an
+/// undeclared `from` name (no implicit interval inference), a `ragged` set used
+/// as an output index or referenced without an `of` parent, and a `derived`
+/// set (resolved by the build-time relational layer, not the evaluator).
 pub fn resolve_aggregate_ranges(model: &mut Model) -> Result<(), CompileError> {
     // Clone the registry so the equations can be mutated without aliasing
     // `model`. An absent registry is fine: any `{from}` reference then errors
@@ -210,16 +217,32 @@ fn resolve_expr_ranges(
         return Ok(());
     };
 
-    // Resolve this node's own ranges in place.
+    // Resolve this node's own ranges in place. A ragged inner range carries no
+    // static upper bound; it resolves to a self-describing `RaggedDyn` that the
+    // evaluator expands per output tuple. Output indices may not be ragged
+    // (their extent must be statically known to size the result array), so the
+    // output/contracted distinction is passed down to reject that with a clear
+    // error. Clone the output names up front to avoid aliasing `node.ranges`.
+    let output_names: std::collections::HashSet<String> = node
+        .output_idx
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
     if let Some(ranges) = &mut node.ranges {
         for (idx_name, spec) in ranges.iter_mut() {
+            let is_output = output_names.contains(idx_name);
             let resolved = match spec {
-                RangeSpec::Interval(_) => continue,
+                // Already-concrete and already-resolved forms are idempotent.
+                RangeSpec::Interval(_) | RangeSpec::RaggedDyn { .. } => continue,
                 RangeSpec::IndexSetRef { from, of } => {
-                    resolve_index_set_ref(from, of.as_deref(), idx_name, index_sets)?
+                    resolve_index_set_ref(from, of.as_deref(), idx_name, is_output, index_sets)?
                 }
             };
-            *spec = RangeSpec::Interval(resolved);
+            *spec = match resolved {
+                ResolvedRange::Static(iv) => RangeSpec::Interval(iv),
+                ResolvedRange::Ragged { offsets, of } => RangeSpec::RaggedDyn { offsets, of },
+            };
         }
     }
 
@@ -249,31 +272,40 @@ fn resolve_expr_ranges(
     Ok(())
 }
 
-/// Resolve one `{ from, of }` reference to concrete `[lo, hi]` bounds.
+/// The outcome of resolving one `{ from, of }` reference: either a static dense
+/// interval (interval/categorical sets) or a dynamic ragged bound that the
+/// evaluator expands per output tuple from the `offsets` backing factor.
+#[derive(Debug)]
+enum ResolvedRange {
+    Static([i64; 2]),
+    Ragged { offsets: String, of: Vec<String> },
+}
+
+/// Resolve one `{ from, of }` reference.
 ///
 /// Interval and categorical sets resolve to a 1-based dense interval
-/// (`[1, size]` / `[1, |members|]`), matching the existing file-level range
-/// convention. A dependent (`of`) reference, or a `ragged`/`derived` set, needs
-/// per-parent dynamic bounds + gather that the Rust evaluator does not yet
-/// implement (M1) and is rejected with a clear error.
+/// ([`ResolvedRange::Static`] `[1, size]` / `[1, |members|]`), matching the
+/// existing file-level range convention; any `of` on the reference is ignored
+/// for these (their extent is static), mirroring the Julia reference.
+///
+/// A `ragged` set resolves to a [`ResolvedRange::Ragged`] dynamic bound — but
+/// only as a contracted (inner) index: a ragged *output* index is rejected
+/// (`is_output`), since the result array's extent must be statically known. The
+/// dynamic upper bound `offsets[of…]` needs the parent index variable(s) from
+/// the *reference's* `of` (rejected if empty) and the `offsets` backing factor
+/// from the set definition; the member gather through `values` is authored in
+/// the node body, so it is not consulted here.
+///
+/// A `derived` (FAQ-materialized) set is rejected: it is resolved by the
+/// build-time relational layer (the reference graph), not the per-timestep
+/// evaluator, mirroring the Julia tree-walk reference.
 fn resolve_index_set_ref(
     from: &str,
     of: Option<&[String]>,
     idx_name: &str,
+    is_output: bool,
     index_sets: &HashMap<String, IndexSet>,
-) -> Result<[i64; 2], CompileError> {
-    if of.is_some_and(|parents| !parents.is_empty()) {
-        return Err(CompileError::UnsupportedFeatureError {
-            feature: "ragged index-set range".to_string(),
-            message: format!(
-                "aggregate range '{idx_name}' references index set '{from}' with a dependent `of` \
-                 (ragged) binding; per-parent dynamic bounds + gather are not yet implemented in \
-                 the Rust evaluator (M1 supports interval/categorical; RFC \
-                 semiring-faq-unified-ir §5.2)"
-            ),
-        });
-    }
-
+) -> Result<ResolvedRange, CompileError> {
     let set = index_sets
         .get(from)
         .ok_or_else(|| CompileError::InterpreterBuildError {
@@ -291,7 +323,7 @@ fn resolve_index_set_ref(
                 .ok_or_else(|| CompileError::InterpreterBuildError {
                     details: format!("index set '{from}' has kind \"interval\" but no `size`"),
                 })?;
-            Ok([1, size])
+            Ok(ResolvedRange::Static([1, size]))
         }
         "categorical" => {
             let n = set
@@ -303,22 +335,52 @@ fn resolve_index_set_ref(
                         "index set '{from}' has kind \"categorical\" but no `members`"
                     ),
                 })?;
-            Ok([1, n])
+            Ok(ResolvedRange::Static([1, n]))
         }
-        "ragged" => Err(CompileError::UnsupportedFeatureError {
-            feature: "ragged index set".to_string(),
-            message: format!(
-                "index set '{from}' (aggregate range '{idx_name}') has kind \"ragged\"; per-parent \
-                 dynamic bounds + gather are not yet implemented in the Rust evaluator (M1 supports \
-                 interval/categorical; RFC semiring-faq-unified-ir §5.2)"
-            ),
-        }),
+        "ragged" => {
+            // A ragged set's per-tuple length is a function of its parent
+            // index, so it can size a reduction but not the output array.
+            if is_output {
+                return Err(CompileError::UnsupportedFeatureError {
+                    feature: "ragged output index".to_string(),
+                    message: format!(
+                        "aggregate output index '{idx_name}' references ragged index set '{from}'; \
+                         a ragged set's extent is per-parent dynamic and may only be a contracted \
+                         (reduction) index, not an output index (RFC semiring-faq-unified-ir §5.2)"
+                    ),
+                });
+            }
+            let parents = of.unwrap_or_default();
+            if parents.is_empty() {
+                return Err(CompileError::InterpreterBuildError {
+                    details: format!(
+                        "ragged index set '{from}' (aggregate range '{idx_name}') is referenced \
+                         without an `of` parent index; a ragged set's length is a function of its \
+                         parent (RFC semiring-faq-unified-ir §5.2)"
+                    ),
+                });
+            }
+            let offsets =
+                set.offsets
+                    .clone()
+                    .ok_or_else(|| CompileError::InterpreterBuildError {
+                        details: format!(
+                            "ragged index set '{from}' (aggregate range '{idx_name}') requires an \
+                             `offsets` backing factor giving |set(parent)| per parent tuple"
+                        ),
+                    })?;
+            Ok(ResolvedRange::Ragged {
+                offsets,
+                of: parents.to_vec(),
+            })
+        }
         "derived" => Err(CompileError::UnsupportedFeatureError {
             feature: "derived index set".to_string(),
             message: format!(
                 "index set '{from}' (aggregate range '{idx_name}') has kind \"derived\"; \
-                 FAQ-materialized index sets are not yet implemented in the Rust evaluator (M2+; \
-                 RFC semiring-faq-unified-ir §5.5)"
+                 FAQ-materialized index sets are resolved by the build-time relational layer (the \
+                 reference graph), not the per-timestep evaluator — mirroring the Julia reference \
+                 (M2+; RFC semiring-faq-unified-ir §5.5)"
             ),
         }),
         other => Err(CompileError::InterpreterBuildError {
@@ -340,6 +402,26 @@ mod tests {
             of: None,
             offsets: None,
             values: None,
+        }
+    }
+
+    fn ragged(offsets: Option<&str>) -> IndexSet {
+        IndexSet {
+            kind: "ragged".into(),
+            size: None,
+            members: None,
+            from_faq: None,
+            of: Some(vec!["cells".into()]),
+            offsets: offsets.map(str::to_string),
+            values: Some("edgesOnCell".into()),
+        }
+    }
+
+    /// Unwrap a [`ResolvedRange::Static`] in tests, panicking otherwise.
+    fn static_bounds(r: ResolvedRange) -> [i64; 2] {
+        match r {
+            ResolvedRange::Static(iv) => iv,
+            ResolvedRange::Ragged { .. } => panic!("expected a static range, got ragged"),
         }
     }
 
@@ -430,43 +512,104 @@ mod tests {
             },
         );
         assert_eq!(
-            resolve_index_set_ref("cells", None, "i", &index_sets).unwrap(),
+            static_bounds(resolve_index_set_ref("cells", None, "i", false, &index_sets).unwrap()),
             [1, 5]
         );
         assert_eq!(
-            resolve_index_set_ref("county", None, "c", &index_sets).unwrap(),
+            static_bounds(resolve_index_set_ref("county", None, "c", false, &index_sets).unwrap()),
             [1, 3]
+        );
+        // An `of` on a reference to a *static* set is ignored (its extent is
+        // static), mirroring the Julia reference — it no longer errors.
+        assert_eq!(
+            static_bounds(
+                resolve_index_set_ref("cells", Some(&["i".into()]), "i", false, &index_sets)
+                    .unwrap()
+            ),
+            [1, 5]
         );
     }
 
     #[test]
     fn undeclared_from_errors_naming_the_set() {
         let index_sets: HashMap<String, IndexSet> = HashMap::new();
-        let err = resolve_index_set_ref("nonesuch", None, "i", &index_sets).unwrap_err();
+        let err = resolve_index_set_ref("nonesuch", None, "i", false, &index_sets).unwrap_err();
         let msg = format!("{err:?}");
         assert!(msg.contains("nonesuch"), "error should name the set: {msg}");
     }
 
     #[test]
-    fn ragged_and_derived_and_dependent_of_are_unsupported() {
+    fn ragged_contracted_index_resolves_to_dynamic_bound() {
+        // A ragged set used as a *contracted* index (is_output=false) resolves
+        // to a RaggedDyn carrying the `offsets` factor and the reference's `of`
+        // parents — the per-output-tuple bound `[1, offsets[of…]]`.
+        let mut index_sets = HashMap::new();
+        index_sets.insert("edges".to_string(), ragged(Some("nEdgesOnCell")));
+        let resolved =
+            resolve_index_set_ref("edges", Some(&["i".into()]), "k", false, &index_sets).unwrap();
+        match resolved {
+            ResolvedRange::Ragged { offsets, of } => {
+                assert_eq!(offsets, "nEdgesOnCell");
+                assert_eq!(of, vec!["i".to_string()]);
+            }
+            ResolvedRange::Static(iv) => panic!("expected ragged, got static {iv:?}"),
+        }
+    }
+
+    #[test]
+    fn ragged_as_output_index_is_rejected() {
+        // A ragged set may not be an output index: the result array's extent
+        // must be statically known.
+        let mut index_sets = HashMap::new();
+        index_sets.insert("edges".to_string(), ragged(Some("nEdgesOnCell")));
+        let err = resolve_index_set_ref("edges", Some(&["i".into()]), "k", true, &index_sets)
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("ragged"), "error should mention ragged: {msg}");
+    }
+
+    #[test]
+    fn ragged_without_of_parent_is_rejected() {
+        // A ragged set's length is a function of its parent, so a reference
+        // without an `of` parent index is rejected.
+        let mut index_sets = HashMap::new();
+        index_sets.insert("edges".to_string(), ragged(Some("nEdgesOnCell")));
+        assert!(resolve_index_set_ref("edges", None, "k", false, &index_sets).is_err());
+        assert!(resolve_index_set_ref("edges", Some(&[]), "k", false, &index_sets).is_err());
+    }
+
+    #[test]
+    fn ragged_missing_offsets_factor_is_rejected() {
+        // A ragged set with no `offsets` backing factor cannot produce a bound.
+        let mut index_sets = HashMap::new();
+        index_sets.insert("edges".to_string(), ragged(None));
+        assert!(
+            resolve_index_set_ref("edges", Some(&["i".into()]), "k", false, &index_sets).is_err()
+        );
+    }
+
+    #[test]
+    fn derived_index_set_is_rejected_by_the_evaluator() {
+        // `derived` is resolved by the build-time relational layer, not the
+        // per-timestep evaluator (mirrors the Julia tree-walk reference).
         let mut index_sets = HashMap::new();
         index_sets.insert(
-            "edges".to_string(),
+            "edge_set".to_string(),
             IndexSet {
-                kind: "ragged".into(),
+                kind: "derived".into(),
                 size: None,
                 members: None,
-                from_faq: None,
-                of: Some(vec!["cells".into()]),
-                offsets: Some("nEdgesOnCell".into()),
-                values: Some("edgesOnCell".into()),
+                from_faq: Some("edge_faq_node".into()),
+                of: None,
+                offsets: None,
+                values: None,
             },
         );
-        assert!(resolve_index_set_ref("edges", None, "k", &index_sets).is_err());
-
-        // A dependent `of` on the *reference* is ragged even for a static set.
-        let mut iv = HashMap::new();
-        iv.insert("cells".to_string(), interval(3));
-        assert!(resolve_index_set_ref("cells", Some(&["i".to_string()]), "k", &iv).is_err());
+        let err = resolve_index_set_ref("edge_set", None, "e", false, &index_sets).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("derived"),
+            "error should mention derived: {msg}"
+        );
     }
 }
