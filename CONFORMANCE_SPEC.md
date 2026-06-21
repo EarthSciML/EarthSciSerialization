@@ -1145,8 +1145,19 @@ row-sum → apply → normalize) is
 (`build_regridder` / `Regridder`, bead ess-my4.4.7), composed from the existing
 M1/M2/M3 machinery plus the `intersect_polygon` leaf and exercised end-to-end by
 `packages/earthsci_toolkit/tests/test_conservative_regrid.py` (candidate-set
-determinism, partition-of-unity exactness, global conservation). The Julia and
-Rust assemblies (ess-my4.4.6 / .12) are the sibling producing bindings the gate
+determinism, partition-of-unity exactness, global conservation). The **Julia
+producing-binding assembly** is the sibling
+`packages/EarthSciSerialization.jl/src/conservative_regrid.jl` (`build_regridder`
+/ `Regridder`, bead ess-my4.4.6), composed identically from the relational engine
+(`Relational`: `skolem` bins / `equijoin` / `distinct`) plus the
+`intersect_polygon` leaf, and exercised on the SAME worked grids by
+`packages/EarthSciSerialization.jl/test/conservative_regrid_test.jl`. Its IR form
+— the `A_j` row-sum and the apply `sum_product` FAQs written as an ESM document
+and run through the tree-walk evaluator — is the worked fixture
+`tests/valid/geometry/conservative_regrid_assembly.esm`, evaluated end-to-end
+(conservation + partition-of-unity) by
+`packages/EarthSciSerialization.jl/test/geometry_assembly_conformance_test.jl`.
+The Rust assembly (ess-my4.4.12) is the third sibling producing binding the gate
 compares against.
 
 ## 6. CI Integration
