@@ -190,6 +190,17 @@ from .geometry import (
     MANIFOLDS,
 )
 
+# Conservative-regridding assembly — the end-to-end A.8 pipeline (overlap join →
+# A_ij → A_j → apply → normalize) composed from the M1/M2/M3 machinery plus the
+# intersect_polygon clip leaf (RFC semiring-faq-unified-ir §A.8; bead ess-my4.4.7).
+from .conservative_regrid import (
+    Regridder,
+    build_regridder,
+    candidate_overlap_pairs,
+    cell_bin_keys,
+    overlap_area,
+)
+
 # Build-time cadence-partition pass — the structural_simplify analogue (RFC
 # semiring-faq-unified-ir §6.1; CONFORMANCE_SPEC.md §5.7)
 from .cadence import (
@@ -488,6 +499,12 @@ __all__ = [
     "polygon_area",
     "area_tolerance_ok",
     "MANIFOLDS",
+    # Conservative-regridding assembly (overlap join → A_ij → A_j → apply → normalize)
+    "Regridder",
+    "build_regridder",
+    "candidate_overlap_pairs",
+    "cell_bin_keys",
+    "overlap_area",
     # Build-time cadence-partition pass (structural_simplify analogue)
     "CadenceError",
     "Partition",

@@ -1135,6 +1135,17 @@ Unlike the determinism and cadence gates, the assertion is **tolerance +
 invariant** on areas / weights and **byte-identity** only on the integer
 candidate index set.
 
+The **Python producing-binding assembly** that realizes this end-to-end pipeline
+(broad-phase bin-Skolem candidate join → `A_ij` clip + `polygon_area` FAQ → `A_j`
+row-sum → apply → normalize) is
+`packages/earthsci_toolkit/src/earthsci_toolkit/conservative_regrid.py`
+(`build_regridder` / `Regridder`, bead ess-my4.4.7), composed from the existing
+M1/M2/M3 machinery plus the `intersect_polygon` leaf and exercised end-to-end by
+`packages/earthsci_toolkit/tests/test_conservative_regrid.py` (candidate-set
+determinism, partition-of-unity exactness, global conservation). The Julia and
+Rust assemblies (ess-my4.4.6 / .12) are the sibling producing bindings the gate
+compares against.
+
 ## 6. CI Integration
 
 ### 6.1 GitHub Actions Workflow
