@@ -181,6 +181,16 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         handler_id = expr_data.get("handler_id")
         name = expr_data.get("name")
         value = expr_data.get("value")
+        # Node id (RFC §6.1) + intersect_polygon manifold (RFC §8.1). The
+        # geometry leaf is strictly binary with a required manifold (the schema
+        # enforces both); fail fast here so a hand-built node mirrors that.
+        node_id = expr_data.get("id")
+        manifold = expr_data.get("manifold")
+        if op == "intersect_polygon" and manifold is None:
+            raise ValueError(
+                "Operator 'intersect_polygon' requires a 'manifold' field "
+                "(planar / spherical / geodesic); it carries no default"
+            )
 
         if op == "call" and handler_id is None:
             raise ValueError("Operator 'call' requires 'handler_id' field to be specified")
@@ -228,6 +238,8 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
             handler_id=handler_id,
             name=name,
             value=value,
+            id=node_id,
+            manifold=manifold,
             table=table,
             table_axes=table_axes,
             output=output,

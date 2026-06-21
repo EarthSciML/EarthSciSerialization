@@ -82,6 +82,12 @@ def _serialize_expression(expr: Expr) -> Union[int, float, str, Dict[str, Any]]:
             result["axis"] = expr.axis
         if expr.fn is not None:
             result["fn"] = expr.fn
+        # Node id (RFC §6.1) + intersect_polygon manifold (RFC §8.1) — emitted
+        # only when present so non-geometry nodes round-trip byte-identically.
+        if getattr(expr, "id", None) is not None:
+            result["id"] = expr.id
+        if getattr(expr, "manifold", None) is not None:
+            result["manifold"] = expr.manifold
         if expr.handler_id is not None:
             result["handler_id"] = expr.handler_id
         if expr.name is not None:

@@ -63,6 +63,17 @@ class ExprNode:
     axis: Optional[int] = None
     # broadcast:
     fn: Optional[str] = None
+    # Node addressing (RFC §6.1): a node-local id by which a `kind:"derived"`
+    # index set names its producer via `from_faq`. Carried on an
+    # `intersect_polygon` leaf so its data-dependent clip ring is exposed as a
+    # derived index set the `polygon_area` FAQ ranges over (RFC §8.1).
+    id: Optional[str] = None
+    # Geometry interpretation for the `intersect_polygon` leaf — "planar" |
+    # "spherical" | "geodesic" (RFC §8.1 / Appendix B; CONFORMANCE_SPEC.md
+    # §5.8.4). REQUIRED on every intersect_polygon node, no default; matched
+    # EXACTLY across bindings (two bindings compare only same-manifold).
+    # Meaningful only for intersect_polygon; ignored on any other op.
+    manifold: Optional[str] = None
     # call (registered function invocation, see esm-spec §4.4 / §9.2):
     handler_id: Optional[str] = None
     # fn (closed function registry — esm-spec §9.2): the dotted module path of

@@ -58,6 +58,15 @@ class EvalContext:
     # keyed by name. Used to resolve arrayop / aggregate range references of the
     # form {"from": <name>}. Empty ⇒ no named sets are declared.
     index_sets: Dict[str, Any] = field(default_factory=dict)
+    # Runtime materialization of data-derived index sets (RFC §5.5 / §8.1),
+    # keyed by the producing node's `id`. An `intersect_polygon` leaf registers
+    # its clipped overlap ring here under its `id`; a `kind:"derived"` index set
+    # with `from_faq: <id>` then resolves its extent (the vertex count) from the
+    # registered ring, and the ring is readable as a bare symbol by that id so a
+    # `polygon_area` FAQ body can `index(<id>, v, c)` into it. Each value is the
+    # CLOSED ring ndarray (first vertex repeated) of shape [n+1, 2]; the derived
+    # set's extent is the n distinct vertices. Empty ⇒ none materialized yet.
+    derived_rings: Dict[str, np.ndarray] = field(default_factory=dict)
 
 
 class NumpyInterpreterError(Exception):
@@ -107,6 +116,11 @@ def _resolve_symbol(name: str, ctx: EvalContext) -> Union[float, np.ndarray]:
         return float(ctx.locals[name])
     if name == "t":
         return float(ctx.t)
+    # A materialized derived ring (RFC §8.1): an `intersect_polygon` node id
+    # resolves to its CLOSED clip ring so a `polygon_area` FAQ body can
+    # `index(<id>, v, c)` into the overlap vertices.
+    if name in ctx.derived_rings:
+        return ctx.derived_rings[name]
     if name in ctx.state_layout:
         return _view_state_array(name, ctx)
     if name in ctx.param_values:
@@ -244,10 +258,26 @@ def _resolve_range_spec(spec: Any, ctx: EvalContext) -> Any:
             offsets=entry["offsets"], values=entry.get("values"),
         )
     if kind == "derived":
-        raise NumpyInterpreterError(
-            f"index set {name!r} is kind 'derived'; data-derived index-set "
-            f"materialization (RFC §5.5) is not part of M1"
-        )
+        # A data-derived index set (RFC §5.5 / §8.1) resolves its extent from
+        # the ring its producing node materialized at runtime. The `intersect_polygon`
+        # clip-ring case is wired here: from_faq names the producer's `id`, and
+        # the derived set's extent is the n distinct vertices of the registered
+        # (closed, n+1-row) ring. The producer must have been evaluated first —
+        # observed clip variables are evaluated before the FAQ that consumes them.
+        faq = entry.get("from_faq")
+        if faq is None:
+            raise NumpyInterpreterError(
+                f"derived index set {name!r} is missing 'from_faq' (RFC §5.5)"
+            )
+        ring = ctx.derived_rings.get(faq)
+        if ring is None:
+            raise NumpyInterpreterError(
+                f"derived index set {name!r} (from_faq {faq!r}) is not materialized; "
+                f"its producing node has not been evaluated. Materialized rings: "
+                f"{sorted(ctx.derived_rings)} (RFC §8.1)"
+            )
+        n_vertices = max(int(ring.shape[0]) - 1, 0)  # closed ring has n+1 rows
+        return [1, n_vertices]
     raise NumpyInterpreterError(
         f"index set {name!r} has unknown kind {kind!r}"
     )
@@ -447,8 +477,52 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
         return _eval_transpose(expr, ctx)
     if op == "concat":
         return _eval_concat(expr, ctx)
+    # --- conservative-regridding geometry kernel (RFC §8.1) ---
+    if op == "intersect_polygon":
+        return _eval_intersect_polygon(expr, ctx)
 
     raise NumpyInterpreterError(f"Unsupported op in NumPy interpreter: {op!r}")
+
+
+def _eval_intersect_polygon(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
+    """Evaluate the ``intersect_polygon`` clip leaf (RFC §8.1).
+
+    Clips the two operand polygon rings under the node's required ``manifold``
+    and returns the overlap ring as a CLOSED ``[n+1, 2]`` lon-lat array (first
+    vertex repeated) so the ``polygon_area`` FAQ can read the wrap edge as an
+    ordinary ``index(ring, v+1, …)``. When the node carries an ``id`` the ring is
+    registered in ``ctx.derived_rings`` so the ``kind:"derived"`` clip-ring index
+    set (``from_faq: <id>``) resolves its extent and the ring is addressable by
+    that id — making ``polygon_area`` an ordinary ``sum_product`` FAQ over it.
+
+    The clip is the only geometry-specific kernel; the area is *not* computed
+    here. For ``spherical``/``geodesic`` the clip is delegated to the pinned
+    optional ``spherely`` (S2); ``planar`` is dependency-free. An empty overlap
+    yields an empty ``(0, 2)`` array (registered as an extent-0 derived set).
+    """
+    from . import geometry
+
+    manifold = getattr(expr, "manifold", None)
+    if manifold is None:
+        raise NumpyInterpreterError(
+            "intersect_polygon requires a 'manifold' field (planar / spherical / "
+            "geodesic); it carries no default (CONFORMANCE_SPEC.md §5.8.4)"
+        )
+    if len(expr.args) != 2:
+        raise NumpyInterpreterError(
+            f"intersect_polygon is strictly binary; got {len(expr.args)} operand(s)"
+        )
+    poly_a = _as_array(eval_expr(expr.args[0], ctx))
+    poly_b = _as_array(eval_expr(expr.args[1], ctx))
+    try:
+        ring = geometry.intersect_polygon(poly_a, poly_b, manifold)
+    except geometry.GeometryError as exc:
+        raise NumpyInterpreterError(str(exc)) from exc
+    closed = geometry.close_ring(ring)
+    node_id = getattr(expr, "id", None)
+    if node_id is not None:
+        ctx.derived_rings[node_id] = closed
+    return closed
 
 
 def _eval_index(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
@@ -1328,7 +1402,7 @@ def expr_contains_array_op(expr: Expr) -> bool:
     if isinstance(expr, ExprNode):
         if expr.op in {
             "aggregate", "arrayop", "makearray", "index", "broadcast",
-            "reshape", "transpose", "concat",
+            "reshape", "transpose", "concat", "intersect_polygon",
         }:
             return True
         for a in expr.args:

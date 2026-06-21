@@ -177,6 +177,19 @@ from .relational import (
     serialize_canonical,
 )
 
+# Conservative-regridding geometry kernel — the intersect_polygon clip leaf +
+# the polygon_area reference (RFC semiring-faq-unified-ir §8.1 / Appendix B;
+# CONFORMANCE_SPEC.md §5.8). polygon_area itself is an ordinary sum_product FAQ;
+# the helper here is the reference the FAQ is cross-checked against.
+from .geometry import (
+    GeometryError,
+    GeometryBackendUnavailable,
+    intersect_polygon,
+    polygon_area,
+    area_tolerance_ok,
+    MANIFOLDS,
+)
+
 # Build-time cadence-partition pass — the structural_simplify analogue (RFC
 # semiring-faq-unified-ir §6.1; CONFORMANCE_SPEC.md §5.7)
 from .cadence import (
@@ -468,6 +481,13 @@ __all__ = [
     "group_aggregate",
     "canonical_index_set_json",
     "serialize_canonical",
+    # Conservative-regridding geometry kernel (intersect_polygon + polygon_area)
+    "GeometryError",
+    "GeometryBackendUnavailable",
+    "intersect_polygon",
+    "polygon_area",
+    "area_tolerance_ok",
+    "MANIFOLDS",
     # Build-time cadence-partition pass (structural_simplify analogue)
     "CadenceError",
     "Partition",
