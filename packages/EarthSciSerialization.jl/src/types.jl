@@ -148,6 +148,22 @@ struct OpExpr <: Expr
     filter::Union{Expr,Nothing}
     join_gates::Union{Vector{Any},Nothing}
 
+    # ── M4 geometry kernel (RFC semiring-faq-unified-ir §8.1 / Appendix B;
+    #    schema bead ess-my4.4.2; Julia kernel ess-my4.4.3) ──
+    #
+    # `id`       — node-local identifier (RFC §6.1) by which a `kind:"derived"`
+    #              index set names its producer via `from_faq`. Carried on an
+    #              `intersect_polygon` leaf so its data-dependent clip ring is
+    #              exposed as the derived index set a `polygon_area` FAQ ranges
+    #              over (§8.1). Emitted only when present (byte-identical round-trip
+    #              for non-geometry nodes).
+    # `manifold` — geometry interpretation for the `intersect_polygon` leaf:
+    #              "planar" | "spherical" | "geodesic" (CONFORMANCE_SPEC.md §5.8.4).
+    #              REQUIRED on every `intersect_polygon` node, no default; matched
+    #              EXACTLY across bindings. Meaningful only for `intersect_polygon`.
+    id::Union{String,Nothing}
+    manifold::Union{String,Nothing}
+
     OpExpr(op::String, args::Vector{Expr};
            wrt=nothing, dim=nothing,
            int_var=nothing, lower=nothing, upper=nothing,
@@ -158,6 +174,7 @@ struct OpExpr <: Expr
            name=nothing, value=nothing,
            table=nothing, table_axes=nothing, output=nothing,
            join=nothing, filter=nothing, join_gates=nothing,
+           id=nothing, manifold=nothing,
            # `handler_id` was the v0.2.x field for the now-removed `call`
            # op (esm-spec §9.2 closure). Accept and ignore on construction
            # so internal helpers that still pass it through don't break
@@ -166,7 +183,8 @@ struct OpExpr <: Expr
         new(op, args, wrt, dim, int_var, lower, upper, output_idx, expr_body, reduce,
             semiring, ranges,
             regions, values, shape, perm, axis, fn, name, value,
-            table, table_axes, output, join, filter, join_gates)
+            table, table_axes, output, join, filter, join_gates,
+            id, manifold)
 end
 
 # Accept any AbstractVector of Expr-subtypes (e.g. Vector{VarExpr},

@@ -369,7 +369,9 @@ function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String}):
         value=expr.value,
         join=expr.join,
         filter=new_filter,
-        join_gates=expr.join_gates)
+        join_gates=expr.join_gates,
+        id=expr.id,
+        manifold=expr.manifold)
 end
 
 """

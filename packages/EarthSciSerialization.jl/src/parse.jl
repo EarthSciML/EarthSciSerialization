@@ -185,6 +185,23 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     filter_raw = get(data, kfilter, nothing)
     filter_expr = filter_raw === nothing ? nothing : parse_expression(filter_raw)
 
+    # M4 geometry kernel (RFC §8.1 / Appendix B; schema bead ess-my4.4.2): the
+    # node-local `id` (§6.1, by which a derived index set names its producer) and
+    # the `intersect_polygon` `manifold` flag. The key spelling matches the rest
+    # of the keys (string for Dict, symbol for JSON3). `intersect_polygon` is
+    # strictly manifold-required (the schema enforces it); fail fast here so a
+    # hand-built node mirrors that.
+    kid = kop isa Symbol ? :id : "id"
+    kmanifold = kop isa Symbol ? :manifold : "manifold"
+    id_raw = get(data, kid, nothing)
+    id_str = id_raw === nothing ? nothing : string(id_raw)
+    manifold_raw = get(data, kmanifold, nothing)
+    manifold_str = manifold_raw === nothing ? nothing : string(manifold_raw)
+    if op == "intersect_polygon" && manifold_str === nothing
+        throw(ParseError("`intersect_polygon` op requires a `manifold` field " *
+                         "(planar / spherical / geodesic); it carries no default"))
+    end
+
     return OpExpr(op, args;
         wrt=(wrt === nothing ? nothing : string(wrt)),
         dim=(dim === nothing ? nothing : string(dim)),
@@ -195,7 +212,8 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
         perm=perm_vec, axis=axis_int, fn=fn_str,
         name=name_str, value=value_native,
         table=table_str, table_axes=table_axes_dict, output=output_native,
-        join=join_clauses, filter=filter_expr)
+        join=join_clauses, filter=filter_expr,
+        id=id_str, manifold=manifold_str)
 end
 
 function _coerce_output_idx(data)

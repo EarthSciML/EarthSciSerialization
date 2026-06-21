@@ -77,12 +77,134 @@ Keyword arguments:
 * `registered_functions::Dict{String,<:Function}` — handlers for
   `call` ops, keyed by `handler_id`.
 """
+# ============================================================
+# M4 geometry kernel — build-time intersect_polygon clip (RFC §8.1 / Appendix B)
+# ============================================================
+#
+# The `intersect_polygon` leaf runs at SETUP time (RFC Appendix B.1): its polygon
+# operands are build-time-known parameters supplied via `const_arrays`, so the clip
+# is evaluated ONCE here into a closed vertex ring. The ring is registered as a 2D
+# const_array (read by the `polygon_area` FAQ as `index(clip, v, c)`) and its
+# distinct-vertex count feeds the `kind:"derived"` index set the FAQ ranges over —
+# so `polygon_area` rides the existing M1 aggregate machinery unchanged.
+#
+# All of this is guarded behind "an equation uses intersect_polygon", so every
+# non-geometry file compiles byte-identically.
+
+# True iff any node in the subtree is an intersect_polygon op.
+_expr_has_intersect_polygon(e::OpExpr) =
+    e.op == "intersect_polygon" ||
+    any(_expr_has_intersect_polygon, e.args) ||
+    (e.expr_body !== nothing && _expr_has_intersect_polygon(e.expr_body))
+_expr_has_intersect_polygon(::Expr) = false
+_equations_have_intersect_polygon(eqs) =
+    any(eq -> _expr_has_intersect_polygon(eq.lhs) || _expr_has_intersect_polygon(eq.rhs), eqs)
+
+# An intersect_polygon may live in an equation RHS or in an observed variable's
+# `expression` field (the shared geometry fixtures use the latter — the Python
+# evaluator reads `variable.expression` directly).
+function _model_has_intersect_polygon(model::Model)
+    for (_, v) in model.variables
+        v.expression isa Expr && _expr_has_intersect_polygon(v.expression) && return true
+    end
+    return _equations_have_intersect_polygon(model.equations)
+end
+
+# Resolve an intersect_polygon polygon operand to its const-array matrix. The clip
+# runs at setup, so each operand must be a variable name supplied in `const_arrays`.
+function _geometry_operand(arg::Expr, const_arrays_kw::AbstractDict, who::AbstractString)
+    arg isa VarExpr || throw(TreeWalkError("E_TREEWALK_GEOMETRY_OPERAND",
+        "intersect_polygon operand for '$who' must be a polygon variable name"))
+    name = (arg::VarExpr).name
+    haskey(const_arrays_kw, name) || throw(TreeWalkError("E_TREEWALK_GEOMETRY_OPERAND",
+        "intersect_polygon operand '$name' for '$who' must be supplied in `const_arrays` " *
+        "(the clip runs at setup time; RFC Appendix B.1)"))
+    return const_arrays_kw[name]
+end
+
+# Evaluate every intersect_polygon clip ring at setup. Returns
+# `(rings, extents)`: observed-var-name → CLOSED ring matrix `[n+1, 2]`, and
+# `from_faq` key (the clip node `id` AND the observed var name) → distinct vertex
+# count `n`. `geom_ring_vars` are the observed vars whose RHS is intersect_polygon.
+function _materialize_geometry_rings(equations, const_arrays_kw::AbstractDict,
+                                     geom_ring_vars::Set{String})
+    rings = Dict{String,Matrix{Float64}}()
+    extents = Dict{String,Int}()
+    for eq in equations
+        eq.lhs isa VarExpr || continue
+        vname = (eq.lhs::VarExpr).name
+        vname in geom_ring_vars || continue
+        rhs = eq.rhs
+        (rhs isa OpExpr && (rhs::OpExpr).op == "intersect_polygon") || continue
+        op = rhs::OpExpr
+        manifold = op.manifold
+        manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
+            "intersect_polygon observed '$vname' requires a `manifold` (planar / spherical / geodesic)"))
+        length(op.args) == 2 || throw(TreeWalkError("E_TREEWALK_GEOMETRY_ARITY",
+            "intersect_polygon is strictly binary; '$vname' has $(length(op.args)) operand(s)"))
+        poly_a = _geometry_operand(op.args[1], const_arrays_kw, vname)
+        poly_b = _geometry_operand(op.args[2], const_arrays_kw, vname)
+        ring = try
+            intersect_polygon(poly_a, poly_b, manifold)
+        catch err
+            err isa GeometryError &&
+                throw(TreeWalkError("E_TREEWALK_GEOMETRY_CLIP", err.msg))
+            rethrow()
+        end
+        closed = close_ring(ring)
+        rings[vname] = closed
+        n = max(size(closed, 1) - 1, 0)   # closed ring has n+1 rows
+        extents[vname] = n                # derived set may name the var…
+        op.id === nothing || (extents[op.id] = n)   # …or the clip node id (from_faq)
+    end
+    return rings, extents
+end
+
+const _EMPTY_DERIVED_EXTENTS = Dict{String,Int}()
+
+# An explicit empty shape (`[]`, a rank-0 declaration) is scalar, not an array;
+# only a non-empty declared shape marks an array variable. `nothing` (no shape) is
+# also scalar.
+_is_array_shape(shape) = shape !== nothing && !isempty(shape)
+
 function build_evaluator(model::Model;
                          initial_conditions::AbstractDict=Dict{String,Float64}(),
                          parameter_overrides::AbstractDict=Dict{String,Float64}(),
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
                          registered_functions::AbstractDict=Dict{String,Function}(),
                          const_arrays::AbstractDict=Dict{String,Vector{Float64}}())
+    # ---- M4 geometry kernel detection (RFC §8.1), guarded ----
+    # Active only when the model uses intersect_polygon — non-geometry files are
+    # byte-identical. Observed variables may be defined by their `expression`
+    # field (the shared geometry fixtures do) rather than an explicit equation;
+    # synthesize an observed equation `name = expression` for each so they flow
+    # through the same ISR-resolution / observed-substitution pipeline as
+    # equation-defined observeds. `_geom_ring_vars` are the (array-shaped) observed
+    # variables whose defining expression is an intersect_polygon clip; they are
+    # materialized into const_arrays at setup rather than treated as scalar
+    # observeds.
+    _has_geometry = _model_has_intersect_polygon(model)
+    _model_equations = model.equations
+    if _has_geometry
+        synth = Equation[]
+        for (name, v) in model.variables
+            (v.type == ObservedVariable && v.expression isa Expr) || continue
+            any(eq -> eq.lhs isa VarExpr && (eq.lhs::VarExpr).name == name,
+                model.equations) && continue
+            push!(synth, Equation(VarExpr(name), v.expression))
+        end
+        isempty(synth) || (_model_equations = vcat(model.equations, synth))
+    end
+    _geom_ring_vars = Set{String}()
+    if _has_geometry
+        for eq in _model_equations
+            if eq.lhs isa VarExpr && eq.rhs isa OpExpr &&
+               (eq.rhs::OpExpr).op == "intersect_polygon"
+                push!(_geom_ring_vars, (eq.lhs::VarExpr).name)
+            end
+        end
+    end
+
     # ---- Partition variables ----
     scalar_state_names = String[]
     param_names = String[]
@@ -92,25 +214,50 @@ function build_evaluator(model::Model;
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
-            v.shape !== nothing &&
-                throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
-            push!(param_names, name)
+            if _is_array_shape(v.shape)
+                # An array-shaped parameter is supported only when supplied as
+                # const data (e.g. the polygon operands of an intersect_polygon
+                # clip; RFC Appendix B.1). It is const_array-backed, not a scalar
+                # parameter, so it is NOT added to param_names.
+                (_has_geometry && haskey(const_arrays, name)) ||
+                    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
+            else
+                push!(param_names, name)
+            end
         elseif v.type == ObservedVariable
-            v.shape !== nothing &&
-                throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
-            push!(observed_names, name)
+            if _is_array_shape(v.shape)
+                # An array-shaped observed is supported only for an
+                # intersect_polygon clip ring, materialized into a const_array at
+                # setup (RFC §8.1); the polygon_area FAQ then ranges over it.
+                (name in _geom_ring_vars) ||
+                    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
+            else
+                push!(observed_names, name)
+            end
         elseif v.type == BrownianVariable
             throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_BROWNIAN", name))
         end
     end
     sort!(param_names)
 
+    # ---- M4: materialize intersect_polygon clip rings at setup time ----
+    # Each clip is evaluated now (operands are const_arrays) into a CLOSED ring,
+    # registered below as a 2D const_array; `_derived_extents` maps each clip's
+    # `from_faq` key to its distinct-vertex count so the derived clip-ring index
+    # set resolves to `[1, n]` for the polygon_area FAQ.
+    _geom_rings = Dict{String,Matrix{Float64}}()
+    _derived_extents = _EMPTY_DERIVED_EXTENTS
+    if _has_geometry
+        _geom_rings, _derived_extents =
+            _materialize_geometry_rings(_model_equations, const_arrays, _geom_ring_vars)
+    end
+
     # ---- Resolve value-equality joins (RFC §5.3) ----
     # Rewrite each aggregate's `join` clauses into build-time `join_gates` (a
     # canonical bucket code per key-column position) BEFORE index-set ranges are
     # resolved away — categorical members are read from the still-present
     # `{from}` references here. No-op (byte-identical) for files without a join.
-    equations = _resolve_join_gates(model.equations, model.index_sets)
+    equations = _resolve_join_gates(_model_equations, model.index_sets)
     init_equations = _resolve_join_gates(model.initialization_equations,
                                          model.index_sets)
 
@@ -119,18 +266,19 @@ function build_evaluator(model::Model;
     # `index_sets` registry into the dense / dynamic-bound form the range
     # machinery already consumes, BEFORE any range expansion runs. No-op (and
     # therefore byte-identical) for files that use no `{from}` references.
-    equations = _resolve_index_set_ranges(equations, model.index_sets)
+    equations = _resolve_index_set_ranges(equations, model.index_sets, _derived_extents)
     init_equations = _resolve_index_set_ranges(init_equations,
-                                               model.index_sets)
+                                               model.index_sets, _derived_extents)
 
     # ---- Discover array cells from equations and initial conditions ----
     # Array variable detection: a variable is treated as an array if it has
-    # an explicit non-nothing shape, OR if it appears inside index(var, k...)
+    # an explicit non-empty shape, OR if it appears inside index(var, k...)
     # in an equation LHS. This handles both declared-shape variables and the
-    # common pattern where shape=nothing but equations use D(index(var, k)).
+    # common pattern where shape=nothing but equations use D(index(var, k)). An
+    # explicit empty shape (`[]`, rank-0) is scalar, not an array.
     array_var_names_declared = Set{String}(n for (n, v) in model.variables
                                            if v.type == StateVariable &&
-                                              v.shape !== nothing)
+                                              _is_array_shape(v.shape))
     # Detect array usage from equations even when shape is not declared.
     array_var_names = _detect_array_vars(equations, state_var_names,
                                          initial_conditions)
@@ -231,7 +379,11 @@ function build_evaluator(model::Model;
     observed_exprs = Dict{String,Expr}()
     derivative_eqs = Equation[]
     for eq in equations
-        if _is_scalar_D_lhs(eq.lhs)
+        if eq.lhs isa VarExpr && (eq.lhs::VarExpr).name in _geom_ring_vars
+            # intersect_polygon clip ring — materialized into a const_array at
+            # setup (RFC §8.1); it is not a scalar observed and produces no ODE.
+            continue
+        elseif _is_scalar_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
         elseif _is_indexed_D_lhs(eq.lhs) || _is_arrayop_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
@@ -262,6 +414,13 @@ function build_evaluator(model::Model;
         else
             _const_arrays[k_str] = Array{Float64}(v)
         end
+    end
+    # M4 (RFC §8.1): register each materialized intersect_polygon clip ring as a
+    # 2D const_array under its observed-variable name, so the polygon_area FAQ body
+    # reads its vertices via `index(clip, v, c)` through the existing const-array
+    # path. The CLOSED ring (n+1 rows) makes the wrap edge an ordinary `v+1` lookup.
+    for (k, ring) in _geom_rings
+        _const_arrays[k] = ring
     end
 
     # ---- Evaluate arrayop-valued initialization_equations into u0 ----
@@ -1080,7 +1239,8 @@ function _sub_preserving(expr::OpExpr, bindings::Dict{String,Expr})
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value,
-                  join=expr.join, filter=new_filter, join_gates=expr.join_gates)
+                  join=expr.join, filter=new_filter, join_gates=expr.join_gates,
+                  id=expr.id, manifold=expr.manifold)
 end
 
 # Substitute loop-var bindings into an arrayop `ranges` dict's bound expressions.
@@ -1587,7 +1747,8 @@ function _resolve_join_in_expr(expr::OpExpr, index_sets::AbstractDict)
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value,
                   table=expr.table, table_axes=expr.table_axes, output=expr.output,
-                  join=expr.join, filter=new_filter, join_gates=gates)
+                  join=expr.join, filter=new_filter, join_gates=gates,
+                  id=expr.id, manifold=expr.manifold)
 end
 _resolve_join_in_expr(expr::Expr, ::AbstractDict) = expr
 
@@ -1621,7 +1782,8 @@ end
 # Resolve ONE IndexSetRef to a concrete `ranges` value. Errors clearly on an
 # undeclared name — no implicit interval is inferred, so a typo can't silently
 # become an empty set (§5.2).
-function _resolve_one_index_set_ref(ref::IndexSetRef, index_sets::AbstractDict)
+function _resolve_one_index_set_ref(ref::IndexSetRef, index_sets::AbstractDict,
+                                    derived_extents::AbstractDict=_EMPTY_DERIVED_EXTENTS)
     haskey(index_sets, ref.from) || throw(TreeWalkError(
         "E_TREEWALK_UNDECLARED_INDEX_SET",
         "undeclared index set '$(ref.from)' referenced in ranges; declare it in " *
@@ -1648,9 +1810,22 @@ function _resolve_one_index_set_ref(ref::IndexSetRef, index_sets::AbstractDict)
         append!(idx_args, Expr[VarExpr(p) for p in ref.of])
         return Any[1, OpExpr("index", idx_args)]
     elseif is.kind == "derived"
-        throw(TreeWalkError("E_TREEWALK_DERIVED_INDEX_SET",
-            "derived index set '$(ref.from)' requires §5.5 distinct/skolem " *
-            "materialization; the tree-walk evaluator does not support it (M1)"))
+        # M4 (RFC §8.1): a derived index set names its producing FAQ node via
+        # `from_faq`. The intersect_polygon clip ring is materialized at setup time
+        # (`_materialize_geometry_rings`); its distinct-vertex count is the resolved
+        # dense extent `[1, n]`, so the polygon_area FAQ unrolls over the ring like
+        # any other aggregate. The general §5.5 distinct/skolem materialization for
+        # non-geometry derived sets remains out of the tree-walk scope (M1).
+        faq = is.from_faq
+        faq === nothing && throw(TreeWalkError("E_TREEWALK_DERIVED_NO_FAQ",
+            "derived index set '$(ref.from)' requires a `from_faq` naming its " *
+            "producing node (§5.5)"))
+        haskey(derived_extents, faq) || throw(TreeWalkError("E_TREEWALK_DERIVED_INDEX_SET",
+            "derived index set '$(ref.from)' (from_faq '$faq') is not materialized; its " *
+            "producing intersect_polygon node has not been evaluated at setup (RFC §8.1). " *
+            "Materialized: $(sort(collect(keys(derived_extents)))). The general §5.5 " *
+            "distinct/skolem materialization is out of the tree-walk scope (M1)."))
+        return Any[1, derived_extents[faq]]
     end
     throw(TreeWalkError("E_TREEWALK_UNKNOWN_INDEX_SET_KIND",
         "unknown index set kind '$(is.kind)' for '$(ref.from)'"))
@@ -1675,19 +1850,20 @@ _has_index_set_ref(eq::Equation) = _has_index_set_ref(eq.lhs) || _has_index_set_
 
 # Rewrite every IndexSetRef in the subtree's ranges to its resolved concrete
 # form, rebuilding OpExpr nodes while preserving all fields.
-function _resolve_isr(expr::OpExpr, index_sets::AbstractDict)
-    new_args = Expr[_resolve_isr(a, index_sets) for a in expr.args]
-    new_body = expr.expr_body === nothing ? nothing : _resolve_isr(expr.expr_body, index_sets)
+function _resolve_isr(expr::OpExpr, index_sets::AbstractDict,
+                      derived_extents::AbstractDict=_EMPTY_DERIVED_EXTENTS)
+    new_args = Expr[_resolve_isr(a, index_sets, derived_extents) for a in expr.args]
+    new_body = expr.expr_body === nothing ? nothing : _resolve_isr(expr.expr_body, index_sets, derived_extents)
     new_values = expr.values === nothing ? nothing :
-                 Expr[_resolve_isr(v, index_sets) for v in expr.values]
-    new_lower = expr.lower === nothing ? nothing : _resolve_isr(expr.lower, index_sets)
-    new_upper = expr.upper === nothing ? nothing : _resolve_isr(expr.upper, index_sets)
+                 Expr[_resolve_isr(v, index_sets, derived_extents) for v in expr.values]
+    new_lower = expr.lower === nothing ? nothing : _resolve_isr(expr.lower, index_sets, derived_extents)
+    new_upper = expr.upper === nothing ? nothing : _resolve_isr(expr.upper, index_sets, derived_extents)
     new_ranges = expr.ranges
     if expr.ranges !== nothing && any(v -> v isa IndexSetRef, values(expr.ranges))
         new_ranges = Dict{String,Any}()
         for (k, v) in expr.ranges
             new_ranges[k] = v isa IndexSetRef ?
-                _resolve_one_index_set_ref(v, index_sets) : v
+                _resolve_one_index_set_ref(v, index_sets, derived_extents) : v
         end
     end
     return OpExpr(expr.op, new_args;
@@ -1699,19 +1875,23 @@ function _resolve_isr(expr::OpExpr, index_sets::AbstractDict)
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value,
                   table=expr.table, table_axes=expr.table_axes, output=expr.output,
-                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
+                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates,
+                  id=expr.id, manifold=expr.manifold)
 end
-_resolve_isr(expr::Expr, ::AbstractDict) = expr
-_resolve_isr(eq::Equation, index_sets::AbstractDict) =
-    Equation(_resolve_isr(eq.lhs, index_sets), _resolve_isr(eq.rhs, index_sets);
+_resolve_isr(expr::Expr, ::AbstractDict, ::AbstractDict=_EMPTY_DERIVED_EXTENTS) = expr
+_resolve_isr(eq::Equation, index_sets::AbstractDict,
+             derived_extents::AbstractDict=_EMPTY_DERIVED_EXTENTS) =
+    Equation(_resolve_isr(eq.lhs, index_sets, derived_extents),
+             _resolve_isr(eq.rhs, index_sets, derived_extents);
              _comment=eq._comment, region=eq.region)
 
 # Resolve all index-set references across a vector of equations. Returns the
 # input unchanged when no equation uses a `{from}` reference — preserving
 # byte-identical behaviour (and the compiled tree) for existing files (§6).
-function _resolve_index_set_ranges(eqs::Vector{Equation}, index_sets::AbstractDict)
+function _resolve_index_set_ranges(eqs::Vector{Equation}, index_sets::AbstractDict,
+                                   derived_extents::AbstractDict=_EMPTY_DERIVED_EXTENTS)
     any(_has_index_set_ref, eqs) || return eqs
-    return Equation[_resolve_isr(eq, index_sets) for eq in eqs]
+    return Equation[_resolve_isr(eq, index_sets, derived_extents) for eq in eqs]
 end
 
 # Resolve index(arrayop(...), k1, k2, ...) in expression position by
@@ -1961,7 +2141,8 @@ function _resolve_indices(expr::OpExpr,
                       regions=expr.regions, values=expr.values,
                       shape=expr.shape, perm=expr.perm, axis=expr.axis,
                       fn=expr.fn, name=expr.name, value=expr.value,
-                      join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
+                      join=expr.join, filter=expr.filter, join_gates=expr.join_gates,
+                      id=expr.id, manifold=expr.manifold)
     end
     if expr.op == "integral"
         # Euler/midpoint quadrature: integral(u, var=x) → dx * sum(u[k] for k in lo..hi)
@@ -2018,7 +2199,8 @@ function _resolve_indices(expr::OpExpr,
                   regions=expr.regions, values=new_values,
                   shape=expr.shape, perm=expr.perm, axis=expr.axis,
                   fn=expr.fn, name=expr.name, value=expr.value,
-                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates)
+                  join=expr.join, filter=expr.filter, join_gates=expr.join_gates,
+                  id=expr.id, manifold=expr.manifold)
 end
 
 # Detect which state variables are used in array context (inside index ops)

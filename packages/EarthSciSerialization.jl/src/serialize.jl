@@ -152,6 +152,15 @@ function serialize_expression(expr::Expr)
         if expr.filter !== nothing
             result["filter"] = serialize_expression(expr.filter)
         end
+        # M4 geometry kernel (RFC §8.1): node `id` (§6.1) + `intersect_polygon`
+        # `manifold` — emitted only when present so non-geometry nodes round-trip
+        # byte-identically.
+        if expr.id !== nothing
+            result["id"] = expr.id
+        end
+        if expr.manifold !== nothing
+            result["manifold"] = expr.manifold
+        end
         return result
     else
         throw(ArgumentError("Unknown expression type: $(typeof(expr))"))
