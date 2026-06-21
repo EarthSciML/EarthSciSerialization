@@ -507,7 +507,12 @@ pub struct ExpressionNode {
     /// under the authored `kind` key (esm-spec §9.2) so the rule engine's
     /// kind/side matcher discriminates dirichlet/neumann/robin/… ; serialized
     /// canonically as `fn` (ess-tox / G8).
-    #[serde(default, rename = "fn", alias = "kind", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "fn",
+        alias = "kind",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub broadcast_fn: Option<String>,
 
     /// For the `fn` op: dotted module path of the closed-registry function to
