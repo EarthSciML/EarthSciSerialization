@@ -56,8 +56,17 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 #
 # Gated to non-wasm targets so the WASM build (which has its own follow-up
 # bead for simulate exposure) does not pull diffsol in.
+#
+# s2bindings (ess-my4.4.11): the spherical geometry kernel behind the
+# `intersect_polygon` leaf op (RFC semiring-faq-unified-ir §8.1, Appendix B.2).
+# FFI over Google's s2geometry C++ engine — the same S2 core Python's `spherely`
+# wraps, giving Rust↔Python tight cross-binding agreement (CONFORMANCE_SPEC.md
+# §5.8). Pinned to a tag for reproducibility. Native-only: the crate compiles
+# vendored abseil + s2geometry from source (CMake superbuild) and cannot build
+# on wasm32, so it is gated alongside diffsol.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 diffsol = "0.11"
+s2bindings = { git = "https://github.com/EarthSciML/s2bindings.rs", tag = "v0.1.0" }
 
 [dev-dependencies]
 serde_test = "1.0"

@@ -46,6 +46,7 @@ pub mod edit;
 pub mod error;
 pub mod expression;
 pub mod flatten;
+pub mod geometry;
 pub mod graph;
 pub mod grid_accessor;
 pub mod join;
@@ -92,6 +93,9 @@ pub use expression::{contains, free_parameters, free_variables, simplify};
 pub use flatten::{
     DimensionPromotionRecord, FlattenError, FlattenMetadata, FlattenedSystem, flatten,
     flatten_model,
+};
+pub use geometry::{
+    GeometryError, Manifold, intersect_polygon, shoelace_area, shoelace_signed_area,
 };
 pub use graph::{
     ComponentGraph, ComponentNode, ComponentType, CouplingEdge, DependencyEdge,

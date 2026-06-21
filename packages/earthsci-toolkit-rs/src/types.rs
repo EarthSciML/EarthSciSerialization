@@ -480,6 +480,25 @@ pub struct ExpressionNode {
     /// this (defaults to 0 at lowering time).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<serde_json::Value>,
+
+    /// Stable node id for value-invention (M3 / RFC semiring-faq-unified-ir
+    /// §5.2, §8.1). A node that produces a data-dependent index set — a
+    /// `distinct` aggregate, or an `intersect_polygon` clip whose overlap ring
+    /// has data-dependent length — carries an `id`, and an `index_sets` entry
+    /// with `kind:"derived"` references it via `from_faq`. Preserved through
+    /// canonicalization so the producer↔derived-set linkage survives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
+    /// Geometry manifold for the `intersect_polygon` op — one of `planar`,
+    /// `spherical`, or `geodesic` (RFC semiring-faq-unified-ir §8.1;
+    /// CONFORMANCE_SPEC.md §5.8.4). REQUIRED on every `intersect_polygon` node
+    /// (the schema gives it no default): the geometric interpretation is part of
+    /// the op's contract — `spherical`/`geodesic` clip along great-circle edges,
+    /// `planar` along straight lon/lat edges — and two bindings may be compared
+    /// only under the same declared manifold.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifold: Option<String>,
 }
 
 /// Numerical comparison tolerance used by inline model tests.

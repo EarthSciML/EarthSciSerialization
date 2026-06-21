@@ -1203,6 +1203,10 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         // Array ops.
         "index" => eval_index(node, ctx),
         "arrayop" | "aggregate" => eval_arrayop(node, ctx),
+        // Conservative-regridding geometry kernel (RFC §8.1): clip two lon/lat
+        // polygon rings on the node's `manifold`, producing the overlap ring as
+        // an `[N, 2]` array. `polygon_area` over it is an ordinary `aggregate`.
+        "intersect_polygon" => eval_intersect_polygon(node, ctx),
         "makearray" => eval_makearray(node, ctx),
         "reshape" => eval_reshape(node, ctx),
         "transpose" => eval_transpose(node, ctx),
@@ -1473,6 +1477,104 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     } else {
         Value::Scalar(0.0)
     }
+}
+
+/// Evaluate the `intersect_polygon` leaf op (RFC `semiring-faq-unified-ir` §8.1):
+/// clip the two polygon operands on the node's declared `manifold` and return
+/// the overlap ring as an `[N, 2]` array of `(lon, lat)` rows. `N` is
+/// data-dependent; a disjoint / edge-touching clip yields a `[0, 2]` array.
+/// Spherical/geodesic clips dispatch to `s2geometry` via [`crate::geometry`];
+/// planar clips use a pure-Rust Sutherland–Hodgman intersection.
+fn eval_intersect_polygon(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
+    // Strict binary clip (schema-enforced; defense-in-depth here).
+    if node.args.len() != 2 {
+        return Value::Scalar(f64::NAN);
+    }
+    // The `manifold` flag is required and part of the op's contract (§5.8.4);
+    // a missing or out-of-enum value is not evaluable.
+    let manifold = match node
+        .manifold
+        .as_deref()
+        .and_then(crate::geometry::Manifold::from_flag)
+    {
+        Some(m) => m,
+        None => return Value::Scalar(f64::NAN),
+    };
+    let poly_a = match eval(&node.args[0], ctx) {
+        Value::Array(a) => a,
+        _ => return Value::Scalar(f64::NAN),
+    };
+    let poly_b = match eval(&node.args[1], ctx) {
+        Value::Array(a) => a,
+        _ => return Value::Scalar(f64::NAN),
+    };
+    let (va, vb) = match (arrayd_to_lonlat(&poly_a), arrayd_to_lonlat(&poly_b)) {
+        (Some(a), Some(b)) => (a, b),
+        _ => return Value::Scalar(f64::NAN),
+    };
+    match crate::geometry::intersect_polygon(&va, &vb, manifold) {
+        Ok(ring) => Value::Array(lonlat_to_arrayd(&ring)),
+        // A degenerate input ring or unavailable backend surfaces as NaN, the
+        // same not-a-value sentinel the evaluator uses for unevaluable nodes.
+        Err(_) => Value::Scalar(f64::NAN),
+    }
+}
+
+/// Read a `[V, 2]` lon/lat coordinate array into a `Vec<(lon, lat)>`. Returns
+/// `None` unless the array is 2-D with a trailing coordinate axis of length 2.
+fn arrayd_to_lonlat(arr: &ArrayD<f64>) -> Option<Vec<(f64, f64)>> {
+    if arr.ndim() != 2 || arr.shape()[1] != 2 {
+        return None;
+    }
+    let nv = arr.shape()[0];
+    let mut out = Vec::with_capacity(nv);
+    for v in 0..nv {
+        out.push((arr[IxDyn(&[v, 0])], arr[IxDyn(&[v, 1])]));
+    }
+    Some(out)
+}
+
+/// Build a row-major `[N, 2]` lon/lat array from a ring of `(lon, lat)` pairs.
+/// An empty ring yields a `[0, 2]` array so downstream `index(clip, v, c)` reads
+/// return the 0 ghost value and a `sum_product` FAQ over the empty `clip_ring`
+/// range reduces to the additive identity `0̄`.
+fn lonlat_to_arrayd(ring: &[(f64, f64)]) -> ArrayD<f64> {
+    let n = ring.len();
+    let mut flat = Vec::with_capacity(n * 2);
+    for &(lon, lat) in ring {
+        flat.push(lon);
+        flat.push(lat);
+    }
+    ArrayD::from_shape_vec(IxDyn(&[n, 2]), flat).expect("ring [N,2] shape is consistent")
+}
+
+/// Evaluate a standalone expression against a set of named array inputs, reusing
+/// the array evaluator — in particular the M1 `aggregate` machinery in
+/// [`eval_arrayop`]. This is the entry point for computing a `polygon_area`
+/// `sum_product` FAQ over an `intersect_polygon` ring (RFC §8.1): supply the
+/// clipped ring (and any companion arrays the integrand references) in `inputs`
+/// with the aggregate's `clip_ring` range already resolved to a concrete
+/// `[1, N]` interval, and the body is reduced exactly as any other `aggregate`.
+///
+/// Returns [`Value::Scalar`] for a scalar FAQ output (`output_idx: []`),
+/// [`Value::Array`] otherwise.
+pub fn eval_expression(
+    expr: &Expr,
+    inputs: &HashMap<String, ArrayD<f64>>,
+    params: &[f64],
+    param_names: &[String],
+    t: f64,
+) -> Value {
+    let empty: HashMap<String, ArrayD<f64>> = HashMap::new();
+    let mut ctx = EvalCtx {
+        state_arrays: &empty,
+        observed_arrays: inputs,
+        params,
+        param_names,
+        loop_binds: HashMap::new(),
+        t,
+    };
+    eval(expr, &mut ctx)
 }
 
 /// Evaluate an `aggregate`/`arrayop` `filter` predicate under the current loop
@@ -2352,4 +2454,173 @@ where
     }
 
     Ok((times, state_rows))
+}
+
+#[cfg(test)]
+mod geometry_eval_tests {
+    //! End-to-end evaluation of the M4 geometry kernel through the *real* array
+    //! evaluator (bead ess-my4.4.11; RFC `semiring-faq-unified-ir` §8.1): the
+    //! `intersect_polygon` leaf is dispatched by [`eval_op`] (spherical →
+    //! s2geometry via the `s2bindings` crate, planar → Sutherland–Hodgman), and
+    //! `polygon_area` is computed as an ordinary `sum_product` aggregate over the
+    //! clipped ring, reduced by the M1 machinery in [`eval_arrayop`]. This is the
+    //! Rust binding actually clipping and integrating, not just schema-validating.
+    use super::*;
+    use serde_json::json;
+
+    /// Build an `[N, 2]` lon/lat array from a ring of `(lon, lat)` pairs.
+    fn ring_array(ring: &[(f64, f64)]) -> ArrayD<f64> {
+        let mut flat = Vec::with_capacity(ring.len() * 2);
+        for &(lon, lat) in ring {
+            flat.push(lon);
+            flat.push(lat);
+        }
+        ArrayD::from_shape_vec(IxDyn(&[ring.len(), 2]), flat).unwrap()
+    }
+
+    /// Clip two polygons through the public evaluator path — `eval_expression`
+    /// → [`eval_op`] → `intersect_polygon` arm — exactly as a model's observed
+    /// `clip` variable would be evaluated. Returns the overlap ring vertices.
+    fn clip_via_evaluator(
+        src: &[(f64, f64)],
+        tgt: &[(f64, f64)],
+        manifold: &str,
+    ) -> Vec<(f64, f64)> {
+        let mut inputs = HashMap::new();
+        inputs.insert("src_poly".to_string(), ring_array(src));
+        inputs.insert("tgt_poly".to_string(), ring_array(tgt));
+        let node: Expr = serde_json::from_value(json!({
+            "op": "intersect_polygon",
+            "id": "overlap_clip",
+            "manifold": manifold,
+            "args": ["src_poly", "tgt_poly"],
+        }))
+        .unwrap();
+        match eval_expression(&node, &inputs, &[], &[], 0.0) {
+            Value::Array(a) => arrayd_to_lonlat(&a).expect("[N,2] ring"),
+            Value::Scalar(s) => panic!("intersect_polygon evaluated to scalar {s}"),
+        }
+    }
+
+    /// `polygon_area` as an ordinary `sum_product` FAQ over a ring (planar
+    /// shoelace), evaluated by the M1 aggregate machinery. The integrand is the
+    /// signed cross term `½·(xᵥ·yᵥ₊₁ − xᵥ₊₁·yᵥ)` summed over ring edges; the ring
+    /// and its one-vertex rotation are supplied as arrays so the contracted `v`
+    /// loop needs no wrap-around indexing. Returns the unsigned area.
+    fn shoelace_area_faq(ring: &[(f64, f64)]) -> f64 {
+        let n = ring.len();
+        if n < 3 {
+            return 0.0;
+        }
+        let next: Vec<(f64, f64)> = (0..n).map(|i| ring[(i + 1) % n]).collect();
+        let mut inputs = HashMap::new();
+        inputs.insert("clip".to_string(), ring_array(ring));
+        inputs.insert("clip_next".to_string(), ring_array(&next));
+        let agg: Expr = serde_json::from_value(json!({
+            "op": "aggregate",
+            "args": [],
+            "semiring": "sum_product",
+            "output_idx": [],
+            "ranges": { "v": [1, n] },
+            "expr": {
+                "op": "*",
+                "args": [
+                    0.5,
+                    { "op": "-", "args": [
+                        { "op": "*", "args": [
+                            { "op": "index", "args": ["clip", "v", 1] },
+                            { "op": "index", "args": ["clip_next", "v", 2] }
+                        ]},
+                        { "op": "*", "args": [
+                            { "op": "index", "args": ["clip_next", "v", 1] },
+                            { "op": "index", "args": ["clip", "v", 2] }
+                        ]}
+                    ]}
+                ]
+            }
+        }))
+        .unwrap();
+        match eval_expression(&agg, &inputs, &[], &[], 0.0) {
+            Value::Scalar(s) => s.abs(),
+            Value::Array(_) => panic!("scalar polygon_area FAQ expected"),
+        }
+    }
+
+    #[test]
+    fn planar_clip_then_polygon_area_faq_is_exact() {
+        // [0,2]² ∩ [1,3]² = [1,2]², area 1. Clip through the evaluator, then take
+        // `polygon_area` as a sum_product FAQ over the clipped ring.
+        let src = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)];
+        let tgt = [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)];
+        let ring = clip_via_evaluator(&src, &tgt, "planar");
+        assert!(ring.len() >= 3, "expected a non-degenerate overlap ring");
+        let area = shoelace_area_faq(&ring);
+        assert!(
+            (area - 1.0).abs() < 1e-9,
+            "polygon_area FAQ = {area}, expected 1"
+        );
+        // The FAQ agrees with the closed-form shoelace oracle.
+        assert!((area - crate::geometry::shoelace_area(&ring)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn planar_clip_of_offset_triangles_area_faq() {
+        // A non-rectangular case so the FAQ is exercised on a general ring.
+        let src = [(0.0, 0.0), (4.0, 0.0), (0.0, 4.0)];
+        let tgt = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0)];
+        let ring = clip_via_evaluator(&src, &tgt, "planar");
+        let area = shoelace_area_faq(&ring);
+        // Overlap is the triangle (0,0),(4,0),(2,2): area = ½·base·height = 4.
+        assert!(
+            (area - 4.0).abs() < 1e-9,
+            "polygon_area FAQ = {area}, expected 4"
+        );
+    }
+
+    #[test]
+    fn spherical_clip_via_s2_is_nonempty_with_analytic_area() {
+        // Two quarter-hemisphere sectors; the s2 clip overlap is π/4 steradians.
+        let src = [(0.0, 0.0), (90.0, 0.0), (0.0, 90.0)];
+        let tgt = [(45.0, 0.0), (135.0, 0.0), (45.0, 90.0)];
+        let ring = clip_via_evaluator(&src, &tgt, "spherical");
+        assert!(ring.len() >= 3, "the s2 spherical clip should be non-empty");
+        let area = crate::geometry::spherical_area(&ring).expect("spherical area");
+        assert!(
+            (area - std::f64::consts::FRAC_PI_4).abs() < 1e-9,
+            "spherical overlap area = {area}, expected π/4"
+        );
+    }
+
+    #[test]
+    fn disjoint_clip_is_empty_ring_with_zero_area_faq() {
+        let src = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let tgt = [(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)];
+        let ring = clip_via_evaluator(&src, &tgt, "planar");
+        assert!(ring.is_empty(), "disjoint cells clip to an empty ring");
+        // A sum_product FAQ over the empty clip_ring reduces to the additive 0̄.
+        assert_eq!(shoelace_area_faq(&ring), 0.0);
+    }
+
+    #[test]
+    fn intersect_polygon_without_manifold_is_unevaluable() {
+        // `manifold` is required; absent, the node is not evaluable (NaN sentinel).
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "src_poly".to_string(),
+            ring_array(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]),
+        );
+        inputs.insert(
+            "tgt_poly".to_string(),
+            ring_array(&[(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)]),
+        );
+        let node: Expr = serde_json::from_value(json!({
+            "op": "intersect_polygon",
+            "args": ["src_poly", "tgt_poly"],
+        }))
+        .unwrap();
+        match eval_expression(&node, &inputs, &[], &[], 0.0) {
+            Value::Scalar(s) => assert!(s.is_nan(), "missing manifold should be NaN, got {s}"),
+            Value::Array(_) => panic!("missing manifold must not produce a ring"),
+        }
+    }
 }

@@ -83,6 +83,8 @@ fn canon_op(node: &ExpressionNode) -> Result<Expr, CanonicalizeError> {
         table: node.table.clone(),
         axes: node.axes.clone(),
         output: node.output.clone(),
+        id: node.id.clone(),
+        manifold: node.manifold.clone(),
     };
     match work.op.as_str() {
         "+" => canon_add(&mut work),
