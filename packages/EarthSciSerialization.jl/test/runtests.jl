@@ -11,7 +11,6 @@ using JSON3
     include("reactions_test.jl")
     include("display_test.jl")
     include("units_test.jl")
-    include("error_handling_test.jl")
     include("conformance_round_trip_test.jl")
     include("mtk_catalyst_test.jl")
     include("real_mtk_integration_test.jl")

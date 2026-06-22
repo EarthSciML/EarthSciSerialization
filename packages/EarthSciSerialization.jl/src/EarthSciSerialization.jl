@@ -21,7 +21,6 @@ using JSONSchema
 using Tullio
 
 include("types.jl")
-include("error_handling.jl")
 include("validate.jl")
 include("reactions.jl")
 include("flatten.jl")
