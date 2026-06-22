@@ -315,9 +315,9 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
 
     # Arrayop lifting: wrap array-variable differential equations in arrayop
     # after the rule engine rewrites PDE ops to stencil/index form. On
-    # non-periodic dimensions with declared dirichlet/neumann BCs, the
-    # interior arrayop range shrinks by the stencil reach and per-cell
-    # boundary equations are emitted (ess-gp3).
+    # non-periodic dimensions with declared BCs, the interior stencil is
+    # rewrapped as a makearray whose boundary regions splice the rewritten
+    # `bc["value"]` ghost AST (ess-hjg, declarative lowering).
     _arrayop_lift_equations!(model, ctx.grids, ctx.variables; lift_1d = lift_1d_arrayop)
 end
 
@@ -349,11 +349,10 @@ function _arrayop_lift_equations!(model::Dict{String,Any},
         eqn = eqn_any isa Dict{String,Any} ? eqn_any :
             Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
         info = _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
-        push!(new_eqns, eqn)
         if info !== nothing && bcs isa AbstractDict && !isempty(bcs)
-            append!(new_eqns,
-                    _apply_nonperiodic_bcs!(eqn, info, bcs, grids, variables))
+            _apply_makearray_bcs!(eqn, info, bcs, grids, variables)
         end
+        push!(new_eqns, eqn)
     end
     model["equations"] = new_eqns
 end
@@ -531,9 +530,9 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
     rhs_raw, _ = _inline_elementwise_arrayops(rhs_raw, dim_to_canon)
-    # Keep a pre-fold copy: boundary-cell emission (ess-gp3) instantiates the
-    # stencil at literal indices and must see raw i±k offsets, not the
-    # periodic ifelse wrappers.
+    # Keep a pre-fold copy: makearray boundary-region emission (ess-hjg)
+    # instantiates the stencil at literal indices and must see raw i±k offsets,
+    # not the periodic ifelse wrappers.
     rhs_prefold = _deep_native(rhs_raw)
 
     periodic_dims = get(gmeta, "periodic_dims", nothing)
@@ -668,16 +667,57 @@ function _scan_stencil_reach!(reach::Dict{String,Int}, node)
     end
 end
 
-# Instantiate a stencil body at literal cell indices: canonical index
-# variables resolve via `fixed`, offset arithmetic folds, periodic reads
-# wrap numerically, and bounded out-of-range reads resolve per the read
-# variable's BC (dirichlet value / neumann-zero mirror / zero-ghost
-# passthrough when undeclared).
-function _instantiate_bc_cell(node, fixed::Dict{String,Int},
-                               variables::Dict{String,Dict{String,Any}},
-                               dim_sizes::AbstractDict,
-                               periodic::Set{String},
-                               bc_map::Dict{Tuple{String,String,Symbol},Tuple{String,Any}})
+# Re-index a BC-rule ghost AST from the rule's local 0-based frame into the
+# absolute grid frame (ess-hjg). The ESD ghost rules
+# ({dirichlet,neumann,robin}_bc.json) author the ghost in terms of
+# `index($u, L)`, where L (0-based) counts cells inward from the boundary
+# face (L=0 ⇒ the first interior cell). Map each such read to the absolute
+# grid index along the BC's side axis — min side: `1 + L`, max side: `N - L`
+# — while the variable's other axes inherit the concrete indices of the
+# out-of-range read being replaced (`other_idx`). `rank` is the variable's
+# dimensionality so a 1-D-authored ghost rehydrates to the full index tuple.
+function _reindex_ghost(node, var::String, axis_pos::Int, is_max::Bool, N::Int,
+                        other_idx::Dict{Int,Int}, rank::Int)
+    node isa AbstractDict || return node
+    if get(node, "op", nothing) == "index"
+        args = get(node, "args", Any[])
+        if !isempty(args) && args[1] isa AbstractString && String(args[1]) == var
+            L = length(args) >= 2 ? _fold_index_arg(args[2], Dict{String,Int}()) : 0
+            L === nothing && (L = 0)
+            full = Any[var]
+            for p in 1:rank
+                if p == axis_pos
+                    push!(full, is_max ? N - L : 1 + L)
+                else
+                    push!(full, get(other_idx, p, 1))
+                end
+            end
+            return Dict{String,Any}("op" => "index", "args" => full)
+        end
+    end
+    out = Dict{String,Any}()
+    for (k, v) in node
+        key = String(k)
+        out[key] = key == "args" && v isa AbstractVector ?
+            Any[_reindex_ghost(a, var, axis_pos, is_max, N, other_idx, rank) for a in v] : v
+    end
+    return out
+end
+
+# Instantiate a stencil body at literal cell indices, splicing the declarative
+# BC-rule ghost AST at out-of-range reads (ess-hjg). Canonical index variables
+# resolve via `fixed`, offset arithmetic folds, periodic reads wrap
+# numerically. For a bounded out-of-range read of variable `v` on side `s`,
+# the whole read node is replaced by `bc_ghost_map[(v,dim,s)]` — the rewritten
+# `bc["value"]` produced by the rule engine — re-indexed into the grid frame.
+# The result is re-instantiated so corner reads (out-of-range on ≥2 axes)
+# compose their per-axis ghosts. Undeclared out-of-range reads keep the
+# zero-ghost convention (concrete index passes through to the evaluator).
+function _instantiate_bc_cell_ghost(node, fixed::Dict{String,Int},
+                                     variables::Dict{String,Dict{String,Any}},
+                                     dim_sizes::AbstractDict,
+                                     periodic::Set{String},
+                                     bc_ghost_map::Dict{Tuple{String,String,Symbol},Any})
     node isa AbstractDict || return node
     if get(node, "op", nothing) == "index"
         args = get(node, "args", Any[])
@@ -686,30 +726,42 @@ function _instantiate_bc_cell(node, fixed::Dict{String,Int},
             vmeta = get(variables, vname, nothing)
             vshape = vmeta === nothing ? nothing : get(vmeta, "shape", nothing)
             if vshape isa AbstractVector && length(vshape) == length(args) - 1
+                rank = length(vshape)
+                folded = Vector{Union{Int,Nothing}}(undef, rank)
+                for (p, a) in enumerate(args[2:end])
+                    folded[p] = _fold_index_arg(a, fixed)
+                end
+                # Splice the ghost at the first bounded out-of-range axis.
+                for p in 1:rank
+                    e = folded[p]
+                    e === nothing && continue
+                    dn = String(vshape[p])
+                    N = Int(get(dim_sizes, dn, 0))
+                    (N > 0 && !(dn in periodic) && (e < 1 || e > N)) || continue
+                    is_max = e > N
+                    ghost = get(bc_ghost_map, (vname, dn, is_max ? :max : :min), nothing)
+                    ghost === nothing && continue
+                    other_idx = Dict{Int,Int}()
+                    for q in 1:rank
+                        q == p && continue
+                        folded[q] !== nothing && (other_idx[q] = folded[q])
+                    end
+                    spliced = _reindex_ghost(_deep_native(ghost), vname, p, is_max, N,
+                                             other_idx, rank)
+                    return _instantiate_bc_cell_ghost(spliced, fixed, variables,
+                                                      dim_sizes, periodic, bc_ghost_map)
+                end
+                # No ghost spliced: rebuild with folded / periodic-wrapped indices.
                 new_args = Any[vname]
                 for (p, a) in enumerate(args[2:end])
-                    e = _fold_index_arg(a, fixed)
+                    e = folded[p]
                     if e === nothing
                         push!(new_args, a)
                         continue
                     end
                     dn = String(vshape[p])
                     N = Int(get(dim_sizes, dn, 0))
-                    if N > 0 && dn in periodic
-                        e = mod(e - 1, N) + 1
-                    elseif N > 0 && (e < 1 || e > N)
-                        side = e < 1 ? :min : :max
-                        entry = get(bc_map, (vname, dn, side), nothing)
-                        if entry !== nothing
-                            kind, value = entry
-                            _check_bc_supported(kind, value, vname, dn)
-                            if kind == "dirichlet"
-                                return _deep_native(value)
-                            else  # zero-flux neumann
-                                e = e < 1 ? 1 - e : 2N + 1 - e
-                            end
-                        end
-                    end
+                    (N > 0 && dn in periodic) && (e = mod(e - 1, N) + 1)
                     push!(new_args, e)
                 end
                 return Dict{String,Any}("op" => "index", "args" => new_args)
@@ -720,7 +772,7 @@ function _instantiate_bc_cell(node, fixed::Dict{String,Int},
     for (k, v) in node
         key = String(k)
         out[key] = key == "args" && v isa AbstractVector ?
-            Any[_instantiate_bc_cell(a, fixed, variables, dim_sizes, periodic, bc_map)
+            Any[_instantiate_bc_cell_ghost(a, fixed, variables, dim_sizes, periodic, bc_ghost_map)
                 for a in v] : v
     end
     return out
@@ -743,55 +795,69 @@ function _fold_index_arg(a, fixed::Dict{String,Int})
     return op == "+" ? x + y : x - y
 end
 
-function _check_bc_supported(kind::String, value, var::String, dim::String)
-    kind == "dirichlet" && return
-    if kind == "neumann"
-        (value isa Number && iszero(value)) && return
-        throw(RuleEngineError("E_BC_UNSUPPORTED",
-            "nonzero-Neumann boundary condition on '$var' along '$dim' is not " *
-            "yet supported by the arrayop lift (requires grid-spacing-aware " *
-            "ghost extrapolation)"))
+# Resolve a BC `side` string to `(dim_name, :min|:max)`. Primary convention is
+# axis-position (`xmin`/`xmax`/`ymin`/… and compass aliases) mapped through the
+# grid's `spatial_dims`, matching the rule-engine guards (`_SIDE_TO_AXIS_IDX`,
+# `bind_side_spacing`) so the same side that a BC rule fired on selects the
+# right boundary axis here. Falls back to the dim-name convention
+# (`<dim>min`/`<dim>max`) for backward compatibility.
+const _BC_SIDE_MAX = Set{String}(["xmax", "ymax", "zmax", "east", "north", "top"])
+function _resolve_bc_side(side::String, dim_sizes::AbstractDict, spatial::Vector{String})
+    axis = get(_SIDE_TO_AXIS_IDX, side, nothing)
+    if axis !== nothing && axis <= length(spatial)
+        return (spatial[axis], side in _BC_SIDE_MAX ? :max : :min)
     end
-    throw(RuleEngineError("E_BC_UNSUPPORTED",
-        "boundary condition kind '$kind' on '$var' along '$dim' is not " *
-        "supported by the arrayop lift (supported: dirichlet, zero-flux neumann)"))
+    for dn_any in keys(dim_sizes)
+        dn = String(dn_any)
+        side == dn * "min" && return (dn, :min)
+        side == dn * "max" && return (dn, :max)
+    end
+    return nothing
 end
 
-# Emit boundary-cell equations for non-periodic dimensions with declared
-# dirichlet/neumann BCs. Shrinks the interior arrayop range by the stencil
-# reach on each bounded side, then emits one scalar equation per excluded
-# boundary cell with ghost reads substituted per BC kind:
-#   dirichlet → BC `value` expr; neumann-0 → mirror back in-range (zero-flux).
-# Reads of periodic dims wrap numerically; undeclared ghost reads keep the
-# zero-ghost convention.
-function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
-                                  bcs::AbstractDict,
-                                  grids::Dict{String,Dict{String,Any}},
-                                  variables::Dict{String,Dict{String,Any}})
+# Lower declarative non-periodic BCs into a makearray-region arrayop body
+# (ess-hjg). The interior arrayop RHS body `B(i,j,…)` is rewrapped as
+# `index(makearray(regions, values), i, j, …)`:
+#   • region 0  = the full grid box, value = B (the periodic-folded interior
+#     stencil) — the default at every cell.
+#   • one single-cell region per boundary cell within stencil reach of a
+#     bounded side carrying a BC, value = B instantiated at that cell with
+#     each out-of-range read replaced by the declarative BC-rule ghost
+#     (`bc["value"]`, re-indexed into the grid frame). Corner cells fall out
+#     naturally as single-cell regions on ≥2 bounded axes.
+# makearray last-match-wins: a boundary region overrides region 0 at its cell.
+# The arrayop ranges stay FULL — there is ONE arrayop equation (the retired
+# imperative path shrank the range and emitted separate scalar equations).
+# Mutates `eqn["rhs"]["expr"]` in place; appends no equations.
+function _apply_makearray_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
+                                bcs::AbstractDict,
+                                grids::Dict{String,Dict{String,Any}},
+                                variables::Dict{String,Dict{String,Any}})
     gmeta = get(grids, info.grid_name, nothing)
-    gmeta isa AbstractDict || return Any[]
+    gmeta isa AbstractDict || return
     dim_sizes = get(gmeta, "dim_sizes", nothing)
-    dim_sizes isa AbstractDict || return Any[]
+    dim_sizes isa AbstractDict || return
     periodic = Set{String}(String.(get(gmeta, "periodic_dims", Any[])))
 
-    bc_map = Dict{Tuple{String,String,Symbol},Tuple{String,Any}}()
+    # Ghost map (var, dim, side) → rewritten ghost AST. The ghost is the
+    # rule-engine output stashed on `bc["value"]` by `_discretize_bc!`
+    # (consumed here, not re-derived from `kind`).
+    spatial = String[String(s) for s in get(gmeta, "spatial_dims", String[])]
+    bc_ghost_map = Dict{Tuple{String,String,Symbol},Any}()
     for bcname in sort!(collect(String.(keys(bcs))))
         bc = bcs[bcname]
         bc isa AbstractDict || continue
         v = get(bc, "variable", nothing)
-        k = get(bc, "kind", nothing)
         s = get(bc, "side", nothing)
-        (v isa AbstractString && k isa AbstractString && s isa AbstractString) || continue
-        for dn_any in keys(dim_sizes)
-            dn = String(dn_any)
-            if String(s) == dn * "min"
-                bc_map[(String(v), dn, :min)] = (String(k), get(bc, "value", 0))
-            elseif String(s) == dn * "max"
-                bc_map[(String(v), dn, :max)] = (String(k), get(bc, "value", 0))
-            end
-        end
+        (v isa AbstractString && s isa AbstractString) || continue
+        ghost = get(bc, "value", nothing)
+        ghost === nothing && continue
+        resolved = _resolve_bc_side(String(s), dim_sizes, spatial)
+        resolved === nothing && continue
+        dn, sym = resolved
+        bc_ghost_map[(String(v), dn, sym)] = ghost
     end
-    isempty(bc_map) && return Any[]
+    isempty(bc_ghost_map) && return
 
     var    = info.var_name
     shape  = info.shape
@@ -802,6 +868,7 @@ function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
     reach = Dict{String,Int}(ix => 0 for ix in idxs)
     _scan_stencil_reach!(reach, info.rhs_prefold)
 
+    # Interior box [lo,hi]: shrink each bounded side by its stencil reach.
     lo = ones(Int, nd)
     hi = copy(sizes)
     bounded = falses(nd)
@@ -809,21 +876,14 @@ function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
         dn = shape[d]
         dn in periodic && continue
         r = get(reach, idxs[d], 0)
+        r == 0 && continue
         for (sym, isback) in ((:min, false), (:max, true))
-            entry = get(bc_map, (var, dn, sym), nothing)
-            entry === nothing && continue
-            kind, value = entry
-            _check_bc_supported(kind, value, var, dn)
-            r == 0 && continue
-            if isback
-                hi[d] = sizes[d] - r
-            else
-                lo[d] = 1 + r
-            end
+            haskey(bc_ghost_map, (var, dn, sym)) || continue
+            isback ? (hi[d] = sizes[d] - r) : (lo[d] = 1 + r)
             bounded[d] = true
         end
     end
-    any(bounded) || return Any[]
+    any(bounded) || return
     for d in 1:nd
         lo[d] <= hi[d] || throw(RuleEngineError("E_BC_GRID_TOO_SMALL",
             "dimension '$(shape[d])' (size $(sizes[d])) is too small for the " *
@@ -831,30 +891,26 @@ function _apply_nonperiodic_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
             "on both sides"))
     end
 
-    for d in 1:nd
-        bounded[d] || continue
-        eqn["lhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
-        eqn["rhs"]["ranges"][idxs[d]] = Any[lo[d], hi[d]]
-    end
-
-    extra = Any[]
+    # region 0 = full grid → the existing (folded) interior body.
+    regions = Any[Any[Any[1, sizes[d]] for d in 1:nd]]
+    values  = Any[eqn["rhs"]["expr"]]
     for cell in Iterators.product((1:sizes[d] for d in 1:nd)...)
         all(d -> lo[d] <= cell[d] <= hi[d], 1:nd) && continue
         fixed = Dict{String,Int}(idxs[d] => cell[d] for d in 1:nd)
-        rhs_cell = _instantiate_bc_cell(info.rhs_prefold, fixed, variables,
-                                        dim_sizes, periodic, bc_map)
-        lhs_cell = Dict{String,Any}(
-            "op"   => "D",
-            "args" => Any[Dict{String,Any}(
-                "op" => "index", "args" => Any[var, cell...])],
-            "wrt"  => info.wrt,
-        )
-        push!(extra, Dict{String,Any}(
-            "lhs" => lhs_cell,
-            "rhs" => rhs_cell,
-        ))
+        body_cell = _instantiate_bc_cell_ghost(_deep_native(info.rhs_prefold), fixed,
+                                               variables, dim_sizes, periodic, bc_ghost_map)
+        push!(regions, Any[Any[cell[d], cell[d]] for d in 1:nd])
+        push!(values, body_cell)
     end
-    return extra
+
+    eqn["rhs"]["expr"] = Dict{String,Any}(
+        "op"   => "index",
+        "args" => vcat(
+            Any[Dict{String,Any}("op" => "makearray",
+                                 "regions" => regions, "values" => values)],
+            Any[idxs[d] for d in 1:nd]),
+    )
+    return
 end
 
 # ============================================================================
@@ -910,6 +966,15 @@ function _discretize_bc!(path::String, bc::Dict{String,Any},
         end
         if value_raw !== nothing
             push!(wrapper["args"], value_raw)
+        end
+        # Robin coefficients ride as trailing args (ess-hjg) — no OpExpr slot,
+        # no schema change. Appended in the fixed order α, β, γ AFTER `value`
+        # so a robin rule binds them positionally (`args: [$u, $a, $b, $g]`
+        # when robin carries no scalar `value`). Only robin BCs declare these
+        # fields, so dirichlet/neumann/interface arg shapes are unchanged.
+        for coeff in ("robin_alpha", "robin_beta", "robin_gamma")
+            cv = get(bc, coeff, nothing)
+            cv !== nothing && push!(wrapper["args"], cv)
         end
         bc_expr = parse_expression(wrapper)
         rewrite_out = rewrite(canonicalize(bc_expr), rules, ctx; max_passes=max_passes)

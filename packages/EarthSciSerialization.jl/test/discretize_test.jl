@@ -203,74 +203,136 @@ using JSON3
         @test unfolded == String[]
     end
 
-    @testset "non-periodic BCs: interior shrink + boundary-cell emission (ess-1nm)" begin
-        # 1D bounded heat-like model: D(u) = grad(u) rewritten to a centered
-        # stencil; dirichlet at xmin (value 3), zero-flux neumann at xmax.
-        function _bounded_1d_esm(; bcs=true)
+    @testset "non-periodic BCs: makearray-region ghost lowering (ess-hjg)" begin
+        # 1D bounded heat-like model: D(u) = grad(u) rewritten to the centered
+        # stencil -u[i-1] + u[i+1]. The non-periodic BC ghost is now lowered
+        # DECLARATIVELY: boundary-cell emission consumes the rewritten
+        # `bc["value"]` ghost AST produced by the inline dirichlet/neumann/robin
+        # rules and splices it into makearray boundary regions (ess-hjg), in
+        # place of the retired imperative ghost shadow.
+        #
+        # The ghost rules mirror ESD's finite_difference/{dirichlet,neumann,
+        # robin}_bc.json (local 0-based `index($u,0)` = first interior cell;
+        # `$h` from bind_side_spacing). Robin coefficients ride as trailing args.
+        _dirichlet_rule() = Dict{String,Any}(
+            "name" => "dirichlet_bc",
+            "pattern" => Dict{String,Any}("op"=>"bc","kind"=>"dirichlet","side"=>"\$side",
+                "args"=>Any["\$u","\$value"]),
+            "replacement" => Dict{String,Any}("op"=>"-","args"=>Any[
+                Dict{String,Any}("op"=>"*","args"=>Any[2,"\$value"]),
+                Dict{String,Any}("op"=>"index","args"=>Any["\$u",0])]))
+        _neumann_rule() = Dict{String,Any}(
+            "name" => "neumann_bc",
+            "pattern" => Dict{String,Any}("op"=>"bc","kind"=>"neumann","side"=>"\$side",
+                "args"=>Any["\$u","\$value"]),
+            "where" => Any[
+                Dict{String,Any}("guard"=>"var_has_grid","pvar"=>"\$u","grid"=>"\$g"),
+                Dict{String,Any}("guard"=>"bind_side_spacing","pvar"=>"\$h","side"=>"\$side","grid"=>"\$g")],
+            "replacement" => Dict{String,Any}("op"=>"+","args"=>Any[
+                Dict{String,Any}("op"=>"index","args"=>Any["\$u",0]),
+                Dict{String,Any}("op"=>"*","args"=>Any["\$h","\$value"])]))
+        _robin_rule() = Dict{String,Any}(
+            "name" => "robin_bc",
+            "pattern" => Dict{String,Any}("op"=>"bc","kind"=>"robin","side"=>"\$side",
+                "args"=>Any["\$u","\$a","\$b","\$g"]),
+            "where" => Any[
+                Dict{String,Any}("guard"=>"var_has_grid","pvar"=>"\$u","grid"=>"\$gr"),
+                Dict{String,Any}("guard"=>"bind_side_spacing","pvar"=>"\$h","side"=>"\$side","grid"=>"\$gr")],
+            "replacement" => Dict{String,Any}("op"=>"/","args"=>Any[
+                Dict{String,Any}("op"=>"+","args"=>Any[
+                    Dict{String,Any}("op"=>"*","args"=>Any[Dict{String,Any}("op"=>"*","args"=>Any[2,"\$h"]),"\$g"]),
+                    Dict{String,Any}("op"=>"*","args"=>Any[
+                        Dict{String,Any}("op"=>"-","args"=>Any[Dict{String,Any}("op"=>"*","args"=>Any[2,"\$b"]),
+                            Dict{String,Any}("op"=>"*","args"=>Any["\$a","\$h"])]),
+                        Dict{String,Any}("op"=>"index","args"=>Any["\$u",0])])]),
+                Dict{String,Any}("op"=>"+","args"=>Any[Dict{String,Any}("op"=>"*","args"=>Any["\$a","\$h"]),
+                    Dict{String,Any}("op"=>"*","args"=>Any[2,"\$b"])])]))
+
+        function _bounded_1d_esm(; bcs=true, right=Dict{String,Any}(
+                    "variable"=>"u","kind"=>"neumann","side"=>"xmax","value"=>0),
+                    extra_rules=Any[])
             esm = _heat_1d_esm(; with_rule=true)
             esm["grids"]["gx"]["dimensions"][1]["periodic"] = false
+            append!(esm["rules"], Any[_dirichlet_rule(), _neumann_rule(), _robin_rule()])
+            append!(esm["rules"], extra_rules)
             if bcs
                 esm["models"]["M"]["boundary_conditions"] = Dict{String,Any}(
                     "left" => Dict{String,Any}(
                         "variable" => "u", "kind" => "dirichlet",
-                        "side" => "imin", "value" => 3,
-                    ),
-                    "right" => Dict{String,Any}(
-                        "variable" => "u", "kind" => "neumann",
-                        "side" => "imax", "value" => 0,
-                    ),
-                )
+                        "side" => "xmin", "value" => 3),
+                    "right" => right)
             end
             return esm
         end
 
         out = discretize(_bounded_1d_esm(); lift_1d_arrayop=true)
         eqs = out["models"]["M"]["equations"]
-        # 1 interior arrayop + 2 boundary cells (reach 1, both sides bounded).
-        @test length(eqs) == 3
-        interior = eqs[1]
-        @test interior["lhs"]["op"] == "arrayop"
-        @test interior["lhs"]["ranges"] == Dict{String,Any}("i" => Any[2, 7])
-        @test interior["rhs"]["ranges"] == Dict{String,Any}("i" => Any[2, 7])
+        # ONE arrayop equation over the full grid; the boundary ghosts ride in a
+        # makearray body (the retired path shrank the range + emitted 2 extra
+        # scalar equations).
+        @test length(eqs) == 1
+        eqn = eqs[1]
+        @test eqn["lhs"]["op"] == "arrayop"
+        @test eqn["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
+        @test eqn["rhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
+        # RHS body is index(makearray(regions, values), i): full grid + the two
+        # boundary single cells (reach 1, both sides bounded).
+        body = eqn["rhs"]["expr"]
+        @test body["op"] == "index"
+        ma = body["args"][1]
+        @test ma["op"] == "makearray"
+        @test ma["regions"] == Any[Any[Any[1,8]], Any[Any[1,1]], Any[Any[8,8]]]
         # No periodic folding on a bounded dim.
-        @test !occursin("ifelse", JSON3.write(interior["rhs"]))
+        @test !occursin("ifelse", JSON3.write(eqn["rhs"]))
 
-        # Left boundary cell: ghost u[0] replaced by the dirichlet value 3.
-        # Rule rhs is -u[i-1] + u[i+1], so at i=1: -(3) + u[2].
-        left = eqs[2]
-        @test left["lhs"]["args"][1] == Dict{String,Any}("op" => "index", "args" => Any["u", 1])
-        s_left = JSON3.write(left["rhs"])
-        @test !occursin("\"index\",\"args\":[\"u\",0]", replace(s_left, " " => ""))
-        @test occursin("3", s_left)
-        @test occursin("[\"u\",2]", replace(s_left, " " => ""))
+        # xmin region: dirichlet ghost u[0] → 2*value − u[1] (2nd-order; consumes
+        # the rule output, supersedes the retired 1st-order `value` ghost).
+        s_xmin = replace(JSON3.write(ma["values"][2]), " " => "")
+        @test !occursin("[\"u\",0]", s_xmin)   # no out-of-range read survives
+        @test occursin("[\"u\",1]", s_xmin)    # reflected interior cell
+        @test occursin("[\"u\",2]", s_xmin)    # interior neighbour
+        # xmax region: zero-flux neumann ghost u[9] → u[8] (byte-identical to the
+        # retired mirror; the rule's `+ h*0` folds away).
+        s_xmax = replace(JSON3.write(ma["values"][3]), " " => "")
+        @test occursin("[\"u\",8]", s_xmax)
+        @test occursin("[\"u\",7]", s_xmax)
+        @test !occursin("[\"u\",9]", s_xmax)
 
-        # Right boundary cell: ghost u[9] mirrors to u[8] (zero-flux).
-        right = eqs[3]
-        @test right["lhs"]["args"][1] == Dict{String,Any}("op" => "index", "args" => Any["u", 8])
-        s_right = replace(JSON3.write(right["rhs"]), " " => "")
-        @test occursin("[\"u\",8]", s_right)   # mirrored ghost
-        @test occursin("[\"u\",7]", s_right)   # interior neighbor
-        @test !occursin("[\"u\",9]", s_right)  # no out-of-range read survives
+        # Numeric byte-identity anchor: u[k] = k, interior -u[i-1]+u[i+1] = 2;
+        # dirichlet i=1 → -(2*3 - u[1]) + u[2] = -3; zero-neumann i=8 → -u[7]+u[8] = 1.
+        f!, u0, p, _, vmap = build_evaluator(out; initial_conditions=Dict("u[$k]"=>Float64(k) for k in 1:8))
+        du = similar(u0); f!(du, u0, p, 0.0)
+        @test isapprox(du[vmap["u[1]"]], -3.0; rtol=1e-12)
+        for k in 2:7
+            @test isapprox(du[vmap["u[$k]"]], 2.0; rtol=1e-12)
+        end
+        @test isapprox(du[vmap["u[8]"]], 1.0; rtol=1e-12)   # zero-neumann mirror
 
         # Backward compat: bounded dim WITHOUT declared BCs is unchanged
-        # (full range, no extra equations, zero-ghost convention).
+        # (full range, single arrayop, zero-ghost convention).
         out0 = discretize(_bounded_1d_esm(bcs=false); lift_1d_arrayop=true)
         eqs0 = out0["models"]["M"]["equations"]
         @test length(eqs0) == 1
         @test eqs0[1]["lhs"]["ranges"] == Dict{String,Any}("i" => Any[1, 8])
+        @test !occursin("makearray", JSON3.write(eqs0[1]["rhs"]))
 
-        # Unsupported kinds on a lifted bounded dim are loud, not silent.
-        bad = _bounded_1d_esm()
-        bad["models"]["M"]["boundary_conditions"]["left"]["kind"] = "robin"
-        err = try discretize(bad; lift_1d_arrayop=true); nothing catch e; e end
-        @test err isa RuleEngineError
-        @test err.code == "E_BC_UNSUPPORTED"
+        # nonzero-Neumann now flows through (retired path threw E_BC_UNSUPPORTED).
+        # ghost u[8] + h*value, h = 1/8 → i=8: -u[7] + u[8] + 0.25 = 1.25.
+        outn = discretize(_bounded_1d_esm(; right=Dict{String,Any}(
+            "variable"=>"u","kind"=>"neumann","side"=>"xmax","value"=>2)); lift_1d_arrayop=true)
+        fn!, u0n, pn, _, vmn = build_evaluator(outn; initial_conditions=Dict("u[$k]"=>Float64(k) for k in 1:8))
+        dun = similar(u0n); fn!(dun, u0n, pn, 0.0)
+        @test isapprox(dun[vmn["u[8]"]], 1.25; rtol=1e-12)
 
-        bad2 = _bounded_1d_esm()
-        bad2["models"]["M"]["boundary_conditions"]["right"]["value"] = 2.5
-        err = try discretize(bad2; lift_1d_arrayop=true); nothing catch e; e end
-        @test err isa RuleEngineError
-        @test err.code == "E_BC_UNSUPPORTED"
+        # Robin now flows through (retired path threw E_BC_UNSUPPORTED). a=1,b=1,
+        # g=0, h=1/8 → ghost (2-h)*u[8]/(h+2); i=8: -u[7] + that.
+        outr = discretize(_bounded_1d_esm(; right=Dict{String,Any}(
+            "variable"=>"u","kind"=>"robin","side"=>"xmax",
+            "robin_alpha"=>1,"robin_beta"=>1,"robin_gamma"=>0)); lift_1d_arrayop=true)
+        fr!, u0r, pr, _, vmr = build_evaluator(outr; initial_conditions=Dict("u[$k]"=>Float64(k) for k in 1:8))
+        dur = similar(u0r); fr!(dur, u0r, pr, 0.0)
+        h = 1/8; robin_ghost = (2-h)*8 / (h+2)
+        @test isapprox(dur[vmr["u[8]"]], -7 + robin_ghost; rtol=1e-12)
     end
 
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
