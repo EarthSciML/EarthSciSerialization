@@ -123,9 +123,7 @@ pub use grid_accessor::{
 };
 pub use parse::{ParseError, SchemaValidationError, load, load_path};
 pub use reactions::{
-    ConservationAnalysis, ConservationLawType, ConservationViolation, DeriveError, LinearInvariant,
-    derive_odes, detect_conservation_violations, lower_reactions_to_equations,
-    stoichiometric_matrix,
+    DeriveError, derive_odes, lower_reactions_to_equations, stoichiometric_matrix,
 };
 pub use ref_loading::resolve_subsystem_refs;
 pub use reference_resolution::{
@@ -182,8 +180,6 @@ pub use migration::{MigrationError, can_migrate, get_supported_migration_targets
 
 pub use compile_error::CompileError;
 pub use performance::{CompactExpr, PerformanceError};
-#[cfg(feature = "simd")]
-pub use reactions::compute_conservation_weights_simd;
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
 #[cfg(not(target_arch = "wasm32"))]
