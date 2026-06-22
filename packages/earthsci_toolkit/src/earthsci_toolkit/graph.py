@@ -12,11 +12,9 @@ import re
 
 try:
     from .esm_types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
-    from .coupling_graph import construct_coupling_graph
 except ImportError:
     # For direct imports when testing
     from types import EsmFile, Model, ReactionSystem, Reaction, Expr, ExprNode, Equation
-    from coupling_graph import construct_coupling_graph
 
 
 def _format_chemical_name(name: str) -> str:
@@ -244,27 +242,9 @@ def component_graph(esm_file: EsmFile) -> 'Graph[ComponentNode, CouplingEdge]':
             )
             graph.nodes.append(node)
 
-    # Add coupling edges using the existing coupling graph functionality
-    try:
-        coupling_graph = construct_coupling_graph(esm_file)
-
-        for edge in coupling_graph.edges:
-            source_node = coupling_graph.nodes.get(edge.source_node)
-            target_node = coupling_graph.nodes.get(edge.target_node)
-
-            if source_node and target_node:
-                graph_edge = CouplingEdge(
-                    source=f"{source_node.type.value}_{source_node.name}",
-                    target=f"{target_node.type.value}_{target_node.name}",
-                    label=f"{len(edge.source_variables)} vars",
-                    coupling_type="coupling",
-                    coupling_type_detail=edge.coupling_type.value if hasattr(edge.coupling_type, 'value') else str(edge.coupling_type),
-                    variables=edge.source_variables + edge.target_variables
-                )
-                graph.edges.append(graph_edge)
-    except Exception:
-        # If coupling graph construction fails, skip coupling edges
-        pass
+    # Component graph contains component nodes only; it does not draw coupling
+    # edges. (Adding cross-system coupling edges would be a separate feature —
+    # see ess-9jb.3.)
 
     return graph
 
