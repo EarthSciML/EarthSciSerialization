@@ -335,6 +335,53 @@ using JSON3
         @test isapprox(dur[vmr["u[8]"]], -7 + robin_ghost; rtol=1e-12)
     end
 
+    @testset "_scan_stencil_reach! detects canonicalized constant-first offsets (ess-wg0)" begin
+        # `canonicalize` reorders the commutative `+` so the literal leads: the
+        # laplacian neighbour read `index(u, i + (-1), j)` becomes
+        # `index(u, {+,[-1,"i"]}, j)` — a CONSTANT-first offset. The reach scan
+        # used to match only the VARIABLE-first form `[v,k]`, so multi-dim
+        # additive stencils computed per-axis reach 0; `_apply_makearray_bcs!`
+        # then found no bounded side and silently dropped EVERY declarative BC
+        # ghost (periodic/Dirichlet/Neumann/Robin) in 2-D. 1-D `d2` rules escaped
+        # the bug only because they author one neighbour as a non-commutative
+        # subtraction `index(u, i - 1)`, whose arg order canonicalize preserves.
+        scan! = EarthSciSerialization._scan_stencil_reach!
+
+        # --- Full authentic path: author variable-first, canonicalize, scan. ---
+        # `index(u, i + (-1), j)` exactly as a laplacian rule authors it.
+        raw = Dict{String,Any}("op" => "index", "args" => Any["u",
+            Dict{String,Any}("op" => "+", "args" => Any["i", -1]), "j"])
+        canon = EarthSciSerialization._canonicalize_value(raw)
+        # Premise: canonicalize emitted the constant-first offset `[-1, "i"]`.
+        off = canon["args"][2]
+        @test off["op"] == "+"
+        @test off["args"][1] == -1 && off["args"][2] == "i"
+        # The fix: the canonicalized constant-first offset is detected (was 0).
+        reach = Dict{String,Int}("i" => 0, "j" => 0)
+        scan!(reach, canon)
+        @test reach["i"] == 1
+        @test reach["j"] == 0
+
+        # --- Both arg orderings agree (the symmetry the fix restores). ---
+        cf = Dict{String,Any}("op" => "index", "args" => Any["u",   # constant-first
+            Dict{String,Any}("op" => "+", "args" => Any[-1, "i"]), "j"])
+        vf = Dict{String,Any}("op" => "index", "args" => Any["u",   # variable-first
+            Dict{String,Any}("op" => "+", "args" => Any["i", -1]), "j"])
+        rcf = Dict{String,Int}("i" => 0, "j" => 0); scan!(rcf, cf)
+        rvf = Dict{String,Int}("i" => 0, "j" => 0); scan!(rvf, vf)
+        @test rcf == rvf == Dict("i" => 1, "j" => 0)
+
+        # --- Full 2-D laplacian: constant-first offsets on BOTH axes detected. ---
+        # The canonicalized four-neighbour reads: i±1 and j±1, all const-first.
+        _nbr(di, dj) = Dict{String,Any}("op" => "index", "args" => Any["u",
+            di == 0 ? "i" : Dict{String,Any}("op" => "+", "args" => Any[di, "i"]),
+            dj == 0 ? "j" : Dict{String,Any}("op" => "+", "args" => Any[dj, "j"])])
+        lap = Dict{String,Any}("op" => "+",
+            "args" => Any[_nbr(-1, 0), _nbr(1, 0), _nbr(0, -1), _nbr(0, 1)])
+        rlap = Dict{String,Int}("i" => 0, "j" => 0); scan!(rlap, lap)
+        @test rlap == Dict("i" => 1, "j" => 1)   # both axes bounded ⇒ makearray BC emitted
+    end
+
     @testset "Acceptance 2 — determinism (two calls byte-identical)" begin
         esm = _heat_1d_esm(; with_rule=true)
         a = discretize(esm)

@@ -658,6 +658,15 @@ function _scan_stencil_reach!(reach::Dict{String,Int}, node)
                     k = abs(Int(aa[2]))
                     v = String(aa[1])
                     haskey(reach, v) && (reach[v] = max(reach[v], k))
+                elseif length(aa) == 2 && aa[1] isa Number && aa[2] isa AbstractString
+                    # canonicalize reorders the commutative `+` so the literal
+                    # comes first: `index(u, i + (-1))` → args `[-1, "i"]`. Detect
+                    # this constant-first offset symmetrically, else the per-axis
+                    # reach computes to 0 and `_apply_makearray_bcs!` drops every
+                    # declarative BC ghost on multi-dim additive stencils (ess-wg0).
+                    k = abs(Int(aa[1]))
+                    v = String(aa[2])
+                    haskey(reach, v) && (reach[v] = max(reach[v], k))
                 end
             end
         end
