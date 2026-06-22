@@ -208,15 +208,6 @@ function serialize_trigger(trigger::DiscreteEventTrigger)::Dict{String,Any}
 end
 
 """
-    serialize_discrete_event_trigger(trigger::DiscreteEventTrigger) -> Dict{String,Any}
-
-Alias for serialize_trigger for backward compatibility.
-"""
-function serialize_discrete_event_trigger(trigger::DiscreteEventTrigger)::Dict{String,Any}
-    return serialize_trigger(trigger)
-end
-
-"""
     serialize_event(event::EventType) -> Dict{String,Any}
 
 Serialize EventType to JSON-compatible format.
@@ -969,7 +960,7 @@ function serialize_event(entry::CouplingEvent)::Dict{String,Any}
         result["conditions"] = [serialize_expression(c) for c in entry.conditions]
     end
     if entry.trigger !== nothing
-        result["trigger"] = serialize_discrete_event_trigger(entry.trigger)
+        result["trigger"] = serialize_trigger(entry.trigger)
     end
     if entry.affect_neg !== nothing
         result["affect_neg"] = [serialize_affect_equation(a) for a in entry.affect_neg]

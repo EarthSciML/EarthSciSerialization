@@ -38,15 +38,6 @@ const SUBSCRIPT_MAP = Dict(
     '5' => '₅', '6' => '₆', '7' => '₇', '8' => '₈', '9' => '₉'
 )
 
-"""
-    to_subscript(n::Integer) -> String
-
-Convert integer to Unicode subscript representation.
-"""
-function to_subscript(n::Integer)
-    return join([SUBSCRIPT_MAP[d] for d in string(n)])
-end
-
 # Unicode superscripts for digits 0-9 and signs
 const SUPERSCRIPT_MAP = Dict(
     '0' => '⁰', '1' => '¹', '2' => '²', '3' => '³', '4' => '⁴',

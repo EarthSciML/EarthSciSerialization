@@ -4,11 +4,6 @@ using EarthSciSerialization
 @testset "Display Tests" begin
 
     @testset "Utility Functions" begin
-        # Test to_subscript
-        @test EarthSciSerialization.to_subscript(0) == "₀"
-        @test EarthSciSerialization.to_subscript(123) == "₁₂₃"
-        @test EarthSciSerialization.to_subscript(5) == "₅"
-
         # Test to_superscript
         @test EarthSciSerialization.to_superscript("1") == "¹"
         @test EarthSciSerialization.to_superscript("23") == "²³"

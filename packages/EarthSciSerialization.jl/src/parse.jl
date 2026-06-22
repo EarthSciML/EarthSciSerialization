@@ -1227,18 +1227,6 @@ function coerce_affect_equation(data::Any)::AffectEquation
 end
 
 """
-    coerce_functional_affect(data::Any) -> FunctionalAffect
-
-Coerce JSON data into FunctionalAffect type.
-"""
-function coerce_functional_affect(data::Any)::FunctionalAffect
-    target = string(data.target)
-    expression = parse_expression(data.expression)
-    operation = haskey(data, :operation) ? string(data.operation) : "set"
-    return FunctionalAffect(target, expression, operation=operation)
-end
-
-"""
     coerce_reaction_system(data::Any) -> ReactionSystem
 
 Coerce JSON data into ReactionSystem type.
@@ -1466,77 +1454,6 @@ function coerce_data_loader(data::Any)::DataLoader
                       regridding=regridding,
                       reference=reference,
                       metadata=metadata)
-end
-
-"""
-    coerce_operator(data::Any) -> Operator
-
-Coerce JSON data into Operator type.
-"""
-function coerce_operator(data::Any)::Operator
-    operator_id = string(data.operator_id)
-    needed_vars = haskey(data, :needed_vars) ? [string(v) for v in data.needed_vars] : String[]
-
-    reference = haskey(data, :reference) && data.reference !== nothing ? coerce_reference(data.reference) : nothing
-    config = haskey(data, :config) && data.config !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.config)) : nothing
-    modifies = haskey(data, :modifies) && data.modifies !== nothing ? [string(v) for v in data.modifies] : nothing
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
-
-    return Operator(operator_id, needed_vars,
-                   reference=reference,
-                   config=config,
-                   modifies=modifies,
-                   description=description)
-end
-
-"""
-    coerce_registered_function(data::Any) -> RegisteredFunction
-
-Coerce JSON data into RegisteredFunction type (esm-spec §9.2).
-"""
-function coerce_registered_function(data::Any)::RegisteredFunction
-    id = string(data.id)
-
-    sig_data = data.signature
-    arg_count = Int(sig_data.arg_count)
-    arg_types = if haskey(sig_data, :arg_types) && sig_data.arg_types !== nothing
-        [string(t) for t in sig_data.arg_types]
-    else
-        nothing
-    end
-    return_type = if haskey(sig_data, :return_type) && sig_data.return_type !== nothing
-        string(sig_data.return_type)
-    else
-        nothing
-    end
-    signature = RegisteredFunctionSignature(arg_count;
-                                            arg_types=arg_types,
-                                            return_type=return_type)
-
-    units = haskey(data, :units) && data.units !== nothing ? string(data.units) : nothing
-    arg_units = if haskey(data, :arg_units) && data.arg_units !== nothing
-        Vector{Union{String,Nothing}}([u === nothing ? nothing : string(u) for u in data.arg_units])
-    else
-        nothing
-    end
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
-    references = if haskey(data, :references) && data.references !== nothing
-        Reference[coerce_reference(r) for r in data.references]
-    else
-        Reference[]
-    end
-    config = if haskey(data, :config) && data.config !== nothing
-        Dict{String,Any}(string(k) => _to_native_json(v) for (k, v) in pairs(data.config))
-    else
-        nothing
-    end
-
-    return RegisteredFunction(id, signature;
-                              units=units,
-                              arg_units=arg_units,
-                              description=description,
-                              references=references,
-                              config=config)
 end
 
 """
