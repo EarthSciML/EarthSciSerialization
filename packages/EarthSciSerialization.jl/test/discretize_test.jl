@@ -143,7 +143,7 @@ using JSON3
         @test lhs_default["op"] == "D"
 
         # Opt-in: same document lifts to arrayop with ranges from the grid,
-        # and periodic stencil accesses fold via ifelse wrapping.
+        # and periodic stencil accesses wrap declaratively via makearray regions.
         out = discretize(esm; lift_1d_arrayop=true)
         eqn = out["models"]["M"]["equations"][1]
         @test eqn["lhs"]["op"] == "arrayop"
@@ -152,13 +152,19 @@ using JSON3
         @test eqn["rhs"]["op"] == "arrayop"
         rhs_str = JSON3.write(eqn["rhs"])
         @test occursin("\"index\"", rhs_str)
-        @test occursin("\"ifelse\"", rhs_str)   # periodic folding applied
+        # Periodic wrapping lowers declaratively through the makearray-region
+        # path; the imperative ifelse fold is retired (ess-8ne).
+        @test occursin("\"makearray\"", rhs_str)
+        @test !occursin("\"ifelse\"", rhs_str)
     end
 
-    @testset "arrayop lift folds periodic accesses of every shaped grid variable (ess-1nm)" begin
+    @testset "arrayop lift wraps periodic accesses of every shaped grid variable via makearray (ess-8ne)" begin
         # A stencil RHS may index shaped fields other than the equation's LHS
         # variable (e.g. a space-varying velocity in an advection rule); the
-        # periodic fold must wrap those reads too, not just the LHS variable's.
+        # declarative periodic lowering must wrap those reads too, not just the
+        # LHS variable's. Each single-cell boundary region instantiates the
+        # stencil at a literal cell, so every out-of-range read — into u OR U —
+        # is wrapped modulo the size to a concrete in-bounds index (no ifelse).
         esm = _heat_1d_esm(; with_rule=true)
         esm["models"]["M"]["variables"]["U"] = Dict{String,Any}(
             "type" => "state", "default" => 1.0, "units" => "1",
@@ -183,24 +189,42 @@ using JSON3
         rhs = out["models"]["M"]["equations"][1]["rhs"]
         @test rhs["op"] == "arrayop"
 
-        # Every index node — into u AND into U — must carry an ifelse-folded
-        # index expression.
-        unfolded = String[]
-        function _walk_fold(node)
+        # Body is index(makearray(regions, values), i): region 0 is the raw
+        # full-grid stencil; the rest are single-cell wrapped boundary regions.
+        n = 8
+        body = rhs["expr"]
+        @test body["op"] == "index"
+        ma = body["args"][1]
+        @test ma["op"] == "makearray"
+        @test ma["regions"][1] == Any[Any[1, n]]            # region 0 = full grid
+        @test !occursin("\"ifelse\"", JSON3.write(rhs))     # fold retired
+
+        # Collect every index read inside the wrapped boundary regions (skip
+        # region 0, whose reads are still symbolic in i). Each must resolve to a
+        # concrete in-bounds integer — for BOTH u and U — proving the periodic
+        # wrap covers every shaped variable, not just the LHS variable's.
+        reads = Tuple{String,Any}[]
+        function _collect_idx(node)
             node isa AbstractDict || return
             if get(node, "op", nothing) == "index"
-                target = node["args"][1]
-                idx_arg = node["args"][2]
-                folded = idx_arg isa AbstractDict && get(idx_arg, "op", nothing) == "ifelse"
-                folded || push!(unfolded, String(target))
+                push!(reads, (String(node["args"][1]), node["args"][2]))
             end
             for a in get(node, "args", Any[])
-                _walk_fold(a)
+                _collect_idx(a)
             end
-            haskey(node, "expr") && _walk_fold(node["expr"])
         end
-        _walk_fold(rhs)
-        @test unfolded == String[]
+        for k in 2:length(ma["values"])
+            _collect_idx(ma["values"][k])
+        end
+        @test !isempty(reads)
+        for (target, idx) in reads
+            @test target in ("u", "U")
+            @test idx isa Integer
+            @test 1 <= idx <= n
+        end
+        targets = Set(t for (t, _) in reads)
+        @test "u" in targets
+        @test "U" in targets
     end
 
     @testset "non-periodic BCs: makearray-region ghost lowering (ess-hjg)" begin

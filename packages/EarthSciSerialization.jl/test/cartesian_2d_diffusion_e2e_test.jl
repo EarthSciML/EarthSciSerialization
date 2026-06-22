@@ -218,6 +218,9 @@ end
         max_err = max(max_err, abs(u_sim - u_exact))
     end
     @info "2D diffusion max error vs analytic FD decay" max_err decay_factor
-    # Periodic accuracy test removed: _apply_periodic_folding! is deleted (ess-e7u).
-    # Periodic wrapping will be restored via the periodic_bc rule path (bind-guards-interface).
+    # Periodic wrapping now flows through the declarative makearray-region path
+    # (ess-8ne retired the imperative _apply_periodic_folding! fold). The 2-D
+    # periodic accuracy gate is restored: wrapped edge cells must reproduce the
+    # analytic FD decay exactly.
+    @test max_err < 1e-6
 end

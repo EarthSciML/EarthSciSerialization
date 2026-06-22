@@ -218,8 +218,11 @@ end
         max_err = max(max_err, abs(u_sim - u_exact))
     end
     @info "Lat-lon diffusion max error vs analytic FD decay" max_err decay_factor lambda
-    # Periodic accuracy test removed: _apply_periodic_folding! is deleted (ess-e7u).
-    # Periodic wrapping will be restored via the periodic_bc rule path (bind-guards-interface).
+    # Periodic wrapping now flows through the declarative makearray-region path
+    # (ess-8ne retired the imperative _apply_periodic_folding! fold). The
+    # periodic-lon accuracy gate is restored: wrapped lon edge cells must
+    # reproduce the analytic FD decay exactly.
+    @test max_err < 1e-6
 
     # Sign pattern: cells 1,3 positive; cells 2,4 negative
     for j in 1:Nlat

@@ -314,10 +314,13 @@ function _discretize_model!(mname::String, model::Dict{String,Any},
     end
 
     # Arrayop lifting: wrap array-variable differential equations in arrayop
-    # after the rule engine rewrites PDE ops to stencil/index form. On
-    # non-periodic dimensions with declared BCs, the interior stencil is
-    # rewrapped as a makearray whose boundary regions splice the rewritten
-    # `bc["value"]` ghost AST (ess-hjg, declarative lowering).
+    # after the rule engine rewrites PDE ops to stencil/index form. The interior
+    # stencil is rewrapped as a makearray whose boundary regions handle every
+    # out-of-range read declaratively (ess-hjg / ess-8ne): on a bounded side with
+    # a declared BC, the region splices the rewritten `bc["value"]` ghost AST; on
+    # a periodic axis, the region wraps the read modulo the dimension size. The
+    # imperative periodic fold is retired — periodic wrapping flows through this
+    # same lowering.
     _arrayop_lift_equations!(model, ctx.grids, ctx.variables; lift_1d = lift_1d_arrayop)
 end
 
@@ -349,8 +352,14 @@ function _arrayop_lift_equations!(model::Dict{String,Any},
         eqn = eqn_any isa Dict{String,Any} ? eqn_any :
             Dict{String,Any}(String(k) => v for (k, v) in eqn_any)
         info = _try_arrayop_lift_equation!(eqn, grids, variables; lift_1d = lift_1d)
-        if info !== nothing && bcs isa AbstractDict && !isempty(bcs)
-            _apply_makearray_bcs!(eqn, info, bcs, grids, variables)
+        if info !== nothing
+            # Periodic wrapping and non-periodic BC ghosts both lower through the
+            # declarative makearray-region path (ess-8ne retired the imperative
+            # periodic fold). A purely periodic grid declares no BCs yet still
+            # needs wrapping boundary regions, so call unconditionally and pass an
+            # empty BC set when the model declares none.
+            bcs_dict = bcs isa AbstractDict ? bcs : Dict{String,Any}()
+            _apply_makearray_bcs!(eqn, info, bcs_dict, grids, variables)
         end
         push!(new_eqns, eqn)
     end
@@ -530,40 +539,12 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
     rhs_raw = get(eqn, "rhs", nothing)
     rhs_raw === nothing && return
     rhs_raw, _ = _inline_elementwise_arrayops(rhs_raw, dim_to_canon)
-    # Keep a pre-fold copy: makearray boundary-region emission (ess-hjg)
-    # instantiates the stencil at literal indices and must see raw i±k offsets,
-    # not the periodic ifelse wrappers.
-    rhs_prefold = _deep_native(rhs_raw)
-
-    periodic_dims = get(gmeta, "periodic_dims", nothing)
-    if periodic_dims isa AbstractVector && !isempty(periodic_dims)
-        # Fold EVERY shaped variable on this grid, not just the equation's
-        # LHS variable: a stencil RHS may index other fields (e.g. a
-        # space-varying velocity in an advection rule), and an unfolded
-        # out-of-range read would silently hit the zero-ghost convention
-        # instead of wrapping.
-        var_periodic_sizes = Dict{String,Vector{Tuple{Int,Bool}}}()
-        for (vname, vm) in variables
-            vshape = get(vm, "shape", nothing)
-            vshape isa AbstractVector && !isempty(vshape) || continue
-            get(vm, "grid", nothing) == grid_name || continue
-            dims_info = Tuple{Int,Bool}[]
-            all_found = true
-            for d in eachindex(vshape)
-                dim_name_p = String(vshape[d])
-                sz_p = get(dim_sizes, dim_name_p, nothing)
-                sz_p isa Integer || (all_found = false; break)
-                is_periodic = dim_name_p in (String(p) for p in periodic_dims)
-                push!(dims_info, (Int(sz_p), is_periodic))
-            end
-            if all_found && any(d -> d[2], dims_info)
-                var_periodic_sizes[String(vname)] = dims_info
-            end
-        end
-        if !isempty(var_periodic_sizes)
-            _apply_periodic_folding!(rhs_raw, var_periodic_sizes)
-        end
-    end
+    # Keep a copy of the raw interior stencil body. The makearray
+    # boundary-region emission (ess-hjg / ess-8ne) instantiates this stencil at
+    # literal cell indices — splicing the declarative BC ghost on bounded sides
+    # and wrapping out-of-range reads modulo the size on periodic axes — so it
+    # must see the raw i±k offsets, never a pre-wrapped form.
+    rhs_interior = _deep_native(rhs_raw)
 
     eqn["rhs"] = Dict{String,Any}(
         "op"         => "arrayop",
@@ -578,73 +559,13 @@ function _try_arrayop_lift_equation!(eqn::Dict{String,Any},
             shape = String[String(s) for s in shape],
             grid_name = String(grid_name),
             output_idx = String[String(ix) for ix in output_idx],
-            rhs_prefold = rhs_prefold,
+            rhs_interior = rhs_interior,
             wrt = wrt)
 end
 
 # ============================================================================
-# Periodic boundary folding and non-periodic BC cell emission (ess-1nm)
+# Stencil-reach scan and declarative BC / periodic cell emission (ess-hjg / ess-8ne)
 # ============================================================================
-
-# Walk a raw JSON-like body Dict and fold stencil index accesses for periodic
-# grid dimensions. For each `index(u, e1, e2, ...)` node where variable `u`
-# lives on a periodic dimension d of size N, replaces `e_d` with:
-#   ifelse(e_d < 1, e_d + N, ifelse(e_d > N, e_d - N, e_d))
-# This is exact for nearest-neighbor stencils where e_d ∈ {0, 1, …, N, N+1}.
-# At _build_arrayop scalarization time, e_d is a concrete integer, so the
-# ifelse collapses to the correct in-bounds index.
-function _apply_periodic_folding!(body::Any,
-                                   var_periodic_sizes::Dict{String,Vector{Tuple{Int,Bool}}})
-    body isa AbstractDict || return
-    op = get(body, "op", nothing)
-    if op == "index"
-        args = get(body, "args", nothing)
-        args isa AbstractVector && length(args) >= 2 || return
-        varname = args[1] isa AbstractString ? String(args[1]) : nothing
-        if varname !== nothing
-            dims = get(var_periodic_sizes, varname, nothing)
-            if dims !== nothing
-                new_args = Any[args[1]]
-                for (d, idx_expr) in enumerate(args[2:end])
-                    if d <= length(dims)
-                        N, is_periodic = dims[d]
-                        if is_periodic && !(idx_expr isa AbstractString)
-                            idx_expr = Dict{String,Any}(
-                                "op"   => "ifelse",
-                                "args" => Any[
-                                    Dict{String,Any}("op" => "<",
-                                        "args" => Any[idx_expr, 1]),
-                                    Dict{String,Any}("op" => "+",
-                                        "args" => Any[idx_expr, N]),
-                                    Dict{String,Any}("op" => "ifelse",
-                                        "args" => Any[
-                                            Dict{String,Any}("op" => ">",
-                                                "args" => Any[idx_expr, N]),
-                                            Dict{String,Any}("op" => "-",
-                                                "args" => Any[idx_expr, N]),
-                                            idx_expr
-                                        ])
-                                ]
-                            )
-                        end
-                    end
-                    push!(new_args, idx_expr)
-                end
-                body["args"] = new_args
-                return
-            end
-        end
-    end
-    for val in values(body)
-        if val isa AbstractDict
-            _apply_periodic_folding!(val, var_periodic_sizes)
-        elseif val isa AbstractVector
-            for item in val
-                item isa AbstractDict && _apply_periodic_folding!(item, var_periodic_sizes)
-            end
-        end
-    end
-end
 
 # Max |offset| per canonical index variable across every index read.
 function _scan_stencil_reach!(reach::Dict{String,Int}, node)
@@ -866,7 +787,10 @@ function _apply_makearray_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
         dn, sym = resolved
         bc_ghost_map[(String(v), dn, sym)] = ghost
     end
-    isempty(bc_ghost_map) && return
+    # Nothing to lower only when there are neither declared BC ghosts nor
+    # periodic axes; a periodic grid needs wrapping boundary regions even with
+    # no explicit BCs (ess-8ne).
+    (isempty(bc_ghost_map) && isempty(periodic)) && return
 
     var    = info.var_name
     shape  = info.shape
@@ -875,38 +799,54 @@ function _apply_makearray_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
     sizes  = Int[Int(dim_sizes[shape[d]]) for d in 1:nd]
 
     reach = Dict{String,Int}(ix => 0 for ix in idxs)
-    _scan_stencil_reach!(reach, info.rhs_prefold)
+    _scan_stencil_reach!(reach, info.rhs_interior)
 
-    # Interior box [lo,hi]: shrink each bounded side by its stencil reach.
+    # Interior box [lo,hi]: shrink each side whose edge reads leave the field —
+    # a bounded side carrying a BC ghost, or either side of a periodic axis
+    # (both wrap). The cells outside [lo,hi] become single-cell boundary regions
+    # whose body is re-instantiated per cell: BC ghosts spliced on bounded
+    # sides, out-of-range reads wrapped modulo the size on periodic axes (the
+    # wrap lives in `_instantiate_bc_cell_ghost`).
     lo = ones(Int, nd)
     hi = copy(sizes)
     bounded = falses(nd)
     for d in 1:nd
         dn = shape[d]
-        dn in periodic && continue
         r = get(reach, idxs[d], 0)
         r == 0 && continue
-        for (sym, isback) in ((:min, false), (:max, true))
-            haskey(bc_ghost_map, (var, dn, sym)) || continue
-            isback ? (hi[d] = sizes[d] - r) : (lo[d] = 1 + r)
+        if dn in periodic
+            lo[d] = 1 + r
+            hi[d] = sizes[d] - r
             bounded[d] = true
+        else
+            for (sym, isback) in ((:min, false), (:max, true))
+                haskey(bc_ghost_map, (var, dn, sym)) || continue
+                isback ? (hi[d] = sizes[d] - r) : (lo[d] = 1 + r)
+                bounded[d] = true
+            end
         end
     end
     any(bounded) || return
     for d in 1:nd
+        # A periodic axis with lo>hi just means every cell wraps (the whole axis
+        # is boundary regions); only a bounded BC axis whose two sides overlap is
+        # a genuine too-small-grid error.
+        shape[d] in periodic && continue
         lo[d] <= hi[d] || throw(RuleEngineError("E_BC_GRID_TOO_SMALL",
             "dimension '$(shape[d])' (size $(sizes[d])) is too small for the " *
             "stencil reach $(get(reach, idxs[d], 0)) with boundary conditions " *
             "on both sides"))
     end
 
-    # region 0 = full grid → the existing (folded) interior body.
+    # region 0 = full grid → the raw interior stencil body. Boundary regions
+    # below override it (makearray last-match-wins) at every wrapped / ghosted
+    # cell, so region 0 is only ever evaluated where its reads stay in bounds.
     regions = Any[Any[Any[1, sizes[d]] for d in 1:nd]]
     values  = Any[eqn["rhs"]["expr"]]
     for cell in Iterators.product((1:sizes[d] for d in 1:nd)...)
         all(d -> lo[d] <= cell[d] <= hi[d], 1:nd) && continue
         fixed = Dict{String,Int}(idxs[d] => cell[d] for d in 1:nd)
-        body_cell = _instantiate_bc_cell_ghost(_deep_native(info.rhs_prefold), fixed,
+        body_cell = _instantiate_bc_cell_ghost(_deep_native(info.rhs_interior), fixed,
                                                variables, dim_sizes, periodic, bc_ghost_map)
         push!(regions, Any[Any[cell[d], cell[d]] for d in 1:nd])
         push!(values, body_cell)
