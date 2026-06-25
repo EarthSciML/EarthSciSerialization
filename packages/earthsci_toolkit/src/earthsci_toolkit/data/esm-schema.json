@@ -193,8 +193,11 @@
           }
         },
         "discretized_from": {
-          "type": "string",
-          "description": "Diagnostic stamped by discretize(): the metadata.name of the source document this was discretized from."
+          "type": "object",
+          "description": "Diagnostic stamped by discretize(): identifies the source document this was discretized from (RFC §12).",
+          "properties": {
+            "name": { "type": "string", "description": "The metadata.name of the source document." }
+          }
         }
       }
     },

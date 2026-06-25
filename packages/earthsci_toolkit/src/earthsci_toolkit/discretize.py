@@ -145,10 +145,20 @@ def discretize(
             _nontrivial_dae_message(total_algebraic, residual_paths, residual_equations),
         )
 
-    # Record provenance.
+    # Record provenance. The cross-language discretize conformance goldens
+    # (tests/conformance/discretize/golden/*.json, RFC §12) carry this as an
+    # object {"name": <source name>}, not a bare string — match that shape.
     in_meta = esm.get("metadata") if isinstance(esm.get("metadata"), dict) else None
     if in_meta is not None and "name" in in_meta:
-        meta["discretized_from"] = in_meta["name"]
+        meta["discretized_from"] = {"name": in_meta["name"]}
+
+    # The goldens also tag the output as discretized (append, deduped, so an
+    # input that already carries tags keeps them).
+    tags = meta.get("tags")
+    tags = list(tags) if isinstance(tags, list) else []
+    if "discretized" not in tags:
+        tags.append("discretized")
+    meta["tags"] = tags
 
     return out
 
