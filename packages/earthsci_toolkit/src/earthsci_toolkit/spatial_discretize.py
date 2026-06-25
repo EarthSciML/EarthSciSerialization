@@ -301,39 +301,122 @@ def _grid_sizes(domain, dims, bc_by_side) -> Dict[str, Tuple[int, float]]:
     return out
 
 
-def _ghost_subst(expr, state, pos, ndim, side, bc_kind, bc_value, dim):
-    target = {"op": ("+" if side == "high" else "-"), "args": [dim, 1]}
+def _affine_offset(sub: Any, dim: str) -> Optional[int]:
+    """If ``sub`` is an affine index ``dim`` / ``dim ± k`` (in the canonical
+    ``{op:"+", args:[dim, k]}`` form or its ``-``/operand-swapped variants),
+    return the integer offset ``k`` (0 for a bare ``dim``); else ``None``."""
+    if sub == dim:
+        return 0
+    if isinstance(sub, dict) and sub.get("op") in ("+", "-"):
+        args = sub.get("args") or []
+        if len(args) == 2:
+            a, b = args
+            if sub["op"] == "+":
+                if a == dim and isinstance(b, (int, float)) and not isinstance(b, bool):
+                    return int(b)
+                if b == dim and isinstance(a, (int, float)) and not isinstance(a, bool):
+                    return int(a)
+            elif sub["op"] == "-" and a == dim and isinstance(b, (int, float)) \
+                    and not isinstance(b, bool):
+                return -int(b)
+    return None
+
+
+def _halo_by_dim(body: Any, state: str, dims: List[str]) -> Dict[str, int]:
+    """Largest absolute stencil offset on ``state`` per spatial dim — the ghost
+    halo width each boundary needs (1 for a centred 2nd-order / Godunov stencil,
+    2 for WENO5, etc.)."""
+    halo = {d: 0 for d in dims}
 
     def f(n):
         if (isinstance(n, dict) and n.get("op") == "index"
                 and n.get("args") and n["args"][0] == state):
             subs = n["args"][1:]
-            if len(subs) == ndim and subs[pos] == target:
-                if bc_kind in ("dirichlet", "constant"):
-                    return float(bc_value)
-                new = list(subs)
-                new[pos] = dim
-                return {"op": "index", "args": [state] + new}
+            if len(subs) == len(dims):
+                for pos, d in enumerate(dims):
+                    k = _affine_offset(subs[pos], d)
+                    if k is not None:
+                        halo[d] = max(halo[d], abs(k))
         return n
+    _map_expr(body, f)
+    return halo
+
+
+def _ghost_subst_cell(expr, state, pos, ndim, cell, n, bc_kind, bc_value, dim):
+    """Substitute out-of-range ghost accesses for one concrete boundary cell.
+
+    For an ``index(state, …)`` whose subscript along ``pos`` is affine in ``dim``
+    (offset ``k``), the resolved index at this cell is ``cell + k``; when that
+    falls outside ``[1, n]`` it is a ghost: replaced by the Dirichlet/constant
+    value, or (Neumann / zero-gradient) by the nearest in-range cell. Matching
+    the canonical ``{+,[dim,k]}`` affine form fixes the long-standing low-side
+    miss (the old ``{-,[dim,1]}`` target never matched ``{+,[dim,-1]}``), and the
+    per-cell resolution generalizes from a 1-cell to an N-cell halo."""
+    def f(node):
+        if (isinstance(node, dict) and node.get("op") == "index"
+                and node.get("args") and node["args"][0] == state):
+            subs = node["args"][1:]
+            if len(subs) == ndim:
+                k = _affine_offset(subs[pos], dim)
+                if k is not None:
+                    resolved = cell + k
+                    if resolved < 1 or resolved > n:
+                        if bc_kind in ("dirichlet", "constant"):
+                            return float(bc_value)
+                        new = list(subs)
+                        new[pos] = min(max(resolved, 1), n)   # clamp to boundary cell
+                        return {"op": "index", "args": [state] + new}
+        return node
     return _map_expr(expr, f)
 
 
 def _make_regions(interior, state, dims, sizes, bc_by_side):
+    """Carve the index box into an interior region plus per-cell boundary
+    regions of the stencil's halo width, applying ghost substitution per cell.
+
+    The interior body covers the full box first; boundary cells (depth ``1..h``
+    from each side, ``h`` = stencil halo) overwrite it last-wins. A 1-cell halo
+    reproduces the original 3^D layout; wider stencils (WENO) get a width-``h``
+    band on each side, so a ``±h`` access never reads past the domain edge."""
     ndim = len(dims)
-    combos = sorted(itertools.product(("I", "L", "H"), repeat=ndim),
-                    key=lambda c: sum(s != "I" for s in c))
+    halo = _halo_by_dim(interior, state, dims)
+
+    # Per-dim position options: a DISJOINT interior band [h+1, n-h] plus the
+    # low/high boundary cells (depth 1..h each side). Disjoint (not the full
+    # box) so an interior ``±h`` access never reaches a domain edge — the
+    # vectorized evaluator can slice it directly, and boundary cells carry the
+    # ghost-substituted bodies. h=0 dims keep the full [1, n] band.
+    dim_opts: List[List[Tuple[Any, Tuple[int, int]]]] = []
+    for dim in dims:
+        n = sizes[dim][0]
+        h = min(halo[dim], n)
+        opts: List[Tuple[Any, Tuple[int, int]]] = []
+        if n - h >= h + 1:                              # non-empty interior band
+            opts.append(("I", (h + 1, n - h)))
+        for p in range(1, h + 1):                       # low cells 1..h
+            opts.append((("low", p), (p, p)))
+        for p in range(max(h + 1, n - h + 1), n + 1):   # high cells, no overlap with low
+            opts.append((("high", p), (p, p)))
+        if not opts:                                    # degenerate (n==0); keep full box
+            opts = [("I", (1, n))]
+        dim_opts.append(opts)
+
+    combos = sorted(
+        itertools.product(*[range(len(o)) for o in dim_opts]),
+        key=lambda c: sum(1 for pos, i in enumerate(c) if dim_opts[pos][i][0] != "I"))
+
     regions, values = [], []
     for combo in combos:
         rng, value = [], copy.deepcopy(interior)
-        for pos, (dim, s) in enumerate(zip(dims, combo)):
-            n = sizes[dim][0]
-            if s == "I":
-                rng.append([1, n])
-            else:
-                end = "low" if s == "L" else "high"
-                rng.append([1, 1] if s == "L" else [n, n])
-                b = _bc(bc_by_side, dim, end)
-                value = _ghost_subst(value, state, pos, ndim, end, b["kind"], b["value"], dim)
+        for pos in range(ndim):
+            tag, (lo, hi) = dim_opts[pos][combo[pos]]
+            rng.append([lo, hi])
+            if tag != "I":
+                side, cell = tag
+                n = sizes[dims[pos]][0]
+                b = _bc(bc_by_side, dims[pos], side)
+                value = _ghost_subst_cell(value, state, pos, ndim, cell, n,
+                                          b["kind"], b["value"], dims[pos])
         regions.append(rng)
         values.append(value)
     return regions, values

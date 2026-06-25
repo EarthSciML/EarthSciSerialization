@@ -372,3 +372,85 @@ def test_heat_runs_end_to_end_via_gdd():
         idx = next(k for k, n in enumerate(r.vars) if n.endswith(f"[{i}]"))
         got = float(np.interp(0.1, r.t, r.y[idx]))
         assert got == pytest.approx(math.exp(lam * 0.1) * math.sin(math.pi * i / 5), rel=1e-6)
+
+
+# --- width-N halo + vectorized stencil evaluation --------------------------
+
+def _d2_4th_rule():
+    """A WENO-width (±2) 4th-order centered 2nd-derivative rule, to exercise the
+    width-N ghost halo: needs u[x-2 .. x+2]."""
+    ix = lambda k: {"op": "index", "args": ["$u", ("$x" if k == 0 else {"op": "+", "args": ["$x", k]})]}
+    num = {"op": "+", "args": [{"op": "*", "args": [-1, ix(-2)]}, {"op": "*", "args": [16, ix(-1)]},
+                               {"op": "*", "args": [-30, ix(0)]}, {"op": "*", "args": [16, ix(1)]},
+                               {"op": "*", "args": [-1, ix(2)]}]}
+    return {"discretizations": {"d2": {"applies_to": {"op": "d2", "args": ["$u"], "dim": "$x"},
+        "grid_family": "cartesian", "replacement": {"op": "arrayop", "output_idx": ["$x"], "args": ["$u"],
+        "expr": {"op": "/", "args": [num, {"op": "*", "args": [12, {"op": "*", "args": ["dx", "dx"]}]}]}}}}}
+
+
+def _heat_model(bc, dx=0.1):
+    return {"esm": "0.5.0", "metadata": {"name": "Heat"},
+        "domains": {"line": {"independent_variable": "t",
+            "spatial": {"x": {"min": 0.0, "max": 1.0, "grid_spacing": dx}},
+            "boundary_conditions": [{"type": bc, "value": 0.0, "dimensions": ["x"]}]}},
+        "models": {"Heat": {"domain": "line", "system_kind": "pde",
+            "variables": {"u": {"type": "state", "units": "1"}},
+            "equations": [{"lhs": {"op": "D", "args": ["u"], "wrt": "t"},
+                           "rhs": {"op": "laplacian", "args": ["u"]}}]}}}
+
+
+def test_width_n_halo_carves_disjoint_band_for_wide_stencil():
+    """A ±2 stencil yields a width-2 ghost halo: a disjoint interior band plus
+    two boundary cells on each side (vs. the single edge cell a ±1 stencil gets).
+    Regions must partition the index box with no overlap."""
+    disc = spatial_discretize(_heat_model("dirichlet", dx=0.1), _d2_4th_rule())
+    ma = disc["models"]["Heat"]["equations"][0]["rhs"]["expr"]["args"][0]
+    regions = [r[0] for r in ma["regions"]]   # 1-D: one [lo,hi] per region
+    n = max(hi for lo, hi in regions)
+    # interior band is [3, n-2]; boundary cells 1,2 and n-1,n.
+    assert [3, n - 2] in regions
+    assert [1, 1] in regions and [2, 2] in regions
+    assert [n - 1, n - 1] in regions and [n, n] in regions
+    # disjoint partition: every cell covered exactly once.
+    covered = sorted(c for lo, hi in regions for c in range(lo, hi + 1))
+    assert covered == list(range(1, n + 1))
+
+
+def test_width_n_halo_runs_for_both_bcs():
+    """The ±2 stencil integrates end-to-end under Dirichlet and zero-gradient
+    BCs — the width-2 boundary cells keep every access in range."""
+    for bc in ("dirichlet", "zero_gradient"):
+        disc = spatial_discretize(_heat_model(bc, dx=0.1), _d2_4th_rule())
+        f = et.load(disc)
+        n = max(hi for r in disc["models"]["Heat"]["equations"][0]["rhs"]["expr"]["args"][0]["regions"]
+                for (lo, hi) in r)
+        ic = {f"u[{i}]": math.sin(math.pi * i / (n + 1)) for i in range(1, n + 1)}
+        r = simulate(f, (0.0, 0.02), initial_conditions=ic, method="LSODA", rtol=1e-7, atol=1e-9)
+        assert r.success, f"{bc}: {r.message}"
+
+
+def test_vectorized_stencil_matches_scalar_bit_for_bit():
+    """The vectorized makearray materialization must be identical to the scalar
+    fallback. Disable the fast path and compare a centered-diffusion run."""
+    import earthsci_toolkit.numpy_interpreter as _ni
+    disc = spatial_discretize(_heat_model("dirichlet", dx=0.05), {"discretizations": {"d2": _CENTERED_D2}})
+    n = max(hi for r in disc["models"]["Heat"]["equations"][0]["rhs"]["expr"]["args"][0]["regions"]
+            for (lo, hi) in r)
+    ic = {f"u[{i}]": math.sin(math.pi * i / (n + 1)) for i in range(1, n + 1)}
+
+    def solve():
+        return simulate(et.load(disc), (0.0, 0.02), initial_conditions=ic,
+                        method="LSODA", rtol=1e-6, atol=1e-8)
+
+    rv = solve()
+    saved = _ni._materialize_map
+    _ni._materialize_map = lambda *a, **k: None      # force scalar fallback
+    try:
+        rs = solve()
+    finally:
+        _ni._materialize_map = saved
+    assert rv.success and rs.success
+    tf = min(rv.t[-1], rs.t[-1])
+    av = np.array([np.interp(tf, rv.t, rv.y[i]) for i in range(len(rv.vars))])
+    as_ = np.array([np.interp(tf, rs.t, rs.y[i]) for i in range(len(rs.vars))])
+    assert np.max(np.abs(av - as_)) == 0.0           # bit-identical
