@@ -821,6 +821,19 @@
     "notes": "Legacy-shape rejection (RFC pure-io-data-loaders §4.1): the loader 'regridding' block was removed (regridding is now a per-variable model concern). A loader still carrying 'regridding' is rejected as an unknown property by DataLoader's additionalProperties:false."
   },
 
+  "data_loader_legacy_spatial.esm": {
+    "schema_errors": [
+      {
+        "path": "/data_loaders/BadSpatial",
+        "message": "Additional property 'spatial' is not allowed",
+        "keyword": "additionalProperties"
+      }
+    ],
+    "structural_errors": [],
+    "is_valid": false,
+    "notes": "Legacy-shape rejection (RFC pure-io-data-loaders 4.1, bead ess-v9a.8): the loader 'spatial' block (former DataLoaderSpatial) was removed; the native grid is now a GDD Grid under 'grid' and regridding is a per-variable model concern. A loader still carrying 'spatial' is rejected as an unknown property by DataLoader's additionalProperties:false. Parallel to interpolation_method_invalid.esm (the 'regridding' rejection)."
+  },
+
   "temporal_resolution_invalid.esm": {
     "schema_errors": [
       {
@@ -1135,27 +1148,13 @@
     "schema_errors": [
       {
         "path": "",
-        "message": "Must satisfy at least one of: required property 'models' or required property 'reaction_systems'",
+        "message": "Must satisfy at least one of: required property 'models', required property 'reaction_systems', required property 'data_loaders', or kind 'grid_discretization_descriptor'",
         "keyword": "anyOf"
-      },
-      {
-        "path": "/data_loaders/weather/type",
-        "message": "Value 'netcdf' not in enum: [gridded_data, emissions, timeseries, static, callback]",
-        "keyword": "enum"
-      },
-      {
-        "path": "/data_loaders/weather",
-        "message": "Additional property 'path' is not allowed",
-        "keyword": "additionalProperties"
-      },
-      {
-        "path": "/data_loaders/weather",
-        "message": "Additional property 'provides_vars' is not allowed",
-        "keyword": "additionalProperties"
       }
     ],
     "structural_errors": [],
-    "is_valid": false
+    "is_valid": false,
+    "notes": "Genuine no-subsystem negative (RFC pure-io-data-loaders 4.4, bead ess-v9a.8): a document declaring none of models / reaction_systems / data_loaders (and no grid_discretization_descriptor) fails the top-level anyOf. Refreshed for ess-v9a.8 -- the prior fixture was a loader-only document kept invalid only incidentally by a stray top-level 'domain' key, and this entry listed pre-pure-IO 'type: netcdf' / 'path' / 'provides_vars' loader errors (from before the 4.1 pure-IO migration) that no longer apply."
   },
 
   "invalid_trigger_type.esm": {
