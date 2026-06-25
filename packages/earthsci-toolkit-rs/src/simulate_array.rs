@@ -44,7 +44,7 @@ use crate::simulate::{CompileError, SimulateError, SimulateOptions, SolutionMeta
 use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
 use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, RangeSpec, VariableType};
 use indexmap::IndexMap;
-use ndarray::{ArrayD, IxDyn};
+use ndarray::{ArrayD, IxDyn, Slice};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -182,6 +182,32 @@ enum RhsRule {
         /// false contribute the additive identity 0̄. `None` ⇒ no gating.
         filter: Option<Box<Expr>>,
     },
+}
+
+/// Instrumentation for one `evaluate_rhs` call: how the spatial array-op
+/// derivatives were evaluated. The load-bearing field for the
+/// no-scalarization contract (ess-bdm) is [`RhsStats::kernel_ops`] — the
+/// number of AST-node evaluations performed by the **vectorized** whole-array
+/// path. It is a function of the discretized RHS *expression* only, so it is
+/// **independent of the grid size N**: the same stencil evaluated on a 4-cell
+/// and an 8-cell grid visits the same number of array kernels (one shifted
+/// slice per neighbour, one broadcast per arithmetic node — not `O(N)` scalar
+/// sub-expressions). The per-cell oracle, by contrast, re-walks the body once
+/// per grid cell, so its `kernel_ops` scales with N. A test asserts the
+/// vectorized count is N-independent (criterion 3 of ess-bdm).
+#[derive(Debug, Clone, Default)]
+pub struct RhsStats {
+    /// AST-node evaluations performed by the vectorized (whole-array) path.
+    /// N-independent for a fixed discretized RHS.
+    pub kernel_ops: usize,
+    /// Number of array-op derivative rules evaluated vectorized (shifted-slice
+    /// stencils + region-materialized boundary makearrays, no per-cell loop).
+    pub vectorized_rules: usize,
+    /// Number of array-op derivative rules that fell back to the per-cell
+    /// oracle (general semiring contraction, non-affine indexing, periodic
+    /// wrap, …). The vectorized path is a verified-equivalent overlay; the
+    /// per-cell path remains the correctness reference.
+    pub scalar_rules: usize,
 }
 
 /// Eliminated algebraic-variable definition. Evaluated once per RHS call
@@ -745,6 +771,45 @@ impl ArrayCompiled {
         &self.param_names
     }
 
+    /// Evaluate the RHS `f(state, t)` once and return `(dy, stats)`. Exposed for
+    /// the no-scalarization verification (ess-bdm): callers compare the
+    /// vectorized path (`force_scalar = false`) against the per-cell oracle
+    /// (`force_scalar = true`) for bit-equivalence, and assert that the
+    /// vectorized [`RhsStats::kernel_ops`] is independent of the grid size N.
+    #[doc(hidden)]
+    pub fn debug_eval_rhs(
+        &self,
+        state: &[f64],
+        t: f64,
+        params: &HashMap<String, f64>,
+        force_scalar: bool,
+    ) -> (Vec<f64>, RhsStats) {
+        let mut param_vec = vec![0.0f64; self.param_names.len()];
+        for (i, name) in self.param_names.iter().enumerate() {
+            if let Some(&v) = params.get(name) {
+                param_vec[i] = v;
+            } else if let Some(d) = self.param_defaults[i] {
+                param_vec[i] = d;
+            }
+        }
+        let mut dy = vec![0.0f64; self.n_states];
+        let mut stats = RhsStats::default();
+        evaluate_rhs(
+            &self.rhs_rules,
+            &self.observed_rules,
+            &self.observed_shapes,
+            &self.var_shapes,
+            &self.param_names,
+            state,
+            &param_vec,
+            t,
+            &mut dy,
+            force_scalar,
+            &mut stats,
+        );
+        (dy, stats)
+    }
+
     /// Run the simulation.
     pub fn simulate(
         &self,
@@ -823,6 +888,8 @@ impl ArrayCompiled {
                 p_s,
                 t,
                 dy_s,
+                false,
+                &mut RhsStats::default(),
             );
         };
 
@@ -859,6 +926,8 @@ impl ArrayCompiled {
                 p_s,
                 t,
                 &mut f_y,
+                false,
+                &mut RhsStats::default(),
             );
             evaluate_rhs(
                 &rhs_rules_jac,
@@ -870,6 +939,8 @@ impl ArrayCompiled {
                 p_s,
                 t,
                 &mut f_yp,
+                false,
+                &mut RhsStats::default(),
             );
             let jv_s = jv.as_mut_slice();
             for i in 0..n {
@@ -1203,6 +1274,7 @@ fn materialize_observeds(
     observed_arrays
 }
 
+#[allow(clippy::too_many_arguments)]
 fn evaluate_rhs(
     rhs_rules: &[RhsRule],
     observed_rules: &[AlgebraicRule],
@@ -1213,6 +1285,12 @@ fn evaluate_rhs(
     params: &[f64],
     t: f64,
     dy: &mut [f64],
+    // When true, skip the vectorized fast path and evaluate every array-op
+    // derivative via the per-cell oracle. Production always passes `false`
+    // (vectorized); the equivalence test passes `true` to obtain the
+    // reference values. See [`RhsStats`].
+    force_scalar: bool,
+    stats: &mut RhsStats,
 ) {
     // (a) Build per-variable state ndarray views from the flat state vector.
     let state_arrays = build_state_arrays(var_shapes, state);
@@ -1282,6 +1360,45 @@ fn evaluate_rhs(
             } => {
                 let vs = &var_shapes[var_name];
                 let filter = filter.as_deref();
+
+                // ---- Vectorized (whole-array) fast path (ess-bdm) ----------
+                // A pure-map spatial derivative (no contraction) whose LHS
+                // addresses the state variable by the bare output indices is
+                // the method-of-lines stencil shape. Evaluate its RHS body as
+                // whole-array kernels — shifted slices for `index(u, i±k)`,
+                // region sub-range writes for boundary makearrays, broadcast
+                // arithmetic for coefficients — then scatter the dy block in
+                // one bulk copy. No per-element scalar loop walks the body.
+                if !force_scalar
+                    && contract_names.is_empty()
+                    && lhs_is_identity(lhs_idx_exprs, output_idx_names)
+                    && var_box_matches(vs, output_ranges)
+                {
+                    let ctx = EvalCtx {
+                        state_arrays: &state_arrays,
+                        observed_arrays: &observed_arrays,
+                        params,
+                        param_names,
+                        loop_binds: HashMap::new(),
+                        t,
+                        derived_rings: &derived_rings,
+                    };
+                    if let Some((arr, ops)) =
+                        try_eval_arrayop_vectorized(output_idx_names, output_ranges, body, &ctx)
+                    {
+                        let col = arrayd_to_col_major(&arr);
+                        let start = vs.flat_offset;
+                        if start + col.len() <= dy.len() {
+                            dy[start..start + col.len()].copy_from_slice(&col);
+                            stats.kernel_ops += ops;
+                            stats.vectorized_rules += 1;
+                            continue;
+                        }
+                    }
+                }
+
+                // ---- Per-cell oracle (fallback / forced reference) ---------
+                stats.scalar_rules += 1;
                 for tuple in cartesian_range(output_ranges) {
                     let mut ctx = EvalCtx {
                         state_arrays: &state_arrays,
@@ -1314,6 +1431,423 @@ fn evaluate_rhs(
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// Vectorized (whole-array) stencil evaluator (ess-bdm).
+//
+// Evaluates a discretized spatial arrayop RHS as whole-array kernels instead
+// of a per-cell scalar loop, mirroring the Python `numpy_interpreter`
+// vectorized path (ESS PR #25, `_materialize_map` + shifted-slice `_eval_index`
+// + region-materialized makearray). The state stays the gridded array; the RHS
+// is computed by:
+//   * shifted array slices for stencil neighbours `index(u, sym±k)`,
+//   * Julia-left-aligned broadcast arithmetic for coefficients (reusing the
+//     existing `combine`/`broadcast_binary`),
+//   * boundary makearrays materialized region-by-region as array sub-range
+//     writes (last region wins),
+// producing the whole output array in a single AST walk. The number of kernel
+// ops is therefore independent of the grid size N — the no-scalarization
+// property ess-bdm requires.
+//
+// This is a *fast path*: any construct it does not handle (general semiring
+// contraction, periodic-wrap / non-affine indexing, reshape/transpose, …)
+// returns `None`, and the caller falls back to the per-cell oracle, which
+// remains the correctness reference.
+// ============================================================================
+
+/// A value produced by the vectorized evaluator. An [`VecValue::Array`] carries
+/// its per-axis 1-based `origin` (the index value of its first element along
+/// each axis) so an enclosing `index(A, sym±k)` can align `A` to the output box
+/// with a shifted slice.
+enum VecValue {
+    Scalar(f64),
+    Array { data: ArrayD<f64>, origin: Vec<i64> },
+}
+
+/// The output box currently being materialized: the positional output index
+/// symbols and, per axis, the 1-based low index and extent.
+struct VecBox<'a> {
+    syms: &'a [String],
+    lo: &'a [i64],
+    shape: &'a [usize],
+}
+
+/// Are the LHS index expressions exactly the bare output symbols, in order?
+/// (`D(u[i, j]) = …` with no offset/permutation) — the only shape for which a
+/// vectorized result maps directly onto the state block via a bulk copy.
+fn lhs_is_identity(lhs_idx_exprs: &[Expr], output_idx_names: &[String]) -> bool {
+    lhs_idx_exprs.len() == output_idx_names.len()
+        && lhs_idx_exprs
+            .iter()
+            .zip(output_idx_names.iter())
+            .all(|(e, name)| matches!(e, Expr::Variable(v) if v == name))
+}
+
+/// Does the state variable's flat block span exactly the output box, so the
+/// vectorized array (laid out column-major) is the dy block verbatim?
+fn var_box_matches(vs: &VarShape, output_ranges: &[(i64, i64)]) -> bool {
+    vs.shape.len() == output_ranges.len()
+        && vs
+            .shape
+            .iter()
+            .zip(output_ranges.iter())
+            .all(|(&n, &(lo, hi))| n == (hi - lo + 1) as usize)
+        && vs
+            .origin
+            .iter()
+            .zip(output_ranges.iter())
+            .all(|(&o, &(lo, _))| o == lo)
+}
+
+/// Try to evaluate a pure-map arrayop body over the output box as whole-array
+/// kernels. Returns `Some((array, kernel_ops))` on success — `kernel_ops` is
+/// the number of AST nodes visited (N-independent) — or `None` if the body
+/// contains a construct the vectorized path does not handle.
+fn try_eval_arrayop_vectorized(
+    output_idx_names: &[String],
+    output_ranges: &[(i64, i64)],
+    body: &Expr,
+    ctx: &EvalCtx,
+) -> Option<(ArrayD<f64>, usize)> {
+    let lo: Vec<i64> = output_ranges.iter().map(|(l, _)| *l).collect();
+    let shape: Vec<usize> = output_ranges
+        .iter()
+        .map(|(l, h)| (h - l + 1) as usize)
+        .collect();
+    if shape.contains(&0) {
+        return None;
+    }
+    let bx = VecBox {
+        syms: output_idx_names,
+        lo: &lo,
+        shape: &shape,
+    };
+    let mut ops = 0usize;
+    let v = eval_vec(body, &bx, ctx, &mut ops)?;
+    let arr = match v {
+        VecValue::Array { data, origin } => {
+            // The top-level result must already cover the output box exactly.
+            if data.shape() != shape.as_slice() || origin != lo {
+                return None;
+            }
+            data
+        }
+        VecValue::Scalar(s) => ArrayD::from_elem(IxDyn(&shape), s),
+    };
+    Some((arr, ops))
+}
+
+/// Vectorized evaluation of `expr` over the output box `bx`. Increments `ops`
+/// once per AST node. Returns `None` on any unsupported construct.
+fn eval_vec(expr: &Expr, bx: &VecBox, ctx: &EvalCtx, ops: &mut usize) -> Option<VecValue> {
+    *ops += 1;
+    match expr {
+        Expr::Number(n) => Some(VecValue::Scalar(*n)),
+        Expr::Integer(n) => Some(VecValue::Scalar(*n as f64)),
+        Expr::Variable(name) => eval_vec_variable(name, bx, ctx),
+        Expr::Operator(node) => eval_vec_op(node, bx, ctx, ops),
+    }
+}
+
+fn eval_vec_variable(name: &str, bx: &VecBox, ctx: &EvalCtx) -> Option<VecValue> {
+    if name == "t" {
+        return Some(VecValue::Scalar(ctx.t));
+    }
+    // A bare output index symbol as a *value* (rather than inside `index(...)`
+    // addressing) is not part of the stencil fast path — bail to the oracle.
+    if bx.syms.iter().any(|s| s == name) {
+        return None;
+    }
+    if let Some(a) = ctx.state_arrays.get(name) {
+        return Some(if a.ndim() == 0 {
+            VecValue::Scalar(a[IxDyn(&[])])
+        } else {
+            VecValue::Array {
+                data: a.clone(),
+                origin: vec![1; a.ndim()],
+            }
+        });
+    }
+    if let Some(a) = ctx.observed_arrays.get(name) {
+        return Some(if a.ndim() == 0 {
+            VecValue::Scalar(a[IxDyn(&[])])
+        } else {
+            VecValue::Array {
+                data: a.clone(),
+                origin: vec![1; a.ndim()],
+            }
+        });
+    }
+    if let Some(i) = ctx.param_names.iter().position(|p| p == name) {
+        return Some(VecValue::Scalar(ctx.params[i]));
+    }
+    // Unknown bare symbol (e.g. an outer-scope loop bind): bail.
+    None
+}
+
+fn eval_vec_op(
+    node: &ExpressionNode,
+    bx: &VecBox,
+    ctx: &EvalCtx,
+    ops: &mut usize,
+) -> Option<VecValue> {
+    match node.op.as_str() {
+        "+" | "-" | "*" | "/" | "^" | "min" | "max" => {
+            if node.op == "-" && node.args.len() == 1 {
+                return Some(vec_negate(eval_vec(&node.args[0], bx, ctx, ops)?));
+            }
+            let mut acc = eval_vec(&node.args[0], bx, ctx, ops)?;
+            for a in &node.args[1..] {
+                let v = eval_vec(a, bx, ctx, ops)?;
+                acc = vec_combine(&node.op, acc, v)?;
+            }
+            Some(acc)
+        }
+        "neg" => Some(vec_negate(eval_vec(&node.args[0], bx, ctx, ops)?)),
+        "index" => eval_vec_index(node, bx, ctx, ops),
+        "makearray" => eval_vec_makearray(node, bx, ctx, ops),
+        "const" => match eval_const(node) {
+            Value::Scalar(s) => Some(VecValue::Scalar(s)),
+            // Array-valued constants are not part of the stencil fast path.
+            Value::Array(_) => None,
+        },
+        // Everything else (ifelse, comparisons, aggregate, reshape, transpose,
+        // concat, broadcast, transcendentals over arrays, D, …) falls back.
+        _ => None,
+    }
+}
+
+fn vec_negate(v: VecValue) -> VecValue {
+    match v {
+        VecValue::Scalar(s) => VecValue::Scalar(-s),
+        VecValue::Array { data, origin } => VecValue::Array {
+            data: data.mapv(|x| -x),
+            origin,
+        },
+    }
+}
+
+/// Combine two vectorized values with a binary arithmetic op. Array operands
+/// must already share the same box (origin + shape) — which holds within a
+/// stencil body, since every `index(...)` result is produced over the current
+/// output box. Differing boxes return `None` (bail to oracle).
+fn vec_combine(op: &str, a: VecValue, b: VecValue) -> Option<VecValue> {
+    match (a, b) {
+        (VecValue::Scalar(x), VecValue::Scalar(y)) => {
+            Some(VecValue::Scalar(apply_binary(op, x, y)))
+        }
+        (VecValue::Scalar(x), VecValue::Array { data, origin }) => Some(VecValue::Array {
+            data: data.mapv(|y| apply_binary(op, x, y)),
+            origin,
+        }),
+        (VecValue::Array { data, origin }, VecValue::Scalar(y)) => Some(VecValue::Array {
+            data: data.mapv(|x| apply_binary(op, x, y)),
+            origin,
+        }),
+        (
+            VecValue::Array {
+                data: xa,
+                origin: xo,
+            },
+            VecValue::Array {
+                data: ya,
+                origin: yo,
+            },
+        ) => {
+            if xo != yo || xa.shape() != ya.shape() {
+                return None;
+            }
+            let mut out = ArrayD::<f64>::zeros(xa.raw_dim());
+            ndarray::Zip::from(&mut out)
+                .and(&xa)
+                .and(&ya)
+                .for_each(|o, &x, &y| *o = apply_binary(op, x, y));
+            Some(VecValue::Array {
+                data: out,
+                origin: xo,
+            })
+        }
+    }
+}
+
+/// Vectorized `index(A, e_0, …, e_{n-1})`: a shifted array slice. Each index
+/// expression must be affine `sym_d ± k` in the positional output symbol for
+/// axis `d` (coefficient 1). The result spans the current output box; positions
+/// whose shifted source index leaves `A`'s extent are 0-filled — the existing
+/// homogeneous-Dirichlet ghost-cell convention (matches the scalar `eval_index`
+/// out-of-bounds → 0). Non-affine indexing (e.g. periodic wrap) returns `None`.
+fn eval_vec_index(
+    node: &ExpressionNode,
+    bx: &VecBox,
+    ctx: &EvalCtx,
+    ops: &mut usize,
+) -> Option<VecValue> {
+    if node.args.is_empty() {
+        return None;
+    }
+    let arg0 = eval_vec(&node.args[0], bx, ctx, ops)?;
+    let (src, src_origin) = match arg0 {
+        VecValue::Array { data, origin } => (data, origin),
+        // `index(scalar)` with a single arg is the identity; otherwise unhandled.
+        VecValue::Scalar(s) if node.args.len() == 1 => return Some(VecValue::Scalar(s)),
+        VecValue::Scalar(_) => return None,
+    };
+    let n = node.args.len() - 1;
+    if n != src.ndim() || n != bx.shape.len() {
+        return None;
+    }
+    // Parse each index expression as `output_sym_d + k_d`.
+    let mut offsets = vec![0i64; n];
+    for d in 0..n {
+        offsets[d] = parse_affine_offset(&node.args[1 + d], &bx.syms[d])?;
+    }
+    // Compute, per axis, the output sub-range that maps in-bounds into `src`,
+    // and the matching source sub-range. Everything else stays 0 (ghost).
+    let mut out_start = vec![0usize; n];
+    let mut out_len = vec![0usize; n];
+    let mut src_start = vec![0usize; n];
+    for d in 0..n {
+        let k = offsets[d];
+        let so = src_origin[d];
+        let ssz = src.shape()[d] as i64;
+        // output position p (0-based) -> symbol value bx.lo[d] + p
+        //   -> source 1-based (bx.lo[d] + p + k) -> source 0-based - so.
+        // valid when 0 <= bx.lo[d] + p + k - so <= ssz - 1.
+        let lo_p = (so - bx.lo[d] - k).max(0);
+        let hi_p = (so + ssz - bx.lo[d] - k).min(bx.shape[d] as i64); // exclusive
+        if lo_p >= hi_p {
+            // Entire axis out of bounds -> all-ghost result.
+            return Some(VecValue::Array {
+                data: ArrayD::<f64>::zeros(IxDyn(bx.shape)),
+                origin: bx.lo.to_vec(),
+            });
+        }
+        out_start[d] = lo_p as usize;
+        out_len[d] = (hi_p - lo_p) as usize;
+        src_start[d] = (bx.lo[d] + lo_p + k - so) as usize;
+    }
+    let mut result = ArrayD::<f64>::zeros(IxDyn(bx.shape));
+    {
+        let mut out_view = result.slice_each_axis_mut(|ax| {
+            let d = ax.axis.index();
+            Slice::from(out_start[d]..out_start[d] + out_len[d])
+        });
+        let src_view = src.slice_each_axis(|ax| {
+            let d = ax.axis.index();
+            Slice::from(src_start[d]..src_start[d] + out_len[d])
+        });
+        out_view.assign(&src_view);
+    }
+    Some(VecValue::Array {
+        data: result,
+        origin: bx.lo.to_vec(),
+    })
+}
+
+/// Vectorized makearray: materialize each region as a whole-array sub-range
+/// write over the region's box (last region wins), reusing the enclosing output
+/// symbols. Returns an array spanning the union bounding box.
+fn eval_vec_makearray(
+    node: &ExpressionNode,
+    bx: &VecBox,
+    ctx: &EvalCtx,
+    ops: &mut usize,
+) -> Option<VecValue> {
+    let regions = node.regions.as_ref()?;
+    let values = node.values.as_ref()?;
+    if regions.is_empty() || values.len() != regions.len() {
+        return None;
+    }
+    let ndim = regions[0].len();
+    if ndim != bx.shape.len() {
+        return None;
+    }
+    let mut lo_bb = vec![i64::MAX; ndim];
+    let mut hi_bb = vec![i64::MIN; ndim];
+    for region in regions {
+        if region.len() != ndim {
+            return None;
+        }
+        for (d, r) in region.iter().enumerate() {
+            lo_bb[d] = lo_bb[d].min(r[0]);
+            hi_bb[d] = hi_bb[d].max(r[1]);
+        }
+    }
+    let bb_shape: Vec<usize> = (0..ndim)
+        .map(|d| (hi_bb[d] - lo_bb[d] + 1) as usize)
+        .collect();
+    let mut result = ArrayD::<f64>::zeros(IxDyn(&bb_shape));
+    for (region, value_expr) in regions.iter().zip(values.iter()) {
+        let r_lo: Vec<i64> = region.iter().map(|r| r[0]).collect();
+        let r_shape: Vec<usize> = region.iter().map(|r| (r[1] - r[0] + 1) as usize).collect();
+        if r_shape.contains(&0) {
+            return None;
+        }
+        let rbx = VecBox {
+            syms: bx.syms,
+            lo: &r_lo,
+            shape: &r_shape,
+        };
+        let v = eval_vec(value_expr, &rbx, ctx, ops)?;
+        let mut sub = result.slice_each_axis_mut(|ax| {
+            let d = ax.axis.index();
+            let s = (r_lo[d] - lo_bb[d]) as usize;
+            Slice::from(s..s + r_shape[d])
+        });
+        match v {
+            VecValue::Scalar(s) => sub.fill(s),
+            VecValue::Array { data, origin } => {
+                if origin != r_lo || data.shape() != r_shape.as_slice() {
+                    return None;
+                }
+                sub.assign(&data);
+            }
+        }
+    }
+    Some(VecValue::Array {
+        data: result,
+        origin: lo_bb,
+    })
+}
+
+/// Parse `expr` as `sym ± k` (or bare `sym`) where `sym` is the given output
+/// index symbol and `k` is an integer literal. Returns the signed offset `k`,
+/// or `None` if `expr` is not affine in exactly `sym` with unit coefficient.
+fn parse_affine_offset(expr: &Expr, sym: &str) -> Option<i64> {
+    match expr {
+        Expr::Variable(v) if v == sym => Some(0),
+        Expr::Operator(node) => {
+            let as_int = |e: &Expr| -> Option<i64> {
+                match e {
+                    Expr::Integer(n) => Some(*n),
+                    Expr::Number(n) if n.fract() == 0.0 => Some(*n as i64),
+                    _ => None,
+                }
+            };
+            let is_sym = |e: &Expr| matches!(e, Expr::Variable(v) if v == sym);
+            match node.op.as_str() {
+                "+" if node.args.len() == 2 => {
+                    if is_sym(&node.args[0]) {
+                        as_int(&node.args[1])
+                    } else if is_sym(&node.args[1]) {
+                        as_int(&node.args[0])
+                    } else {
+                        None
+                    }
+                }
+                "-" if node.args.len() == 2 => {
+                    if is_sym(&node.args[0]) {
+                        as_int(&node.args[1]).map(|k| -k)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+        _ => None,
     }
 }
 
@@ -1398,9 +1932,7 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         // Unary / scalar transcendentals.
         "exp" | "log" | "ln" | "log10" | "sqrt" | "abs" | "sign" | "floor" | "ceil" | "sin"
         | "cos" | "tan" | "asin" | "acos" | "atan" | "sinh" | "cosh" | "tanh" | "asinh"
-        | "acosh" | "atanh" => {
-            eval_unary(&node.op, &node.args, ctx)
-        }
+        | "acosh" | "atanh" => eval_unary(&node.op, &node.args, ctx),
 
         "atan2" => eval_binary(&node.op, &node.args, ctx),
 

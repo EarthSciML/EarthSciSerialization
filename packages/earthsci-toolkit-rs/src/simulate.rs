@@ -883,7 +883,12 @@ where
 /// with array-shaped state variables (non-empty `shape` field). Spatial
 /// models that have already been discretized (spatial ops rewritten to
 /// `index`-addressed array equations) integrate end-to-end via the ArrayOp
-/// runtime without hitting the scalar-ODE rejection guard.
+/// runtime without hitting the scalar-ODE rejection guard. Their
+/// method-of-lines stencil RHS is evaluated **vectorized** — whole-array
+/// shifted-slice stencils + region-materialized boundary makearrays, no
+/// per-cell scalarization (ess-bdm; see
+/// [`crate::simulate_array::ArrayCompiled`] and the no-scalarization
+/// verification in `tests/pde_vectorized_eval.rs`).
 ///
 /// Falls back to the scalar path via [`Compiled::from_file`] for pure-ODE
 /// files with no array-op or spatial structure.

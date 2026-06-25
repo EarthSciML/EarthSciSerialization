@@ -15,13 +15,26 @@ contracted index). This category closes that gap.
 | `22_reduce_min_ode` | j | min | 1 | State var (v[i]) appears in body alongside j |
 | `20_arrayop_contraction_embedded` | j | +, max | 0 (scalar) / 1 | Embedded form: arrayop is RHS of scalar D eq |
 
+### Spatial PDE stencils (ess-bdm)
+
+Discretized method-of-lines diffusion fixtures — pure-map LHS-arrayops whose RHS
+body is `index(makearray(interior + Dirichlet ghost regions), …)`. Conformance is
+on a **numeric-tolerance** basis against the exact discrete eigenvalue solution
+(rel tol 1e-3). Rust evaluates these **vectorized** (whole-array shifted-slice
+stencils, no per-cell scalarization — ess-bdm).
+
+| Fixture | Grid | Reducer | Output rank | Notes |
+|---------|------|---------|-------------|-------|
+| `15_discretized_1d_heat` | 4 cells | (pure map) | 1 | 1-D heat, Dirichlet ghosts; λ₁=−9.5492 |
+| `16_discretized_2d_heat` | 3×3 | (pure map) | 2 | 2-D heat, edge/corner ghost regions |
+
 ## Executing ports
 
-| Port | Executes fixture 23? | Executes fixture 20? | How |
-|------|---------------------|---------------------|-----|
-| Python | ✅ yes | ✅ yes | `simulation.py` Case B with contraction unroll |
-| Rust | ✅ yes | ✅ yes | `arrayop_simulate_tests.rs` |
-| Julia | ✅ yes (MTK + tree-walk) | ⚠️ MTK only | MTK: `_build_arrayop_sym`; tree-walk: generalized-einsum unroll (tree_walk.jl:294-370) |
+| Port | Contraction (23/20) | PDE stencils (15/16) | How |
+|------|---------------------|----------------------|-----|
+| Python | ✅ yes | ✅ yes | `simulation.py` Case B + numpy vectorized stencil path (PR #25); `test_arrayop_simulation.py` globs all fixtures |
+| Rust | ✅ yes | ✅ yes (vectorized) | `arrayop_simulate_tests.rs`; vectorized path verified in `pde_vectorized_eval.rs` (ess-bdm) |
+| Julia | ✅ yes (MTK + tree-walk) | ✅ yes (tree-walk) | tree-walk LHS-arrayop unroller; `tree_walk_arrayop_test.jl` testsets 6 (15) & 7 (16) |
 | TypeScript | ❌ skip | ❌ skip | No arrayop numeric executor |
 | Go | ❌ skip | ❌ skip | No arrayop numeric executor |
 
