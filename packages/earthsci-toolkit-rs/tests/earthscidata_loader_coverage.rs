@@ -4,7 +4,7 @@
 //! loader currently implemented in EarthSciData.jl. Each fixture under
 //! `tests/fixtures/data_loaders/` hand-constructs an instantiation of one
 //! EarthSciData.jl `FileSet` struct using the schema's
-//! kind/source/temporal/spatial/variables/regridding fields. The fixture
+//! kind/source/temporal/grid/variables fields. The fixture
 //! header documents which EarthSciData.jl file and line range it corresponds
 //! to.
 //!

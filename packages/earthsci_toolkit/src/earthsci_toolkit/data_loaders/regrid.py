@@ -1,11 +1,13 @@
 """Target-grid regridding with ``fill_value`` / ``extrapolation`` semantics.
 
-This is a minimal bilinear regridder for ``latlon`` grids — enough to honour
-the schema's ``DataLoaderRegridding`` settings without pulling in a heavy
-dependency like xesmf. Callers that need higher-order regridders should do
-that out-of-band and bypass this helper.
+This is a minimal bilinear regridder for geographic (``longlat``) grids —
+enough to resample a loader's native grid onto a model target grid without
+pulling in a heavy dependency like xesmf. Regridding is a per-variable model
+concern (RFC pure-io-data-loaders §4.1), so ``fill_value`` / ``extrapolation``
+are supplied by the caller rather than read from the loader. Callers that need
+higher-order regridders should do that out-of-band and bypass this helper.
 
-Supported extrapolation modes (from :class:`DataLoaderRegridding`):
+Supported extrapolation modes:
 
 - ``"clamp"`` — hold edge values (bilinear clipped to source extent)
 - ``"nan"`` — set out-of-domain samples to ``fill_value`` (or NaN)

@@ -17,9 +17,7 @@ import pytest
 from earthsci_toolkit import (
     DataLoader,
     DataLoaderKind,
-    DataLoaderRegridding,
     DataLoaderSource,
-    DataLoaderSpatial,
     DataLoaderTemporal,
     DataLoaderVariable,
     DataLoaderDispatchError,
@@ -45,6 +43,16 @@ from earthsci_toolkit import (
     resolve_files,
     template_placeholders,
 )
+from earthsci_toolkit.esm_types import Grid, GridCRS
+
+
+def _geographic_grid() -> Grid:
+    """Minimal geographic (longlat) native grid for regridding tests."""
+    return Grid(
+        family="cartesian",
+        dimensions=["lon", "lat"],
+        crs=GridCRS(projection="longlat", datum="WGS84"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -371,8 +379,7 @@ class FakeDataset:
 def _make_grid_loader(
     tpl: str = "mem://{date:%Y%m%d}.nc",
     variables=None,
-    spatial=None,
-    regridding=None,
+    grid=None,
     temporal=None,
 ) -> DataLoader:
     return DataLoader(
@@ -383,8 +390,7 @@ def _make_grid_loader(
             "u": DataLoaderVariable(file_variable="U", units="m/s"),
         },
         temporal=temporal or DataLoaderTemporal(file_period="P1D"),
-        spatial=spatial,
-        regridding=regridding,
+        grid=grid,
     )
 
 
@@ -464,12 +470,7 @@ class TestGridLoader:
     def test_regrid_latlon_to_target(self):
         import numpy as np  # noqa: PLC0415
 
-        dl = _make_grid_loader(
-            spatial=DataLoaderSpatial(
-                crs="+proj=longlat", grid_type="latlon"
-            ),
-            regridding=DataLoaderRegridding(extrapolation="clamp"),
-        )
+        dl = _make_grid_loader(grid=_geographic_grid())
         lat = np.array([0.0, 1.0, 2.0])
         lon = np.array([0.0, 1.0, 2.0, 3.0])
         lat_mesh, lon_mesh = np.meshgrid(lat, lon, indexing="ij")

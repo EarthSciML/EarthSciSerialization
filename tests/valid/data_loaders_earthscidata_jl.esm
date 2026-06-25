@@ -3,9 +3,15 @@
   "metadata": {
     "name": "DataLoadersEarthSciDataJLCoverage",
     "description": "Expressiveness fixture: demonstrates the STAC-like DataLoader schema can express every data source currently implemented in EarthSciData.jl. Each loader documents the Julia source file + struct it corresponds to in its metadata.description. Hand-constructed from the EarthSciData.jl parameter footprint (no actual data fetched) — see task gt-dba Mayor amendment.",
-    "authors": ["ESM Test Suite"],
+    "authors": [
+      "ESM Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["data-loaders", "expressiveness", "earthscidata-jl-coverage"]
+    "tags": [
+      "data-loaders",
+      "expressiveness",
+      "earthscidata-jl-coverage"
+    ]
   },
   "data_loaders": {
     "ERA5PressureLevel": {
@@ -21,17 +27,42 @@
         "frequency": "PT1H",
         "time_variable": "valid_time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "longitude": "center",
-          "latitude": "center",
-          "pressure_level": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "longitude": 0.25,
-          "latitude": 0.25
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "longitude",
+          "latitude",
+          "pressure_level"
+        ],
+        "extents": {
+          "longitude": {
+            "n": "n_longitude",
+            "spacing": "uniform"
+          },
+          "latitude": {
+            "n": "n_latitude",
+            "spacing": "uniform"
+          },
+          "pressure_level": {
+            "n": "n_pressure_level",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_longitude": {
+            "description": "longitude cell count, resolved from the source dataset at load time"
+          },
+          "n_latitude": {
+            "description": "latitude cell count, resolved from the source dataset at load time"
+          },
+          "n_pressure_level": {
+            "description": "pressure_level cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -78,10 +109,14 @@
         "notes": "EarthSciData.jl source: src/era5.jl — struct ERA5PressureLevelFileSet (lines 56-210), relpath (lines 213-217), variable short-name table ERA5_VARIABLES (lines 16-33). Native time/longitude orientation is normalized in loadslice!."
       },
       "metadata": {
-        "tags": ["reanalysis", "meteorology", "pressure-levels", "cds"]
+        "tags": [
+          "reanalysis",
+          "meteorology",
+          "pressure-levels",
+          "cds"
+        ]
       }
     },
-
     "WRFRegional": {
       "kind": "grid",
       "source": {
@@ -93,13 +128,49 @@
         "records_per_file": 1,
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "+proj=lcc +lat_1=30.0 +lat_2=60.0 +lat_0=40.0 +lon_0=-97.0 +x_0=0 +y_0=0 +a=6370000 +b=6370000 +to_meter=1",
-        "grid_type": "lambert_conformal",
-        "staggering": {
-          "west_east": "center",
-          "south_north": "center",
-          "bottom_top": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "lambert_conformal",
+          "datum": "sphere",
+          "R": 6370000,
+          "parameters": {
+            "lat_1": 30,
+            "lat_2": 60,
+            "lat_0": 40,
+            "lon_0": -97
+          }
+        },
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "west_east",
+          "south_north",
+          "bottom_top"
+        ],
+        "extents": {
+          "west_east": {
+            "n": "n_west_east",
+            "spacing": "uniform"
+          },
+          "south_north": {
+            "n": "n_south_north",
+            "spacing": "uniform"
+          },
+          "bottom_top": {
+            "n": "n_bottom_top",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_west_east": {
+            "description": "west_east cell count, resolved from the source dataset at load time"
+          },
+          "n_south_north": {
+            "description": "south_north cell count, resolved from the source dataset at load time"
+          },
+          "n_bottom_top": {
+            "description": "bottom_top cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -135,10 +206,14 @@
         "notes": "EarthSciData.jl source: src/wrf.jl — struct WRFFileSet (lines 4-37), relpath (lines 39-45), projection decoded at runtime from MAP_PROJ/TRUELAT1/TRUELAT2/MOAD_CEN_LAT/STAND_LON (lines 85-92). Projection string here uses example CONUS parameters; real values come from file attributes."
       },
       "metadata": {
-        "tags": ["reanalysis", "meteorology", "regional", "lambert-conformal"]
+        "tags": [
+          "reanalysis",
+          "meteorology",
+          "regional",
+          "lambert-conformal"
+        ]
       }
     },
-
     "CEDSAnthroSO2": {
       "kind": "grid",
       "source": {
@@ -151,16 +226,34 @@
         "frequency": "P1M",
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.5,
-          "lat": 0.5
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -177,7 +270,12 @@
         "notes": "EarthSciData.jl source: src/ceds.jl — struct CEDSFileSet (lines 59-158), relpath (lines 159-167), sector list CEDS_SECTORS (lines 4-13), species list CEDS_SPECIES (lines 16-18), file chunks CEDS_GN_CHUNKS (lines 21-28). Files are chunked 50-year blocks; per-species. The url_template uses a custom {species}/{year_start}/{year_end} substitution — runtime resolves these."
       },
       "metadata": {
-        "tags": ["emissions", "anthropogenic", "sector-based", "ceds-cmip"],
+        "tags": [
+          "emissions",
+          "anthropogenic",
+          "sector-based",
+          "ceds-cmip"
+        ],
         "sectors": [
           "Agriculture",
           "Energy",
@@ -190,7 +288,6 @@
         ]
       }
     },
-
     "EDGARv81MonthlyNOx": {
       "kind": "grid",
       "source": {
@@ -203,16 +300,34 @@
         "frequency": "P1M",
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.1,
-          "lat": 0.1
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -228,25 +343,49 @@
         "notes": "EarthSciData.jl source: src/edgar_v81_monthly.jl — struct EDGARv81MonthlyEmisFileSet (lines 91-130), relative path helper _edgar_zip_relpath (lines 13-15), substance list EDGAR_V81_SUBSTANCES (lines 3-5), temporal range constants EDGAR_V81_START_YEAR/EDGAR_V81_END_YEAR (lines 8-9), mirror EDGAR_V81_MIRROR (line 7). Distributed as per-(substance, sector) zip archives; schema-level url_template uses {species}/{sector} custom substitutions."
       },
       "metadata": {
-        "tags": ["emissions", "anthropogenic", "sector-based", "edgar", "per-species", "monthly"]
+        "tags": [
+          "emissions",
+          "anthropogenic",
+          "sector-based",
+          "edgar",
+          "per-species",
+          "monthly"
+        ]
       }
     },
-
     "USGS3DEPElevation": {
       "kind": "static",
       "source": {
         "url_template": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox={bbox_west},{bbox_south},{bbox_east},{bbox_north}&size={width},{height}&format=tiff&f=image&bboxSR=4326&imageSR=4326"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 9.2592592592e-05,
-          "lat": 9.2592592592e-05
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -256,17 +395,19 @@
           "description": "Terrain elevation above sea level (native 1/3 arc-second, ~10m resolution)"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp",
-        "fill_value": -9999.0
-      },
       "reference": {
         "citation": "U.S. Geological Survey — 3D Elevation Program (3DEP)",
         "url": "https://elevation.nationalmap.gov/",
         "notes": "EarthSciData.jl source: src/usgs3dep.jl — struct USGS3DEPFileSet (lines 21-27), constructor USGS3DEPFileSet(domaininfo; resolution=1/3) (lines 44-100+), mirror URL USGS3DEP_MIRROR (line 3). This is a time-invariant (kind=\"static\") dataset; the REST API returns GeoTIFF on demand. Schema-level url_template uses custom {bbox_*},{width},{height} substitutions computed from the requested domain."
       },
       "metadata": {
-        "tags": ["static", "elevation", "terrain", "usgs", "rest-api"]
+        "tags": [
+          "static",
+          "elevation",
+          "terrain",
+          "usgs",
+          "rest-api"
+        ]
       }
     }
   },
@@ -284,7 +425,9 @@
         {
           "lhs": {
             "op": "D",
-            "args": ["x"],
+            "args": [
+              "x"
+            ],
             "wrt": "t"
           },
           "rhs": 0

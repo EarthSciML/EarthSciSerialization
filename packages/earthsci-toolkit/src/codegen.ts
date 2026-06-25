@@ -678,17 +678,10 @@ function generateDataLoaderCode(name: string, dataLoader: DataLoader): string[] 
       lines.push(`  time_variable = "${dataLoader.temporal.time_variable}",`)
     }
   }
-  if (dataLoader.spatial) {
-    lines.push(`  crs = "${dataLoader.spatial.crs}",`)
-    lines.push(`  grid_type = "${dataLoader.spatial.grid_type}",`)
-  }
-  if (dataLoader.regridding) {
-    if (dataLoader.regridding.fill_value !== undefined) {
-      lines.push(`  fill_value = ${dataLoader.regridding.fill_value},`)
-    }
-    if (dataLoader.regridding.extrapolation) {
-      lines.push(`  extrapolation = "${dataLoader.regridding.extrapolation}",`)
-    }
+  if (dataLoader.grid) {
+    // Native grid description (GDD Grid). The loader merely describes the grid it
+    // reads; reprojection/regridding are model concerns (RFC pure-io-data-loaders §4.1).
+    lines.push(`  grid = ${JSON.stringify(dataLoader.grid)},`)
   }
   lines.push(`)`)
 
@@ -1167,17 +1160,10 @@ function generatePythonDataLoaderCode(name: string, dataLoader: DataLoader): str
       lines.push(`    time_variable="${dataLoader.temporal.time_variable}",`)
     }
   }
-  if (dataLoader.spatial) {
-    lines.push(`    crs="${dataLoader.spatial.crs}",`)
-    lines.push(`    grid_type="${dataLoader.spatial.grid_type}",`)
-  }
-  if (dataLoader.regridding) {
-    if (dataLoader.regridding.fill_value !== undefined) {
-      lines.push(`    fill_value=${dataLoader.regridding.fill_value},`)
-    }
-    if (dataLoader.regridding.extrapolation) {
-      lines.push(`    extrapolation="${dataLoader.regridding.extrapolation}",`)
-    }
+  if (dataLoader.grid) {
+    // Native grid description (GDD Grid). The loader merely describes the grid it
+    // reads; reprojection/regridding are model concerns (RFC pure-io-data-loaders §4.1).
+    lines.push(`    grid=${JSON.stringify(dataLoader.grid)},`)
   }
   lines.push(`)`)
 

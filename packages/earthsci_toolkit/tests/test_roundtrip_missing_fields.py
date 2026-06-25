@@ -5,7 +5,7 @@ import pytest
 
 from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderKind, DataLoaderSource,
-    DataLoaderVariable, DataLoaderTemporal, DataLoaderSpatial, Operator,
+    DataLoaderVariable, DataLoaderTemporal, Grid, GridCRS, Operator,
     VariableMapCoupling, CouplingType, ContinuousEvent, AffectEquation
 )
 from earthsci_toolkit.serialize import save
@@ -38,7 +38,11 @@ def test_roundtrip_preserves_data_loaders():
                 file_variable="P", units="Pa", description="Air pressure"
             ),
         },
-        spatial=DataLoaderSpatial(crs="EPSG:4326", grid_type="latlon"),
+        grid=Grid(
+            family="cartesian",
+            dimensions=["lon", "lat"],
+            crs=GridCRS(projection="longlat", datum="WGS84"),
+        ),
     )
 
     # Create ESM file

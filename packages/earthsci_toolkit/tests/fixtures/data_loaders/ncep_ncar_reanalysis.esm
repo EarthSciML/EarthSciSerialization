@@ -4,9 +4,15 @@
   "metadata": {
     "name": "NCEPNCARReanalysisFixture",
     "description": "NCEP-NCAR Reanalysis 1 pressure-level variables and static surface geopotential in the STAC-like DataLoader schema.",
-    "authors": ["EarthSciSerialization Test Suite"],
+    "authors": [
+      "EarthSciSerialization Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["earthscidata-coverage", "ncep-ncar", "reanalysis"]
+    "tags": [
+      "earthscidata-coverage",
+      "ncep-ncar",
+      "reanalysis"
+    ]
   },
   "data_loaders": {
     "NCEPNCAR_Pressure": {
@@ -20,22 +26,36 @@
         "frequency": "PT6H",
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "+proj=longlat +datum=WGS84 +no_defs",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center",
-          "level": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 2.5,
-          "lat": 2.5
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat",
+          "level"
+        ],
+        "extents": {
+          "lon": {
+            "n": 144,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 72,
+            "spacing": "uniform"
+          },
+          "level": {
+            "n": "n_level",
+            "spacing": "uniform"
+          }
         },
-        "extent": {
-          "lon": [-180.0, 180.0],
-          "lat": [-90.0, 90.0],
-          "level": [10.0, 1000.0]
+        "parameters": {
+          "n_level": {
+            "description": "level cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -71,7 +91,11 @@
         "doi": "10.1175/1520-0477(1996)077<0437:TNYRP>2.0.CO;2"
       },
       "metadata": {
-        "tags": ["meteorology", "reanalysis", "pressure-level"],
+        "tags": [
+          "meteorology",
+          "reanalysis",
+          "pressure-level"
+        ],
         "earthscidata_source": "src/NCEP-NCAR_Reanalysis.jl::NCEPNCARReanalysisFileSet (pressure variables)"
       }
     },
@@ -80,16 +104,34 @@
       "source": {
         "url_template": "https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/surface/{var}.sfc.nc"
       },
-      "spatial": {
-        "crs": "+proj=longlat +datum=WGS84 +no_defs",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 2.5,
-          "lat": 2.5
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -104,7 +146,11 @@
         "url": "https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html"
       },
       "metadata": {
-        "tags": ["meteorology", "static", "surface"],
+        "tags": [
+          "meteorology",
+          "static",
+          "surface"
+        ],
         "earthscidata_source": "src/NCEP-NCAR_Reanalysis.jl::NCEPNCARReanalysisFileSet (surface variables)"
       }
     }
@@ -112,10 +158,23 @@
   "models": {
     "placeholder": {
       "variables": {
-        "x": {"type": "state", "units": "1", "default": 0.0}
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

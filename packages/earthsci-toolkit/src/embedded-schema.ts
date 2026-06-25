@@ -195,6 +195,39 @@ export const schema: AnySchemaObject = {
           "items": {
             "$ref": "#/$defs/Reference"
           }
+        },
+        "system_class": {
+          "type": "string",
+          "enum": [
+            "ode",
+            "dae"
+          ],
+          "description": "Diagnostic stamped by discretize(): whether the resolved system is a pure ODE or a DAE (RFC §12)."
+        },
+        "dae_info": {
+          "type": "object",
+          "description": "Diagnostic stamped by discretize(): algebraic-equation accounting (RFC §12).",
+          "properties": {
+            "algebraic_equation_count": {
+              "type": "integer"
+            },
+            "per_model": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "discretized_from": {
+          "type": "object",
+          "description": "Diagnostic stamped by discretize(): identifies the source document this was discretized from (RFC §12).",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The metadata.name of the source document."
+            }
+          }
         }
       }
     },
@@ -2464,66 +2497,6 @@ export const schema: AnySchemaObject = {
         }
       }
     },
-    "DataLoaderStaggering": {
-      "type": "object",
-      "description": "Per-dimension grid staggering (centered or edge-aligned).",
-      "additionalProperties": {
-        "type": "string",
-        "enum": [
-          "center",
-          "edge"
-        ]
-      }
-    },
-    "DataLoaderSpatial": {
-      "type": "object",
-      "description": "Spatial grid description for a data source.",
-      "required": [
-        "crs",
-        "grid_type"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "crs": {
-          "type": "string",
-          "description": "Coordinate reference system as a PROJ string or EPSG code."
-        },
-        "grid_type": {
-          "type": "string",
-          "enum": [
-            "latlon",
-            "lambert_conformal",
-            "mercator",
-            "polar_stereographic",
-            "rotated_pole",
-            "unstructured"
-          ],
-          "description": "Structural grid family. Use \"unstructured\" for mesh/point datasets."
-        },
-        "staggering": {
-          "$ref": "#/$defs/DataLoaderStaggering"
-        },
-        "resolution": {
-          "type": "object",
-          "description": "Per-dimension resolution in native CRS units. Optional; some datasets only know this at runtime.",
-          "additionalProperties": {
-            "type": "number"
-          }
-        },
-        "extent": {
-          "type": "object",
-          "description": "Per-dimension [min, max] extent in native CRS units. Optional; runtime can infer from files.",
-          "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "number"
-            },
-            "minItems": 2,
-            "maxItems": 2
-          }
-        }
-      }
-    },
     "DataLoaderVariable": {
       "type": "object",
       "description": "A variable exposed by a data loader, mapped from a source-file variable.",
@@ -2557,26 +2530,6 @@ export const schema: AnySchemaObject = {
         },
         "reference": {
           "$ref": "#/$defs/Reference"
-        }
-      }
-    },
-    "DataLoaderRegridding": {
-      "type": "object",
-      "description": "Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.",
-      "additionalProperties": false,
-      "properties": {
-        "fill_value": {
-          "type": "number",
-          "description": "Value to assign to cells with no source data."
-        },
-        "extrapolation": {
-          "type": "string",
-          "enum": [
-            "clamp",
-            "nan",
-            "periodic"
-          ],
-          "description": "Behavior when regridding targets fall outside the source extent. Defaults to \"clamp\"."
         }
       }
     },
@@ -2668,7 +2621,7 @@ export const schema: AnySchemaObject = {
     },
     "DataLoader": {
       "type": "object",
-      "description": "A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
+      "description": "A generic, runtime-agnostic description of an external data source reduced to pure I/O: it locates, reads, and slices bytes from disk and describes the data's native grid. It performs no reprojection and no regridding — those are model concerns, chosen per variable, on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1). Authentication and algorithm-specific tuning are runtime-only and not part of the schema.",
       "required": [
         "kind",
         "source",
@@ -2692,8 +2645,9 @@ export const schema: AnySchemaObject = {
         "temporal": {
           "$ref": "#/$defs/DataLoaderTemporal"
         },
-        "spatial": {
-          "$ref": "#/$defs/DataLoaderSpatial"
+        "grid": {
+          "$ref": "#/$defs/Grid",
+          "description": "Optional description of the data's native grid in the unified GDD Grid format (topological family + optional crs descriptor), replacing the removed bespoke 'spatial' block. The loader merely describes the grid it reads from disk; reprojection and regridding onto a target grid are performed by the owning model, never by the loader (RFC pure-io-data-loaders §4.1-§4.2). Applies to 'grid' and 'points' (family 'unstructured') kinds; 'mesh' loaders describe geometry via the 'mesh' descriptor plus a grids entry, and any loader whose native grid is resolved at runtime may omit it."
         },
         "mesh": {
           "$ref": "#/$defs/DataLoaderMesh"
@@ -2708,9 +2662,6 @@ export const schema: AnySchemaObject = {
           "additionalProperties": {
             "$ref": "#/$defs/DataLoaderVariable"
           }
-        },
-        "regridding": {
-          "$ref": "#/$defs/DataLoaderRegridding"
         },
         "reference": {
           "$ref": "#/$defs/Reference"

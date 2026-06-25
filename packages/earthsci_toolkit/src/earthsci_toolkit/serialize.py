@@ -32,7 +32,7 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderKind, DataLoaderMesh, DataLoaderMeshTopology,
     DataLoaderDeterminism, DataLoaderSource, DataLoaderTemporal,
-    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding, Operator,
+    DataLoaderVariable, Operator,
     CouplingEntry, CouplingType, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
@@ -682,17 +682,6 @@ def _serialize_data_loader_temporal(temporal: DataLoaderTemporal) -> Dict[str, A
     return result
 
 
-def _serialize_data_loader_spatial(spatial: DataLoaderSpatial) -> Dict[str, Any]:
-    result: Dict[str, Any] = {"crs": spatial.crs, "grid_type": spatial.grid_type}
-    if spatial.staggering:
-        result["staggering"] = dict(spatial.staggering)
-    if spatial.resolution:
-        result["resolution"] = dict(spatial.resolution)
-    if spatial.extent:
-        result["extent"] = {k: list(v) for k, v in spatial.extent.items()}
-    return result
-
-
 def _serialize_data_loader_variable(variable: DataLoaderVariable) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "file_variable": variable.file_variable,
@@ -707,15 +696,6 @@ def _serialize_data_loader_variable(variable: DataLoaderVariable) -> Dict[str, A
         result["description"] = variable.description
     if variable.reference is not None:
         result["reference"] = _serialize_reference(variable.reference)
-    return result
-
-
-def _serialize_data_loader_regridding(regridding: DataLoaderRegridding) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    if regridding.fill_value is not None:
-        result["fill_value"] = regridding.fill_value
-    if regridding.extrapolation is not None:
-        result["extrapolation"] = regridding.extrapolation
     return result
 
 
@@ -757,18 +737,14 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
         temporal_dict = _serialize_data_loader_temporal(loader.temporal)
         if temporal_dict:
             result["temporal"] = temporal_dict
-    if loader.spatial is not None:
-        result["spatial"] = _serialize_data_loader_spatial(loader.spatial)
+    if loader.grid is not None:
+        result["grid"] = _serialize_grid(loader.grid)
     if loader.mesh is not None:
         result["mesh"] = _serialize_data_loader_mesh(loader.mesh)
     if loader.determinism is not None:
         det_dict = _serialize_data_loader_determinism(loader.determinism)
         if det_dict:
             result["determinism"] = det_dict
-    if loader.regridding is not None:
-        regridding_dict = _serialize_data_loader_regridding(loader.regridding)
-        if regridding_dict:
-            result["regridding"] = regridding_dict
     if loader.reference is not None:
         result["reference"] = _serialize_reference(loader.reference)
     if loader.metadata:

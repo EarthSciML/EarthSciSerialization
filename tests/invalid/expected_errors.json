@@ -811,14 +811,14 @@
   "interpolation_method_invalid.esm": {
     "schema_errors": [
       {
-        "path": "/data_loaders/BadInterpolation/regridding/extrapolation",
-        "message": "Value 'invalid_extrapolation_method' not in enum: [clamp, nan, periodic]",
-        "keyword": "enum"
+        "path": "/data_loaders/BadInterpolation",
+        "message": "Additional property 'regridding' is not allowed",
+        "keyword": "additionalProperties"
       }
     ],
     "structural_errors": [],
     "is_valid": false,
-    "notes": "Repurposed for new DataLoader shape: 'interpolation' field removed; tests invalid 'regridding.extrapolation' enum value."
+    "notes": "Legacy-shape rejection (RFC pure-io-data-loaders §4.1): the loader 'regridding' block was removed (regridding is now a per-variable model concern). A loader still carrying 'regridding' is rejected as an unknown property by DataLoader's additionalProperties:false."
   },
 
   "temporal_resolution_invalid.esm": {

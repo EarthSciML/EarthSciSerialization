@@ -4,9 +4,15 @@
   "metadata": {
     "name": "GEOSFPFixture",
     "description": "GEOS-FP reanalysis data (0.25x0.3125 NA grid, A3dyn filetype) expressed in the STAC-like DataLoader schema.",
-    "authors": ["EarthSciSerialization Test Suite"],
+    "authors": [
+      "EarthSciSerialization Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["earthscidata-coverage", "geosfp", "reanalysis"]
+    "tags": [
+      "earthscidata-coverage",
+      "geosfp",
+      "reanalysis"
+    ]
   },
   "data_loaders": {
     "GEOSFP": {
@@ -20,20 +26,26 @@
         "records_per_file": 8,
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "+proj=longlat +datum=WGS84 +no_defs",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.3125,
-          "lat": 0.25
-        },
-        "extent": {
-          "lon": [-140.0, -40.0],
-          "lat": [10.0, 70.0]
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": 320,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 240,
+            "spacing": "uniform"
+          }
         }
       },
       "variables": {
@@ -53,16 +65,17 @@
           "description": "Vertical pressure velocity"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC. GEOS Forward Processing (GEOS-FP).",
         "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/",
         "doi": "10.5067/A7S6XP56VZWS"
       },
       "metadata": {
-        "tags": ["meteorology", "reanalysis", "geoschem"],
+        "tags": [
+          "meteorology",
+          "reanalysis",
+          "geoschem"
+        ],
         "earthscidata_source": "src/geosfp.jl::GEOSFPFileSet",
         "domain": "0.25x0.3125_NA",
         "filetype": "A3dyn"
@@ -72,10 +85,23 @@
   "models": {
     "placeholder": {
       "variables": {
-        "x": {"type": "state", "units": "1", "default": 0.0}
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

@@ -3,8 +3,14 @@
   "metadata": {
     "name": "WRF_d01_hourly",
     "description": "Source: EarthSciData/src/wrf.jl — WRFFileSet / WRF(). Parameter footprint: mirror (NCAR RDA d340000), domain. File-per-hour NetCDF (wrfout_hourly_d01_{YYYY}-{MM}-{DD}_{HH}.nc) on the Lambert conformal WRF grid. This fixture represents the d01 domain 2018 snapshot.",
-    "authors": ["EarthSciSerialization gt-mos"],
-    "tags": ["meteorology", "regional", "earthscidata.jl"]
+    "authors": [
+      "EarthSciSerialization gt-mos"
+    ],
+    "tags": [
+      "meteorology",
+      "regional",
+      "earthscidata.jl"
+    ]
   },
   "data_loaders": {
     "WRF_d01": {
@@ -18,17 +24,48 @@
         "records_per_file": 1,
         "time_variable": "Time"
       },
-      "spatial": {
-        "crs": "+proj=lcc +lat_1=30 +lat_2=60 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
-        "grid_type": "lambert_conformal",
-        "staggering": {
-          "west_east": "center",
-          "south_north": "center",
-          "bottom_top": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "lambert_conformal",
+          "datum": "WGS84",
+          "parameters": {
+            "lat_1": 30,
+            "lat_2": 60,
+            "lat_0": 40,
+            "lon_0": -97
+          }
         },
-        "resolution": {
-          "west_east": 12000.0,
-          "south_north": 12000.0
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "west_east",
+          "south_north",
+          "bottom_top"
+        ],
+        "extents": {
+          "west_east": {
+            "n": "n_west_east",
+            "spacing": "uniform"
+          },
+          "south_north": {
+            "n": "n_south_north",
+            "spacing": "uniform"
+          },
+          "bottom_top": {
+            "n": "n_bottom_top",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_west_east": {
+            "description": "west_east cell count, resolved from the source dataset at load time"
+          },
+          "n_south_north": {
+            "description": "south_north cell count, resolved from the source dataset at load time"
+          },
+          "n_bottom_top": {
+            "description": "bottom_top cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -58,24 +95,38 @@
           "description": "Perturbation pressure (WRF P)"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Skamarock, W. C., et al. (2019) A Description of the Advanced Research WRF Model Version 4. NCAR/TN-556+STR",
         "url": "https://rda.ucar.edu/datasets/ds634.1/"
       },
       "metadata": {
-        "tags": ["meteorology", "regional", "wrf"],
+        "tags": [
+          "meteorology",
+          "regional",
+          "wrf"
+        ],
         "domain": "d01"
       }
     }
   },
   "models": {
     "stub": {
-      "variables": {"x": {"type": "state"}},
+      "variables": {
+        "x": {
+          "type": "state"
+        }
+      },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

@@ -1711,11 +1711,11 @@ where `net_stoich_X = (stoich as product) − (stoich as substrate)`.
 
 ## 8. Data Loaders
 
-Data loaders are generic, runtime-agnostic descriptions of external data sources. The schema carries enough information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — **not** just a pointer at a runtime handler.
+Data loaders are generic, runtime-agnostic descriptions of external data sources, reduced to a single responsibility: **locate, read, and slice** data from disk and **describe its native grid**. The schema carries enough information to locate files, map timestamps to files, and describe variable semantics and the native grid — **not** just a pointer at a runtime handler. A loader performs **no** reprojection and **no** regridding: transferring its native fields onto a consuming model's target grid (and the choice of method) is a **model** concern, selected per variable on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1).
 
 The shape is loosely modeled on a STAC catalog: it is usable for any gridded or point dataset (reanalysis, emissions inventories, static fields), not tied to any specific runtime or library.
 
-Authentication, credential management, algorithm-specific regridding tuning, and per-variable temporal availability constraints are **out of scope** for the schema. Those are runtime concerns.
+Authentication, credential management, and per-variable temporal availability constraints are **out of scope** for the schema. Those are runtime concerns.
 
 ### 8.1 Data Loader Fields
 
@@ -1725,10 +1725,9 @@ Authentication, credential management, algorithm-specific regridding tuning, and
 | `source` | ✓ | File discovery object (see §8.2). |
 | `variables` | ✓ | Map of schema-level variable name → variable descriptor (see §8.5). At least one entry required. |
 | `temporal` | | Temporal coverage and record layout (see §8.3). |
-| `spatial` | | Spatial grid description (see §8.4). |
+| `grid` | | Native grid in the unified GDD `Grid` format (see §8.4). Optional. |
 | `mesh` | conditional | Mesh descriptor (see §8.9). **Required when `kind: "mesh"`**, ignored otherwise. |
 | `determinism` | | Reproducibility contract — endian / float format / integer width (see §8.9). Applies to any loader kind, but is most commonly declared on mesh loaders. |
-| `regridding` | | Regridding configuration (see §8.6). |
 | `reference` | | Data source citation. |
 | `metadata` | | Free-form metadata. The `tags` array is conventional for scientific role. |
 
@@ -1767,25 +1766,29 @@ temporal:
 
 Both **static declaration** (`records_per_file` + `frequency`) and **runtime discovery** (`time_variable`) are allowed. If both are present, the static declaration wins and `time_variable` acts as a fallback. `records_per_file: "auto"` explicitly defers to runtime discovery.
 
-### 8.4 `spatial` — grid description
+### 8.4 `grid` — native grid (GDD `Grid`)
+
+The optional `grid` field describes the data's **native** grid — the grid the loader reads from disk — using the same unified GDD `Grid` format that discretization grids and model-target grids use (see the `Grid` `$def`). This replaces the former bespoke `spatial` block (`crs` string + `grid_type` enum), so loader-native grids, model-target grids, and discretization grids share one schema that can be cross-validated.
 
 ```
-spatial:
-  crs: string                              # PROJ string or EPSG code (required)
-  grid_type: enum                          # required; see below
-  staggering:                              # optional, per-dimension
-    lon: "center" | "edge"
-    lat: "center" | "edge"
-    lev: "center" | "edge"
-  resolution:                              # optional; in native CRS units
-    <dim>: number
-  extent:                                  # optional; runtime can infer from files
-    <dim>: [min, max]
+grid:
+  family: "cartesian" | "unstructured"     # required
+  crs:                                      # optional; orthogonal to family
+    projection: "longlat" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole"
+    datum: "sphere" | "WGS84"               # R required when datum=sphere
+    R: number                               # sphere radius in metres
+    parameters: { <name>: number }          # e.g. LCC {lat_1, lat_2, lat_0, lon_0}
+  dimensions: [string]                      # required; ordered logical dim names
+  extents:                                  # required for cartesian
+    <dim>: { n: integer|string, spacing: "uniform"|"nonuniform" }
+  connectivity: { ... }                     # required for unstructured (see Grid $def)
+  locations: [string]                       # optional declared stagger locations
+  parameters: { <name>: Parameter }         # optional; e.g. runtime-resolved dim counts
 ```
 
-`grid_type` is one of: `"latlon"`, `"lambert_conformal"`, `"mercator"`, `"polar_stereographic"`, `"rotated_pole"`, `"unstructured"`. Use `"unstructured"` (in combination with `kind: "points"`) for point-cloud datasets. For mesh datasets with connectivity, prefer `kind: "mesh"` and declare topology + connectivity / metric fields under `mesh` (see §8.9); `spatial` may be omitted for mesh loaders.
+The `crs` descriptor **names** the native projection and the parameters a downstream reprojection rule consumes; the grid itself performs no reprojection. Geographic grids use `projection: "longlat"` (the identity case). A projected native grid — e.g. WRF / NEI Lambert Conformal — is topologically `cartesian` with a `crs` naming the projection: `crs` is **orthogonal** to the topological `family` (a lat-lon grid and an LCC grid share `family: "cartesian"` and differ only in `crs`).
 
-`staggering` is first-class rather than buried in `config`, because it changes how variables align to the grid and is needed for regridding. Dimensions not listed default to `"center"`.
+`grid` applies to `kind: "grid"` (cartesian, geographic or projected). For `kind: "points"` the native grid is an unstructured geographic point cloud; because the GDD `Grid` `unstructured` family requires connectivity tables that a bare point cloud lacks, point loaders may **omit** `grid` (their geographic CRS is conventional). For `kind: "mesh"`, geometry is described by the `mesh` descriptor (§8.9) plus a `grids.<g>` entry, and `grid` is omitted. A loader whose native grid is fully resolved at runtime may also omit it; dimension counts that are only known at load time can be expressed as `extents.<dim>.n` parameter references (§8.4 `parameters`).
 
 ### 8.5 `variables` — variable mapping
 
@@ -1801,21 +1804,15 @@ variables:
 
 `file_variable` lets the schema-level variable name differ from the on-disk name. `unit_conversion` is either a plain multiplicative factor or a full `Expression` AST (§4); the runtime applies it when producing values in the declared `units`.
 
-### 8.6 `regridding` — regridding configuration
+### 8.6 Regridding — removed (now a model concern)
 
-```
-regridding:
-  fill_value: number                         # optional
-  extrapolation: "clamp" | "nan" | "periodic"  # optional, default "clamp"
-```
-
-Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters, etc.) is runtime-only and not part of the schema.
+Earlier revisions carried a loader-level `regridding` block (`fill_value`, `extrapolation`). It has been **removed**: a data loader is pure I/O and performs no regridding. Transferring a loader's native fields onto a consuming model's target grid — and the choice of method (conservative for cell-centered fields, interpolating for staggered fields, cell-averaging with a configurable missing value for scattered points) — is a **model** concern, selected **per variable** on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1, §5.2, §6). A loader that still carries a `regridding` block (or the old `spatial` block) is **rejected** at load: both are unknown properties under the pure-I/O `DataLoader`.
 
 ### 8.7 Out of scope
 
 - **Authentication / credentials.** Env vars, API keys, S3 credentials, CDS API tokens — all runtime-side. The schema stores **no** credential information.
 - **Per-variable temporal availability windows** (e.g. "CEDS covers 1750–2023 for NOx but 1850–2023 for CH4"). Runtime validation concern.
-- **Regridding algorithm tuning parameters.**
+- **Reprojection and regridding.** A loader describes its native grid only; transforming onto a target grid is a model concern (§8.6).
 
 ### 8.8 Worked examples
 
@@ -1835,11 +1832,18 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
       "frequency":   "PT1H",
       "records_per_file": 1
     },
-    "spatial": {
-      "crs": "EPSG:4326",
-      "grid_type": "latlon",
-      "staggering": { "lon": "center", "lat": "center" },
-      "resolution": { "lon": 0.3125, "lat": 0.25 }
+    "grid": {
+      "family": "cartesian",
+      "crs": { "projection": "longlat", "datum": "WGS84" },
+      "dimensions": ["lon", "lat"],
+      "extents": {
+        "lon": { "n": "n_lon", "spacing": "uniform" },
+        "lat": { "n": "n_lat", "spacing": "uniform" }
+      },
+      "parameters": {
+        "n_lon": { "description": "longitude cell count, resolved from the source file" },
+        "n_lat": { "description": "latitude cell count, resolved from the source file" }
+      }
     },
     "variables": {
       "u": { "file_variable": "U10M", "units": "m/s", "description": "10-m eastward wind" },
@@ -1847,7 +1851,6 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
       "T": { "file_variable": "T2M",  "units": "K",   "description": "2-m temperature" },
       "PBLH": { "file_variable": "PBLH", "units": "m", "description": "PBL height" }
     },
-    "regridding": { "extrapolation": "clamp" },
     "reference": {
       "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC",
       "url": "https://gmao.gsfc.nasa.gov/GEOS_systems/",
@@ -1878,11 +1881,18 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
       "records_per_file": 12,
       "time_variable": "time"
     },
-    "spatial": {
-      "crs": "EPSG:4326",
-      "grid_type": "latlon",
-      "staggering": { "lon": "center", "lat": "center" },
-      "resolution": { "lon": 0.5, "lat": 0.5 }
+    "grid": {
+      "family": "cartesian",
+      "crs": { "projection": "longlat", "datum": "WGS84" },
+      "dimensions": ["lon", "lat"],
+      "extents": {
+        "lon": { "n": "n_lon", "spacing": "uniform" },
+        "lat": { "n": "n_lat", "spacing": "uniform" }
+      },
+      "parameters": {
+        "n_lon": { "description": "longitude cell count, resolved from the source file" },
+        "n_lat": { "description": "latitude cell count, resolved from the source file" }
+      }
     },
     "variables": {
       "emis_NOx": {
@@ -1922,11 +1932,20 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
       "records_per_file": "auto",
       "time_variable": "time"
     },
-    "spatial": {
-      "crs": "EPSG:4326",
-      "grid_type": "latlon",
-      "staggering": { "lon": "center", "lat": "center", "lev": "center" },
-      "resolution": { "lon": 0.25, "lat": 0.25 }
+    "grid": {
+      "family": "cartesian",
+      "crs": { "projection": "longlat", "datum": "WGS84" },
+      "dimensions": ["lon", "lat", "lev"],
+      "extents": {
+        "lon": { "n": "n_lon", "spacing": "uniform" },
+        "lat": { "n": "n_lat", "spacing": "uniform" },
+        "lev": { "n": "n_lev", "spacing": "nonuniform" }
+      },
+      "parameters": {
+        "n_lon": { "description": "longitude cell count, resolved from the source file" },
+        "n_lat": { "description": "latitude cell count, resolved from the source file" },
+        "n_lev": { "description": "pressure-level count, resolved from the source file" }
+      }
     },
     "variables": {
       "T": {
@@ -1965,11 +1984,18 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
     "source": {
       "url_template": "s3://prd-tnm/StagedProducts/Elevation/1/TIFF/USGS_Seamless_DEM_1.tif"
     },
-    "spatial": {
-      "crs": "EPSG:4326",
-      "grid_type": "latlon",
-      "staggering": { "lon": "center", "lat": "center" },
-      "resolution": { "lon": 0.00027778, "lat": 0.00027778 }
+    "grid": {
+      "family": "cartesian",
+      "crs": { "projection": "longlat", "datum": "WGS84" },
+      "dimensions": ["lon", "lat"],
+      "extents": {
+        "lon": { "n": "n_lon", "spacing": "uniform" },
+        "lat": { "n": "n_lat", "spacing": "uniform" }
+      },
+      "parameters": {
+        "n_lon": { "description": "longitude cell count, resolved from the source file" },
+        "n_lat": { "description": "latitude cell count, resolved from the source file" }
+      }
     },
     "variables": {
       "elevation": {
@@ -1978,7 +2004,6 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
         "description": "Ground-surface elevation above geoid"
       }
     },
-    "regridding": { "fill_value": -9999.0, "extrapolation": "nan" },
     "reference": {
       "citation": "USGS 3D Elevation Program (3DEP)",
       "url": "https://www.usgs.gov/3d-elevation-program"
@@ -1988,9 +2013,51 @@ Algorithm-specific tuning (mass-conservative vs. bilinear, smoothing parameters,
 }
 ```
 
+#### WRF regional (projected native grid — Lambert Conformal Conic)
+
+A projected native grid is topologically `cartesian` with a `crs` naming the projection and its parameters (orthogonal to `family`). The loader still performs no reprojection; the `crs` parameters are exactly what a downstream model's reprojection rule consumes.
+
+```json
+{
+  "WRF_d01": {
+    "kind": "grid",
+    "source": {
+      "url_template": "https://data.rda.ucar.edu/wrfout_d01_{date:%Y-%m-%d_%H:%M:%S}.nc"
+    },
+    "temporal": { "file_period": "PT1H", "frequency": "PT1H", "records_per_file": 1, "time_variable": "time" },
+    "grid": {
+      "family": "cartesian",
+      "crs": {
+        "projection": "lambert_conformal",
+        "datum": "sphere",
+        "R": 6370000.0,
+        "parameters": { "lat_1": 30.0, "lat_2": 60.0, "lat_0": 38.999996, "lon_0": -97.0 }
+      },
+      "dimensions": ["west_east", "south_north", "bottom_top"],
+      "extents": {
+        "west_east": { "n": "n_x", "spacing": "uniform" },
+        "south_north": { "n": "n_y", "spacing": "uniform" },
+        "bottom_top": { "n": "n_z", "spacing": "nonuniform" }
+      },
+      "parameters": {
+        "n_x": { "description": "west-east cell count, resolved from the source file" },
+        "n_y": { "description": "south-north cell count, resolved from the source file" },
+        "n_z": { "description": "vertical level count, resolved from the source file" }
+      }
+    },
+    "variables": {
+      "T2": { "file_variable": "T2", "units": "K", "description": "2-m air temperature" },
+      "U10": { "file_variable": "U10", "units": "m/s", "description": "10-m eastward wind" }
+    },
+    "reference": { "citation": "Skamarock et al. (2019), WRF v4", "url": "https://www2.mmm.ucar.edu/wrf/users/" },
+    "metadata": { "tags": ["meteorology", "wrf", "lambert_conformal"] }
+  }
+}
+```
+
 ### 8.9 `kind: "mesh"` — mesh loaders (discretization RFC §8.A)
 
-A loader declared with `kind: "mesh"` publishes the integer connectivity tables and float metric arrays that an unstructured `grids.<g>` entry (see the discretization RFC §6) resolves by `{loader, field}` reference. `"mesh"` is distinct from `kind: "grid"` (which describes a regular gridded dataset with a CRS under `spatial`) and from `kind: "points"` (which is a point-cloud placeholder with no connectivity).
+A loader declared with `kind: "mesh"` publishes the integer connectivity tables and float metric arrays that an unstructured `grids.<g>` entry (see the discretization RFC §6) resolves by `{loader, field}` reference. `"mesh"` is distinct from `kind: "grid"` (which describes a regular gridded dataset with a native grid under `grid`, §8.4) and from `kind: "points"` (which is a point-cloud placeholder with no connectivity).
 
 #### 8.9.1 `mesh` — mesh descriptor
 
@@ -3619,7 +3686,7 @@ Every equation, species, reaction, parameter, and variable must be present in th
 
 ### Data loaders are the only externally-registered mechanism
 
-Data loaders are runtime-specific: they involve I/O, format adapters, regridding, and large external grids that cannot be meaningfully serialized as math. The `.esm` file declares *what* they provide and *what* they need, but delegates *how* to the runtime. State-mutating numerical schemes (advection, diffusion stencils, deposition algorithms) are **not** an externally-registered mechanism: they are expressed via PDE operators in model equations and named entries in the `discretizations` block (`docs/rfcs/discretization.md` §7). Pure callables embedded inside expressions are **not** an externally-registered mechanism either: they are drawn from the closed function registry (Section 9), whose entries are spec-pinned with fixed names, signatures, and tolerances.
+Data loaders are runtime-specific: they involve I/O, format adapters, and large external grids that cannot be meaningfully serialized as math. (A loader is pure I/O — it does not regrid; transferring its fields onto a model's target grid is a model concern, §8.) The `.esm` file declares *what* they provide and *what* they need, but delegates *how* to the runtime. State-mutating numerical schemes (advection, diffusion stencils, deposition algorithms) are **not** an externally-registered mechanism: they are expressed via PDE operators in model equations and named entries in the `discretizations` block (`docs/rfcs/discretization.md` §7). Pure callables embedded inside expressions are **not** an externally-registered mechanism either: they are drawn from the closed function registry (Section 9), whose entries are spec-pinned with fixed names, signatures, and tolerances.
 
 ### Expression AST over string math
 

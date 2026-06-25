@@ -4,9 +4,16 @@
   "metadata": {
     "name": "OpenAQFixture",
     "description": "OpenAQ point-observation ozone measurements in the STAC-like DataLoader schema.",
-    "authors": ["EarthSciSerialization Test Suite"],
+    "authors": [
+      "EarthSciSerialization Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["earthscidata-coverage", "openaq", "observations", "point-data"]
+    "tags": [
+      "earthscidata-coverage",
+      "openaq",
+      "observations",
+      "point-data"
+    ]
   },
   "data_loaders": {
     "OpenAQ_O3": {
@@ -20,14 +27,6 @@
         "records_per_file": "auto",
         "time_variable": "datetime"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "unstructured",
-        "extent": {
-          "lon": [-180.0, 180.0],
-          "lat": [-90.0, 90.0]
-        }
-      },
       "variables": {
         "o3": {
           "file_variable": "value",
@@ -40,7 +39,11 @@
         "url": "https://docs.openaq.org/"
       },
       "metadata": {
-        "tags": ["observation", "point-data", "air-quality"],
+        "tags": [
+          "observation",
+          "point-data",
+          "air-quality"
+        ],
         "earthscidata_source": "src/openaq.jl::OpenAQFileSet",
         "parameter": "o3",
         "requires_api_key": true,
@@ -51,10 +54,23 @@
   "models": {
     "placeholder": {
       "variables": {
-        "x": {"type": "state", "units": "1", "default": 0.0}
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

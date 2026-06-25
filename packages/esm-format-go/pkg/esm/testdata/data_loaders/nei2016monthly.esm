@@ -3,8 +3,14 @@
   "metadata": {
     "name": "NEI2016Monthly_ptegu",
     "description": "Source: EarthSciData/src/nei2016monthly.jl — NEI2016MonthlyEmisFileSet / NEI2016MonthlyEmis(). Parameter footprint: mirror (EPA gaftp), sector (e.g. ptegu, ptnonipm, onroad, nonpt, ...), starttime, endtime. Monthly emission files on the 12US1 (12-km CONUS Lambert conformal) grid, one file per month. This fixture represents the 'ptegu' (EGU point sources) sector for 2016.",
-    "authors": ["EarthSciSerialization gt-mos"],
-    "tags": ["emissions", "anthropogenic", "earthscidata.jl"]
+    "authors": [
+      "EarthSciSerialization gt-mos"
+    ],
+    "tags": [
+      "emissions",
+      "anthropogenic",
+      "earthscidata.jl"
+    ]
   },
   "data_loaders": {
     "NEI2016Monthly_ptegu": {
@@ -20,16 +26,40 @@
         "records_per_file": 1,
         "time_variable": "TSTEP"
       },
-      "spatial": {
-        "crs": "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
-        "grid_type": "lambert_conformal",
-        "staggering": {
-          "COL": "center",
-          "ROW": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "lambert_conformal",
+          "datum": "WGS84",
+          "parameters": {
+            "lat_1": 33,
+            "lat_2": 45,
+            "lat_0": 40,
+            "lon_0": -97
+          }
         },
-        "resolution": {
-          "COL": 12000.0,
-          "ROW": 12000.0
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "COL",
+          "ROW"
+        ],
+        "extents": {
+          "COL": {
+            "n": "n_COL",
+            "spacing": "uniform"
+          },
+          "ROW": {
+            "n": "n_ROW",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_COL": {
+            "description": "COL cell count, resolved from the source dataset at load time"
+          },
+          "n_ROW": {
+            "description": "ROW cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -39,7 +69,10 @@
           "description": "NO emission flux",
           "unit_conversion": {
             "op": "*",
-            "args": [1.0e-9, 1.0]
+            "args": [
+              1e-09,
+              1.0
+            ]
           }
         },
         "NO2": {
@@ -58,16 +91,15 @@
           "description": "CO emission flux"
         }
       },
-      "regridding": {
-        "fill_value": 0.0,
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "US EPA, 2016 National Emissions Inventory — Modeling Platform (2016fh)",
         "url": "https://www.epa.gov/air-emissions-modeling/2016v1-platform"
       },
       "metadata": {
-        "tags": ["emissions", "anthropogenic"],
+        "tags": [
+          "emissions",
+          "anthropogenic"
+        ],
         "sector": "ptegu",
         "grid_id": "12US1",
         "year": 2016
@@ -76,9 +108,22 @@
   },
   "models": {
     "stub": {
-      "variables": {"x": {"type": "state"}},
+      "variables": {
+        "x": {
+          "type": "state"
+        }
+      },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

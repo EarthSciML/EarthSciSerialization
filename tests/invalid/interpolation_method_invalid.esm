@@ -1,8 +1,8 @@
 {
   "esm": "0.1.0",
   "metadata": {
-    "name": "ExtrapolationMethodInvalid",
-    "description": "Test case: data loader with invalid regridding.extrapolation value",
+    "name": "LegacyRegriddingBlockRejected",
+    "description": "Test case: a data loader still carrying the legacy 'regridding' block. Regridding was removed from DataLoader in RFC pure-io-data-loaders §4.1 (it is now a per-variable model concern); DataLoader.additionalProperties:false rejects the stale block.",
     "authors": ["Test Suite"]
   },
 

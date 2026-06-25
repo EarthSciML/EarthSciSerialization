@@ -3,11 +3,20 @@
   "metadata": {
     "name": "WRF_hourly_d01_example",
     "description": "Covers EarthSciData.jl/src/wrf.jl WRFFileSet. relpath = <yr><mo>/wrfout_hourly_d01_<yyyy>-<mm>-<dd>_<hh>.nc. Lambert-conformal projection on Arakawa C-grid (staggered U/V/W). CRS varies by domain; using a typical CONUS LCC here. WRF hourly domain-1 output on a CONUS Lambert-conformal grid.",
-    "authors": ["ESM fixture"],
-    "tags": ["data-loader", "meteorology", "wrf"]
+    "authors": [
+      "ESM fixture"
+    ],
+    "tags": [
+      "data-loader",
+      "meteorology",
+      "wrf"
+    ]
   },
   "models": {
-    "Stub": { "variables": {}, "equations": [] }
+    "Stub": {
+      "variables": {},
+      "equations": []
+    }
   },
   "data_loaders": {
     "WRF_hourly_d01": {
@@ -21,17 +30,48 @@
         "records_per_file": 1,
         "time_variable": "Time"
       },
-      "spatial": {
-        "crs": "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
-        "grid_type": "lambert_conformal",
-        "staggering": {
-          "west_east": "center",
-          "south_north": "center",
-          "bottom_top": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "lambert_conformal",
+          "datum": "WGS84",
+          "parameters": {
+            "lat_1": 33,
+            "lat_2": 45,
+            "lat_0": 40,
+            "lon_0": -97
+          }
         },
-        "resolution": {
-          "west_east": 12000.0,
-          "south_north": 12000.0
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "west_east",
+          "south_north",
+          "bottom_top"
+        ],
+        "extents": {
+          "west_east": {
+            "n": "n_west_east",
+            "spacing": "uniform"
+          },
+          "south_north": {
+            "n": "n_south_north",
+            "spacing": "uniform"
+          },
+          "bottom_top": {
+            "n": "n_bottom_top",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_west_east": {
+            "description": "west_east cell count, resolved from the source dataset at load time"
+          },
+          "n_south_north": {
+            "description": "south_north cell count, resolved from the source dataset at load time"
+          },
+          "n_bottom_top": {
+            "description": "bottom_top cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -61,15 +101,15 @@
           "description": "Water vapor mixing ratio"
         }
       },
-      "regridding": {
-        "extrapolation": "nan"
-      },
       "reference": {
         "citation": "Skamarock, W.C. et al. (2021) A Description of the Advanced Research WRF Model Version 4.3. NCAR Tech. Note.",
         "url": "https://www2.mmm.ucar.edu/wrf/users/"
       },
       "metadata": {
-        "tags": ["wrf", "regional"],
+        "tags": [
+          "wrf",
+          "regional"
+        ],
         "domain_id": "d01"
       }
     }

@@ -404,18 +404,19 @@ type ContinuousEvent struct {
 // ========================================
 
 // DataLoader is a runtime-agnostic description of an external data source.
-// It carries enough structural information to locate files, map timestamps
-// to files, describe spatial and variable semantics, and regrid — rather
-// than pointing at a runtime handler.
+// It is pure I/O: it carries enough structural information to locate files,
+// map timestamps to files, and describe variable semantics — rather than
+// pointing at a runtime handler. The native grid of the source, when known,
+// is described by the optional Grid (a GDD Grid); reprojection and regridding
+// are the responsibility of downstream rules, not the loader.
 type DataLoader struct {
 	Kind        string                        `json:"kind"` // "grid", "points", "static", or "mesh" (esm-spec §8.9)
 	Source      DataLoaderSource              `json:"source"`
 	Temporal    *DataLoaderTemporal           `json:"temporal,omitempty"`
-	Spatial     *DataLoaderSpatial            `json:"spatial,omitempty"`
+	Grid        *Grid                         `json:"grid,omitempty"`
 	Mesh        *DataLoaderMesh               `json:"mesh,omitempty"`
 	Determinism *DataLoaderDeterminism        `json:"determinism,omitempty"`
 	Variables   map[string]DataLoaderVariable `json:"variables"`
-	Regridding  *DataLoaderRegridding         `json:"regridding,omitempty"`
 	Reference   *Reference                    `json:"reference,omitempty"`
 	Metadata    map[string]interface{}        `json:"metadata,omitempty"`
 }
@@ -458,15 +459,6 @@ type DataLoaderTemporal struct {
 	TimeVariable   *string     `json:"time_variable,omitempty"`
 }
 
-// DataLoaderSpatial describes the spatial grid of a data source.
-type DataLoaderSpatial struct {
-	CRS        string                `json:"crs"`
-	GridType   string                `json:"grid_type"` // "latlon", "lambert_conformal", "mercator", "polar_stereographic", "rotated_pole", "unstructured"
-	Staggering map[string]string     `json:"staggering,omitempty"`
-	Resolution map[string]float64    `json:"resolution,omitempty"`
-	Extent     map[string][2]float64 `json:"extent,omitempty"`
-}
-
 // DataLoaderVariable describes one variable exposed by a data loader.
 // UnitConversion is either a number or an Expression AST node.
 type DataLoaderVariable struct {
@@ -475,12 +467,6 @@ type DataLoaderVariable struct {
 	UnitConversion interface{} `json:"unit_conversion,omitempty"`
 	Description    *string     `json:"description,omitempty"`
 	Reference      *Reference  `json:"reference,omitempty"`
-}
-
-// DataLoaderRegridding describes the structural regridding configuration.
-type DataLoaderRegridding struct {
-	FillValue     *float64 `json:"fill_value,omitempty"`
-	Extrapolation *string  `json:"extrapolation,omitempty"` // "clamp", "nan", "periodic"
 }
 
 // The top-level `operators` and `registered_functions` blocks (and the `call`

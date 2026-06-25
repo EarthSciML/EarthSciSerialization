@@ -891,16 +891,50 @@
         "file_period": "PT1H",
         "records_per_file": 1
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "dx": 12000,
-          "dy": 12000
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat",
+          "dx",
+          "dy"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          },
+          "dx": {
+            "n": "n_dx",
+            "spacing": "uniform"
+          },
+          "dy": {
+            "n": "n_dy",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          },
+          "n_dx": {
+            "description": "dx cell count, resolved from the source dataset at load time"
+          },
+          "n_dy": {
+            "description": "dy cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -951,12 +985,34 @@
       "source": {
         "url_template": "file:///data/NEI_2017/{date:%Y%m%d_%H%M}.nc"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
+        },
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": "n_lon",
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": "n_lat",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_lon": {
+            "description": "lon cell count, resolved from the source dataset at load time"
+          },
+          "n_lat": {
+            "description": "lat cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {

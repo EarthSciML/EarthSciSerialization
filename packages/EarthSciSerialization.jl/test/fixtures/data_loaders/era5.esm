@@ -3,11 +3,21 @@
   "metadata": {
     "name": "ERA5_pressure_levels_example",
     "description": "Covers EarthSciData.jl/src/era5.jl ERA5PressureLevelFileSet. Files come from CDS API or a local mirror (era5_pl_YYYY_MM.nc per month, 37 pressure levels 1000..1 hPa, hourly valid_time). Variables follow ERA5_VARIABLES mapping (full name -> short name used in the NetCDF). ERA5 pressure-level reanalysis, monthly files, hourly frequency, 37 pressure levels from CDS.",
-    "authors": ["ESM fixture"],
-    "tags": ["data-loader", "meteorology", "reanalysis", "era5"]
+    "authors": [
+      "ESM fixture"
+    ],
+    "tags": [
+      "data-loader",
+      "meteorology",
+      "reanalysis",
+      "era5"
+    ]
   },
   "models": {
-    "Stub": { "variables": {}, "equations": [] }
+    "Stub": {
+      "variables": {},
+      "equations": []
+    }
   },
   "data_loaders": {
     "ERA5_pl_monthly": {
@@ -24,21 +34,36 @@
         "frequency": "PT1H",
         "time_variable": "valid_time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "longitude": "center",
-          "latitude": "center",
-          "pressure_level": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "longitude": 0.25,
-          "latitude": 0.25
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "longitude",
+          "latitude",
+          "pressure_level"
+        ],
+        "extents": {
+          "longitude": {
+            "n": 1440,
+            "spacing": "uniform"
+          },
+          "latitude": {
+            "n": 720,
+            "spacing": "uniform"
+          },
+          "pressure_level": {
+            "n": "n_pressure_level",
+            "spacing": "uniform"
+          }
         },
-        "extent": {
-          "longitude": [-180.0, 180.0],
-          "latitude": [-90.0, 90.0]
+        "parameters": {
+          "n_pressure_level": {
+            "description": "pressure_level cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -68,16 +93,16 @@
           "description": "Geopotential on pressure levels"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Hersbach, H. et al. (2020) The ERA5 global reanalysis. Q. J. R. Meteorol. Soc. 146: 1999-2049.",
         "doi": "10.1002/qj.3803",
         "url": "https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels"
       },
       "metadata": {
-        "tags": ["reanalysis", "pressure-levels"],
+        "tags": [
+          "reanalysis",
+          "pressure-levels"
+        ],
         "dataset": "reanalysis-era5-pressure-levels"
       }
     }

@@ -1348,24 +1348,6 @@ function coerce_data_loader_temporal(data::Any)::DataLoaderTemporal
 end
 
 """
-    coerce_data_loader_spatial(data::Any) -> DataLoaderSpatial
-"""
-function coerce_data_loader_spatial(data::Any)::DataLoaderSpatial
-    crs = string(data.crs)
-    grid_type = string(data.grid_type)
-    staggering = haskey(data, :staggering) && data.staggering !== nothing ?
-                 Dict{String,String}(string(k) => string(v) for (k, v) in pairs(data.staggering)) : nothing
-    resolution = haskey(data, :resolution) && data.resolution !== nothing ?
-                 Dict{String,Float64}(string(k) => Float64(v) for (k, v) in pairs(data.resolution)) : nothing
-    extent = haskey(data, :extent) && data.extent !== nothing ?
-             Dict{String,Vector{Float64}}(string(k) => [Float64(x) for x in v] for (k, v) in pairs(data.extent)) : nothing
-    return DataLoaderSpatial(crs, grid_type;
-                             staggering=staggering,
-                             resolution=resolution,
-                             extent=extent)
-end
-
-"""
     coerce_data_loader_variable(data::Any) -> DataLoaderVariable
 """
 function coerce_data_loader_variable(data::Any)::DataLoaderVariable
@@ -1383,15 +1365,6 @@ function coerce_data_loader_variable(data::Any)::DataLoaderVariable
                               unit_conversion=unit_conversion,
                               description=description,
                               reference=reference)
-end
-
-"""
-    coerce_data_loader_regridding(data::Any) -> DataLoaderRegridding
-"""
-function coerce_data_loader_regridding(data::Any)::DataLoaderRegridding
-    fill_value = haskey(data, :fill_value) && data.fill_value !== nothing ? Float64(data.fill_value) : nothing
-    extrapolation = haskey(data, :extrapolation) && data.extrapolation !== nothing ? string(data.extrapolation) : nothing
-    return DataLoaderRegridding(; fill_value=fill_value, extrapolation=extrapolation)
 end
 
 """
@@ -1428,8 +1401,8 @@ function coerce_data_loader(data::Any)::DataLoader
 
     temporal = haskey(data, :temporal) && data.temporal !== nothing ?
                coerce_data_loader_temporal(data.temporal) : nothing
-    spatial = haskey(data, :spatial) && data.spatial !== nothing ?
-              coerce_data_loader_spatial(data.spatial) : nothing
+    grid = haskey(data, :grid) && data.grid !== nothing ?
+           Grid(_to_native_json(data.grid)::Dict{String,Any}) : nothing
     mesh = haskey(data, :mesh) && data.mesh !== nothing ?
            coerce_data_loader_mesh(data.mesh) : nothing
     determinism = haskey(data, :determinism) && data.determinism !== nothing ?
@@ -1439,8 +1412,6 @@ function coerce_data_loader(data::Any)::DataLoader
         string(k) => coerce_data_loader_variable(v) for (k, v) in pairs(data.variables)
     )
 
-    regridding = haskey(data, :regridding) && data.regridding !== nothing ?
-                 coerce_data_loader_regridding(data.regridding) : nothing
     reference = haskey(data, :reference) && data.reference !== nothing ?
                 coerce_reference(data.reference) : nothing
     metadata = haskey(data, :metadata) && data.metadata !== nothing ?
@@ -1448,10 +1419,9 @@ function coerce_data_loader(data::Any)::DataLoader
 
     return DataLoader(kind, source, variables;
                       temporal=temporal,
-                      spatial=spatial,
+                      grid=grid,
                       mesh=mesh,
                       determinism=determinism,
-                      regridding=regridding,
                       reference=reference,
                       metadata=metadata)
 end

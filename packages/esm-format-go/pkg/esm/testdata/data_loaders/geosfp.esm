@@ -3,8 +3,14 @@
   "metadata": {
     "name": "GEOSFP_I3_4x5",
     "description": "Source: EarthSciData/src/geosfp.jl — GEOSFPFileSet / GEOSFP(). Parameter footprint: mirror, domain, filetype ({A1, A3cld, A3dyn, A3mstC, A3mstE, I3}), starttime, endtime. Files on GEOS-Chem S3 mirror, daily file period, 3-hourly samples (1-hourly for A1). This fixture represents the I3 (instantaneous 3-hourly) filetype on the 4x5 global domain.",
-    "authors": ["EarthSciSerialization gt-mos"],
-    "tags": ["meteorology", "reanalysis", "earthscidata.jl"]
+    "authors": [
+      "EarthSciSerialization gt-mos"
+    ],
+    "tags": [
+      "meteorology",
+      "reanalysis",
+      "earthscidata.jl"
+    ]
   },
   "data_loaders": {
     "GEOSFP_I3": {
@@ -21,21 +27,36 @@
         "records_per_file": 8,
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "+proj=longlat +datum=WGS84 +no_defs",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center",
-          "lev": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 5.0,
-          "lat": 4.0
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat",
+          "lev"
+        ],
+        "extents": {
+          "lon": {
+            "n": 72,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 45,
+            "spacing": "uniform"
+          },
+          "lev": {
+            "n": "n_lev",
+            "spacing": "uniform"
+          }
         },
-        "extent": {
-          "lon": [-180.0, 180.0],
-          "lat": [-90.0, 90.0]
+        "parameters": {
+          "n_lev": {
+            "description": "lev cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -55,15 +76,15 @@
           "description": "Surface pressure"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Global Modeling and Assimilation Office (GMAO), NASA GSFC — GEOS-FP",
         "url": "http://geoschemdata.wustl.edu/ExtData/"
       },
       "metadata": {
-        "tags": ["meteorology", "reanalysis"],
+        "tags": [
+          "meteorology",
+          "reanalysis"
+        ],
         "domain": "4x5",
         "filetype": "I3"
       }
@@ -71,9 +92,22 @@
   },
   "models": {
     "stub": {
-      "variables": {"x": {"type": "state"}},
+      "variables": {
+        "x": {
+          "type": "state"
+        }
+      },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

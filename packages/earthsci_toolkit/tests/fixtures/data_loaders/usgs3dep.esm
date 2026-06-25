@@ -4,9 +4,16 @@
   "metadata": {
     "name": "USGS3DEPFixture",
     "description": "USGS 3D Elevation Program (3DEP) elevation data over a CONUS bounding box in the STAC-like DataLoader schema.",
-    "authors": ["EarthSciSerialization Test Suite"],
+    "authors": [
+      "EarthSciSerialization Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["earthscidata-coverage", "usgs3dep", "elevation", "static"]
+    "tags": [
+      "earthscidata-coverage",
+      "usgs3dep",
+      "elevation",
+      "static"
+    ]
   },
   "data_loaders": {
     "USGS3DEP": {
@@ -14,20 +21,26 @@
       "source": {
         "url_template": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox={bbox_west},{bbox_south},{bbox_east},{bbox_north}&size={width},{height}&format=tiff&bboxSR=4326&imageSR=4326&pixelType=F32&f=image"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.00009259,
-          "lat": 0.00009259
-        },
-        "extent": {
-          "lon": [-125.0, -66.0],
-          "lat": [20.0, 50.0]
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": 637218,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 324009,
+            "spacing": "uniform"
+          }
         }
       },
       "variables": {
@@ -37,15 +50,16 @@
           "description": "Terrain elevation above WGS84 ellipsoid (no-data pixels outside US territory)"
         }
       },
-      "regridding": {
-        "extrapolation": "nan"
-      },
       "reference": {
         "citation": "U.S. Geological Survey (USGS), 3D Elevation Program (3DEP). National Map Elevation Imagery.",
         "url": "https://elevation.nationalmap.gov/"
       },
       "metadata": {
-        "tags": ["elevation", "static", "terrain"],
+        "tags": [
+          "elevation",
+          "static",
+          "terrain"
+        ],
         "earthscidata_source": "src/usgs3dep.jl::USGS3DEPFileSet",
         "resolution_arc_seconds": 0.333,
         "coverage": "US only (CONUS + Alaska + Hawaii + territories)",
@@ -56,10 +70,23 @@
   "models": {
     "placeholder": {
       "variables": {
-        "x": {"type": "state", "units": "1", "default": 0.0}
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

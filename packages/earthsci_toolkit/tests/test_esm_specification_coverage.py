@@ -963,10 +963,14 @@ class TestSection08DataLoaders:
                         "frequency": "PT3H",
                         "records_per_file": 8
                     },
-                    "spatial": {
-                        "crs": "EPSG:4326",
-                        "grid_type": "latlon",
-                        "resolution": {"lon": 0.3125, "lat": 0.25}
+                    "grid": {
+                        "family": "cartesian",
+                        "dimensions": ["lon", "lat"],
+                        "crs": {"projection": "longlat", "datum": "WGS84"},
+                        "extents": {
+                            "lon": {"n": 320, "spacing": "uniform"},
+                            "lat": {"n": 240, "spacing": "uniform"}
+                        }
                     },
                     "variables": {
                         "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},
@@ -1003,9 +1007,14 @@ class TestSection08DataLoaders:
                         "frequency": "P1M",
                         "records_per_file": 1
                     },
-                    "spatial": {
-                        "crs": "EPSG:4326",
-                        "grid_type": "latlon"
+                    "grid": {
+                        "family": "cartesian",
+                        "dimensions": ["lon", "lat"],
+                        "crs": {"projection": "longlat", "datum": "WGS84"},
+                        "extents": {
+                            "lon": {"n": 459, "spacing": "uniform"},
+                            "lat": {"n": 299, "spacing": "uniform"}
+                        }
                     },
                     "variables": {
                         "emission_rate_NO": {
@@ -1466,10 +1475,14 @@ class TestSection13CompleteExamples:
                 "GEOSFP": {
                     "kind": "grid",
                     "source": {"url_template": "file:///data/geosfp_{date:%Y%m%d}.nc"},
-                    "spatial": {
-                        "crs": "EPSG:4326",
-                        "grid_type": "latlon",
-                        "resolution": {"lon": 0.3125, "lat": 0.25}
+                    "grid": {
+                        "family": "cartesian",
+                        "dimensions": ["lon", "lat"],
+                        "crs": {"projection": "longlat", "datum": "WGS84"},
+                        "extents": {
+                            "lon": {"n": 320, "spacing": "uniform"},
+                            "lat": {"n": 240, "spacing": "uniform"}
+                        }
                     },
                     "variables": {
                         "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},

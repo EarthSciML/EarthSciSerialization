@@ -4,7 +4,7 @@ implemented in EarthSciData.jl.
 
 Each fixture under tests/fixtures/data_loaders/*.esm hand-constructs an
 instantiation of one EarthSciData.jl FileSet using the new kind/source/temporal/
-spatial/variables/regridding shape. The test ensures:
+grid/variables shape. The test ensures:
 
 1. The fixture validates against the schema (no validation errors).
 2. It round-trips through parse -> serialize without loss of DataLoader fields.
@@ -88,7 +88,7 @@ def test_earthscidata_fixture_roundtrips(fixture_name):
             assert new.get(field) == orig.get(field), (
                 f"{fixture_name}/{name}/{field}: round-trip lost field"
             )
-        for field in ("temporal", "spatial", "regridding"):
+        for field in ("temporal", "grid", "mesh", "determinism"):
             if field in orig:
                 assert new.get(field) == orig.get(field), (
                     f"{fixture_name}/{name}/{field}: round-trip changed field"

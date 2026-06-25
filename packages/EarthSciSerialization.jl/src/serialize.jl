@@ -645,20 +645,6 @@ function serialize_data_loader_temporal(t::DataLoaderTemporal)::Dict{String,Any}
 end
 
 """
-    serialize_data_loader_spatial(s::DataLoaderSpatial) -> Dict{String,Any}
-"""
-function serialize_data_loader_spatial(s::DataLoaderSpatial)::Dict{String,Any}
-    result = Dict{String,Any}(
-        "crs" => s.crs,
-        "grid_type" => s.grid_type,
-    )
-    s.staggering !== nothing && (result["staggering"] = s.staggering)
-    s.resolution !== nothing && (result["resolution"] = s.resolution)
-    s.extent !== nothing && (result["extent"] = s.extent)
-    return result
-end
-
-"""
     serialize_data_loader_variable(v::DataLoaderVariable) -> Dict{String,Any}
 """
 function serialize_data_loader_variable(v::DataLoaderVariable)::Dict{String,Any}
@@ -672,16 +658,6 @@ function serialize_data_loader_variable(v::DataLoaderVariable)::Dict{String,Any}
     end
     v.description !== nothing && (result["description"] = v.description)
     v.reference !== nothing && (result["reference"] = serialize_reference(v.reference))
-    return result
-end
-
-"""
-    serialize_data_loader_regridding(r::DataLoaderRegridding) -> Dict{String,Any}
-"""
-function serialize_data_loader_regridding(r::DataLoaderRegridding)::Dict{String,Any}
-    result = Dict{String,Any}()
-    r.fill_value !== nothing && (result["fill_value"] = r.fill_value)
-    r.extrapolation !== nothing && (result["extrapolation"] = r.extrapolation)
     return result
 end
 
@@ -727,8 +703,8 @@ function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     if loader.temporal !== nothing
         result["temporal"] = serialize_data_loader_temporal(loader.temporal)
     end
-    if loader.spatial !== nothing
-        result["spatial"] = serialize_data_loader_spatial(loader.spatial)
+    if loader.grid !== nothing
+        result["grid"] = serialize_grid(loader.grid)
     end
     if loader.mesh !== nothing
         result["mesh"] = serialize_data_loader_mesh(loader.mesh)
@@ -736,9 +712,6 @@ function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     if loader.determinism !== nothing
         det_dict = serialize_data_loader_determinism(loader.determinism)
         isempty(det_dict) || (result["determinism"] = det_dict)
-    end
-    if loader.regridding !== nothing
-        result["regridding"] = serialize_data_loader_regridding(loader.regridding)
     end
     if loader.reference !== nothing
         result["reference"] = serialize_reference(loader.reference)

@@ -863,23 +863,6 @@ struct DataLoaderTemporal
 end
 
 """
-    DataLoaderSpatial
-
-Spatial grid description for a DataLoader.
-"""
-struct DataLoaderSpatial
-    crs::String
-    grid_type::String
-    staggering::Union{Dict{String,String},Nothing}
-    resolution::Union{Dict{String,Float64},Nothing}
-    extent::Union{Dict{String,Vector{Float64}},Nothing}
-
-    DataLoaderSpatial(crs::String, grid_type::String;
-                      staggering=nothing, resolution=nothing, extent=nothing) =
-        new(crs, grid_type, staggering, resolution, extent)
-end
-
-"""
     DataLoaderVariable
 
 A variable exposed by a DataLoader, mapped from a source-file variable.
@@ -897,19 +880,6 @@ struct DataLoaderVariable
                        description=nothing,
                        reference=nothing) =
         new(file_variable, units, unit_conversion, description, reference)
-end
-
-"""
-    DataLoaderRegridding
-
-Structural regridding configuration for a DataLoader.
-"""
-struct DataLoaderRegridding
-    fill_value::Union{Float64,Nothing}
-    extrapolation::Union{String,Nothing}  # "clamp" | "nan" | "periodic"
-
-    DataLoaderRegridding(; fill_value=nothing, extrapolation=nothing) =
-        new(fill_value, extrapolation)
 end
 
 """
@@ -961,23 +931,43 @@ struct DataLoaderDeterminism
 end
 
 """
+    Grid
+
+Top-level grid definition (RFC §6). Minimal typed wrapper: the full grid
+tree is preserved as an opaque `Dict{String,Any}` so round-trips are
+lossless, while the schema (already loaded by `validate_schema`) enforces
+structural constraints (family, metric_arrays, connectivity, generators,
+etc.). Post-parse validation in `coerce_grids` enforces the semantic
+constraints not expressible in pure JSON Schema: loader-refs must point
+at existing `data_loaders` entries, and `kind: "builtin"` names must be
+from the closed set of canonical builtin generators (RFC §6.4.1; the set
+is currently empty). Also used as the optional `grid` field of a
+[`DataLoader`](@ref) describing that loader's native grid.
+"""
+struct Grid
+    data::Dict{String,Any}
+
+    Grid(data::Dict{String,Any}) = new(data)
+end
+
+"""
     DataLoader
 
-Generic, runtime-agnostic description of an external data source. Carries
-enough structural information to locate files, map timestamps to files,
-describe spatial/variable semantics, and regrid — rather than pointing at a
-runtime handler. Authentication and algorithm-specific tuning are runtime-only
-and not part of the schema.
+Generic, runtime-agnostic description of an external data source. Pure I/O:
+carries enough structural information to locate files, map timestamps to
+files, and describe the data's native grid and variable semantics — rather
+than pointing at a runtime handler or performing any regridding.
+Authentication and algorithm-specific tuning are runtime-only and not part
+of the schema.
 
 Fields:
 - `kind`: "grid" | "points" | "static" | "mesh" (structural kind; scientific role goes in `metadata.tags`)
 - `source`: `DataLoaderSource` with url_template + optional mirrors
 - `temporal`: optional `DataLoaderTemporal`
-- `spatial`: optional `DataLoaderSpatial`
+- `grid`: optional `Grid` describing the data's native grid
 - `mesh`: optional `DataLoaderMesh` (required when `kind == "mesh"`, esm-spec §8.9)
 - `determinism`: optional `DataLoaderDeterminism` (esm-spec §8.9.2)
 - `variables`: schema-level variable name → `DataLoaderVariable` (minimum one)
-- `regridding`: optional `DataLoaderRegridding`
 - `reference`: optional academic/data-source citation
 - `metadata`: optional free-form map (conventionally carries a `tags` array)
 """
@@ -985,25 +975,23 @@ struct DataLoader
     kind::String
     source::DataLoaderSource
     temporal::Union{DataLoaderTemporal,Nothing}
-    spatial::Union{DataLoaderSpatial,Nothing}
+    grid::Union{Grid,Nothing}
     mesh::Union{DataLoaderMesh,Nothing}
     determinism::Union{DataLoaderDeterminism,Nothing}
     variables::Dict{String,DataLoaderVariable}
-    regridding::Union{DataLoaderRegridding,Nothing}
     reference::Union{Reference,Nothing}
     metadata::Union{Dict{String,Any},Nothing}
 
     DataLoader(kind::String, source::DataLoaderSource,
                variables::Dict{String,DataLoaderVariable};
                temporal=nothing,
-               spatial=nothing,
+               grid=nothing,
                mesh=nothing,
                determinism=nothing,
-               regridding=nothing,
                reference=nothing,
                metadata=nothing) =
-        new(kind, source, temporal, spatial, mesh, determinism,
-            variables, regridding, reference, metadata)
+        new(kind, source, temporal, grid, mesh, determinism,
+            variables, reference, metadata)
 end
 
 """
@@ -1086,25 +1074,6 @@ struct Domain
 
     # Constructor with optional parameters
     Domain(; spatial=nothing, temporal=nothing) = new(spatial, temporal)
-end
-
-"""
-    Grid
-
-Top-level grid definition (RFC §6). Minimal typed wrapper: the full grid
-tree is preserved as an opaque `Dict{String,Any}` so round-trips are
-lossless, while the schema (already loaded by `validate_schema`) enforces
-structural constraints (family, metric_arrays, connectivity, generators,
-etc.). Post-parse validation in `coerce_grids` enforces the semantic
-constraints not expressible in pure JSON Schema: loader-refs must point
-at existing `data_loaders` entries, and `kind: "builtin"` names must be
-from the closed set of canonical builtin generators (RFC §6.4.1; the set
-is currently empty).
-"""
-struct Grid
-    data::Dict{String,Any}
-
-    Grid(data::Dict{String,Any}) = new(data)
 end
 
 """

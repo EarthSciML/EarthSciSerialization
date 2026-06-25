@@ -38,7 +38,7 @@ from .esm_types import (
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
-    DataLoaderSpatial, DataLoaderVariable, DataLoaderRegridding,
+    DataLoaderVariable,
     DataLoaderMesh, DataLoaderMeshTopology, DataLoaderDeterminism, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
@@ -672,8 +672,11 @@ def _parse_species(species_data: Dict[str, Any]) -> Species:
 
 def _parse_parameter(param_data: Dict[str, Any]) -> Parameter:
     """Parse a parameter from JSON data."""
-    # For now, assume value is numeric (can be extended for expressions)
-    value = param_data.get("default", 0.0)
+    # ``default`` is optional (e.g. grid extent counts resolved from the source
+    # at load time). Preserve its absence as ``None`` so a parse/re-emit cycle
+    # does not synthesise a spurious ``default: 0.0`` — the serializer only
+    # emits ``default`` when ``value`` is numeric.
+    value = param_data.get("default")
     return Parameter(
         name="",  # Name comes from the key
         value=value,
@@ -827,16 +830,6 @@ def _parse_data_loader_temporal(tmp_data: Dict[str, Any]) -> DataLoaderTemporal:
     )
 
 
-def _parse_data_loader_spatial(sp_data: Dict[str, Any]) -> DataLoaderSpatial:
-    return DataLoaderSpatial(
-        crs=sp_data["crs"],
-        grid_type=sp_data["grid_type"],
-        staggering=dict(sp_data.get("staggering", {})),
-        resolution=dict(sp_data.get("resolution", {})),
-        extent={k: list(v) for k, v in sp_data.get("extent", {}).items()},
-    )
-
-
 def _parse_data_loader_variable(var_data: Dict[str, Any]) -> DataLoaderVariable:
     unit_conversion = var_data.get("unit_conversion")
     if isinstance(unit_conversion, dict):
@@ -850,13 +843,6 @@ def _parse_data_loader_variable(var_data: Dict[str, Any]) -> DataLoaderVariable:
         unit_conversion=unit_conversion,
         description=var_data.get("description"),
         reference=reference,
-    )
-
-
-def _parse_data_loader_regridding(rg_data: Dict[str, Any]) -> DataLoaderRegridding:
-    return DataLoaderRegridding(
-        fill_value=rg_data.get("fill_value"),
-        extrapolation=rg_data.get("extrapolation"),
     )
 
 
@@ -893,9 +879,13 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     if "temporal" in loader_data:
         temporal = _parse_data_loader_temporal(loader_data["temporal"])
 
-    spatial = None
-    if "spatial" in loader_data:
-        spatial = _parse_data_loader_spatial(loader_data["spatial"])
+    grid = None
+    if "grid" in loader_data:
+        grid = _parse_grid(
+            loader_data.get("name", "grid"),
+            loader_data["grid"],
+            data_loaders={},
+        )
 
     mesh = None
     if "mesh" in loader_data:
@@ -904,10 +894,6 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     determinism = None
     if "determinism" in loader_data:
         determinism = _parse_data_loader_determinism(loader_data["determinism"])
-
-    regridding = None
-    if "regridding" in loader_data:
-        regridding = _parse_data_loader_regridding(loader_data["regridding"])
 
     reference = None
     if "reference" in loader_data:
@@ -921,10 +907,9 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
         source=source,
         variables=variables,
         temporal=temporal,
-        spatial=spatial,
+        grid=grid,
         mesh=mesh,
         determinism=determinism,
-        regridding=regridding,
         reference=reference,
         metadata=metadata,
     )

@@ -92,7 +92,8 @@ class GridLoader:
             to the file_period anchor when ``temporal`` is set.
         target_grid:
             Optional ``{"lon": [...], "lat": [...]}`` destination grid. Only
-            valid when ``spatial.grid_type == "latlon"``.
+            valid when the loader declares a geographic native ``grid`` whose
+            ``crs.projection == "longlat"``.
         opener:
             Callable ``(url) -> xarray.Dataset``. Defaults to
             ``xarray.open_dataset``.
@@ -117,10 +118,11 @@ class GridLoader:
         ds: Any,
         target_grid: Mapping[str, Sequence[float]],
     ) -> Dict[str, Any]:
-        spatial = self.dl.spatial
-        if spatial is None or spatial.grid_type != "latlon":
+        grid = self.dl.grid
+        if grid is None or grid.crs is None or grid.crs.projection != "longlat":
             raise GridLoaderError(
-                "target_grid regridding is only supported for grid_type='latlon'"
+                "target_grid regridding is only supported for geographic "
+                "(crs.projection='longlat') native grids"
             )
         src_lon = _lookup_coord(ds, ("lon", "longitude", "x"))
         src_lat = _lookup_coord(ds, ("lat", "latitude", "y"))
@@ -130,9 +132,10 @@ class GridLoader:
             raise GridLoaderError(
                 "target_grid must contain 'lon' and 'lat' arrays"
             )
-        regridding = self.dl.regridding
-        extrap = regridding.extrapolation if regridding else None
-        fill = regridding.fill_value if regridding else None
+        # Regridding parameters are a per-variable model concern, not a loader
+        # field (RFC pure-io-data-loaders §4.1); use bilinear defaults here.
+        extrap = None
+        fill = None
         out: Dict[str, Any] = {}
         for name, values in variables.items():
             arr = _as_array(values)

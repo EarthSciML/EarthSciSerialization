@@ -464,16 +464,6 @@ class DataLoaderTemporal:
 
 
 @dataclass
-class DataLoaderSpatial:
-    """Spatial grid description for a data source."""
-    crs: str
-    grid_type: str
-    staggering: Dict[str, str] = field(default_factory=dict)
-    resolution: Dict[str, float] = field(default_factory=dict)
-    extent: Dict[str, List[float]] = field(default_factory=dict)
-
-
-@dataclass
 class DataLoaderVariable:
     """A variable exposed by a data loader, mapped from a source-file variable."""
     file_variable: str
@@ -484,30 +474,24 @@ class DataLoaderVariable:
 
 
 @dataclass
-class DataLoaderRegridding:
-    """Structural regridding configuration for a data loader."""
-    fill_value: Optional[float] = None
-    extrapolation: Optional[str] = None  # "clamp", "nan", "periodic"
-
-
-@dataclass
 class DataLoader:
     """
     Generic, runtime-agnostic description of an external data source.
 
-    Carries enough structural information to locate files, map timestamps
-    to files, describe spatial/variable semantics, and regrid — rather than
-    pointing at a runtime handler.
+    Pure I/O (RFC pure-io-data-loaders §4.1): carries enough structural
+    information to locate files, map timestamps to files, and describe the
+    native grid / variable semantics of the source — rather than pointing at
+    a runtime handler. Reprojection and regridding onto a model grid are a
+    downstream model concern, not a loader field.
     """
     name: str
     kind: DataLoaderKind
     source: DataLoaderSource
     variables: Dict[str, DataLoaderVariable] = field(default_factory=dict)
     temporal: Optional[DataLoaderTemporal] = None
-    spatial: Optional[DataLoaderSpatial] = None
+    grid: Optional['Grid'] = None
     mesh: Optional[DataLoaderMesh] = None
     determinism: Optional[DataLoaderDeterminism] = None
-    regridding: Optional[DataLoaderRegridding] = None
     reference: Optional['Reference'] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 

@@ -4,9 +4,16 @@
   "metadata": {
     "name": "LANDFIREFixture",
     "description": "LANDFIRE Anderson 13 fuel models over CONUS in the STAC-like DataLoader schema.",
-    "authors": ["EarthSciSerialization Test Suite"],
+    "authors": [
+      "EarthSciSerialization Test Suite"
+    ],
     "created": "2026-04-14T00:00:00Z",
-    "tags": ["earthscidata-coverage", "landfire", "fuel-model", "static"]
+    "tags": [
+      "earthscidata-coverage",
+      "landfire",
+      "fuel-model",
+      "static"
+    ]
   },
   "data_loaders": {
     "LANDFIRE_FBFM13": {
@@ -14,20 +21,26 @@
       "source": {
         "url_template": "https://landfire.cr.usgs.gov/arcgis/rest/services/Landfire_{version}/{version}_{product}_CONUS/ImageServer/exportImage?bbox={bbox_west},{bbox_south},{bbox_east},{bbox_north}&size={width},{height}&format=tiff&bboxSR=4326&imageSR=4326&pixelType=U8&f=image"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.000278,
-          "lat": 0.000278
-        },
-        "extent": {
-          "lon": [-125.0, -66.0],
-          "lat": [20.0, 50.0]
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": 212230,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 107914,
+            "spacing": "uniform"
+          }
         }
       },
       "variables": {
@@ -37,16 +50,16 @@
           "description": "Anderson 13 fuel model code (1-13 for fuel classes; 91=urban, 92=snow/ice, 93=agriculture, 98=water, 99=barren)"
         }
       },
-      "regridding": {
-        "fill_value": 99.0,
-        "extrapolation": "nan"
-      },
       "reference": {
         "citation": "U.S. Geological Survey (USGS) LANDFIRE Program. Fire Behavior Fuel Model 13.",
         "url": "https://landfire.gov/"
       },
       "metadata": {
-        "tags": ["fuel-model", "wildfire", "static"],
+        "tags": [
+          "fuel-model",
+          "wildfire",
+          "static"
+        ],
         "earthscidata_source": "src/landfire.jl::LANDFIREFileSet",
         "product": "FBFM13",
         "version": "LF2022",
@@ -57,10 +70,23 @@
   "models": {
     "placeholder": {
       "variables": {
-        "x": {"type": "state", "units": "1", "default": 0.0}
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

@@ -530,7 +530,7 @@ export type IndexSet1 = {
   [k: string]: unknown;
 };
 /**
- * A generic, runtime-agnostic description of an external data source. Carries enough structural information to locate files, map timestamps to files, describe spatial/variable semantics, and regrid — rather than pointing at a runtime handler. Authentication and algorithm-specific tuning are runtime-only and not part of the schema.
+ * A generic, runtime-agnostic description of an external data source reduced to pure I/O: it locates, reads, and slices bytes from disk and describes the data's native grid. It performs no reprojection and no regridding — those are model concerns, chosen per variable, on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1). Authentication and algorithm-specific tuning are runtime-only and not part of the schema.
  */
 export type DataLoader = DataLoader1 & {
   /**
@@ -539,7 +539,7 @@ export type DataLoader = DataLoader1 & {
   kind: "grid" | "points" | "static" | "mesh";
   source: DataLoaderSource;
   temporal?: DataLoaderTemporal;
-  spatial?: DataLoaderSpatial;
+  grid?: Grid;
   mesh?: DataLoaderMesh;
   determinism?: DataLoaderDeterminism;
   /**
@@ -548,7 +548,6 @@ export type DataLoader = DataLoader1 & {
   variables: {
     [k: string]: DataLoaderVariable;
   };
-  regridding?: DataLoaderRegridding;
   reference?: Reference;
   /**
    * Free-form metadata about the data source. The "tags" field (array of strings) is conventional for expressing scientific role (e.g. "emissions", "reanalysis") and is not schema-validated.
@@ -560,6 +559,126 @@ export type DataLoader = DataLoader1 & {
 };
 export type DataLoader1 = {
   [k: string]: unknown;
+};
+/**
+ * Optional description of the data's native grid in the unified GDD Grid format (topological family + optional crs descriptor), replacing the removed bespoke 'spatial' block. The loader merely describes the grid it reads from disk; reprojection and regridding onto a target grid are performed by the owning model, never by the loader (RFC pure-io-data-loaders §4.1-§4.2). Applies to 'grid' and 'points' (family 'unstructured') kinds; 'mesh' loaders describe geometry via the 'mesh' descriptor plus a grids entry, and any loader whose native grid is resolved at runtime may omit it.
+ */
+export type Grid = {
+  [k: string]: unknown;
+} & {
+  family: "cartesian" | "unstructured";
+  crs?: GridCRS;
+  description?: string;
+  /**
+   * Ordered list of logical dimension names.
+   *
+   * @minItems 1
+   */
+  dimensions: [string, ...string[]];
+  /**
+   * Declared stagger locations used by variables on this grid (see §11).
+   */
+  locations?: string[];
+  metric_arrays?: {
+    [k: string]: GridMetricArray;
+  };
+  /**
+   * Grid-level parameters. Reuses the ordinary ESM Parameter schema. Parameters with value='from_loader' are resolved at load time from a referenced data_loaders entry (§6.6).
+   */
+  parameters?: {
+    [k: string]: Parameter;
+  };
+  /**
+   * Optional name of the domains entry this grid refines. If a domain declares grid_spacing for the same dimension, the grid's extents.<dim>.spacing wins (§6.1).
+   */
+  domain?: string;
+  /**
+   * Per-dimension extents. Required for 'cartesian'; not used by 'unstructured'.
+   */
+  extents?: {
+    [k: string]: GridExtent;
+  };
+  /**
+   * Unstructured-family connectivity tables. Keys are table names (e.g., cellsOnEdge). Required for 'unstructured'; forbidden otherwise.
+   */
+  connectivity?: {
+    [k: string]: GridConnectivity;
+  };
+};
+/**
+ * Optional coordinate reference system for a grid, orthogonal to the topological `family`: a `cartesian` grid may be geographic (`longlat`) or projected (`lambert_conformal`, ...), and a point dataset may be `unstructured` + `longlat`; grids sharing a `family` can differ only in `crs`. The descriptor names the projection and the parameters a downstream reprojection rule consumes; the grid itself performs no reprojection (RFC pure-io-data-loaders §4.2). Geographic grids use `projection: "longlat"` (the identity case).
+ */
+export type GridCRS = GridCRS1 & {
+  /**
+   * Projection family. `longlat` is the geographic identity case (no projection); the others are projected CRSs whose `parameters` drive the downstream reprojection rule.
+   */
+  projection: "longlat" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole";
+  /**
+   * Geodetic datum. `sphere` is a spherical Earth of radius `R` (required when `datum=sphere`); `WGS84` is the standard ellipsoid.
+   */
+  datum?: "sphere" | "WGS84";
+  /**
+   * Sphere radius in metres, used when `datum=sphere` (e.g. WRF 6370000, NEI2016 6370997).
+   */
+  R?: number;
+  /**
+   * Projection parameters consumed verbatim by the downstream reprojection rule for this `projection` (e.g. Lambert Conformal `{lat_1, lat_2, lat_0, lon_0}`). Absent/empty for `longlat`.
+   */
+  parameters?: {
+    [k: string]: number;
+  };
+};
+export type GridCRS1 = {
+  [k: string]: unknown;
+};
+/**
+ * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently empty; adding a new builtin is a minor version bump per §6.4.1).
+ */
+export type GridMetricGenerator = GridMetricGenerator1 & {
+  kind: "expression" | "loader" | "builtin";
+  /**
+   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
+   */
+  expr?: number | string | ExpressionNode1;
+  /**
+   * For kind='loader': name of a data_loaders entry that produces the array.
+   */
+  loader?: string;
+  /**
+   * For kind='loader': named field within the referenced loader's output.
+   */
+  field?: string;
+  /**
+   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently empty). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
+   */
+  name?: string;
+};
+export type GridMetricGenerator1 = {
+  [k: string]: unknown;
+};
+/**
+ * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently empty; adding a new builtin is a minor version bump per §6.4.1).
+ */
+export type GridMetricGenerator2 = {
+  [k: string]: unknown;
+} & {
+  kind: "expression" | "loader" | "builtin";
+  /**
+   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
+   */
+  expr?: number | string | ExpressionNode1;
+  /**
+   * For kind='loader': name of a data_loaders entry that produces the array.
+   */
+  loader?: string;
+  /**
+   * For kind='loader': named field within the referenced loader's output.
+   */
+  field?: string;
+  /**
+   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently empty). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
+   */
+  name?: string;
 };
 /**
  * A single coupling rule connecting models, reaction systems, or data loaders.
@@ -1272,9 +1391,9 @@ export type ExpressionNode2 = {
 /**
  * A named discretization grid. The `family` selects one of two topologies (cartesian / unstructured) per docs/rfcs/discretization.md §6.1-§6.4. Each grid also carries optional staggering locations, metric array declarations, and its own parameter block reusing the ordinary ESM Parameter schema.
  */
-export type Grid = Grid1 & {
+export type Grid1 = Grid2 & {
   family: "cartesian" | "unstructured";
-  crs?: GridCRS;
+  crs?: GridCRS1;
   description?: string;
   /**
    * Ordered list of logical dimension names.
@@ -1312,83 +1431,8 @@ export type Grid = Grid1 & {
     [k: string]: GridConnectivity;
   };
 };
-export type Grid1 = {
+export type Grid2 = {
   [k: string]: unknown;
-};
-/**
- * Optional coordinate reference system for a grid, orthogonal to the topological `family`: a `cartesian` grid may be geographic (`longlat`) or projected (`lambert_conformal`, ...), and a point dataset may be `unstructured` + `longlat`; grids sharing a `family` can differ only in `crs`. The descriptor names the projection and the parameters a downstream reprojection rule consumes; the grid itself performs no reprojection (RFC pure-io-data-loaders §4.2). Geographic grids use `projection: "longlat"` (the identity case).
- */
-export type GridCRS = GridCRS1 & {
-  /**
-   * Projection family. `longlat` is the geographic identity case (no projection); the others are projected CRSs whose `parameters` drive the downstream reprojection rule.
-   */
-  projection: "longlat" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole";
-  /**
-   * Geodetic datum. `sphere` is a spherical Earth of radius `R` (required when `datum=sphere`); `WGS84` is the standard ellipsoid.
-   */
-  datum?: "sphere" | "WGS84";
-  /**
-   * Sphere radius in metres, used when `datum=sphere` (e.g. WRF 6370000, NEI2016 6370997).
-   */
-  R?: number;
-  /**
-   * Projection parameters consumed verbatim by the downstream reprojection rule for this `projection` (e.g. Lambert Conformal `{lat_1, lat_2, lat_0, lon_0}`). Absent/empty for `longlat`.
-   */
-  parameters?: {
-    [k: string]: number;
-  };
-};
-export type GridCRS1 = {
-  [k: string]: unknown;
-};
-/**
- * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently empty; adding a new builtin is a minor version bump per §6.4.1).
- */
-export type GridMetricGenerator = GridMetricGenerator1 & {
-  kind: "expression" | "loader" | "builtin";
-  /**
-   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
-   */
-  expr?: number | string | ExpressionNode1;
-  /**
-   * For kind='loader': name of a data_loaders entry that produces the array.
-   */
-  loader?: string;
-  /**
-   * For kind='loader': named field within the referenced loader's output.
-   */
-  field?: string;
-  /**
-   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently empty). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
-   */
-  name?: string;
-};
-export type GridMetricGenerator1 = {
-  [k: string]: unknown;
-};
-/**
- * Generator for a grid metric array. Exactly one kind per §6.5: 'expression' (analytic, computed at discretization time from grid parameters), 'loader' (pulled from a named data_loaders entry), or 'builtin' (from a closed set of canonical tables — currently empty; adding a new builtin is a minor version bump per §6.4.1).
- */
-export type GridMetricGenerator2 = {
-  [k: string]: unknown;
-} & {
-  kind: "expression" | "loader" | "builtin";
-  /**
-   * For kind='expression': an ESM expression. All free variables must be grid parameters or dimension indices.
-   */
-  expr?: number | string | ExpressionNode1;
-  /**
-   * For kind='loader': name of a data_loaders entry that produces the array.
-   */
-  loader?: string;
-  /**
-   * For kind='loader': named field within the referenced loader's output.
-   */
-  field?: string;
-  /**
-   * For kind='builtin': canonical name from the closed set defined in §6.4 (currently empty). Unknown names MUST be rejected with E_UNKNOWN_BUILTIN.
-   */
-  name?: string;
 };
 /**
  * A named staggering convention declaring where quantities live on a grid. The `kind` discriminant selects the staggering family. For MPAS Voronoi meshes (kind='unstructured_c_grid'), scalars live at Voronoi cell centers, normal velocities at edge midpoints, and vorticity at triangle vertices — a topology fundamentally unstructured. The referenced `grid` must be a grids.<g> entry of family 'unstructured'. See discretization RFC §7.4.
@@ -1483,7 +1527,7 @@ export interface ESMFormat2 {
    * Named discretization grids (v0.2.0). Each entry declares a cartesian/unstructured topology with dimensions, staggering locations, metric arrays, and (for unstructured) connectivity tables. See docs/rfcs/discretization.md §6.
    */
   grids?: {
-    [k: string]: Grid;
+    [k: string]: Grid1;
   };
   /**
    * Named staggering conventions that declare where quantities live on a grid. The unstructured_c_grid kind (RFC §7.4) captures MPAS-style C-grid placement — scalars at Voronoi cell centers, normal velocities at edge midpoints, vorticity at triangle vertices — and is the prerequisite declaration for the §7.3 worked-example discretizations (mpas_divergence_flux_form, mpas_gradient_edge_difference). Each entry references a grids.<g> entry by name.
@@ -1519,6 +1563,30 @@ export interface Metadata {
   modified?: string;
   tags?: string[];
   references?: Reference[];
+  /**
+   * Diagnostic stamped by discretize(): whether the resolved system is a pure ODE or a DAE (RFC §12).
+   */
+  system_class?: "ode" | "dae";
+  /**
+   * Diagnostic stamped by discretize(): algebraic-equation accounting (RFC §12).
+   */
+  dae_info?: {
+    algebraic_equation_count?: number;
+    per_model?: {
+      [k: string]: number;
+    };
+    [k: string]: unknown;
+  };
+  /**
+   * Diagnostic stamped by discretize(): identifies the source document this was discretized from (RFC §12).
+   */
+  discretized_from?: {
+    /**
+     * The metadata.name of the source document.
+     */
+    name?: string;
+    [k: string]: unknown;
+  };
 }
 /**
  * Academic citation or data source reference.
@@ -2186,40 +2254,52 @@ export interface DataLoaderTemporal {
   time_variable?: string;
 }
 /**
- * Spatial grid description for a data source.
+ * A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
  */
-export interface DataLoaderSpatial {
+export interface GridMetricArray {
   /**
-   * Coordinate reference system as a PROJ string or EPSG code.
+   * Tensor rank of the array: 0 = scalar (uniform spacing), 1 = 1D along a single dim, 2+ = multidimensional.
    */
-  crs: string;
+  rank: number;
   /**
-   * Structural grid family. Use "unstructured" for mesh/point datasets.
+   * For rank=1: the dimension the array is indexed by (one of the grid's dimensions).
    */
-  grid_type: "latlon" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole" | "unstructured";
-  staggering?: DataLoaderStaggering;
+  dim?: string;
   /**
-   * Per-dimension resolution in native CRS units. Optional; some datasets only know this at runtime.
+   * For rank≥2: ordered list of dimensions the array is indexed by.
    */
-  resolution?: {
-    [k: string]: number;
-  };
+  dims?: string[];
   /**
-   * Per-dimension [min, max] extent in native CRS units. Optional; runtime can infer from files.
+   * Optional declared shape (parameter names or integer literals per dimension). Used by connectivity tables; redundant with dim/dims for metric arrays.
    */
-  extent?: {
-    /**
-     * @minItems 2
-     * @maxItems 2
-     */
-    [k: string]: [number, number];
-  };
+  shape?: unknown[];
+  generator: GridMetricGenerator;
 }
 /**
- * Per-dimension grid staggering (centered or edge-aligned).
+ * Per-dimension extent for cartesian grids. `n` is either an integer literal or a parameter reference naming the dimension count; `spacing` is 'uniform' or 'nonuniform' for cartesian (determines whether metric arrays are scalar or rank-1).
  */
-export interface DataLoaderStaggering {
-  [k: string]: "center" | "edge";
+export interface GridExtent {
+  n: number | string;
+  spacing?: "uniform" | "nonuniform";
+}
+/**
+ * Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-indexed lookup produced by a mesh loader. See §6.3.
+ */
+export interface GridConnectivity {
+  /**
+   * Ordered list of dimension sizes (parameter names or integer literals). E.g., ['nEdges', 2] for cellsOnEdge.
+   */
+  shape: unknown[];
+  rank: number;
+  /**
+   * Name of a data_loaders entry that supplies this table.
+   */
+  loader?: string;
+  /**
+   * Named field within the referenced loader's output.
+   */
+  field?: string;
+  generator?: GridMetricGenerator2;
 }
 /**
  * Mesh-loader descriptor (discretization RFC §8.A). Declares which loader fields are integer-typed connectivity tables vs float-typed metric arrays and the topological family the loader serves. Only meaningful when the enclosing DataLoader has kind='mesh'.
@@ -2283,19 +2363,6 @@ export interface DataLoaderVariable {
   unit_conversion?: number | Expression;
   description?: string;
   reference?: Reference;
-}
-/**
- * Structural regridding configuration. Algorithm-specific tuning parameters are runtime-side and not in the schema.
- */
-export interface DataLoaderRegridding {
-  /**
-   * Value to assign to cells with no source data.
-   */
-  fill_value?: number;
-  /**
-   * Behavior when regridding targets fall outside the source extent. Defaults to "clamp".
-   */
-  extrapolation?: "clamp" | "nan" | "periodic";
 }
 /**
  * A file-local enum mapping symbolic names to positive integers (esm-spec.md §9.3). Within a single enum, integer values MUST be unique. Across enums, values MAY collide (each enum is its own namespace). Bindings resolve enum-op nodes at load time before evaluating expressions.
@@ -2701,54 +2768,6 @@ export interface DiscretizationRef {
    * Local file path or URL pointing to an ESD rule file (an ESM file whose discretizations block contains exactly one scheme definition). The scheme is loaded and used as the inline definition for this discretizations entry.
    */
   ref: string;
-}
-/**
- * A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
- */
-export interface GridMetricArray {
-  /**
-   * Tensor rank of the array: 0 = scalar (uniform spacing), 1 = 1D along a single dim, 2+ = multidimensional.
-   */
-  rank: number;
-  /**
-   * For rank=1: the dimension the array is indexed by (one of the grid's dimensions).
-   */
-  dim?: string;
-  /**
-   * For rank≥2: ordered list of dimensions the array is indexed by.
-   */
-  dims?: string[];
-  /**
-   * Optional declared shape (parameter names or integer literals per dimension). Used by connectivity tables; redundant with dim/dims for metric arrays.
-   */
-  shape?: unknown[];
-  generator: GridMetricGenerator;
-}
-/**
- * Per-dimension extent for cartesian grids. `n` is either an integer literal or a parameter reference naming the dimension count; `spacing` is 'uniform' or 'nonuniform' for cartesian (determines whether metric arrays are scalar or rank-1).
- */
-export interface GridExtent {
-  n: number | string;
-  spacing?: "uniform" | "nonuniform";
-}
-/**
- * Unstructured-grid connectivity table (e.g., cellsOnEdge, edgesOnCell). Integer-indexed lookup produced by a mesh loader. See §6.3.
- */
-export interface GridConnectivity {
-  /**
-   * Ordered list of dimension sizes (parameter names or integer literals). E.g., ['nEdges', 2] for cellsOnEdge.
-   */
-  shape: unknown[];
-  rank: number;
-  /**
-   * Name of a data_loaders entry that supplies this table.
-   */
-  loader?: string;
-  /**
-   * Named field within the referenced loader's output.
-   */
-  field?: string;
-  generator?: GridMetricGenerator2;
 }
 /**
  * A sampled function table (esm-spec.md §9.5). Carries one or more named axes and a literal nested-array data block. The shape of `data` is [len(outputs), len(axes[0].values), len(axes[1].values), ...] when `outputs` is declared; otherwise [len(axes[0].values), ...] (single-output convenience form). `table_lookup` AST nodes evaluate this table by supplying a per-axis input expression and selecting an output. Tables are syntactic sugar over `interp.linear` (1 axis) / `interp.bilinear` (2 axes) / `index` (nearest); the materialized AST a binding produces from a `table_lookup` MUST be bit-equivalent to the equivalent inline-const lookup.

@@ -3,8 +3,14 @@
   "metadata": {
     "name": "ERA5_PressureLevels_Fixture",
     "description": "EarthSciData.jl ERA5 pressure-level loader expressed in the STAC-like DataLoader schema. Corresponds to EarthSciData.jl src/era5.jl — struct ERA5PressureLevelFileSet (lines 56-200+) and the ERA5_VARIABLES mapping (lines 16-33). Data can be pulled via the Copernicus Climate Data Store API or from pre-downloaded monthly files (file:// mirror). The CDS API request parameters (area box, variable list, pressure levels) are derived from the simulation domain at runtime and are not schema-expressible; this fixture captures the pre-downloaded monthly-file layout with {date:%Y} and {date:%m} substitutions.",
-    "authors": ["ESM Rust binding acceptance suite"],
-    "tags": ["fixture", "earthscidata", "gt-0c7"]
+    "authors": [
+      "ESM Rust binding acceptance suite"
+    ],
+    "tags": [
+      "fixture",
+      "earthscidata",
+      "gt-0c7"
+    ]
   },
   "data_loaders": {
     "ERA5_PressureLevels": {
@@ -21,17 +27,42 @@
         "records_per_file": "auto",
         "time_variable": "valid_time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "longitude": "center",
-          "latitude": "center",
-          "pressure_level": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "longitude": 0.25,
-          "latitude": 0.25
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "longitude",
+          "latitude",
+          "pressure_level"
+        ],
+        "extents": {
+          "longitude": {
+            "n": "n_longitude",
+            "spacing": "uniform"
+          },
+          "latitude": {
+            "n": "n_latitude",
+            "spacing": "uniform"
+          },
+          "pressure_level": {
+            "n": "n_pressure_level",
+            "spacing": "uniform"
+          }
+        },
+        "parameters": {
+          "n_longitude": {
+            "description": "longitude cell count, resolved from the source dataset at load time"
+          },
+          "n_latitude": {
+            "description": "latitude cell count, resolved from the source dataset at load time"
+          },
+          "n_pressure_level": {
+            "description": "pressure_level cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -71,16 +102,17 @@
           "description": "Ozone mass mixing ratio on pressure levels"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Hersbach et al., 2020: The ERA5 global reanalysis. Q.J.R. Meteorol. Soc., 146, 1999-2049",
         "doi": "10.1002/qj.3803",
         "url": "https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels"
       },
       "metadata": {
-        "tags": ["meteorology", "reanalysis", "pressure-levels"],
+        "tags": [
+          "meteorology",
+          "reanalysis",
+          "pressure-levels"
+        ],
         "earthscidata_source": "src/era5.jl",
         "earthscidata_struct": "ERA5PressureLevelFileSet",
         "earthscidata_variable_map": {
@@ -98,11 +130,21 @@
   "models": {
     "fixture_stub": {
       "variables": {
-        "x": { "type": "state", "units": "1", "default": 0.0 }
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
           "rhs": 0.0
         }
       ]

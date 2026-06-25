@@ -1118,10 +1118,13 @@ fn default_stoichiometry() -> f64 {
 
 /// Generic, runtime-agnostic description of an external data source.
 ///
-/// Carries enough structural information to locate files, map timestamps to
-/// files, describe spatial/variable semantics, and regrid — rather than
-/// pointing at a runtime handler. Authentication and algorithm-specific
-/// tuning are runtime-only and not part of the schema.
+/// A `DataLoader` is pure I/O (RFC pure-io-data-loaders §4.1): it carries
+/// enough structural information to locate files, map timestamps to files, and
+/// describe variable semantics — rather than pointing at a runtime handler.
+/// The dataset's discretization is described by an optional GDD [`Grid`];
+/// reprojection and regridding are expressed by downstream rules, not the
+/// loader. Authentication and algorithm-specific tuning are runtime-only and
+/// not part of the schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataLoader {
     /// Structural kind of the dataset. Scientific role (emissions,
@@ -1136,9 +1139,11 @@ pub struct DataLoader {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporal: Option<DataLoaderTemporal>,
 
-    /// Spatial grid description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spatial: Option<DataLoaderSpatial>,
+    /// Optional discretization grid (GDD `Grid`, §6) the dataset is published
+    /// on. A loader is pure I/O; reprojection/regridding is expressed by
+    /// downstream rules, not the loader.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub grid: Option<Grid>,
 
     /// Mesh descriptor — required when `kind = "mesh"` (esm-spec §8.9).
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -1152,10 +1157,6 @@ pub struct DataLoader {
 
     /// Variables exposed by this loader, keyed by schema-level variable name.
     pub variables: HashMap<String, DataLoaderVariable>,
-
-    /// Structural regridding configuration.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub regridding: Option<DataLoaderRegridding>,
 
     /// Academic citation or data source reference.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1285,56 +1286,6 @@ pub enum AutoRecords {
     Auto,
 }
 
-/// Per-dimension grid staggering (centered or edge-aligned).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StaggeringMode {
-    /// Cell-centered.
-    Center,
-    /// Edge-aligned.
-    Edge,
-}
-
-/// Spatial grid description for a data source.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataLoaderSpatial {
-    /// Coordinate reference system as a PROJ string or EPSG code.
-    pub crs: String,
-
-    /// Structural grid family.
-    pub grid_type: GridType,
-
-    /// Per-dimension staggering.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub staggering: Option<HashMap<String, StaggeringMode>>,
-
-    /// Per-dimension resolution in native CRS units.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolution: Option<HashMap<String, f64>>,
-
-    /// Per-dimension `[min, max]` extent in native CRS units.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extent: Option<HashMap<String, [f64; 2]>>,
-}
-
-/// Structural grid family for a data loader.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GridType {
-    /// Latitude/longitude grid.
-    Latlon,
-    /// Lambert conformal conic.
-    LambertConformal,
-    /// Mercator projection.
-    Mercator,
-    /// Polar stereographic projection.
-    PolarStereographic,
-    /// Rotated-pole projection.
-    RotatedPole,
-    /// Unstructured mesh / point dataset.
-    Unstructured,
-}
-
 /// A variable exposed by a data loader, mapped from a source-file variable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataLoaderVariable {
@@ -1369,32 +1320,6 @@ pub enum UnitConversion {
     Factor(f64),
     /// Expression AST applied to the source value.
     Expression(Expr),
-}
-
-/// Structural regridding configuration. Algorithm-specific tuning parameters
-/// are runtime-side and not in the schema.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DataLoaderRegridding {
-    /// Value to assign to cells with no source data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fill_value: Option<f64>,
-
-    /// Behavior when regridding targets fall outside the source extent.
-    /// Defaults to `clamp`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extrapolation: Option<ExtrapolationMode>,
-}
-
-/// Behavior when regridding targets fall outside the source extent.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExtrapolationMode {
-    /// Clamp to nearest in-range value.
-    Clamp,
-    /// Return NaN.
-    Nan,
-    /// Periodic wrap-around.
-    Periodic,
 }
 
 /// Free-form metadata about a data loader.

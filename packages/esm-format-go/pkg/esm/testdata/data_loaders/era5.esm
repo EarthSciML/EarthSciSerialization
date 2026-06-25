@@ -3,8 +3,14 @@
   "metadata": {
     "name": "ERA5_PressureLevels",
     "description": "Source: EarthSciData/src/era5.jl — ERA5PressureLevelFileSet / ERA5(). Parameter footprint: mirror (CDS API URL or file:// path), variables (list from ERA5_VARIABLES), domaininfo. Files are one-month NetCDF, 0.25 deg global, hourly samples, 37 pressure levels 1000→1 hPa.",
-    "authors": ["EarthSciSerialization gt-mos"],
-    "tags": ["meteorology", "reanalysis", "earthscidata.jl"]
+    "authors": [
+      "EarthSciSerialization gt-mos"
+    ],
+    "tags": [
+      "meteorology",
+      "reanalysis",
+      "earthscidata.jl"
+    ]
   },
   "data_loaders": {
     "ERA5_PL": {
@@ -21,21 +27,36 @@
         "records_per_file": "auto",
         "time_variable": "valid_time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center",
-          "pressure_level": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.25,
-          "lat": 0.25
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat",
+          "pressure_level"
+        ],
+        "extents": {
+          "lon": {
+            "n": 1440,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 720,
+            "spacing": "uniform"
+          },
+          "pressure_level": {
+            "n": "n_pressure_level",
+            "spacing": "uniform"
+          }
         },
-        "extent": {
-          "lon": [-180.0, 180.0],
-          "lat": [-90.0, 90.0]
+        "parameters": {
+          "n_pressure_level": {
+            "description": "pressure_level cell count, resolved from the source dataset at load time"
+          }
         }
       },
       "variables": {
@@ -75,25 +96,71 @@
           "description": "Ozone mass mixing ratio (ERA5 'ozone_mass_mixing_ratio')"
         }
       },
-      "regridding": {
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Hersbach, H. et al. (2020) The ERA5 global reanalysis. Q.J.R. Meteorol. Soc.",
         "doi": "10.1002/qj.3803",
         "url": "https://cds.climate.copernicus.eu/"
       },
       "metadata": {
-        "tags": ["meteorology", "reanalysis", "pressure-levels"],
-        "pressure_levels_hpa": [1000, 975, 950, 925, 900, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 70, 50, 30, 20, 10, 7, 5, 3, 2, 1]
+        "tags": [
+          "meteorology",
+          "reanalysis",
+          "pressure-levels"
+        ],
+        "pressure_levels_hpa": [
+          1000,
+          975,
+          950,
+          925,
+          900,
+          850,
+          800,
+          750,
+          700,
+          650,
+          600,
+          550,
+          500,
+          450,
+          400,
+          350,
+          300,
+          250,
+          200,
+          150,
+          100,
+          70,
+          50,
+          30,
+          20,
+          10,
+          7,
+          5,
+          3,
+          2,
+          1
+        ]
       }
     }
   },
   "models": {
     "stub": {
-      "variables": {"x": {"type": "state"}},
+      "variables": {
+        "x": {
+          "type": "state"
+        }
+      },
       "equations": [
-        {"lhs": {"op": "D", "args": ["x"], "wrt": "t"}, "rhs": 0}
+        {
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
+          "rhs": 0
+        }
       ]
     }
   }

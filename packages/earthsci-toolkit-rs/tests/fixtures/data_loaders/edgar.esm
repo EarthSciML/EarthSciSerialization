@@ -3,8 +3,14 @@
   "metadata": {
     "name": "EDGARv81_Fixture",
     "description": "EarthSciData.jl EDGAR v8.1 monthly emissions loader expressed in the STAC-like DataLoader schema. Corresponds to EarthSciData.jl src/edgar_v81_monthly.jl — struct EDGARv81MonthlyEmisFileSet (lines 91-140) with relpath (lines 148-152) and the EDGAR_V81_SUBSTANCES table (lines 3-5). Upstream files are delivered as a per-substance, per-sector ZIP containing one .nc per year; the runtime unpacks the ZIP and opens the yearly files as a single multi-year dataset. That unpack step is runtime behavior, so the url_template below points at the per-year NC file after extraction (the runtime is free to substitute the ZIP path if it handles unpacking).",
-    "authors": ["ESM Rust binding acceptance suite"],
-    "tags": ["fixture", "earthscidata", "gt-0c7"]
+    "authors": [
+      "ESM Rust binding acceptance suite"
+    ],
+    "tags": [
+      "fixture",
+      "earthscidata",
+      "gt-0c7"
+    ]
   },
   "data_loaders": {
     "EDGARv81Monthly": {
@@ -23,20 +29,26 @@
         "records_per_file": "auto",
         "time_variable": "time"
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": {
-          "lon": "center",
-          "lat": "center"
+      "grid": {
+        "family": "cartesian",
+        "crs": {
+          "projection": "longlat",
+          "datum": "WGS84"
         },
-        "resolution": {
-          "lon": 0.1,
-          "lat": 0.1
-        },
-        "extent": {
-          "lon": [-180.0, 180.0],
-          "lat": [-90.0, 90.0]
+        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
+        "dimensions": [
+          "lon",
+          "lat"
+        ],
+        "extents": {
+          "lon": {
+            "n": 3600,
+            "spacing": "uniform"
+          },
+          "lat": {
+            "n": 1800,
+            "spacing": "uniform"
+          }
         }
       },
       "variables": {
@@ -86,19 +98,29 @@
           "description": "SO2 flux"
         }
       },
-      "regridding": {
-        "fill_value": 0.0,
-        "extrapolation": "clamp"
-      },
       "reference": {
         "citation": "Crippa, M., et al., EDGAR v8.1 Monthly Air Pollutant Emissions (EDGARv8.1_AP), European Commission, JRC",
         "url": "https://edgar.jrc.ec.europa.eu/dataset_ap81"
       },
       "metadata": {
-        "tags": ["emissions", "anthropogenic", "monthly"],
+        "tags": [
+          "emissions",
+          "anthropogenic",
+          "monthly"
+        ],
         "earthscidata_source": "src/edgar_v81_monthly.jl",
         "earthscidata_struct": "EDGARv81MonthlyEmisFileSet",
-        "earthscidata_substances": ["BC", "CO", "NH3", "NMVOC", "NOx", "OC", "PM10", "PM2.5", "SO2"],
+        "earthscidata_substances": [
+          "BC",
+          "CO",
+          "NH3",
+          "NMVOC",
+          "NOx",
+          "OC",
+          "PM10",
+          "PM2.5",
+          "SO2"
+        ],
         "earthscidata_note": "The runtime unpacks the per-sector ZIP mirror into yearly .nc files; the primary url_template is the extracted form."
       }
     }
@@ -106,11 +128,21 @@
   "models": {
     "fixture_stub": {
       "variables": {
-        "x": { "type": "state", "units": "1", "default": 0.0 }
+        "x": {
+          "type": "state",
+          "units": "1",
+          "default": 0.0
+        }
       },
       "equations": [
         {
-          "lhs": { "op": "D", "args": ["x"], "wrt": "t" },
+          "lhs": {
+            "op": "D",
+            "args": [
+              "x"
+            ],
+            "wrt": "t"
+          },
           "rhs": 0.0
         }
       ]
