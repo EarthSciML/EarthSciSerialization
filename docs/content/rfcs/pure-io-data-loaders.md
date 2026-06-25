@@ -81,8 +81,8 @@ Three restructurings were considered and rejected before arriving at this design
 (full reasoning preserved from the issue #24 discussion):
 
 - **Nest the loader inside the model unchanged.** The `Model` schema has no
-  `data_loaders` slot and `subsystems` is typed `oneOf:[Model, ReactionSystem,
-  SubsystemRef]`; nesting needs a schema change regardless, and a loader that
+  `data_loaders` slot and `subsystems` is typed `oneOf:[Model, SubsystemRef]`;
+  nesting needs a schema change regardless, and a loader that
   still regrids inverts ownership (loaders are shared by many consumers, each on
   its own grid).
 - **Strip the file to a loader only.** A `data_loaders`-only document fails
@@ -170,8 +170,9 @@ The current `Grid` (`required: [family, dimensions]`; props `connectivity`,
 `description`, `domain`, `extents`, `locations`, `metric_arrays`, `parameters`)
 has **no CRS / projection slot** — it cannot represent a projected native grid
 such as WRF's or NEI's Lambert Conformal. This RFC adds an optional `crs`
-descriptor to `Grid`, **orthogonal to the topological `family`** (Q3): a lat-lon
-grid and an LCC grid can share `family`/topology and differ only in `crs`.
+descriptor to `Grid`, **orthogonal to the topological `family`** (per review): a
+lat-lon grid and an LCC grid can share the same topological `family` (`cartesian`)
+and differ only in `crs`.
 
 ```jsonc
 // Grid (GDD) — added field, orthogonal to `family`
@@ -196,8 +197,8 @@ A pure-I/O loader may appear as a subsystem of a model. Concretely, `subsystems`
 gains the loader alternative:
 
 ```jsonc
-// before: "subsystems": { "<name>": oneOf[Model, ReactionSystem, SubsystemRef] }
-// after:  "subsystems": { "<name>": oneOf[Model, ReactionSystem, DataLoader, SubsystemRef] }
+// before: "subsystems": { "<name>": oneOf[Model, SubsystemRef] }
+// after:  "subsystems": { "<name>": oneOf[Model, DataLoader, SubsystemRef] }
 ```
 
 The regridding model (§6) declares its loader as a subsystem; the model's
@@ -340,9 +341,10 @@ location on its GDD `Grid`, which is concrete and deterministic:
   analogue of a no-data fill, not an interpolation. (Plain bin-average + missing
   fill — no scattered-interpolation kernel needed.)
 
-Default-by-staggering is a deterministic derivation from the variable's `Grid`
-location, **not** a fuzzy tag inference; an author may override the method per
-variable. All kernels are declarative `.esm` evaluated through the ESS engine,
+Default-by-staggering is a deterministic derivation from the variable's location
+on the GDD `Grid` (via `Grid.locations` / the model-side stagger assignment —
+**not** a per-variable loader field, and **not** a fuzzy tag inference); an author
+may override the method per variable. All kernels are declarative `.esm` evaluated through the ESS engine,
 selected by the regridding model (§6).
 
 ### 5.3 Projected grids in the GDD `Grid` family
@@ -455,7 +457,7 @@ flag-day cut rather than a deprecation window:
 
 | File | Native CRS | `grid_type` | Reprojection | Regridding (by variable) |
 |---|---|---|---|---|
-| `wrf` | `+proj=lcc +lat_1=30 +lat_2=60 +lat_0=39 +lon_0=-97 +a=b=6.37e6` | `lambert_conformal` | LCC ↔ lonlat | centered→conservative, C-grid wind→B-spline |
+| `wrf` | `+proj=lcc +lat_1=30 +lat_2=60 +lat_0=38.999996 +lon_0=-97 +a=b=6370000` | `lambert_conformal` | LCC ↔ lonlat | centered→conservative, C-grid wind→B-spline |
 | `nei2016_monthly` | `+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +a=b=6370997` | `lambert_conformal` | LCC ↔ lonlat | emissions (centered)→conservative |
 | `geosfp` | `+proj=longlat +datum=WGS84` (0.3125°×0.25°) | `latlon` | identity | centered→conservative, staggered→B-spline |
 | `era5` | geographic (lat-lon) | `latlon` | identity | centered→conservative, wind→B-spline |
