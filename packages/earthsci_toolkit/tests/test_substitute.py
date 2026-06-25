@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from earthsci_toolkit import substitute, substitute_in_model, substitute_in_reaction_system
+from earthsci_toolkit.esm_types import ExprNode
 from earthsci_toolkit.parse import load
 
 
@@ -156,6 +157,30 @@ class TestSubstitutionFunctions:
 
         expected = {"op": "func", "args": ["z", "y", "z"]}
         assert result == expected
+
+    def test_substitute_preserves_const_value_metadata(self):
+        """Substituting through a closed-function lookup must keep ``const``
+        ``value`` and ``fn`` ``name`` (regression: param_to_var coupling once
+        dropped the table, leaving an empty ``{op: const, args: []}`` that
+        failed schema validation)."""
+        # fn:interp.linear over a const table axis, indexed by a coupled var.
+        expr = ExprNode(
+            op="fn", fn="interp.linear", name="interp.linear",
+            args=[
+                ExprNode(op="const", args=[], value=[10.0, 20.0, 30.0]),
+                ExprNode(op="const", args=[], value=[1.0, 2.0, 3.0]),
+                "code",
+            ],
+        )
+        result = substitute(expr, {"code": "fuel_code"})
+
+        assert isinstance(result, ExprNode)
+        assert result.name == "interp.linear"
+        assert result.fn == "interp.linear"
+        assert result.args[0].op == "const"
+        assert result.args[0].value == [10.0, 20.0, 30.0]
+        assert result.args[1].value == [1.0, 2.0, 3.0]
+        assert result.args[2] == "fuel_code"  # the coupled var was substituted
 
 
 class TestModelSubstitution:

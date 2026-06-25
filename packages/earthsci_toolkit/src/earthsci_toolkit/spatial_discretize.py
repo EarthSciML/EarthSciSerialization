@@ -138,15 +138,22 @@ def _to_json(e: Any) -> Any:
         d: Dict[str, Any] = {"op": e.op}
         if e.args is not None:
             d["args"] = [_to_json(a) for a in e.args]
-        for f in ("wrt", "dim", "fn", "output_idx", "reduce", "ranges",
-                  "regions", "shape", "perm", "axis"):
+        # scalar / list / dict metadata fields carried verbatim
+        for f in ("wrt", "dim", "fn", "output_idx", "reduce", "ranges", "regions",
+                  "shape", "perm", "axis", "name", "value", "var", "semiring",
+                  "distinct", "join", "id", "manifold", "handler_id", "table", "output"):
             v = getattr(e, f, None)
             if v is not None:
                 d[f] = v
-        if e.expr is not None:
-            d["expr"] = _to_json(e.expr)
+        # expression-valued fields recurse
+        for f in ("expr", "lower", "upper", "filter", "key"):
+            v = getattr(e, f, None)
+            if v is not None:
+                d[f] = _to_json(v)
         if e.values is not None:
             d["values"] = [_to_json(x) for x in e.values]
+        if getattr(e, "table_axes", None) is not None:
+            d["table_axes"] = {k: _to_json(v) for k, v in e.table_axes.items()}
         return d
     return e
 
