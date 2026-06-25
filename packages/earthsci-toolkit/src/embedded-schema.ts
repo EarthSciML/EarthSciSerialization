@@ -39,6 +39,11 @@ export const schema: AnySchemaObject = {
     },
     {
       "required": [
+        "data_loaders"
+      ]
+    },
+    {
+      "required": [
         "kind"
       ],
       "properties": {
@@ -1483,11 +1488,14 @@ export const schema: AnySchemaObject = {
         },
         "subsystems": {
           "type": "object",
-          "description": "Named child models (subsystems), keyed by unique identifier. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\". Each subsystem can be defined inline or included by reference via a local file path or URL.",
+          "description": "Named child subsystems, keyed by unique identifier. A subsystem is a child model, a pure-I/O data loader (RFC pure-io-data-loaders §4.3), or a reference to an external file containing exactly one of those. Enables hierarchical model composition. Variables in subsystems are referenced via dot notation: \"ParentModel.ChildModel.var\" (and \"ParentModel.Loader.var\" for a loader subsystem). Each subsystem can be defined inline or included by reference via a local file path or URL.",
           "additionalProperties": {
             "oneOf": [
               {
                 "$ref": "#/$defs/Model"
+              },
+              {
+                "$ref": "#/$defs/DataLoader"
               },
               {
                 "$ref": "#/$defs/SubsystemRef"
@@ -1545,7 +1553,7 @@ export const schema: AnySchemaObject = {
     },
     "SubsystemRef": {
       "type": "object",
-      "description": "A reference to an external ESM file containing a model or reaction system definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.",
+      "description": "A reference to an external ESM file containing a model, reaction system, or data loader definition. The ref field can be a relative or absolute local file path, or an HTTP/HTTPS URL. Relative paths are resolved relative to the directory of the referencing file.",
       "required": [
         "ref"
       ],
@@ -1553,7 +1561,7 @@ export const schema: AnySchemaObject = {
       "properties": {
         "ref": {
           "type": "string",
-          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model or reaction system, which is used as the subsystem definition."
+          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model, reaction system, or data loader, which is used as the subsystem definition (esm-spec.md §4.7). A single top-level data loader is named by the parent's subsystem key; no fragment selector is needed because the file is single-component."
         }
       }
     },

@@ -72,7 +72,7 @@ The full authoring stance, normatively:
 
 The `operators` and `registered_functions` blocks present in earlier drafts are **removed** in this revision. State-mutating numerical schemes (advection, gridded diffusion) are now expressed as discretization schemes (`discretizations`) with PDE operators in the model equations; pure functions are drawn from the closed function registry (Section 9) via the `fn` op. See `docs/rfcs/closed-function-registry.md` for the migration plan.
 
-At least one of `models` or `reaction_systems` must be present.
+At least one of `models`, `reaction_systems`, or `data_loaders` must be present (a GridDiscretization Descriptor file instead carries `kind: grid_discretization_descriptor`; see §4.7.1). A document whose sole top-level component is `data_loaders` is a valid loader-only file — referenceable as a loader subsystem (§4.7).
 
 ---
 
@@ -519,6 +519,8 @@ Subsystems can be defined inline (as described in Sections 6 and 7) or included 
 
 In the example above, `Atmosphere` and `Ocean` are included by reference while `Land` is defined inline. Both forms can be freely mixed within the same `subsystems` map.
 
+A subsystem may be a child **model**, a child **reaction system**, or a pure-I/O **data loader** (RFC pure-io-data-loaders §4.3). A loader subsystem — declared inline or included by reference — exposes its variables to the owning model under the existing dot-notation (`ParentModel.Loader.var`); the owning model is responsible for any reprojection or regridding of those variables (the loader itself performs neither). A loader subsystem has no `subsystems` of its own.
+
 **Reference format:**
 
 | Form | Example | Resolution |
@@ -527,10 +529,11 @@ In the example above, `Atmosphere` and `Ocean` are included by reference while `
 | Absolute path | `"/models/atmosphere.esm"` | Used as-is |
 | HTTP/HTTPS URL | `"https://example.com/models/atmosphere.esm"` | Fetched from the network |
 
-**Referenced file requirements (model/reaction-system subsystems):**
+**Referenced file requirements (model, reaction-system, or data-loader subsystems):**
 
 - The referenced file must be a valid ESM file (with `esm` version and `metadata` fields).
-- It must contain exactly one top-level model or reaction system and must NOT carry a `"kind"` field (absence of `"kind"` identifies a subsystem file). The single model or reaction system defined in the file is used as the subsystem definition.
+- It must contain exactly one top-level model, reaction system, or data loader and must NOT carry a `"kind"` field (absence of `"kind"` identifies a subsystem file). The single model, reaction system, or data loader defined in the file is used as the subsystem definition. Because the file is single-component, no fragment selector is required.
+- A file whose sole top-level component is `data_loaders` (with exactly one entry) is itself a valid ESM document and is referenceable as a loader subsystem; this is the structural reason a co-located `model + loader` is split into separate files when the loader must be shared by reference.
 - The subsystem key in the parent file determines the subsystem's name, not any name in the referenced file.
 
 **Scoped references** work identically for referenced subsystems as for inline subsystems. After resolution, `"Parent.RefSubsystem.variable"` works the same regardless of whether `RefSubsystem` was defined inline or loaded from a reference.
