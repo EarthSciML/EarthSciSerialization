@@ -133,11 +133,35 @@ def _expand_laplacian(expr: Any, dims: List[str]) -> Any:
     return _map_expr(expr, f)
 
 
+_ATOMIC_OPS = ("grad", "d2")
+
+
 def _apply_gdd_rules(expr: Any, rules: Dict[str, Any], dims: List[str],
                      dx_by_dim: Dict[str, float]) -> Any:
-    """Replace each spatial-op node with the GDD-selected rule's pointwise body."""
+    """Lower spatial operators using the GDD-selected rules.
+
+    Composite rules (GDD keys other than the atomic ``grad`` / ``d2``, e.g. a
+    ``grad_norm`` Godunov rule whose ``applies_to`` matches ``sqrt(grad²+grad²)``)
+    are applied to the whole expression first via the rule engine — they fire
+    wherever their multi-node pattern matches and emit a ready N-D pointwise body
+    (uniform-grid ``dx``). Atomic per-dimension rules then lower any remaining
+    ``grad`` / ``d2`` nodes (extract the 1-D stencil body and lift it to N-D).
+    """
+    composite = [r for op, r in rules.items()
+                 if op not in _ATOMIC_OPS and op != "laplacian"]
+    if composite:
+        expr = _to_json(rewrite(_parse_expr(expr), composite))
+        dxs = set(dx_by_dim.values())
+        if len(dxs) > 1:
+            raise SpatialDiscretizeError(
+                "composite (norm-level) stencil rules assume a uniform grid "
+                f"spacing; got {sorted(dxs)}")
+        expr = _subst_symbol(expr, "dx", float(next(iter(dxs))))
+
+    atomic = {op: rules[op] for op in _ATOMIC_OPS if op in rules}
+
     def f(n):
-        if not (isinstance(n, dict) and n.get("op") in rules):
+        if not (isinstance(n, dict) and n.get("op") in atomic):
             return n
         op = n["op"]
         operand = n["args"][0]
@@ -148,7 +172,7 @@ def _apply_gdd_rules(expr: Any, rules: Dict[str, Any], dims: List[str],
         dim = n.get("dim")
         if dim not in dx_by_dim:
             raise SpatialDiscretizeError(f"{op} over unknown spatial dim {dim!r}")
-        lowered = rewrite(_parse_expr(n), [rules[op]])
+        lowered = rewrite(_parse_expr(n), [atomic[op]])
         if lowered.expr is None:
             raise SpatialDiscretizeError(f"rule for {op!r} did not lower to a body")
         body = _subst_symbol(_to_json(lowered.expr), "dx", float(dx_by_dim[dim]))

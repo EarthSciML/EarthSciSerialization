@@ -124,6 +124,89 @@ def test_observed_grad_chain_discretizes_inline_level_set_form():
     assert abs(front - (r0 + R0 * tf)) < dx     # right speed, first-order accurate
 
 
+def _godunov_norm_2d_rule():
+    """A single composite catalog-shaped rule: matches the inlined
+    sqrt(grad(u,x)^2 + grad(u,y)^2) and rewrites it to the coupled Godunov upwind
+    |grad u| for a non-negative speed. No spec op — just a JSON rule."""
+    def ix(ox, oy):
+        sx = "$x" if ox == 0 else {"op": "+", "args": ["$x", ox]}
+        sy = "$y" if oy == 0 else {"op": "+", "args": ["$y", oy]}
+        return {"op": "index", "args": ["$u", sx, sy]}
+
+    def comp(m, c, p):   # max(D-,0)^2 + min(D+,0)^2 along one axis
+        dm = {"op": "/", "args": [{"op": "-", "args": [c, m]}, "dx"]}
+        dp = {"op": "/", "args": [{"op": "-", "args": [p, c]}, "dx"]}
+        return {"op": "+", "args": [
+            {"op": "^", "args": [{"op": "max", "args": [dm, 0]}, 2]},
+            {"op": "^", "args": [{"op": "min", "args": [dp, 0]}, 2]}]}
+    c = ix(0, 0)
+    return {"discretizations": {"grad_norm": {
+        "applies_to": {"op": "sqrt", "args": [{"op": "+", "args": [
+            {"op": "^", "args": [{"op": "grad", "args": ["$u"], "dim": "$x"}, 2]},
+            {"op": "^", "args": [{"op": "grad", "args": ["$u"], "dim": "$y"}, 2]}]}]},
+        "grid_family": "cartesian",
+        "replacement": {"op": "sqrt", "args": [{"op": "+", "args": [
+            comp(ix(-1, 0), c, ix(1, 0)), comp(ix(0, -1), c, ix(0, 1))]}]}}}}
+
+
+def test_godunov_norm_via_single_json_rule_runs_symmetric_front():
+    """The level-set Hamilton-Jacobi case. A *symmetric* expanding circle is
+    unstable/wrong under per-grad centred or upwind differencing, but correct
+    under the coupled Godunov scheme — which is achievable as a single composite
+    JSON rule (no spec change), applied by the generic pass to the inlined norm."""
+    dx, r0, R0, tf = 0.2, 0.4, 1.0, 0.2
+    xmin, xmax = -1.0, 1.0
+    n = int(round((xmax - xmin) / dx)) + 1
+    ls = {
+        "esm": "0.5.0", "metadata": {"name": "LS"},
+        "domains": {"sq": {"independent_variable": "t",
+            "spatial": {"x": {"min": xmin, "max": xmax, "grid_spacing": dx},
+                        "y": {"min": xmin, "max": xmax, "grid_spacing": dx}},
+            "boundary_conditions": [{"type": "zero_gradient", "dimensions": ["x", "y"]}]}},
+        "models": {"LS": {"domain": "sq", "system_kind": "pde", "variables": {
+            "psi": {"type": "state", "units": "m"},
+            "psi_x": {"type": "observed", "units": "1",
+                      "expression": {"op": "grad", "args": ["psi"], "dim": "x"}},
+            "psi_y": {"type": "observed", "units": "1",
+                      "expression": {"op": "grad", "args": ["psi"], "dim": "y"}},
+            "grad_mag": {"type": "observed", "units": "1", "expression": {"op": "sqrt", "args": [
+                {"op": "+", "args": [{"op": "^", "args": ["psi_x", 2]},
+                                     {"op": "^", "args": ["psi_y", 2]}]}]}},
+            "R0": {"type": "parameter", "units": "m/s", "default": R0}},
+            "equations": [{"lhs": {"op": "D", "args": ["psi"], "wrt": "t"},
+                           "rhs": {"op": "*", "args": [{"op": "-", "args": ["R0"]},
+                                                       "grad_mag"]}}]}},
+    }
+    disc = spatial_discretize(ls, _godunov_norm_2d_rule())
+    interior = _interior(disc, "LS")
+    body = __import__("json").dumps(interior)
+    assert "grad" not in body and '"max"' in body and '"min"' in body   # Godunov, not grad
+
+    f = et.load(disc)
+
+    def X(i):
+        return xmin + (i - 1) * dx
+
+    ic = {f"psi[{i},{j}]": math.hypot(X(i), X(j)) - r0
+          for i in range(1, n + 1) for j in range(1, n + 1)}
+    r = simulate(f, (0.0, tf), initial_conditions=ic, method="LSODA",
+                 rtol=1e-6, atol=1e-8, parameters={"R0": R0})
+    assert r.success
+
+    jc = (n + 1) // 2
+
+    def radius(t):
+        xs = [X(i) for i in range(jc, n + 1)]
+        vs = [float(np.interp(t, r.t, r.y[next(k for k, nm in enumerate(r.vars)
+                                               if nm.endswith(f"[{i},{jc}]"))]))
+              for i in range(jc, n + 1)]
+        return next(xs[k] + (xs[k + 1] - xs[k]) * (-vs[k]) / (vs[k + 1] - vs[k])
+                    for k in range(len(vs) - 1) if vs[k] <= 0 <= vs[k + 1])
+
+    assert abs(radius(0.0) - r0) < dx
+    assert abs(radius(tf) - (r0 + R0 * tf)) < dx        # symmetric front, right speed
+
+
 def test_heat_runs_end_to_end_via_gdd():
     """laplacian -> d2 (GDD-selected centered) -> simulate; matches analytical."""
     heat = {
