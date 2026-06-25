@@ -233,7 +233,7 @@ function _wrap_bounded_const(arr::Array{Float64,N}, boundary, name::AbstractStri
     return BoundedConstArray{N}(arr, NTuple{N,Symbol}(syms))
 end
 
-function build_evaluator(model::Model;
+function _build_evaluator_impl(model::Model;
                          initial_conditions::AbstractDict=Dict{String,Float64}(),
                          parameter_overrides::AbstractDict=Dict{String,Float64}(),
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
@@ -577,6 +577,9 @@ function build_evaluator(model::Model;
     # observed variables, index ops are resolved to flat-slot references,
     # then compiled to the compact `_Node` form.
     rhs_list = Tuple{Int,_Node}[]
+    # Array (`arrayop`) derivative equations compile to whole-array kernels
+    # (ess-dhq) instead of N per-cell scalar nodes — see section 4b.
+    vec_kernels = _VecKernel[]
     covered = falses(length(all_state_names))
 
     for eq in derivative_eqs
@@ -617,6 +620,11 @@ function build_evaluator(model::Model;
         elseif _is_arrayop_D_lhs(eq.lhs)
             # arrayop(expr=D(index(var, ...)), output_idx=[...], ranges={...}) = rhs_arrayop(...)
             # Expand by iterating the Cartesian product of output_ranges.
+            # Per-cell compiled nodes are collected here and then merged into
+            # whole-array kernels (ess-dhq) rather than pushed individually into
+            # `rhs_list`; the per-cell build logic (ghost cells, const-array
+            # inlining, joins/filters, variable-valence bounds) is unchanged.
+            cell_entries = Tuple{Int,_Node}[]
             lhs_op = eq.lhs::OpExpr
             idx_names = String[]
             for sym in (lhs_op.output_idx === nothing ? Any[] : lhs_op.output_idx)
@@ -700,7 +708,7 @@ function build_evaluator(model::Model;
                     sub_rhs = isempty(resolved_obs) ? sub_rhs_outer :
                               _sub_preserving(sub_rhs_outer, resolved_obs)
                     rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays)
-                    push!(rhs_list, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
+                    push!(cell_entries, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 else
                     # Generalized einsum via external Tullio library: compile each
                     # contracted-index term separately, then accumulate at runtime
@@ -753,17 +761,22 @@ function build_evaluator(model::Model;
                         # cell with zero neighbours). Emit the semiring's 0̄
                         # empty-⊕-reduction identity (§5.1): 0 for sum_product,
                         # +∞ for min_sum, -∞ for max_*, 1 for the legacy ×-reduce.
-                        push!(rhs_list, (idx, _mknode(kind=_NK_LITERAL, literal=rhs_zerobar)))
+                        push!(cell_entries, (idx, _mknode(kind=_NK_LITERAL, literal=rhs_zerobar)))
                     else
                         # Carry 0̄ on the contraction node so the runtime fold is
                         # seeded from the registry table, never a hardcoded value.
-                        push!(rhs_list, (idx, _mknode(kind=_NK_CONTRACTION,
+                        push!(cell_entries, (idx, _mknode(kind=_NK_CONTRACTION,
                                                       op=Symbol(rhs_oplus),
                                                       literal=rhs_zerobar,
                                                       children=k_nodes)))
                     end
                 end
             end
+            # Merge this equation's per-cell nodes into whole-array kernels
+            # (ess-dhq). Structurally-identical cells collapse to one template;
+            # ghost boundaries / makearray regions / distinct valences form their
+            # own (N-independent) groups.
+            append!(vec_kernels, _vectorize_cell_entries(cell_entries))
         end
     end
     # States without a D(...) equation get du=0 (integrator leaves them
@@ -773,8 +786,28 @@ function build_evaluator(model::Model;
     tspan_default = _pick_tspan(tspan, model)
 
     # ---- Closure ----
-    f! = _make_rhs(rhs_list)
+    f! = _make_rhs(rhs_list, vec_kernels)
 
+    # Diagnostics for the N-independence property (ess-dhq acceptance #3): the
+    # number of array kernels and total compiled `_VecNode`s must be invariant
+    # across grid sizes; only the embedded slot/value vectors grow with N.
+    diag = (; n_vec_kernels = length(vec_kernels),
+              n_scalar_entries = length(rhs_list),
+              template_node_count =
+                  sum(_count_vecnodes(vk.template) for vk in vec_kernels; init=0))
+
+    return f!, u0, p, tspan_default, var_map, diag
+end
+
+"""
+    build_evaluator(model::Model; kwargs...)
+
+Public entry point — returns `(f!, u0, p, tspan, var_map)`. Thin wrapper over
+`_build_evaluator_impl`, which additionally returns build diagnostics consumed
+by the ess-dhq N-independence property test.
+"""
+function build_evaluator(model::Model; kwargs...)
+    f!, u0, p, tspan_default, var_map, _diag = _build_evaluator_impl(model; kwargs...)
     return f!, u0, p, tspan_default, var_map
 end
 
@@ -1324,16 +1357,419 @@ end
     return nothing
 end
 
+# ============================================================
+# 4b. Vectorized array-kernel evaluator (ess-dhq)
+# ============================================================
+#
+# DESIGN / FEASIBILITY GATE (ess-dhq acceptance criterion #1)
+# -----------------------------------------------------------
+# The scalar path above (`build_evaluator` + `_make_rhs`/`_eval_node`) compiles
+# every discretized `arrayop`-derivative equation into N per-cell scalar `_Node`
+# trees and evaluates them with an O(N) element loop. This section makes the
+# per-timestep RHS of those array equations run as **whole-array kernels** whose
+# compiled-node count is **independent of the grid size N**, with results
+# numerically identical to the scalar runner.
+#
+# Strategy — TRANSPOSE the per-cell nodes, don't re-derive them.
+#   The array-D branch of `build_evaluator` already produces, for each output
+#   cell, a fully-resolved scalar `_Node` (ghost cells, const-array inlining,
+#   semiring joins/filters, variable-valence reduction bounds — all handled at
+#   build time, exactly as before). Instead of pushing N nodes into `rhs_list`,
+#   we group those nodes by structural shape and *merge each group* into ONE
+#   vectorized template (`_VecNode`) whose leaves carry per-cell vectors:
+#       - `index(u, ·)`  STATE leaves whose slot varies per cell → `_VK_GATHER`
+#                        (a `u[slots]` offset-slice / gather)
+#       - const-array / ghost LITERAL leaves that vary    → `_VK_CONSTVEC`
+#       - leaves constant across the group (param, t, a   → `_VK_PARAM/_TIME/
+#         scalar state read, a shared literal)              _STATE/_LITERAL`,
+#                                                            broadcast over lanes
+#       - arithmetic / comparison / transcendental ops    → `_VK_OP` (broadcast)
+#       - `_NK_CONTRACTION` reductions                     → `_VK_REDUCE`
+#         (axis fold in the same order as the scalar path)
+#       - closed `fn` ops                                  → `_VK_FN` (per-lane map)
+#   Each merged template evaluates over its whole cell-axis with array ops, then
+#   `du[out_slots] .= result` scatters the lane values back.
+#
+# Why this preserves numeric identity: the merge is a structural transpose of
+# the *same* compiled per-cell nodes; a broadcast `f.(a, b)` applies the identical
+# scalar `f` to lane j that the scalar node computed for cell j, and reductions
+# fold in the same order. Elementwise ops are bit-identical; reductions match the
+# scalar Tullio/loop order (≤ rounding, absorbed by the tests' tolerances).
+#
+# Why the kernel count is N-independent: cells that share a structural signature
+# collapse into ONE template regardless of how many there are. Ghost boundaries,
+# `makearray` BC regions, and distinct contraction valences each form their own
+# (N-independent) group — this IS the "interior kernel + boundary kernels"
+# decomposition. Only the embedded slot/value vectors grow with N; the number of
+# compiled `_VecNode`s does not.
+#
+# Functions touched: `build_evaluator` (the `_is_arrayop_D_lhs` branch collects
+# per-cell entries then calls `_vectorize_cell_entries`; renamed to
+# `_build_evaluator_impl` with a thin `build_evaluator` wrapper so the
+# N-independence property is introspectable), `_make_rhs` (drives both scalar
+# entries and `_VecKernel`s). The scalar/indexed-D paths, `_resolve_indices`,
+# `_compile`, and `_eval_node` are UNCHANGED — non-array equations keep their
+# exact scalar evaluation.
+#
+# Node kinds confirmed vectorizable (no scalar fallback retained):
+#   stencil arrayop ✓ (gather + broadcast)   contraction/reduction ✓ (axis fold)
+#   integral ✓ (resolves to dx*Σcells = an OP/REDUCE tree, vectorized like any)
+#   makearray BC regions ✓ (per-region structural groups)  ghost cells ✓ (gather
+#   sentinel groups)  gather/indirect ✓ (STATE-slot gather)  broadcast coeffs ✓
+#   (const-array → CONSTVEC).  Closed `fn` ops are a per-lane map — one kernel
+#   node, N-independent — not a per-cell scalar evaluation strategy.
+
+# `_VecNode` kinds. Disjoint from the scalar `_NK_*` space to keep dispatch clear.
+const _VK_LITERAL  = UInt8(1)   # scalar literal, broadcast across lanes
+const _VK_CONSTVEC = UInt8(2)   # per-cell constants (n.vals), length = #cells
+const _VK_STATE    = UInt8(3)   # scalar u[idx], broadcast across lanes
+const _VK_GATHER   = UInt8(4)   # u[slots] — offset-slice / gather over the axis
+const _VK_PARAM    = UInt8(5)   # scalar p.<sym>, broadcast
+const _VK_TIME     = UInt8(6)   # scalar t, broadcast
+const _VK_OP       = UInt8(7)   # elementwise broadcast of op over child vectors
+const _VK_REDUCE   = UInt8(8)   # contraction: axis fold over children (semiring)
+const _VK_FN       = UInt8(9)   # closed-function per-lane map
+
+struct _VecNode
+    kind::UInt8
+    op::Symbol
+    literal::Float64
+    idx::Int
+    sym::Symbol
+    handler::Any
+    vals::Vector{Float64}
+    slots::Vector{Int}
+    children::Vector{_VecNode}
+end
+
+const _VK_NO_VALS  = Float64[]
+const _VK_NO_SLOTS = Int[]
+
+function _mkvnode(; kind::UInt8, op::Symbol=Symbol(""), literal::Float64=0.0,
+                  idx::Int=0, sym::Symbol=Symbol(""), handler=nothing,
+                  vals::Vector{Float64}=_VK_NO_VALS, slots::Vector{Int}=_VK_NO_SLOTS,
+                  children::Vector{_VecNode}=_VecNode[])
+    return _VecNode(kind, op, literal, idx, sym, handler, vals, slots, children)
+end
+
+# One vectorized array equation (or one structural sub-group of it): write the
+# lane values of `template` into `du[out_slots]`.
+struct _VecKernel
+    out_slots::Vector{Int}
+    template::_VecNode
+    len::Int
+end
+
+_count_vecnodes(n::_VecNode) =
+    1 + sum(_count_vecnodes(ch) for ch in n.children; init=0)
+
+# ---- Structural grouping + merge (build time) ----
+
+# A signature that is equal for two per-cell nodes iff they have an identical
+# tree shape ignoring the values that legitimately vary per cell (STATE slot
+# index, LITERAL value). Same signature ⇒ unambiguous merge into one template.
+# Different signatures (in-bounds STATE vs ghost LITERAL, makearray region A vs
+# B, valence-5 vs valence-6 contraction) ⇒ separate kernels.
+function _struct_sig(n::_Node)::String
+    k = n.kind
+    if k === _NK_STATE
+        return "S"
+    elseif k === _NK_LITERAL
+        return "L"
+    elseif k === _NK_PARAM
+        return string("P:", n.sym)
+    elseif k === _NK_TIME
+        return "T"
+    elseif k === _NK_CONTRACTION
+        return string("C:", n.op, "(",
+                      join((_struct_sig(ch) for ch in n.children), ","), ")")
+    else  # _NK_OP (including closed `fn`)
+        h = (n.handler isa Tuple && length(n.handler) >= 1) ?
+            string("@", n.handler[1]) : ""
+        return string("O:", n.op, h, "(",
+                      join((_struct_sig(ch) for ch in n.children), ","), ")")
+    end
+end
+
+# Merge a structurally-identical group of per-cell nodes into one `_VecNode`
+# template. Precondition: all elements share `_struct_sig`.
+function _merge_nodes(nodes::Vector{_Node})::_VecNode
+    n1 = nodes[1]
+    k = n1.kind
+    if k === _NK_LITERAL
+        v1 = n1.literal
+        if all(isequal(nd.literal, v1) for nd in nodes)
+            return _mkvnode(kind=_VK_LITERAL, literal=v1)
+        end
+        return _mkvnode(kind=_VK_CONSTVEC, vals=Float64[nd.literal for nd in nodes])
+    elseif k === _NK_STATE
+        i1 = n1.idx
+        if all(nd.idx == i1 for nd in nodes)
+            return _mkvnode(kind=_VK_STATE, idx=i1)
+        end
+        return _mkvnode(kind=_VK_GATHER, slots=Int[nd.idx for nd in nodes])
+    elseif k === _NK_PARAM
+        return _mkvnode(kind=_VK_PARAM, sym=n1.sym)
+    elseif k === _NK_TIME
+        return _mkvnode(kind=_VK_TIME)
+    elseif k === _NK_CONTRACTION
+        m = length(n1.children)
+        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes]) for c in 1:m]
+        return _mkvnode(kind=_VK_REDUCE, op=n1.op, literal=n1.literal, children=ch)
+    else  # _NK_OP / fn
+        m = length(n1.children)
+        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes]) for c in 1:m]
+        if n1.op === :fn
+            return _mkvnode(kind=_VK_FN, op=:fn, handler=n1.handler, children=ch)
+        end
+        return _mkvnode(kind=_VK_OP, op=n1.op, handler=n1.handler, children=ch)
+    end
+end
+
+# Group an array equation's per-cell `(du_slot, node)` entries by structure and
+# build one `_VecKernel` per group. First-seen group order is preserved for
+# deterministic kernel ordering (du writes are to disjoint slots regardless).
+function _vectorize_cell_entries(entries::Vector{Tuple{Int,_Node}})::Vector{_VecKernel}
+    isempty(entries) && return _VecKernel[]
+    order = String[]
+    groups = Dict{String,Tuple{Vector{Int},Vector{_Node}}}()
+    for (slot, node) in entries
+        sig = _struct_sig(node)
+        if !haskey(groups, sig)
+            groups[sig] = (Int[], _Node[])
+            push!(order, sig)
+        end
+        slots, nds = groups[sig]
+        push!(slots, slot)
+        push!(nds, node)
+    end
+    kernels = _VecKernel[]
+    for sig in order
+        slots, nds = groups[sig]
+        push!(kernels, _VecKernel(slots, _merge_nodes(nds), length(slots)))
+    end
+    return kernels
+end
+
+# ---- Vectorized evaluation (runtime) ----
+#
+# Returns a length-`len` vector of lane values. CONSTVEC returns its stored
+# buffer (callers never mutate a child's return in place — the first combining
+# op of every arm allocates a fresh array), GATHER returns a fresh `u[slots]`.
+function _eval_vec(n::_VecNode, u, p, t, len::Int)
+    k = n.kind
+    if k === _VK_CONSTVEC
+        return n.vals
+    elseif k === _VK_GATHER
+        return @inbounds u[n.slots]
+    elseif k === _VK_LITERAL
+        return fill(n.literal, len)
+    elseif k === _VK_STATE
+        return fill((@inbounds u[n.idx]), len)
+    elseif k === _VK_PARAM
+        return fill(getfield(p, n.sym), len)
+    elseif k === _VK_TIME
+        return fill(t, len)
+    elseif k === _VK_REDUCE
+        return _eval_vec_reduce(n, u, p, t, len)
+    elseif k === _VK_FN
+        return _eval_vec_fn(n, u, p, t, len)
+    else
+        return _eval_vec_op(n, u, p, t, len)
+    end
+end
+
+# Semiring axis reduction — folds the contraction children in the SAME order as
+# the scalar `_eval_contraction`, seeded from the 0̄ identity on the node.
+function _eval_vec_reduce(n::_VecNode, u, p, t, len::Int)
+    op = n.op
+    c = n.children
+    if op === :+
+        s = fill(n.literal, len)
+        @inbounds for k in 1:length(c)
+            s .+= _eval_vec(c[k], u, p, t, len)
+        end
+        return s
+    elseif op === :*
+        s = fill(n.literal, len)
+        @inbounds for k in 1:length(c)
+            s .*= _eval_vec(c[k], u, p, t, len)
+        end
+        return s
+    elseif op === :max
+        s = fill(n.literal, len)
+        @inbounds for k in 1:length(c)
+            s = max.(s, _eval_vec(c[k], u, p, t, len))
+        end
+        return s
+    else  # :min
+        s = fill(n.literal, len)
+        @inbounds for k in 1:length(c)
+            s = min.(s, _eval_vec(c[k], u, p, t, len))
+        end
+        return s
+    end
+end
+
+# Closed-function map — one kernel node, evaluated per lane (mirrors the scalar
+# `:fn` arm). N-independent in compiled-node count.
+function _eval_vec_fn(n::_VecNode, u, p, t, len::Int)
+    fname, const_args = n.handler::Tuple{String,Any}
+    c = n.children
+    cv = [_eval_vec(ci, u, p, t, len) for ci in c]
+    out = Vector{Float64}(undef, len)
+    if const_args === nothing
+        @inbounds for lane in 1:len
+            args_evaluated = Any[cv[a][lane] for a in 1:length(cv)]
+            out[lane] = Float64(evaluate_closed_function(fname, args_evaluated))
+        end
+    elseif fname == "interp.searchsorted"
+        @inbounds for lane in 1:len
+            out[lane] = Float64(evaluate_closed_function(fname, Any[cv[1][lane], const_args[1]]))
+        end
+    elseif fname == "interp.linear"
+        @inbounds for lane in 1:len
+            out[lane] = Float64(evaluate_closed_function(fname,
+                Any[const_args[1], const_args[2], cv[1][lane]]))
+        end
+    elseif fname == "interp.bilinear"
+        @inbounds for lane in 1:len
+            out[lane] = Float64(evaluate_closed_function(fname,
+                Any[const_args[1], const_args[2], const_args[3], cv[1][lane], cv[2][lane]]))
+        end
+    else
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", string("fn:", fname)))
+    end
+    return out
+end
+
+# Elementwise broadcast of an op over its child vectors. Each arm mirrors the
+# corresponding scalar arm in `_eval_node_op`, so lane j equals the scalar value
+# for cell j. The first combining expression of every arm allocates a fresh
+# array; later in-place updates only touch that fresh array.
+function _eval_vec_op(n::_VecNode, u, p, t, len::Int)
+    op = n.op
+    c = n.children
+    cv = Vector{Vector{Float64}}(undef, length(c))
+    @inbounds for i in eachindex(c)
+        cv[i] = _eval_vec(c[i], u, p, t, len)
+    end
+
+    if op === :+
+        length(cv) == 1 && return cv[1]
+        s = cv[1] .+ cv[2]
+        @inbounds for i in 3:length(cv); s .+= cv[i]; end
+        return s
+    elseif op === :*
+        length(cv) == 1 && return cv[1]
+        s = cv[1] .* cv[2]
+        @inbounds for i in 3:length(cv); s .*= cv[i]; end
+        return s
+    elseif op === :-
+        if length(cv) == 1
+            return .-cv[1]
+        elseif length(cv) == 2
+            return cv[1] .- cv[2]
+        end
+        throw(TreeWalkError("E_TREEWALK_ARITY", "- expects 1 or 2 args"))
+    elseif op === :neg
+        return .-cv[1]
+    elseif op === :/
+        return cv[1] ./ cv[2]
+    elseif op === :^ || op === :pow
+        return cv[1] .^ cv[2]
+
+    elseif op === :<
+        return ifelse.(cv[1] .<  cv[2], 1.0, 0.0)
+    elseif op === Symbol("<=")
+        return ifelse.(cv[1] .<= cv[2], 1.0, 0.0)
+    elseif op === :>
+        return ifelse.(cv[1] .>  cv[2], 1.0, 0.0)
+    elseif op === Symbol(">=")
+        return ifelse.(cv[1] .>= cv[2], 1.0, 0.0)
+    elseif op === Symbol("==")
+        return ifelse.(cv[1] .== cv[2], 1.0, 0.0)
+    elseif op === Symbol("!=")
+        return ifelse.(cv[1] .!= cv[2], 1.0, 0.0)
+
+    elseif op === :and
+        r = trues(len)
+        @inbounds for v in cv; r = r .& (v .!= 0); end
+        return ifelse.(r, 1.0, 0.0)
+    elseif op === :or
+        r = falses(len)
+        @inbounds for v in cv; r = r .| (v .!= 0); end
+        return ifelse.(r, 1.0, 0.0)
+    elseif op === :not
+        return ifelse.(cv[1] .== 0, 1.0, 0.0)
+    elseif op === :ifelse
+        return ifelse.(cv[1] .!= 0, cv[2], cv[3])
+
+    elseif op === :sin;   return sin.(cv[1])
+    elseif op === :cos;   return cos.(cv[1])
+    elseif op === :tan;   return tan.(cv[1])
+    elseif op === :asin;  return asin.(cv[1])
+    elseif op === :acos;  return acos.(cv[1])
+    elseif op === :atan
+        if length(cv) == 1
+            return atan.(cv[1])
+        elseif length(cv) == 2
+            return atan.(cv[1], cv[2])
+        end
+        throw(TreeWalkError("E_TREEWALK_ARITY", "atan expects 1 or 2 args"))
+    elseif op === :atan2
+        return atan.(cv[1], cv[2])
+    elseif op === :sinh;  return sinh.(cv[1])
+    elseif op === :cosh;  return cosh.(cv[1])
+    elseif op === :tanh;  return tanh.(cv[1])
+    elseif op === :asinh; return asinh.(cv[1])
+    elseif op === :acosh; return acosh.(cv[1])
+    elseif op === :atanh; return atanh.(cv[1])
+    elseif op === :exp;   return exp.(cv[1])
+    elseif op === :log;   return log.(cv[1])
+    elseif op === :log10; return log10.(cv[1])
+    elseif op === :sqrt;  return sqrt.(cv[1])
+    elseif op === :abs;   return abs.(cv[1])
+    elseif op === :sign;  return sign.(cv[1])
+    elseif op === :floor; return floor.(cv[1])
+    elseif op === :ceil;  return ceil.(cv[1])
+    elseif op === :min
+        s = cv[1]
+        @inbounds for i in 2:length(cv); s = min.(s, cv[i]); end
+        return s
+    elseif op === :max
+        s = cv[1]
+        @inbounds for i in 2:length(cv); s = max.(s, cv[i]); end
+        return s
+
+    elseif op === :pi || op === :π
+        return fill(Float64(pi), len)
+    elseif op === :e
+        return fill(Float64(ℯ), len)
+    elseif op === :Pre
+        return cv[1]
+    else
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", String(op)))
+    end
+end
+
 # Inner closure generator — separated so the closure's body is small
-# enough to stay inferable. `rhs_list` is captured by the closure;
-# Julia specializes the generated method to the captured types.
+# enough to stay inferable. `rhs_list` and `vec_kernels` are captured by the
+# closure; Julia specializes the generated method to the captured types.
+# Scalar/indexed-D equations evaluate through `rhs_list` (one slot each); array
+# (`arrayop`) equations evaluate through `vec_kernels` as whole-array ops.
 # Accepts any AbstractVector so both the pre-allocated and the
 # dynamically-grown forms produced by build_evaluator work.
-function _make_rhs(rhs_list::AbstractVector{Tuple{Int,_Node}})
+function _make_rhs(rhs_list::AbstractVector{Tuple{Int,_Node}},
+                   vec_kernels::AbstractVector{_VecKernel})
     function f!(du, u, p, t)
         @inbounds for k in 1:length(rhs_list)
             idx_and_node = rhs_list[k]
             du[idx_and_node[1]] = _eval_node(idx_and_node[2], u, p, t)
+        end
+        @inbounds for j in 1:length(vec_kernels)
+            vk = vec_kernels[j]
+            du[vk.out_slots] .= _eval_vec(vk.template, u, p, t, vk.len)
         end
         return nothing
     end
