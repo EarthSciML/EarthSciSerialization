@@ -39,6 +39,34 @@ class SpatialDiscretizeError(Exception):
     """Raised when a PDE component cannot be discretized under the given GDD."""
 
 
+def flattened_to_esm(flat: Any, domains: Dict[str, Any],
+                     name: str = "Flattened") -> Dict[str, Any]:
+    """Adapt a :class:`FlattenedSystem` (the output of ``earthsci_toolkit.flatten``)
+    into a single-model ``.esm`` dict that :func:`spatial_discretize` consumes.
+
+    This is the join between coupling resolution and discretization: ``flatten``
+    resolves ``param_to_var`` and other coupling (e.g. a 0-D Rothermel spread
+    rate substituted into the level-set's ``R_0``); this adapter exposes the
+    resolved equation set on the PDE domain so the spatial pass can lower it.
+    ``domains`` is the coupled file's ``domains`` block (re-used verbatim).
+    """
+    variables: Dict[str, Any] = {}
+    for n, v in flat.state_variables.items():
+        variables[n] = {"type": "state", "units": v.units or "1"}
+    for n, v in flat.observed_variables.items():
+        variables[n] = {"type": "observed", "units": v.units or "1"}
+    for n, v in flat.parameters.items():
+        variables[n] = {"type": "parameter", "units": v.units or "1",
+                        "default": v.default if v.default is not None else 0.0}
+    equations = [{"lhs": _to_json(e.lhs), "rhs": _to_json(e.rhs)}
+                 for e in flat.equations]
+    return {
+        "esm": "0.5.0", "metadata": {"name": name}, "domains": domains,
+        "models": {name: {"domain": next(iter(domains)), "system_kind": "pde",
+                          "variables": variables, "equations": equations}},
+    }
+
+
 # --- GDD rule resolution (the generic selection mechanism) -------------------
 def _resolve_rule(op: str, entry: Any) -> Any:
     """Turn a GDD ``discretizations[op]`` entry into a parsed Rule.

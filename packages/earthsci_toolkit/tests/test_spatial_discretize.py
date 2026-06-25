@@ -207,6 +207,65 @@ def test_godunov_norm_via_single_json_rule_runs_symmetric_front():
     assert abs(radius(tf) - (r0 + R0 * tf)) < dx        # symmetric front, right speed
 
 
+def test_coupling_flatten_wires_a_0d_calc_into_the_front():
+    """Full coupled pipeline: a 0-D spread-rate calc feeds the level-set's R_0 via
+    param_to_var. flatten() resolves the coupling; flattened_to_esm adapts it;
+    spatial_discretize inlines the calc and applies the Godunov norm; simulate runs."""
+    from earthsci_toolkit.spatial_discretize import flattened_to_esm
+
+    dx = 0.2
+    domains = {"sq": {"independent_variable": "t",
+        "spatial": {"x": {"min": -1.0, "max": 1.0, "grid_spacing": dx, "units": "m"},
+                    "y": {"min": -1.0, "max": 1.0, "grid_spacing": dx, "units": "m"}},
+        "boundary_conditions": [{"type": "zero_gradient", "dimensions": ["x", "y"]}]}}
+    coupled = {
+        "esm": "0.5.0", "metadata": {"name": "Fire"}, "domains": domains,
+        "models": {
+            "Roth": {"variables": {
+                "R_base": {"type": "parameter", "units": "m/s", "default": 1.0},
+                "wf": {"type": "parameter", "units": "1", "default": 0.5},
+                "R": {"type": "observed", "units": "m/s", "expression":
+                      {"op": "*", "args": ["R_base", {"op": "+", "args": [1.0, "wf"]}]}}},
+                "equations": []},
+            "LevelSet": {"domain": "sq", "system_kind": "pde", "variables": {
+                "psi": {"type": "state", "units": "m"},
+                "psi_x": {"type": "observed", "units": "1",
+                          "expression": {"op": "grad", "args": ["psi"], "dim": "x"}},
+                "psi_y": {"type": "observed", "units": "1",
+                          "expression": {"op": "grad", "args": ["psi"], "dim": "y"}},
+                "grad_mag": {"type": "observed", "units": "1", "expression":
+                    {"op": "sqrt", "args": [{"op": "+", "args": [
+                        {"op": "^", "args": ["psi_x", 2]}, {"op": "^", "args": ["psi_y", 2]}]}]}},
+                "R_0": {"type": "parameter", "units": "m/s", "default": 1.0}},
+                "equations": [{"lhs": {"op": "D", "args": ["psi"], "wrt": "t"},
+                               "rhs": {"op": "*", "args": [{"op": "-", "args": ["R_0"]},
+                                                          "grad_mag"]}}]}},
+        "coupling": [{"type": "variable_map", "from": "Roth.R", "to": "LevelSet.R_0",
+                      "transform": "param_to_var", "lifting": "pointwise"}],
+    }
+
+    # flatten resolves param_to_var: the PDE RHS now references Roth.R, not R_0
+    flat = et.flatten(et.load(coupled))
+    pde = next(e for e in flat.equations if _serialize(e.lhs).count('"op": "D"'))
+    rhs = _serialize(pde.rhs)
+    assert "Roth.R" in rhs and "R_0" not in rhs
+
+    # adapt -> discretize (Godunov): the Rothermel calc is inlined; |grad| -> Godunov
+    disc = spatial_discretize(flattened_to_esm(flat, domains), _godunov_norm_2d_rule())
+    model = disc["models"]["Flattened"]
+    body = __import__("json").dumps(model["equations"][0]["rhs"])
+    assert "R_base" in body and '"max"' in body and "grad" not in body
+
+    # the coupled, discretized system integrates
+    r = simulate(et.load(disc), (0.0, 0.05), method="LSODA", rtol=1e-6, atol=1e-8)
+    assert r.success
+
+
+def _serialize(e):
+    from earthsci_toolkit.spatial_discretize import _to_json
+    return __import__("json").dumps(_to_json(e))
+
+
 def test_heat_runs_end_to_end_via_gdd():
     """laplacian -> d2 (GDD-selected centered) -> simulate; matches analytical."""
     heat = {
