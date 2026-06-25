@@ -710,9 +710,10 @@ function _build_evaluator_impl(model::Model;
                     rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays)
                     push!(cell_entries, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 else
-                    # Generalized einsum via external Tullio library: compile each
-                    # contracted-index term separately, then accumulate at runtime
-                    # using _NK_CONTRACTION (Tullio for +, loops for */max/min).
+                    # Generalized einsum: compile each contracted-index term
+                    # separately, then accumulate at runtime using _NK_CONTRACTION
+                    # (an allocation-free sequential ⊕-fold for every semiring —
+                    # `_eval_contraction` scalar, or `_VK_REDUCE` once vectorized).
                     # Constant-bound contracted ranges reuse the global iterator;
                     # expression-valued ones are expanded for THIS output cell from
                     # the current `idx_env` (variable-valence segment reduction —
@@ -952,7 +953,7 @@ const _NK_STATE        = UInt8(2)   # read u[idx]
 const _NK_PARAM        = UInt8(3)   # read p.<sym>
 const _NK_TIME         = UInt8(4)   # return t
 const _NK_OP           = UInt8(5)   # apply op to children
-const _NK_CONTRACTION  = UInt8(6)   # runtime reduction over children via Tullio
+const _NK_CONTRACTION  = UInt8(6)   # runtime ⊕-reduction over children (seq. fold)
 
 struct _Node
     kind::UInt8
@@ -1143,16 +1144,24 @@ end
 
 # Runtime ⊕-reduction over a node's children, parameterized by semiring (§5.1).
 # The accumulator is seeded from `n.literal`, the 0̄ identity baked onto the node
-# at build time from the registry table — so max/min/× empty-or-folded reductions
-# return the normative identity without any hardcoded constant here. `:+` uses a
-# Tullio sum whose identity is 0.0 = sum_product's 0̄ (the only semiring with
-# ⊕=+); this node is only built with ≥1 child (the empty case folds to a literal
-# upstream), so the Tullio reduction always has terms.
+# at build time from the registry table — so every arm (incl. empty-or-folded
+# max/min/×) returns the normative identity without any hardcoded constant here.
+# All four arms share ONE shape: an `@inbounds` sequential fold over the children
+# seeded from `n.literal`. The `:+` arm sums from 0.0 (sum_product's 0̄, the only
+# ⊕=+ semiring) in child order — allocation-free and bit-identical to the prior
+# `@tullio s = …` sum (which `zero`-seeds the same sequential accumulation). The
+# Tullio form built per-call codegen machinery (~80 B per reduced cell); keeping
+# the four arms structurally identical is what makes the RHS `f!` non-allocating
+# (ess-9cc). This node is only built with ≥1 child (the empty case folds to a
+# literal upstream).
 function _eval_contraction(n::_Node, u, p, t)
     op = n.op
     children = n.children
     if op === :+
-        @tullio s = _eval_node(children[k], u, p, t)
+        s = n.literal  # 0̄ = 0.0 for sum_product
+        @inbounds for k in eachindex(children)
+            s += _eval_node(children[k], u, p, t)
+        end
         return s
     elseif op === :*
         s = n.literal  # 1̄ for the ×-reduce
@@ -1430,6 +1439,20 @@ const _VK_OP       = UInt8(7)   # elementwise broadcast of op over child vectors
 const _VK_REDUCE   = UInt8(8)   # contraction: axis fold over children (semiring)
 const _VK_FN       = UInt8(9)   # closed-function per-lane map
 
+# Each node owns a preallocated `buf` (length = the kernel's lane count) into
+# which `_eval_vec` writes its lane values IN PLACE at runtime, then returns it.
+# This — together with the explicit `du` scatter in `f!` — is what keeps the RHS
+# allocation-free (ess-9cc): the only Float64 arrays are these build-time `buf`s
+# captured in the closure, none are allocated per call. CONSTVEC has no `buf` and
+# is read straight from its stored `vals`. `fnargs`/`cvbufs` are per-`fn`-node
+# scratch (a reused closed-function argument vector and the child result buffers)
+# so the `fn` map reuses one `Any[]` across lanes instead of building a fresh one
+# per cell. They are shared empty sentinels on every non-`fn` node.
+#
+# Because the buffers are mutable shared state, an evaluator is NON-REENTRANT: a
+# given `f!` must not run concurrently for one problem (the ODE integrator calls
+# the RHS sequentially, so this holds). Concurrent/ensemble use needs one
+# evaluator per task — the same constraint the preallocated MTK reference has.
 struct _VecNode
     kind::UInt8
     op::Symbol
@@ -1440,16 +1463,26 @@ struct _VecNode
     vals::Vector{Float64}
     slots::Vector{Int}
     children::Vector{_VecNode}
+    buf::Vector{Float64}
+    fnargs::Vector{Any}
+    cvbufs::Vector{Vector{Float64}}
 end
 
-const _VK_NO_VALS  = Float64[]
-const _VK_NO_SLOTS = Int[]
+const _VK_NO_VALS   = Float64[]
+const _VK_NO_SLOTS  = Int[]
+const _VK_NO_BUF    = Float64[]
+const _VK_NO_FNARGS = Any[]
+const _VK_NO_CVBUFS = Vector{Float64}[]
 
 function _mkvnode(; kind::UInt8, op::Symbol=Symbol(""), literal::Float64=0.0,
                   idx::Int=0, sym::Symbol=Symbol(""), handler=nothing,
                   vals::Vector{Float64}=_VK_NO_VALS, slots::Vector{Int}=_VK_NO_SLOTS,
-                  children::Vector{_VecNode}=_VecNode[])
-    return _VecNode(kind, op, literal, idx, sym, handler, vals, slots, children)
+                  children::Vector{_VecNode}=_VecNode[],
+                  buf::Vector{Float64}=_VK_NO_BUF,
+                  fnargs::Vector{Any}=_VK_NO_FNARGS,
+                  cvbufs::Vector{Vector{Float64}}=_VK_NO_CVBUFS)
+    return _VecNode(kind, op, literal, idx, sym, handler, vals, slots, children,
+                    buf, fnargs, cvbufs)
 end
 
 # One vectorized array equation (or one structural sub-group of it): write the
@@ -1491,38 +1524,70 @@ function _struct_sig(n::_Node)::String
     end
 end
 
+# Preallocate the closed-function argument vector for a vectorized `fn` node,
+# prefilling the constant (per-spec) positions so the per-lane loop writes only
+# the varying scalar slots — reused across lanes instead of a fresh `Any[]` per
+# cell. (The per-lane `Float64`→`Any` box on the scalar slot is irreducible at
+# this layer — `evaluate_closed_function(name, ::AbstractVector)` mixes arrays
+# and scalars in one vector; eliminating it needs a scalar overload of that
+# function, a cross-binding change out of this bead's scope. `fn` in a vectorized
+# kernel is a cold path not on the diffusion RHS.)
+function _make_fnargs(handler, nchildren::Int)::Vector{Any}
+    fname, const_args = handler::Tuple{String,Any}
+    if const_args === nothing
+        return Vector{Any}(undef, nchildren)            # all args per-lane scalars
+    elseif fname == "interp.searchsorted"
+        return Any[0.0, const_args[1]]                  # [x, xs]; x per-lane
+    elseif fname == "interp.linear"
+        return Any[const_args[1], const_args[2], 0.0]   # [table, axis, x]
+    elseif fname == "interp.bilinear"
+        return Any[const_args[1], const_args[2], const_args[3], 0.0, 0.0]
+    else
+        return Vector{Any}(undef, nchildren)
+    end
+end
+
 # Merge a structurally-identical group of per-cell nodes into one `_VecNode`
-# template. Precondition: all elements share `_struct_sig`.
-function _merge_nodes(nodes::Vector{_Node})::_VecNode
+# template. Precondition: all elements share `_struct_sig`. `len` is the group's
+# lane count (number of cells) — every node in the template produces a length-
+# `len` lane vector, so each gets a length-`len` scratch `buf` allocated here,
+# ONCE at build time (CONSTVEC excepted — it is read from its stored `vals`).
+function _merge_nodes(nodes::Vector{_Node}, len::Int)::_VecNode
     n1 = nodes[1]
     k = n1.kind
     if k === _NK_LITERAL
         v1 = n1.literal
         if all(isequal(nd.literal, v1) for nd in nodes)
-            return _mkvnode(kind=_VK_LITERAL, literal=v1)
+            return _mkvnode(kind=_VK_LITERAL, literal=v1, buf=Vector{Float64}(undef, len))
         end
         return _mkvnode(kind=_VK_CONSTVEC, vals=Float64[nd.literal for nd in nodes])
     elseif k === _NK_STATE
         i1 = n1.idx
         if all(nd.idx == i1 for nd in nodes)
-            return _mkvnode(kind=_VK_STATE, idx=i1)
+            return _mkvnode(kind=_VK_STATE, idx=i1, buf=Vector{Float64}(undef, len))
         end
-        return _mkvnode(kind=_VK_GATHER, slots=Int[nd.idx for nd in nodes])
+        return _mkvnode(kind=_VK_GATHER, slots=Int[nd.idx for nd in nodes],
+                        buf=Vector{Float64}(undef, len))
     elseif k === _NK_PARAM
-        return _mkvnode(kind=_VK_PARAM, sym=n1.sym)
+        return _mkvnode(kind=_VK_PARAM, sym=n1.sym, buf=Vector{Float64}(undef, len))
     elseif k === _NK_TIME
-        return _mkvnode(kind=_VK_TIME)
+        return _mkvnode(kind=_VK_TIME, buf=Vector{Float64}(undef, len))
     elseif k === _NK_CONTRACTION
         m = length(n1.children)
-        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes]) for c in 1:m]
-        return _mkvnode(kind=_VK_REDUCE, op=n1.op, literal=n1.literal, children=ch)
+        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes], len) for c in 1:m]
+        return _mkvnode(kind=_VK_REDUCE, op=n1.op, literal=n1.literal, children=ch,
+                        buf=Vector{Float64}(undef, len))
     else  # _NK_OP / fn
         m = length(n1.children)
-        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes]) for c in 1:m]
+        ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes], len) for c in 1:m]
         if n1.op === :fn
-            return _mkvnode(kind=_VK_FN, op=:fn, handler=n1.handler, children=ch)
+            return _mkvnode(kind=_VK_FN, op=:fn, handler=n1.handler, children=ch,
+                            buf=Vector{Float64}(undef, len),
+                            fnargs=_make_fnargs(n1.handler, m),
+                            cvbufs=Vector{Vector{Float64}}(undef, m))
         end
-        return _mkvnode(kind=_VK_OP, op=n1.op, handler=n1.handler, children=ch)
+        return _mkvnode(kind=_VK_OP, op=n1.op, handler=n1.handler, children=ch,
+                        buf=Vector{Float64}(undef, len))
     end
 end
 
@@ -1546,208 +1611,286 @@ function _vectorize_cell_entries(entries::Vector{Tuple{Int,_Node}})::Vector{_Vec
     kernels = _VecKernel[]
     for sig in order
         slots, nds = groups[sig]
-        push!(kernels, _VecKernel(slots, _merge_nodes(nds), length(slots)))
+        push!(kernels, _VecKernel(slots, _merge_nodes(nds, length(slots)), length(slots)))
     end
     return kernels
 end
 
-# ---- Vectorized evaluation (runtime) ----
+# ---- Vectorized evaluation (runtime) — fully in place (ess-9cc) ----
 #
-# Returns a length-`len` vector of lane values. CONSTVEC returns its stored
-# buffer (callers never mutate a child's return in place — the first combining
-# op of every arm allocates a fresh array), GATHER returns a fresh `u[slots]`.
-function _eval_vec(n::_VecNode, u, p, t, len::Int)
+# `_eval_vec` writes the node's lane values into its preallocated `n.buf` and
+# RETURNS that buffer (CONSTVEC returns its stored `n.vals`; pure pass-through
+# arms return a child's buffer directly). No node ever mutates a child's buffer:
+# the template is a pure tree, so every node's `buf` is disjoint from all of its
+# descendants', which lets a parent hold several child buffers at once and
+# combine them in place. The whole array-kernel evaluation therefore allocates
+# nothing — the only Float64 arrays are the build-time `buf`s in the closure.
+function _eval_vec(n::_VecNode, u, p, t)::Vector{Float64}
     k = n.kind
     if k === _VK_CONSTVEC
         return n.vals
     elseif k === _VK_GATHER
-        return @inbounds u[n.slots]
+        b = n.buf; s = n.slots
+        @inbounds for j in eachindex(s)
+            b[j] = u[s[j]]
+        end
+        return b
     elseif k === _VK_LITERAL
-        return fill(n.literal, len)
+        b = n.buf; fill!(b, n.literal); return b
     elseif k === _VK_STATE
-        return fill((@inbounds u[n.idx]), len)
+        b = n.buf; fill!(b, @inbounds(u[n.idx])); return b
     elseif k === _VK_PARAM
-        return fill(getfield(p, n.sym), len)
+        b = n.buf; fill!(b, getfield(p, n.sym)); return b
     elseif k === _VK_TIME
-        return fill(t, len)
+        b = n.buf; fill!(b, t); return b
     elseif k === _VK_REDUCE
-        return _eval_vec_reduce(n, u, p, t, len)
+        return _eval_vec_reduce(n, u, p, t)
     elseif k === _VK_FN
-        return _eval_vec_fn(n, u, p, t, len)
+        return _eval_vec_fn(n, u, p, t)
     else
-        return _eval_vec_op(n, u, p, t, len)
+        return _eval_vec_op(n, u, p, t)
     end
 end
 
 # Semiring axis reduction — folds the contraction children in the SAME order as
-# the scalar `_eval_contraction`, seeded from the 0̄ identity on the node.
-function _eval_vec_reduce(n::_VecNode, u, p, t, len::Int)
+# the scalar `_eval_contraction`, seeded in place from the 0̄ identity on the
+# node. Writes into `n.buf`; each child buffer is consumed before the next child
+# is evaluated, so no child result needs to outlive its use.
+function _eval_vec_reduce(n::_VecNode, u, p, t)::Vector{Float64}
     op = n.op
     c = n.children
+    b = n.buf
+    fill!(b, n.literal)
     if op === :+
-        s = fill(n.literal, len)
         @inbounds for k in 1:length(c)
-            s .+= _eval_vec(c[k], u, p, t, len)
+            ck = _eval_vec(c[k], u, p, t)
+            @. b += ck
         end
-        return s
     elseif op === :*
-        s = fill(n.literal, len)
         @inbounds for k in 1:length(c)
-            s .*= _eval_vec(c[k], u, p, t, len)
+            ck = _eval_vec(c[k], u, p, t)
+            @. b *= ck
         end
-        return s
     elseif op === :max
-        s = fill(n.literal, len)
         @inbounds for k in 1:length(c)
-            s = max.(s, _eval_vec(c[k], u, p, t, len))
+            ck = _eval_vec(c[k], u, p, t)
+            @. b = max(b, ck)
         end
-        return s
     else  # :min
-        s = fill(n.literal, len)
         @inbounds for k in 1:length(c)
-            s = min.(s, _eval_vec(c[k], u, p, t, len))
+            ck = _eval_vec(c[k], u, p, t)
+            @. b = min(b, ck)
         end
-        return s
     end
+    return b
 end
 
-# Closed-function map — one kernel node, evaluated per lane (mirrors the scalar
-# `:fn` arm). N-independent in compiled-node count.
-function _eval_vec_fn(n::_VecNode, u, p, t, len::Int)
+# Closed-function map — one kernel node, evaluated per lane into `n.buf` (mirrors
+# the scalar `:fn` arm). Children are evaluated once and their result buffers
+# captured in `n.cvbufs` (each is read per lane); the closed-function argument
+# vector `n.fnargs` is reused across lanes. The only residual allocation is the
+# per-lane `Float64`→`Any` box on the scalar arg slot, inherent to
+# `evaluate_closed_function`'s `AbstractVector` contract — a cold path off the
+# array-RHS hot loop (see `_make_fnargs`).
+function _eval_vec_fn(n::_VecNode, u, p, t)::Vector{Float64}
     fname, const_args = n.handler::Tuple{String,Any}
     c = n.children
-    cv = [_eval_vec(ci, u, p, t, len) for ci in c]
-    out = Vector{Float64}(undef, len)
+    b = n.buf
+    args = n.fnargs
+    cv = n.cvbufs
+    len = length(b)
+    @inbounds for a in eachindex(c)
+        cv[a] = _eval_vec(c[a], u, p, t)
+    end
     if const_args === nothing
         @inbounds for lane in 1:len
-            args_evaluated = Any[cv[a][lane] for a in 1:length(cv)]
-            out[lane] = Float64(evaluate_closed_function(fname, args_evaluated))
+            for a in 1:length(cv)
+                args[a] = cv[a][lane]
+            end
+            b[lane] = Float64(evaluate_closed_function(fname, args))
         end
     elseif fname == "interp.searchsorted"
         @inbounds for lane in 1:len
-            out[lane] = Float64(evaluate_closed_function(fname, Any[cv[1][lane], const_args[1]]))
+            args[1] = cv[1][lane]
+            b[lane] = Float64(evaluate_closed_function(fname, args))
         end
     elseif fname == "interp.linear"
         @inbounds for lane in 1:len
-            out[lane] = Float64(evaluate_closed_function(fname,
-                Any[const_args[1], const_args[2], cv[1][lane]]))
+            args[3] = cv[1][lane]
+            b[lane] = Float64(evaluate_closed_function(fname, args))
         end
     elseif fname == "interp.bilinear"
         @inbounds for lane in 1:len
-            out[lane] = Float64(evaluate_closed_function(fname,
-                Any[const_args[1], const_args[2], const_args[3], cv[1][lane], cv[2][lane]]))
+            args[4] = cv[1][lane]
+            args[5] = cv[2][lane]
+            b[lane] = Float64(evaluate_closed_function(fname, args))
         end
     else
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", string("fn:", fname)))
     end
-    return out
+    return b
 end
 
-# Elementwise broadcast of an op over its child vectors. Each arm mirrors the
-# corresponding scalar arm in `_eval_node_op`, so lane j equals the scalar value
-# for cell j. The first combining expression of every arm allocates a fresh
-# array; later in-place updates only touch that fresh array.
-function _eval_vec_op(n::_VecNode, u, p, t, len::Int)
+# Elementwise op over child vectors, written in place into `n.buf`. Each arm
+# mirrors the corresponding scalar arm in `_eval_node_op` — fused `@.` broadcasts
+# apply the identical scalar op lane-by-lane, so lane j equals the scalar value
+# for cell j (bit-identical). Children are read but never mutated; `n.buf` is
+# disjoint from every child buffer, so writing it is always safe. Pure
+# pass-through arms (1-ary `+`/`*`/`min`/`max`, `Pre`) return the child buffer
+# directly — the parent only reads it.
+function _eval_vec_op(n::_VecNode, u, p, t)::Vector{Float64}
     op = n.op
     c = n.children
-    cv = Vector{Vector{Float64}}(undef, length(c))
-    @inbounds for i in eachindex(c)
-        cv[i] = _eval_vec(c[i], u, p, t, len)
-    end
+    b = n.buf
 
     if op === :+
-        length(cv) == 1 && return cv[1]
-        s = cv[1] .+ cv[2]
-        @inbounds for i in 3:length(cv); s .+= cv[i]; end
-        return s
+        c1 = _eval_vec(c[1], u, p, t)
+        length(c) == 1 && return c1
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = c1 + c2
+        @inbounds for i in 3:length(c)
+            ci = _eval_vec(c[i], u, p, t)
+            @. b += ci
+        end
+        return b
     elseif op === :*
-        length(cv) == 1 && return cv[1]
-        s = cv[1] .* cv[2]
-        @inbounds for i in 3:length(cv); s .*= cv[i]; end
-        return s
+        c1 = _eval_vec(c[1], u, p, t)
+        length(c) == 1 && return c1
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = c1 * c2
+        @inbounds for i in 3:length(c)
+            ci = _eval_vec(c[i], u, p, t)
+            @. b *= ci
+        end
+        return b
     elseif op === :-
-        if length(cv) == 1
-            return .-cv[1]
-        elseif length(cv) == 2
-            return cv[1] .- cv[2]
+        c1 = _eval_vec(c[1], u, p, t)
+        if length(c) == 1
+            @. b = -c1
+            return b
+        elseif length(c) == 2
+            c2 = _eval_vec(c[2], u, p, t)
+            @. b = c1 - c2
+            return b
         end
         throw(TreeWalkError("E_TREEWALK_ARITY", "- expects 1 or 2 args"))
     elseif op === :neg
-        return .-cv[1]
+        c1 = _eval_vec(c[1], u, p, t)
+        @. b = -c1
+        return b
     elseif op === :/
-        return cv[1] ./ cv[2]
+        c1 = _eval_vec(c[1], u, p, t)
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = c1 / c2
+        return b
     elseif op === :^ || op === :pow
-        return cv[1] .^ cv[2]
+        c1 = _eval_vec(c[1], u, p, t)
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = c1 ^ c2
+        return b
 
     elseif op === :<
-        return ifelse.(cv[1] .<  cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 <  c2, 1.0, 0.0); return b
     elseif op === Symbol("<=")
-        return ifelse.(cv[1] .<= cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 <= c2, 1.0, 0.0); return b
     elseif op === :>
-        return ifelse.(cv[1] .>  cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 >  c2, 1.0, 0.0); return b
     elseif op === Symbol(">=")
-        return ifelse.(cv[1] .>= cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 >= c2, 1.0, 0.0); return b
     elseif op === Symbol("==")
-        return ifelse.(cv[1] .== cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 == c2, 1.0, 0.0); return b
     elseif op === Symbol("!=")
-        return ifelse.(cv[1] .!= cv[2], 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = ifelse(c1 != c2, 1.0, 0.0); return b
 
     elseif op === :and
-        r = trues(len)
-        @inbounds for v in cv; r = r .& (v .!= 0); end
-        return ifelse.(r, 1.0, 0.0)
+        # 1.0 iff every child is non-zero (folds in child order, like the scalar
+        # arm; all children are evaluated — no short-circuit, matching prior code).
+        fill!(b, 1.0)
+        @inbounds for a in eachindex(c)
+            ca = _eval_vec(c[a], u, p, t)
+            @. b = ifelse((b != 0) & (ca != 0), 1.0, 0.0)
+        end
+        return b
     elseif op === :or
-        r = falses(len)
-        @inbounds for v in cv; r = r .| (v .!= 0); end
-        return ifelse.(r, 1.0, 0.0)
+        fill!(b, 0.0)
+        @inbounds for a in eachindex(c)
+            ca = _eval_vec(c[a], u, p, t)
+            @. b = ifelse((b != 0) | (ca != 0), 1.0, 0.0)
+        end
+        return b
     elseif op === :not
-        return ifelse.(cv[1] .== 0, 1.0, 0.0)
+        c1 = _eval_vec(c[1], u, p, t)
+        @. b = ifelse(c1 == 0, 1.0, 0.0); return b
     elseif op === :ifelse
-        return ifelse.(cv[1] .!= 0, cv[2], cv[3])
+        c1 = _eval_vec(c[1], u, p, t)
+        c2 = _eval_vec(c[2], u, p, t)
+        c3 = _eval_vec(c[3], u, p, t)
+        @. b = ifelse(c1 != 0, c2, c3); return b
 
-    elseif op === :sin;   return sin.(cv[1])
-    elseif op === :cos;   return cos.(cv[1])
-    elseif op === :tan;   return tan.(cv[1])
-    elseif op === :asin;  return asin.(cv[1])
-    elseif op === :acos;  return acos.(cv[1])
+    elseif op === :sin;   c1 = _eval_vec(c[1], u, p, t); @. b = sin(c1);   return b
+    elseif op === :cos;   c1 = _eval_vec(c[1], u, p, t); @. b = cos(c1);   return b
+    elseif op === :tan;   c1 = _eval_vec(c[1], u, p, t); @. b = tan(c1);   return b
+    elseif op === :asin;  c1 = _eval_vec(c[1], u, p, t); @. b = asin(c1);  return b
+    elseif op === :acos;  c1 = _eval_vec(c[1], u, p, t); @. b = acos(c1);  return b
     elseif op === :atan
-        if length(cv) == 1
-            return atan.(cv[1])
-        elseif length(cv) == 2
-            return atan.(cv[1], cv[2])
+        c1 = _eval_vec(c[1], u, p, t)
+        if length(c) == 1
+            @. b = atan(c1); return b
+        elseif length(c) == 2
+            c2 = _eval_vec(c[2], u, p, t)
+            @. b = atan(c1, c2); return b
         end
         throw(TreeWalkError("E_TREEWALK_ARITY", "atan expects 1 or 2 args"))
     elseif op === :atan2
-        return atan.(cv[1], cv[2])
-    elseif op === :sinh;  return sinh.(cv[1])
-    elseif op === :cosh;  return cosh.(cv[1])
-    elseif op === :tanh;  return tanh.(cv[1])
-    elseif op === :asinh; return asinh.(cv[1])
-    elseif op === :acosh; return acosh.(cv[1])
-    elseif op === :atanh; return atanh.(cv[1])
-    elseif op === :exp;   return exp.(cv[1])
-    elseif op === :log;   return log.(cv[1])
-    elseif op === :log10; return log10.(cv[1])
-    elseif op === :sqrt;  return sqrt.(cv[1])
-    elseif op === :abs;   return abs.(cv[1])
-    elseif op === :sign;  return sign.(cv[1])
-    elseif op === :floor; return floor.(cv[1])
-    elseif op === :ceil;  return ceil.(cv[1])
+        c1 = _eval_vec(c[1], u, p, t); c2 = _eval_vec(c[2], u, p, t)
+        @. b = atan(c1, c2); return b
+    elseif op === :sinh;  c1 = _eval_vec(c[1], u, p, t); @. b = sinh(c1);  return b
+    elseif op === :cosh;  c1 = _eval_vec(c[1], u, p, t); @. b = cosh(c1);  return b
+    elseif op === :tanh;  c1 = _eval_vec(c[1], u, p, t); @. b = tanh(c1);  return b
+    elseif op === :asinh; c1 = _eval_vec(c[1], u, p, t); @. b = asinh(c1); return b
+    elseif op === :acosh; c1 = _eval_vec(c[1], u, p, t); @. b = acosh(c1); return b
+    elseif op === :atanh; c1 = _eval_vec(c[1], u, p, t); @. b = atanh(c1); return b
+    elseif op === :exp;   c1 = _eval_vec(c[1], u, p, t); @. b = exp(c1);   return b
+    elseif op === :log;   c1 = _eval_vec(c[1], u, p, t); @. b = log(c1);   return b
+    elseif op === :log10; c1 = _eval_vec(c[1], u, p, t); @. b = log10(c1); return b
+    elseif op === :sqrt;  c1 = _eval_vec(c[1], u, p, t); @. b = sqrt(c1);  return b
+    elseif op === :abs;   c1 = _eval_vec(c[1], u, p, t); @. b = abs(c1);   return b
+    elseif op === :sign;  c1 = _eval_vec(c[1], u, p, t); @. b = sign(c1);  return b
+    elseif op === :floor; c1 = _eval_vec(c[1], u, p, t); @. b = floor(c1); return b
+    elseif op === :ceil;  c1 = _eval_vec(c[1], u, p, t); @. b = ceil(c1);  return b
     elseif op === :min
-        s = cv[1]
-        @inbounds for i in 2:length(cv); s = min.(s, cv[i]); end
-        return s
+        c1 = _eval_vec(c[1], u, p, t)
+        length(c) == 1 && return c1
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = min(c1, c2)
+        @inbounds for i in 3:length(c)
+            ci = _eval_vec(c[i], u, p, t)
+            @. b = min(b, ci)
+        end
+        return b
     elseif op === :max
-        s = cv[1]
-        @inbounds for i in 2:length(cv); s = max.(s, cv[i]); end
-        return s
+        c1 = _eval_vec(c[1], u, p, t)
+        length(c) == 1 && return c1
+        c2 = _eval_vec(c[2], u, p, t)
+        @. b = max(c1, c2)
+        @inbounds for i in 3:length(c)
+            ci = _eval_vec(c[i], u, p, t)
+            @. b = max(b, ci)
+        end
+        return b
 
     elseif op === :pi || op === :π
-        return fill(Float64(pi), len)
+        fill!(b, Float64(pi)); return b
     elseif op === :e
-        return fill(Float64(ℯ), len)
+        fill!(b, Float64(ℯ)); return b
     elseif op === :Pre
-        return cv[1]
+        return _eval_vec(c[1], u, p, t)
     else
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", String(op)))
     end
@@ -1760,6 +1903,12 @@ end
 # (`arrayop`) equations evaluate through `vec_kernels` as whole-array ops.
 # Accepts any AbstractVector so both the pre-allocated and the
 # dynamically-grown forms produced by build_evaluator work.
+#
+# The vectorized scatter writes lane values back into `du` with an explicit
+# indexed loop (NOT `du[out_slots] .= …`, whose `dotview` allocates a SubArray):
+# combined with the in-place `_eval_vec`, the whole RHS is allocation-free in
+# steady state (ess-9cc), so it can be reused across every RK stage without GC
+# pressure. Property pinned by the `@allocated f!(du,u,p,t) == 0` test.
 function _make_rhs(rhs_list::AbstractVector{Tuple{Int,_Node}},
                    vec_kernels::AbstractVector{_VecKernel})
     function f!(du, u, p, t)
@@ -1769,7 +1918,11 @@ function _make_rhs(rhs_list::AbstractVector{Tuple{Int,_Node}},
         end
         @inbounds for j in 1:length(vec_kernels)
             vk = vec_kernels[j]
-            du[vk.out_slots] .= _eval_vec(vk.template, u, p, t, vk.len)
+            res = _eval_vec(vk.template, u, p, t)
+            out = vk.out_slots
+            for m in 1:length(out)
+                du[out[m]] = res[m]
+            end
         end
         return nothing
     end
