@@ -49,6 +49,7 @@ class DiscretizationError(Exception):
 def discretize(
     esm: Dict[str, Any],
     *,
+    gdd: Optional[Any] = None,
     dae_support: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Apply the RFC §12 DAE binding contract to an ESM document.
@@ -84,6 +85,18 @@ def discretize(
         )
     if dae_support is None:
         dae_support = _default_dae_support()
+
+    # PDE-op scan (RFC Path A): when a Grid Discretization Descriptor is supplied,
+    # lower spatial operators (grad/d2/laplacian/composite) to ArrayOp stencils
+    # first, then fall through to the DAE/algebraic pass. `gdd` may be a parsed
+    # GDD dict or a path/URL-free JSON file path.
+    if gdd is not None:
+        from .spatial_discretize import spatial_discretize
+        if isinstance(gdd, str):
+            import json as _json
+            from pathlib import Path as _Path
+            gdd = _json.loads(_Path(gdd).read_text())
+        esm = spatial_discretize(esm, gdd)
 
     out = copy.deepcopy(esm)
     indep_by_domain = _indep_var_by_domain(out)
@@ -377,6 +390,13 @@ def _is_algebraic_equation(eq: Dict[str, Any], indep: str) -> bool:
     lhs = eq.get("lhs")
     if lhs is None:
         return True
+    # A spatially-discretized state equation has an arrayop LHS whose body is the
+    # time derivative, e.g. arrayop[i]( D(index(u, i), wrt=t) ). Unwrap to the
+    # inner D so it is classified differential, not algebraic.
+    if isinstance(lhs, dict) and lhs.get("op") == "arrayop":
+        inner = lhs.get("expr")
+        if isinstance(inner, dict) and inner.get("op") == "D":
+            lhs = inner
     if isinstance(lhs, dict) and lhs.get("op") == "D":
         wrt = lhs.get("wrt")
         # wrt=None or wrt==indep is a differential equation.

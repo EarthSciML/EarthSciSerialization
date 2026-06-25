@@ -299,6 +299,40 @@ def test_godunov_matches_real_component_form_via_canonicalization():
     assert et.load(disc) is not None                                    # valid (no `neg` leak)
 
 
+def test_discretize_single_entry_with_gdd():
+    """The canonical discretize(esm, gdd=...) does the PDE-op scan then the DAE
+    pass in one call (like Julia build_ode_problem's grid_ref), producing a
+    pure-ODE arrayop system that integrates."""
+    from earthsci_toolkit.discretize import discretize
+
+    heat = {
+        "esm": "0.5.0", "metadata": {"name": "Heat"},
+        "domains": {"line": {"independent_variable": "t",
+            "spatial": {"x": {"min": 0.0, "max": 1.0, "grid_spacing": 0.2, "units": "m"}},
+            "boundary_conditions": [{"type": "dirichlet", "value": 0.0, "dimensions": ["x"]}]}},
+        "models": {"Heat": {"domain": "line", "system_kind": "pde",
+            "variables": {"u": {"type": "state", "units": "1"}},
+            "equations": [{"lhs": {"op": "D", "args": ["u"], "wrt": "t"},
+                           "rhs": {"op": "laplacian", "args": ["u"]}}]}},
+    }
+    disc = discretize(heat, gdd={"discretizations": {"d2": _CENTERED_D2}})
+    assert disc["metadata"]["system_class"] == "ode"            # PDE -> ODE in one call
+    assert disc["models"]["Heat"]["variables"]["u"]["shape"] == ["x"]
+
+    # strip discretize()'s diagnostic provenance (pre-existing; not schema-valid)
+    for k in ("system_class", "dae_info", "discretized_from"):
+        disc["metadata"].pop(k, None)
+    f = et.load(disc)
+    ic = {f"u[{i}]": math.sin(math.pi * i / 5) for i in range(1, 5)}
+    r = simulate(f, (0.0, 0.1), initial_conditions=ic, method="LSODA")
+    assert r.success
+    lam = (1 / 0.2**2) * (2 * math.cos(math.pi / 5) - 2)
+    for i in range(1, 5):
+        idx = next(k for k, n in enumerate(r.vars) if n.endswith(f"[{i}]"))
+        assert float(np.interp(0.1, r.t, r.y[idx])) == pytest.approx(
+            math.exp(lam * 0.1) * math.sin(math.pi * i / 5), rel=1e-6)
+
+
 def test_heat_runs_end_to_end_via_gdd():
     """laplacian -> d2 (GDD-selected centered) -> simulate; matches analytical."""
     heat = {
