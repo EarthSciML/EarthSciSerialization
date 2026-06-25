@@ -63,6 +63,7 @@ using JSON3
     include("tree_walk_join_test.jl")
     include("cartesian_2d_diffusion_e2e_test.jl")
     include("latlon_diffusion_e2e_test.jl")
+    include("bc_space_time_values_test.jl")
     include("closed_functions_test.jl")
     include("closed_functions_mtk_test.jl")
     include("function_tables_test.jl")

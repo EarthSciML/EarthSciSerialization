@@ -769,6 +769,25 @@ function _apply_makearray_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
     dim_sizes isa AbstractDict || return
     periodic = Set{String}(String.(get(gmeta, "periodic_dims", Any[])))
 
+    # A BC value/coefficient may reference a spatial coordinate — a grid
+    # dimension name, e.g. `value = f(x)`. Reuse the IC coordinate-binding
+    # vocabulary (ess-tt6): map each coordinate symbol to
+    # `index(coord_<dim>, <loop_idx>)` using THIS equation's shape→output-index
+    # correspondence, so the coordinate resolves to the per-cell value at each
+    # boundary/corner cell when the single-cell boundary region binds the loop
+    # index (the same `coord_<dim>` const_array the IC arrayop materializer
+    # emits). The substitution runs on the already-rewritten ghost, so it is
+    # value-agnostic: a coordinate in a dirichlet value, a neumann flux, or a
+    # robin coefficient all resolve the same way (ess-x1w). Time needs no
+    # substitution — `t` is a free symbol that flows through the RHS and is
+    # supplied by the integrator per timestep.
+    coord_subst = Dict{String,Any}()
+    for d in 1:length(info.shape)
+        dn = String(info.shape[d])
+        coord_subst[dn] = Dict{String,Any}(
+            "op" => "index", "args" => Any["coord_$dn", String(info.output_idx[d])])
+    end
+
     # Ghost map (var, dim, side) → rewritten ghost AST. The ghost is the
     # rule-engine output stashed on `bc["value"]` by `_discretize_bc!`
     # (consumed here, not re-derived from `kind`).
@@ -782,6 +801,7 @@ function _apply_makearray_bcs!(eqn::Dict{String,Any}, info::NamedTuple,
         (v isa AbstractString && s isa AbstractString) || continue
         ghost = get(bc, "value", nothing)
         ghost === nothing && continue
+        isempty(coord_subst) || (ghost = _substitute_coord_syms(ghost, coord_subst))
         resolved = _resolve_bc_side(String(s), dim_sizes, spatial)
         resolved === nothing && continue
         dn, sym = resolved
