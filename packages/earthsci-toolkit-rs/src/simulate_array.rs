@@ -44,9 +44,16 @@ use crate::simulate::{CompileError, SimulateError, SimulateOptions, SolutionMeta
 use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
 use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, RangeSpec, VariableType};
 use indexmap::IndexMap;
-use ndarray::{ArrayD, IxDyn, Slice};
+use ndarray::{ArrayD, ArrayViewD, IxDyn, Slice};
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+
+/// Stack-inlined index vectors for per-axis kernel bookkeeping. Grid rank stays
+/// ≤ 4 in practice, so these never touch the heap — a precondition for the
+/// zero-allocation steady-state RHS (ess-mro).
+type DimI = SmallVec<[i64; 4]>;
+type DimU = SmallVec<[usize; 4]>;
 
 use diffsol::{
     Bdf, FaerLU, FaerMat, NewtonNonlinearSolver, OdeBuilder, OdeSolverMethod, Sdirk, VectorHost,
@@ -250,6 +257,165 @@ pub struct ArrayCompiled {
     rhs_rules: Vec<RhsRule>,
     /// Number of flat state slots.
     n_states: usize,
+}
+
+// ============================================================================
+// Zero-allocation RHS scratch (ess-mro).
+//
+// The vectorized stencil evaluator used to allocate `O(#AST-nodes)` arrays per
+// RHS call (one owned `ArrayD` per `index`/combine/`makearray` node, a fresh
+// per-variable state map, and a column-major scatter `Vec`). diffsol's RHS is
+// in-place (`call_inplace` writes the solver-owned `dy`), so there is no
+// allocation floor. `RhsScratch` carries the reusable buffers across diffsol
+// steps so the steady-state vectorized RHS performs **zero** heap allocations:
+//   * `state_arrays` — one persistent logical array per variable, refilled in
+//     place from the flat state each call;
+//   * `observed_arrays` — reused container for algebraic observeds;
+//   * `pool` — a free-list of `f64` buffers recycling kernel intermediates.
+// ============================================================================
+
+/// A reuse pool of `f64` backing buffers for vectorized kernel intermediates.
+/// `take`/`give` recycle buffers by capacity; after a warm-up call the pool
+/// holds enough output-box-sized buffers that no further allocation occurs.
+#[derive(Default)]
+struct Pool {
+    free: Vec<Vec<f64>>,
+}
+
+impl Pool {
+    /// Check out a zero-filled buffer of `len` elements, reusing a free buffer
+    /// whose capacity already covers `len` (no reallocation in steady state).
+    fn take(&mut self, len: usize) -> Vec<f64> {
+        if let Some(pos) = self.free.iter().position(|b| b.capacity() >= len) {
+            let mut b = self.free.swap_remove(pos);
+            b.clear();
+            b.resize(len, 0.0);
+            b
+        } else if let Some(mut b) = self.free.pop() {
+            // A free buffer exists but is too small; grow it (warm-up only).
+            b.clear();
+            b.resize(len, 0.0);
+            b
+        } else {
+            vec![0.0; len]
+        }
+    }
+
+    /// Check out a zero-filled owned `ArrayD` of the given row-major `shape`,
+    /// backed by a pooled buffer.
+    fn take_array(&mut self, shape: &[usize]) -> ArrayD<f64> {
+        let len = shape.iter().copied().product::<usize>().max(1);
+        let buf = self.take(len);
+        ArrayD::from_shape_vec(IxDyn(shape), buf).expect("pool buffer length matches shape")
+    }
+
+    /// Return an owned `ArrayD`'s backing buffer to the pool, preserving its
+    /// capacity. The array must be standard (contiguous, row-major) layout —
+    /// every buffer this module hands out is, and the in-place kernels keep it.
+    fn give_array(&mut self, arr: ArrayD<f64>) {
+        let (buf, _offset) = arr.into_raw_vec_and_offset();
+        self.free.push(buf);
+    }
+}
+
+/// Persistent per-call scratch for [`evaluate_rhs_with_scratch`] (ess-mro). One
+/// is owned per RHS closure (the FD Jacobian closure carries its own), guarded
+/// by a `RefCell` because diffsol's RHS is an `Fn`, not `FnMut`.
+pub struct RhsScratch {
+    /// Per-variable state arrays, logical row-major over each variable's shape,
+    /// refilled in place from the flat state slice each call.
+    state_arrays: HashMap<String, ArrayD<f64>>,
+    /// Observed (algebraic) arrays; the container is reused across calls.
+    observed_arrays: HashMap<String, ArrayD<f64>>,
+    /// Recycled `f64` buffers for vectorized kernel intermediates.
+    pool: Pool,
+}
+
+impl RhsScratch {
+    /// Build a scratch sized to a model's variable shapes. State arrays are
+    /// allocated once here (zero-filled); subsequent RHS calls only overwrite
+    /// their contents. Observed value arrays are materialized lazily.
+    fn new(var_shapes: &IndexMap<String, VarShape>) -> Self {
+        let mut state_arrays = HashMap::with_capacity(var_shapes.len());
+        for (name, vs) in var_shapes {
+            state_arrays.insert(name.clone(), ArrayD::<f64>::zeros(IxDyn(&vs.shape)));
+        }
+        RhsScratch {
+            state_arrays,
+            observed_arrays: HashMap::new(),
+            pool: Pool::default(),
+        }
+    }
+}
+
+/// Overwrite each persistent state array with the current flat state, reading
+/// each variable's column-major block into its logical array in place. The
+/// per-element address is computed explicitly, so no per-call allocation and no
+/// reliance on ndarray iteration order is needed.
+fn refill_state_arrays(
+    state_arrays: &mut HashMap<String, ArrayD<f64>>,
+    var_shapes: &IndexMap<String, VarShape>,
+    state: &[f64],
+) {
+    for (name, vs) in var_shapes {
+        let total = vs.shape.iter().copied().product::<usize>().max(1);
+        let block = &state[vs.flat_offset..vs.flat_offset + total];
+        let arr = state_arrays
+            .get_mut(name)
+            .expect("scratch has a state array for every variable");
+        if vs.shape.is_empty() {
+            arr[IxDyn(&[])] = block[0];
+            continue;
+        }
+        let n = vs.shape.len();
+        let mut multi = DimU::from_elem(0usize, n);
+        for _ in 0..total {
+            let mut cm = 0usize;
+            let mut stride = 1usize;
+            for d in 0..n {
+                cm += multi[d] * stride;
+                stride *= vs.shape[d];
+            }
+            arr[IxDyn(&multi)] = block[cm];
+            for d in (0..n).rev() {
+                multi[d] += 1;
+                if multi[d] < vs.shape[d] {
+                    break;
+                }
+                multi[d] = 0;
+            }
+        }
+    }
+}
+
+/// Scatter a logical array's values into the flat `dy` block at `offset`, in
+/// column-major order (the state-vector convention), in place — replacing the
+/// old `arrayd_to_col_major` + `copy_from_slice` (which allocated a `Vec` per
+/// rule). Addresses elements explicitly, so it is layout-agnostic.
+fn scatter_col_major(arr: ArrayViewD<f64>, dy: &mut [f64], offset: usize) {
+    let n = arr.ndim();
+    if n == 0 {
+        dy[offset] = arr[IxDyn(&[])];
+        return;
+    }
+    let total: usize = arr.shape().iter().product();
+    let mut multi = DimU::from_elem(0usize, n);
+    for _ in 0..total {
+        let mut cm = 0usize;
+        let mut stride = 1usize;
+        for d in 0..n {
+            cm += multi[d] * stride;
+            stride *= arr.shape()[d];
+        }
+        dy[offset + cm] = arr[IxDyn(&multi)];
+        for d in (0..n).rev() {
+            multi[d] += 1;
+            if multi[d] < arr.shape()[d] {
+                break;
+            }
+            multi[d] = 0;
+        }
+    }
 }
 
 // ============================================================================
@@ -794,7 +960,8 @@ impl ArrayCompiled {
         }
         let mut dy = vec![0.0f64; self.n_states];
         let mut stats = RhsStats::default();
-        evaluate_rhs(
+        let mut scratch = RhsScratch::new(&self.var_shapes);
+        evaluate_rhs_with_scratch(
             &self.rhs_rules,
             &self.observed_rules,
             &self.observed_shapes,
@@ -806,8 +973,66 @@ impl ArrayCompiled {
             &mut dy,
             force_scalar,
             &mut stats,
+            &mut scratch,
         );
         (dy, stats)
+    }
+
+    /// Build a persistent [`RhsScratch`] sized to this model. Exposed for the
+    /// zero-allocation verification (ess-mro): a counting-allocator test drives
+    /// [`Self::debug_eval_rhs_into`] with a reused scratch and asserts that the
+    /// steady-state vectorized RHS allocates nothing.
+    #[doc(hidden)]
+    pub fn debug_new_scratch(&self) -> RhsScratch {
+        RhsScratch::new(&self.var_shapes)
+    }
+
+    /// Resolve a parameter map into the positional parameter vector once, so the
+    /// zero-allocation RHS test can pre-build it outside the measured loop.
+    #[doc(hidden)]
+    pub fn debug_resolve_params(&self, params: &HashMap<String, f64>) -> Vec<f64> {
+        let mut param_vec = vec![0.0f64; self.param_names.len()];
+        for (i, name) in self.param_names.iter().enumerate() {
+            if let Some(&v) = params.get(name) {
+                param_vec[i] = v;
+            } else if let Some(d) = self.param_defaults[i] {
+                param_vec[i] = d;
+            }
+        }
+        param_vec
+    }
+
+    /// Evaluate the vectorized RHS into a caller-owned `dy` using a caller-owned
+    /// scratch — the allocation-free entry point. With a warmed scratch and a
+    /// pre-resolved `param_vec`, this performs no heap allocation (ess-mro
+    /// acceptance criterion 1).
+    #[doc(hidden)]
+    pub fn debug_eval_rhs_into(
+        &self,
+        state: &[f64],
+        t: f64,
+        param_vec: &[f64],
+        dy: &mut [f64],
+        scratch: &mut RhsScratch,
+        stats: &mut RhsStats,
+    ) {
+        for slot in dy.iter_mut() {
+            *slot = 0.0;
+        }
+        evaluate_rhs_with_scratch(
+            &self.rhs_rules,
+            &self.observed_rules,
+            &self.observed_shapes,
+            &self.var_shapes,
+            &self.param_names,
+            state,
+            param_vec,
+            t,
+            dy,
+            false,
+            stats,
+            scratch,
+        );
     }
 
     /// Run the simulation.
@@ -868,6 +1093,12 @@ impl ArrayCompiled {
         let var_shapes_jac = var_shapes.clone();
         let param_names_jac = param_names.clone();
 
+        // Per-closure reusable scratch (ess-mro). `RefCell` gives the interior
+        // mutability diffsol's `Fn` RHS requires; the Jacobian closure carries
+        // its own so the two never alias.
+        let rhs_scratch = RefCell::new(RhsScratch::new(&var_shapes));
+        let jac_scratch = RefCell::new(RhsScratch::new(&var_shapes_jac));
+
         let rhs_closure = move |y: &diffsol::FaerVec<f64>,
                                 p: &diffsol::FaerVec<f64>,
                                 t: f64,
@@ -878,7 +1109,8 @@ impl ArrayCompiled {
             for slot in dy_s.iter_mut() {
                 *slot = 0.0;
             }
-            evaluate_rhs(
+            let mut scratch = rhs_scratch.borrow_mut();
+            evaluate_rhs_with_scratch(
                 &rhs_rules,
                 &observed_rules,
                 &observed_shapes,
@@ -890,6 +1122,7 @@ impl ArrayCompiled {
                 dy_s,
                 false,
                 &mut RhsStats::default(),
+                &mut scratch,
             );
         };
 
@@ -916,7 +1149,8 @@ impl ArrayCompiled {
 
             let mut f_y = vec![0.0f64; n];
             let mut f_yp = vec![0.0f64; n];
-            evaluate_rhs(
+            let mut scratch = jac_scratch.borrow_mut();
+            evaluate_rhs_with_scratch(
                 &rhs_rules_jac,
                 &observed_rules_jac,
                 &observed_shapes_jac,
@@ -928,8 +1162,9 @@ impl ArrayCompiled {
                 &mut f_y,
                 false,
                 &mut RhsStats::default(),
+                &mut scratch,
             );
-            evaluate_rhs(
+            evaluate_rhs_with_scratch(
                 &rhs_rules_jac,
                 &observed_rules_jac,
                 &observed_shapes_jac,
@@ -941,6 +1176,7 @@ impl ArrayCompiled {
                 &mut f_yp,
                 false,
                 &mut RhsStats::default(),
+                &mut scratch,
             );
             let jv_s = jv.as_mut_slice();
             for i in 0..n {
@@ -1274,8 +1510,80 @@ fn materialize_observeds(
     observed_arrays
 }
 
+/// Like [`materialize_observeds`] but writes into a reused container (ess-mro),
+/// so the observed map is not reallocated each RHS call. The container is
+/// cleared (capacity retained) then repopulated; for models with no observeds
+/// — the vectorized PDE path — it stays empty and nothing is allocated. The
+/// observed *value* arrays themselves are still materialized fresh (only models
+/// that actually carry algebraic observeds pay that, and they are outside the
+/// zero-allocation stencil path being verified).
+fn materialize_observeds_into(
+    dst: &mut HashMap<String, ArrayD<f64>>,
+    observed_rules: &[AlgebraicRule],
+    state_arrays: &HashMap<String, ArrayD<f64>>,
+    params: &[f64],
+    param_names: &[String],
+    t: f64,
+    derived_rings: &RefCell<HashMap<String, ArrayD<f64>>>,
+) {
+    dst.clear();
+    for rule in observed_rules {
+        match rule {
+            AlgebraicRule::Scalar { var, body } => {
+                let mut ctx = EvalCtx {
+                    state_arrays,
+                    observed_arrays: &*dst,
+                    params,
+                    param_names,
+                    loop_binds: HashMap::new(),
+                    t,
+                    derived_rings,
+                };
+                let arr = match eval(body, &mut ctx) {
+                    Value::Array(a) => a,
+                    Value::Scalar(s) => ArrayD::from_elem(IxDyn(&[]), s),
+                };
+                dst.insert(var.clone(), arr);
+            }
+            AlgebraicRule::ArrayLoop {
+                var,
+                output_idx_names,
+                output_ranges,
+                body,
+            } => {
+                let padded_shape: Vec<usize> =
+                    output_ranges.iter().map(|(_, hi)| *hi as usize).collect();
+                let padded_origin: Vec<i64> = vec![1i64; padded_shape.len()];
+                let total = padded_shape.iter().copied().product::<usize>().max(1);
+                let mut buf = vec![0.0f64; total];
+                for tuple in cartesian_range(output_ranges) {
+                    let mut ctx = EvalCtx {
+                        state_arrays,
+                        observed_arrays: &*dst,
+                        params,
+                        param_names,
+                        loop_binds: HashMap::new(),
+                        t,
+                        derived_rings,
+                    };
+                    for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
+                        ctx.loop_binds.insert(name.clone(), *val);
+                    }
+                    let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
+                    let flat = multi_to_flat_col_major(&tuple, &padded_shape, &padded_origin);
+                    if flat < buf.len() {
+                        buf[flat] = v;
+                    }
+                }
+                let arr = col_major_to_arrayd(&buf, &padded_shape);
+                dst.insert(var.clone(), arr);
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-fn evaluate_rhs(
+fn evaluate_rhs_with_scratch(
     rhs_rules: &[RhsRule],
     observed_rules: &[AlgebraicRule],
     observed_shapes: &HashMap<String, VarShape>,
@@ -1291,9 +1599,14 @@ fn evaluate_rhs(
     // reference values. See [`RhsStats`].
     force_scalar: bool,
     stats: &mut RhsStats,
+    // Reused buffers (ess-mro): persistent per-variable state arrays + observed
+    // container + kernel buffer pool, so the steady-state vectorized RHS does
+    // not allocate.
+    scratch: &mut RhsScratch,
 ) {
-    // (a) Build per-variable state ndarray views from the flat state vector.
-    let state_arrays = build_state_arrays(var_shapes, state);
+    // (a) Refill the persistent per-variable state arrays in place from the
+    //     flat state vector (no per-call allocation).
+    refill_state_arrays(&mut scratch.state_arrays, var_shapes, state);
 
     // FAQ-materialized derived rings (RFC §8.1), keyed by producer node id. An
     // `intersect_polygon` clip self-registers its closed overlap ring here as it
@@ -1302,13 +1615,17 @@ fn evaluate_rhs(
     // vertex count. Shared (interior-mutable) across the observed materialization
     // and the RHS rules so a ring registered while `clip` materializes is visible
     // both when `area` runs and in any state derivative that reads a derived set.
+    // Empty (no allocation) for models without geometry, i.e. the stencil path.
     let derived_rings: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
 
     // (b) Materialize observed algebraic rules (dependency-ordered at build time)
-    //     into observed_arrays before the state derivatives reference them.
-    let observed_arrays = materialize_observeds(
+    //     into the reused observed container before the state derivatives read
+    //     them. For models with no observeds (the vectorized PDE path) this
+    //     leaves the container empty and allocates nothing.
+    materialize_observeds_into(
+        &mut scratch.observed_arrays,
         observed_rules,
-        &state_arrays,
+        &scratch.state_arrays,
         params,
         param_names,
         t,
@@ -1318,13 +1635,19 @@ fn evaluate_rhs(
     // Emit observed shapes we need for downstream variable lookups.
     let _ = observed_shapes; // kept for future consistency checks
 
+    // Split the scratch into disjoint field borrows: the state/observed arrays
+    // are read (shared) while the buffer pool is checked out (exclusive).
+    let state_arrays = &scratch.state_arrays;
+    let observed_arrays = &scratch.observed_arrays;
+    let pool = &mut scratch.pool;
+
     // (c) Evaluate each RHS rule and write into dy.
     for rule in rhs_rules {
         match rule {
             RhsRule::Scalar { slot, body } => {
                 let mut ctx = EvalCtx {
-                    state_arrays: &state_arrays,
-                    observed_arrays: &observed_arrays,
+                    state_arrays,
+                    observed_arrays,
                     params,
                     param_names,
                     loop_binds: HashMap::new(),
@@ -1336,8 +1659,8 @@ fn evaluate_rhs(
             }
             RhsRule::IndexedScalar { slot, body } => {
                 let mut ctx = EvalCtx {
-                    state_arrays: &state_arrays,
-                    observed_arrays: &observed_arrays,
+                    state_arrays,
+                    observed_arrays,
                     params,
                     param_names,
                     loop_binds: HashMap::new(),
@@ -1368,32 +1691,37 @@ fn evaluate_rhs(
                 // whole-array kernels — shifted slices for `index(u, i±k)`,
                 // region sub-range writes for boundary makearrays, broadcast
                 // arithmetic for coefficients — then scatter the dy block in
-                // one bulk copy. No per-element scalar loop walks the body.
+                // place. No per-element scalar loop walks the body, and (ess-mro)
+                // no heap allocation occurs: intermediates come from `pool`.
                 if !force_scalar
                     && contract_names.is_empty()
                     && lhs_is_identity(lhs_idx_exprs, output_idx_names)
                     && var_box_matches(vs, output_ranges)
                 {
                     let ctx = EvalCtx {
-                        state_arrays: &state_arrays,
-                        observed_arrays: &observed_arrays,
+                        state_arrays,
+                        observed_arrays,
                         params,
                         param_names,
                         loop_binds: HashMap::new(),
                         t,
                         derived_rings: &derived_rings,
                     };
-                    if let Some((arr, ops)) =
-                        try_eval_arrayop_vectorized(output_idx_names, output_ranges, body, &ctx)
+                    if let Some((val, ops)) =
+                        try_eval_arrayop_vectorized(output_idx_names, output_ranges, body, &ctx, pool)
                     {
-                        let col = arrayd_to_col_major(&arr);
                         let start = vs.flat_offset;
-                        if start + col.len() <= dy.len() {
-                            dy[start..start + col.len()].copy_from_slice(&col);
+                        let total = vs.shape.iter().copied().product::<usize>().max(1);
+                        if start + total <= dy.len() {
+                            if let Some(view) = val.view() {
+                                scatter_col_major(view, dy, start);
+                            }
+                            val.release(pool);
                             stats.kernel_ops += ops;
                             stats.vectorized_rules += 1;
                             continue;
                         }
+                        val.release(pool);
                     }
                 }
 
@@ -1401,8 +1729,8 @@ fn evaluate_rhs(
                 stats.scalar_rules += 1;
                 for tuple in cartesian_range(output_ranges) {
                     let mut ctx = EvalCtx {
-                        state_arrays: &state_arrays,
-                        observed_arrays: &observed_arrays,
+                        state_arrays,
+                        observed_arrays,
                         params,
                         param_names,
                         loop_binds: HashMap::new(),
@@ -1457,13 +1785,70 @@ fn evaluate_rhs(
 // remains the correctness reference.
 // ============================================================================
 
-/// A value produced by the vectorized evaluator. An [`VecValue::Array`] carries
-/// its per-axis 1-based `origin` (the index value of its first element along
-/// each axis) so an enclosing `index(A, sym±k)` can align `A` to the output box
-/// with a shifted slice.
-enum VecValue {
+/// A value produced by the vectorized evaluator. Array values carry their
+/// per-axis 1-based `origin` (the index value of the first element along each
+/// axis) so an enclosing `index(A, sym±k)` can align `A` to the output box with
+/// a shifted slice.
+///
+/// To keep the steady-state RHS allocation-free (ess-mro), an array intermediate
+/// is either a borrowed view of a persistent state/observed array
+/// ([`VecValue::View`] — never mutated) or a buffer drawn from the [`Pool`]
+/// ([`VecValue::Owned`] — mutated in place and returned to the pool when
+/// consumed). The previous single owning variant cloned each source array per
+/// read and allocated a fresh array per kernel node.
+enum VecValue<'a> {
     Scalar(f64),
-    Array { data: ArrayD<f64>, origin: Vec<i64> },
+    View { data: &'a ArrayD<f64>, origin: DimI },
+    Owned { data: ArrayD<f64>, origin: DimI },
+}
+
+impl<'a> VecValue<'a> {
+    /// The per-axis origin of an array value (`None` for a scalar).
+    fn origin(&self) -> Option<&[i64]> {
+        match self {
+            VecValue::Scalar(_) => None,
+            VecValue::View { origin, .. } | VecValue::Owned { origin, .. } => Some(origin),
+        }
+    }
+
+    /// The shape of an array value (`None` for a scalar).
+    fn shape(&self) -> Option<&[usize]> {
+        match self {
+            VecValue::Scalar(_) => None,
+            VecValue::View { data, .. } => Some(data.shape()),
+            VecValue::Owned { data, .. } => Some(data.shape()),
+        }
+    }
+
+    /// A read-only view of an array value (`None` for a scalar).
+    fn view(&self) -> Option<ArrayViewD<'_, f64>> {
+        match self {
+            VecValue::Scalar(_) => None,
+            VecValue::View { data, .. } => Some(data.view()),
+            VecValue::Owned { data, .. } => Some(data.view()),
+        }
+    }
+
+    /// Consume an array value into an owned, pool-backed buffer: reuse the
+    /// buffer when already `Owned`, or copy a `View` into a fresh pooled buffer.
+    fn into_owned(self, pool: &mut Pool) -> (ArrayD<f64>, DimI) {
+        match self {
+            VecValue::Owned { data, origin } => (data, origin),
+            VecValue::View { data, origin } => {
+                let mut buf = pool.take_array(data.shape());
+                buf.assign(data);
+                (buf, origin)
+            }
+            VecValue::Scalar(_) => unreachable!("into_owned called on a scalar"),
+        }
+    }
+
+    /// Release a consumed value's pooled buffer (no-op for `View`/`Scalar`).
+    fn release(self, pool: &mut Pool) {
+        if let VecValue::Owned { data, .. } = self {
+            pool.give_array(data);
+        }
+    }
 }
 
 /// The output box currently being materialized: the positional output index
@@ -1505,14 +1890,15 @@ fn var_box_matches(vs: &VarShape, output_ranges: &[(i64, i64)]) -> bool {
 /// kernels. Returns `Some((array, kernel_ops))` on success — `kernel_ops` is
 /// the number of AST nodes visited (N-independent) — or `None` if the body
 /// contains a construct the vectorized path does not handle.
-fn try_eval_arrayop_vectorized(
+fn try_eval_arrayop_vectorized<'a>(
     output_idx_names: &[String],
     output_ranges: &[(i64, i64)],
     body: &Expr,
-    ctx: &EvalCtx,
-) -> Option<(ArrayD<f64>, usize)> {
-    let lo: Vec<i64> = output_ranges.iter().map(|(l, _)| *l).collect();
-    let shape: Vec<usize> = output_ranges
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
+) -> Option<(VecValue<'a>, usize)> {
+    let lo: DimI = output_ranges.iter().map(|(l, _)| *l).collect();
+    let shape: DimU = output_ranges
         .iter()
         .map(|(l, h)| (h - l + 1) as usize)
         .collect();
@@ -1521,37 +1907,51 @@ fn try_eval_arrayop_vectorized(
     }
     let bx = VecBox {
         syms: output_idx_names,
-        lo: &lo,
-        shape: &shape,
+        lo: &lo[..],
+        shape: &shape[..],
     };
     let mut ops = 0usize;
-    let v = eval_vec(body, &bx, ctx, &mut ops)?;
-    let arr = match v {
-        VecValue::Array { data, origin } => {
-            // The top-level result must already cover the output box exactly.
-            if data.shape() != shape.as_slice() || origin != lo {
-                return None;
-            }
-            data
-        }
-        VecValue::Scalar(s) => ArrayD::from_elem(IxDyn(&shape), s),
+    let v = eval_vec(body, &bx, ctx, pool, &mut ops)?;
+    // The top-level result must already cover the output box exactly. A bare
+    // scalar is broadcast over the box.
+    let matches_box = match v.shape() {
+        None => true,
+        Some(s) => s == &shape[..] && v.origin().map(|o| o == &lo[..]).unwrap_or(false),
     };
-    Some((arr, ops))
+    if !matches_box {
+        v.release(pool);
+        return None;
+    }
+    let out = match v {
+        VecValue::Scalar(s) => {
+            let mut buf = pool.take_array(&shape);
+            buf.fill(s);
+            VecValue::Owned { data: buf, origin: lo }
+        }
+        other => other,
+    };
+    Some((out, ops))
 }
 
 /// Vectorized evaluation of `expr` over the output box `bx`. Increments `ops`
 /// once per AST node. Returns `None` on any unsupported construct.
-fn eval_vec(expr: &Expr, bx: &VecBox, ctx: &EvalCtx, ops: &mut usize) -> Option<VecValue> {
+fn eval_vec<'a>(
+    expr: &Expr,
+    bx: &VecBox,
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
+    ops: &mut usize,
+) -> Option<VecValue<'a>> {
     *ops += 1;
     match expr {
         Expr::Number(n) => Some(VecValue::Scalar(*n)),
         Expr::Integer(n) => Some(VecValue::Scalar(*n as f64)),
         Expr::Variable(name) => eval_vec_variable(name, bx, ctx),
-        Expr::Operator(node) => eval_vec_op(node, bx, ctx, ops),
+        Expr::Operator(node) => eval_vec_op(node, bx, ctx, pool, ops),
     }
 }
 
-fn eval_vec_variable(name: &str, bx: &VecBox, ctx: &EvalCtx) -> Option<VecValue> {
+fn eval_vec_variable<'a>(name: &str, bx: &VecBox, ctx: &EvalCtx<'a>) -> Option<VecValue<'a>> {
     if name == "t" {
         return Some(VecValue::Scalar(ctx.t));
     }
@@ -1560,13 +1960,15 @@ fn eval_vec_variable(name: &str, bx: &VecBox, ctx: &EvalCtx) -> Option<VecValue>
     if bx.syms.iter().any(|s| s == name) {
         return None;
     }
+    // State/observed reads return a borrowed view of the persistent array — no
+    // clone (ess-mro). The enclosing `index(...)` slices the view directly.
     if let Some(a) = ctx.state_arrays.get(name) {
         return Some(if a.ndim() == 0 {
             VecValue::Scalar(a[IxDyn(&[])])
         } else {
-            VecValue::Array {
-                data: a.clone(),
-                origin: vec![1; a.ndim()],
+            VecValue::View {
+                data: a,
+                origin: DimI::from_elem(1, a.ndim()),
             }
         });
     }
@@ -1574,9 +1976,9 @@ fn eval_vec_variable(name: &str, bx: &VecBox, ctx: &EvalCtx) -> Option<VecValue>
         return Some(if a.ndim() == 0 {
             VecValue::Scalar(a[IxDyn(&[])])
         } else {
-            VecValue::Array {
-                data: a.clone(),
-                origin: vec![1; a.ndim()],
+            VecValue::View {
+                data: a,
+                origin: DimI::from_elem(1, a.ndim()),
             }
         });
     }
@@ -1587,27 +1989,28 @@ fn eval_vec_variable(name: &str, bx: &VecBox, ctx: &EvalCtx) -> Option<VecValue>
     None
 }
 
-fn eval_vec_op(
+fn eval_vec_op<'a>(
     node: &ExpressionNode,
     bx: &VecBox,
-    ctx: &EvalCtx,
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
     ops: &mut usize,
-) -> Option<VecValue> {
+) -> Option<VecValue<'a>> {
     match node.op.as_str() {
         "+" | "-" | "*" | "/" | "^" | "min" | "max" => {
             if node.op == "-" && node.args.len() == 1 {
-                return Some(vec_negate(eval_vec(&node.args[0], bx, ctx, ops)?));
+                return Some(vec_negate(eval_vec(&node.args[0], bx, ctx, pool, ops)?, pool));
             }
-            let mut acc = eval_vec(&node.args[0], bx, ctx, ops)?;
+            let mut acc = eval_vec(&node.args[0], bx, ctx, pool, ops)?;
             for a in &node.args[1..] {
-                let v = eval_vec(a, bx, ctx, ops)?;
-                acc = vec_combine(&node.op, acc, v)?;
+                let v = eval_vec(a, bx, ctx, pool, ops)?;
+                acc = vec_combine(&node.op, acc, v, pool)?;
             }
             Some(acc)
         }
-        "neg" => Some(vec_negate(eval_vec(&node.args[0], bx, ctx, ops)?)),
-        "index" => eval_vec_index(node, bx, ctx, ops),
-        "makearray" => eval_vec_makearray(node, bx, ctx, ops),
+        "neg" => Some(vec_negate(eval_vec(&node.args[0], bx, ctx, pool, ops)?, pool)),
+        "index" => eval_vec_index(node, bx, ctx, pool, ops),
+        "makearray" => eval_vec_makearray(node, bx, ctx, pool, ops),
         "const" => match eval_const(node) {
             Value::Scalar(s) => Some(VecValue::Scalar(s)),
             // Array-valued constants are not part of the stencil fast path.
@@ -1619,55 +2022,90 @@ fn eval_vec_op(
     }
 }
 
-fn vec_negate(v: VecValue) -> VecValue {
+fn vec_negate<'a>(v: VecValue<'a>, pool: &mut Pool) -> VecValue<'a> {
     match v {
         VecValue::Scalar(s) => VecValue::Scalar(-s),
-        VecValue::Array { data, origin } => VecValue::Array {
-            data: data.mapv(|x| -x),
-            origin,
-        },
+        VecValue::Owned { mut data, origin } => {
+            data.mapv_inplace(|x| -x);
+            VecValue::Owned { data, origin }
+        }
+        VecValue::View { data, origin } => {
+            let mut buf = pool.take_array(data.shape());
+            ndarray::Zip::from(&mut buf).and(data).for_each(|o, &x| *o = -x);
+            VecValue::Owned { data: buf, origin }
+        }
     }
 }
 
-/// Combine two vectorized values with a binary arithmetic op. Array operands
-/// must already share the same box (origin + shape) — which holds within a
-/// stencil body, since every `index(...)` result is produced over the current
-/// output box. Differing boxes return `None` (bail to oracle).
-fn vec_combine(op: &str, a: VecValue, b: VecValue) -> Option<VecValue> {
+/// Combine two vectorized values with a binary arithmetic op, preserving the
+/// `(left, right)` argument order (so non-commutative ops stay bit-identical to
+/// the per-cell oracle). Array operands must share the same box (origin +
+/// shape) — which holds within a stencil body, since every `index(...)` result
+/// is produced over the current output box; a mismatch releases both operands
+/// and returns `None` (bail to oracle). The result reuses an `Owned` operand's
+/// pooled buffer in place when possible, so no array is allocated (ess-mro).
+fn vec_combine<'a>(
+    op: &str,
+    a: VecValue<'a>,
+    b: VecValue<'a>,
+    pool: &mut Pool,
+) -> Option<VecValue<'a>> {
     match (a, b) {
-        (VecValue::Scalar(x), VecValue::Scalar(y)) => {
-            Some(VecValue::Scalar(apply_binary(op, x, y)))
+        (VecValue::Scalar(x), VecValue::Scalar(y)) => Some(VecValue::Scalar(apply_binary(op, x, y))),
+        // scalar ∘ array
+        (VecValue::Scalar(x), barr) => {
+            let (mut data, origin) = barr.into_owned(pool);
+            data.mapv_inplace(|y| apply_binary(op, x, y));
+            Some(VecValue::Owned { data, origin })
         }
-        (VecValue::Scalar(x), VecValue::Array { data, origin }) => Some(VecValue::Array {
-            data: data.mapv(|y| apply_binary(op, x, y)),
-            origin,
-        }),
-        (VecValue::Array { data, origin }, VecValue::Scalar(y)) => Some(VecValue::Array {
-            data: data.mapv(|x| apply_binary(op, x, y)),
-            origin,
-        }),
-        (
-            VecValue::Array {
-                data: xa,
-                origin: xo,
-            },
-            VecValue::Array {
-                data: ya,
-                origin: yo,
-            },
-        ) => {
-            if xo != yo || xa.shape() != ya.shape() {
+        // array ∘ scalar
+        (aarr, VecValue::Scalar(y)) => {
+            let (mut data, origin) = aarr.into_owned(pool);
+            data.mapv_inplace(|x| apply_binary(op, x, y));
+            Some(VecValue::Owned { data, origin })
+        }
+        // array ∘ array
+        (aarr, barr) => {
+            let same = aarr.origin() == barr.origin() && aarr.shape() == barr.shape();
+            if !same {
+                aarr.release(pool);
+                barr.release(pool);
                 return None;
             }
-            let mut out = ArrayD::<f64>::zeros(xa.raw_dim());
-            ndarray::Zip::from(&mut out)
-                .and(&xa)
-                .and(&ya)
-                .for_each(|o, &x, &y| *o = apply_binary(op, x, y));
-            Some(VecValue::Array {
-                data: out,
-                origin: xo,
-            })
+            match (aarr, barr) {
+                // Reuse a's buffer: out[k] = op(a[k], b[k]).
+                (VecValue::Owned { mut data, origin }, b2) => {
+                    {
+                        let bv = b2.view().expect("array operand has a view");
+                        ndarray::Zip::from(&mut data)
+                            .and(&bv)
+                            .for_each(|x, &y| *x = apply_binary(op, *x, y));
+                    }
+                    b2.release(pool);
+                    Some(VecValue::Owned { data, origin })
+                }
+                // a is a View, b is Owned: reuse b's buffer but keep order —
+                // out[k] = op(a[k], b[k]) stored into b's slot.
+                (a2, VecValue::Owned { mut data, origin }) => {
+                    let av = a2.view().expect("array operand has a view");
+                    ndarray::Zip::from(&mut data)
+                        .and(&av)
+                        .for_each(|bslot, &aval| *bslot = apply_binary(op, aval, *bslot));
+                    Some(VecValue::Owned { data, origin })
+                }
+                // both Views: a fresh pooled buffer.
+                (a2, b2) => {
+                    let origin: DimI = a2.origin().expect("array origin").iter().copied().collect();
+                    let av = a2.view().expect("array operand has a view");
+                    let bv = b2.view().expect("array operand has a view");
+                    let mut buf = pool.take_array(av.shape());
+                    ndarray::Zip::from(&mut buf)
+                        .and(&av)
+                        .and(&bv)
+                        .for_each(|o, &x, &y| *o = apply_binary(op, x, y));
+                    Some(VecValue::Owned { data: buf, origin })
+                }
+            }
         }
     }
 }
@@ -1678,83 +2116,99 @@ fn vec_combine(op: &str, a: VecValue, b: VecValue) -> Option<VecValue> {
 /// whose shifted source index leaves `A`'s extent are 0-filled — the existing
 /// homogeneous-Dirichlet ghost-cell convention (matches the scalar `eval_index`
 /// out-of-bounds → 0). Non-affine indexing (e.g. periodic wrap) returns `None`.
-fn eval_vec_index(
+fn eval_vec_index<'a>(
     node: &ExpressionNode,
     bx: &VecBox,
-    ctx: &EvalCtx,
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
     ops: &mut usize,
-) -> Option<VecValue> {
+) -> Option<VecValue<'a>> {
     if node.args.is_empty() {
         return None;
     }
-    let arg0 = eval_vec(&node.args[0], bx, ctx, ops)?;
-    let (src, src_origin) = match arg0 {
-        VecValue::Array { data, origin } => (data, origin),
-        // `index(scalar)` with a single arg is the identity; otherwise unhandled.
-        VecValue::Scalar(s) if node.args.len() == 1 => return Some(VecValue::Scalar(s)),
-        VecValue::Scalar(_) => return None,
-    };
+    let arg0 = eval_vec(&node.args[0], bx, ctx, pool, ops)?;
     let n = node.args.len() - 1;
-    if n != src.ndim() || n != bx.shape.len() {
+    // `index(scalar)` with a single arg is the identity; a scalar is otherwise
+    // not indexable on the fast path.
+    if arg0.shape().is_none() {
+        return match arg0 {
+            VecValue::Scalar(s) if n == 0 => Some(VecValue::Scalar(s)),
+            _ => None,
+        };
+    }
+    let src_ndim = arg0.shape().expect("array").len();
+    if n != src_ndim || n != bx.shape.len() {
+        arg0.release(pool);
         return None;
     }
+    let src_origin: DimI = arg0.origin().expect("array origin").iter().copied().collect();
+    let src_shape: DimU = arg0.shape().expect("array").iter().copied().collect();
     // Parse each index expression as `output_sym_d + k_d`.
-    let mut offsets = vec![0i64; n];
+    let mut offsets = DimI::from_elem(0i64, n);
     for d in 0..n {
-        offsets[d] = parse_affine_offset(&node.args[1 + d], &bx.syms[d])?;
+        match parse_affine_offset(&node.args[1 + d], &bx.syms[d]) {
+            Some(k) => offsets[d] = k,
+            None => {
+                arg0.release(pool);
+                return None;
+            }
+        }
     }
-    // Compute, per axis, the output sub-range that maps in-bounds into `src`,
-    // and the matching source sub-range. Everything else stays 0 (ghost).
-    let mut out_start = vec![0usize; n];
-    let mut out_len = vec![0usize; n];
-    let mut src_start = vec![0usize; n];
+    // Compute, per axis, the output sub-range that maps in-bounds into the
+    // source, and the matching source sub-range. Everything else stays 0
+    // (ghost — the homogeneous-Dirichlet convention; the pooled buffer is
+    // zero-filled on checkout).
+    let mut out_start = DimU::from_elem(0usize, n);
+    let mut out_len = DimU::from_elem(0usize, n);
+    let mut src_start = DimU::from_elem(0usize, n);
+    let mut all_ghost = false;
     for d in 0..n {
         let k = offsets[d];
         let so = src_origin[d];
-        let ssz = src.shape()[d] as i64;
+        let ssz = src_shape[d] as i64;
         // output position p (0-based) -> symbol value bx.lo[d] + p
         //   -> source 1-based (bx.lo[d] + p + k) -> source 0-based - so.
         // valid when 0 <= bx.lo[d] + p + k - so <= ssz - 1.
         let lo_p = (so - bx.lo[d] - k).max(0);
         let hi_p = (so + ssz - bx.lo[d] - k).min(bx.shape[d] as i64); // exclusive
         if lo_p >= hi_p {
-            // Entire axis out of bounds -> all-ghost result.
-            return Some(VecValue::Array {
-                data: ArrayD::<f64>::zeros(IxDyn(bx.shape)),
-                origin: bx.lo.to_vec(),
-            });
+            all_ghost = true;
+            break;
         }
         out_start[d] = lo_p as usize;
         out_len[d] = (hi_p - lo_p) as usize;
         src_start[d] = (bx.lo[d] + lo_p + k - so) as usize;
     }
-    let mut result = ArrayD::<f64>::zeros(IxDyn(bx.shape));
-    {
+    let mut result = pool.take_array(bx.shape);
+    if !all_ghost {
+        let src_view = arg0.view().expect("array");
         let mut out_view = result.slice_each_axis_mut(|ax| {
             let d = ax.axis.index();
             Slice::from(out_start[d]..out_start[d] + out_len[d])
         });
-        let src_view = src.slice_each_axis(|ax| {
+        let src_sub = src_view.slice_each_axis(|ax| {
             let d = ax.axis.index();
             Slice::from(src_start[d]..src_start[d] + out_len[d])
         });
-        out_view.assign(&src_view);
+        out_view.assign(&src_sub);
     }
-    Some(VecValue::Array {
+    arg0.release(pool);
+    Some(VecValue::Owned {
         data: result,
-        origin: bx.lo.to_vec(),
+        origin: bx.lo.iter().copied().collect(),
     })
 }
 
 /// Vectorized makearray: materialize each region as a whole-array sub-range
 /// write over the region's box (last region wins), reusing the enclosing output
 /// symbols. Returns an array spanning the union bounding box.
-fn eval_vec_makearray(
+fn eval_vec_makearray<'a>(
     node: &ExpressionNode,
     bx: &VecBox,
-    ctx: &EvalCtx,
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
     ops: &mut usize,
-) -> Option<VecValue> {
+) -> Option<VecValue<'a>> {
     let regions = node.regions.as_ref()?;
     let values = node.values.as_ref()?;
     if regions.is_empty() || values.len() != regions.len() {
@@ -1764,8 +2218,8 @@ fn eval_vec_makearray(
     if ndim != bx.shape.len() {
         return None;
     }
-    let mut lo_bb = vec![i64::MAX; ndim];
-    let mut hi_bb = vec![i64::MIN; ndim];
+    let mut lo_bb = DimI::from_elem(i64::MAX, ndim);
+    let mut hi_bb = DimI::from_elem(i64::MIN, ndim);
     for region in regions {
         if region.len() != ndim {
             return None;
@@ -1775,38 +2229,61 @@ fn eval_vec_makearray(
             hi_bb[d] = hi_bb[d].max(r[1]);
         }
     }
-    let bb_shape: Vec<usize> = (0..ndim)
-        .map(|d| (hi_bb[d] - lo_bb[d] + 1) as usize)
-        .collect();
-    let mut result = ArrayD::<f64>::zeros(IxDyn(&bb_shape));
+    let bb_shape: DimU = (0..ndim).map(|d| (hi_bb[d] - lo_bb[d] + 1) as usize).collect();
+    let mut result = pool.take_array(&bb_shape);
     for (region, value_expr) in regions.iter().zip(values.iter()) {
-        let r_lo: Vec<i64> = region.iter().map(|r| r[0]).collect();
-        let r_shape: Vec<usize> = region.iter().map(|r| (r[1] - r[0] + 1) as usize).collect();
+        let r_lo: DimI = region.iter().map(|r| r[0]).collect();
+        let r_shape: DimU = region.iter().map(|r| (r[1] - r[0] + 1) as usize).collect();
         if r_shape.contains(&0) {
+            pool.give_array(result);
             return None;
         }
         let rbx = VecBox {
             syms: bx.syms,
-            lo: &r_lo,
-            shape: &r_shape,
+            lo: &r_lo[..],
+            shape: &r_shape[..],
         };
-        let v = eval_vec(value_expr, &rbx, ctx, ops)?;
-        let mut sub = result.slice_each_axis_mut(|ax| {
-            let d = ax.axis.index();
-            let s = (r_lo[d] - lo_bb[d]) as usize;
-            Slice::from(s..s + r_shape[d])
-        });
+        let v = match eval_vec(value_expr, &rbx, ctx, pool, ops) {
+            Some(v) => v,
+            None => {
+                pool.give_array(result);
+                return None;
+            }
+        };
+        // An array region value must match the region box exactly.
+        let mismatch = match v.shape() {
+            None => false, // scalar fills the region
+            Some(s) => v.origin().map(|o| o != &r_lo[..]).unwrap_or(true) || s != &r_shape[..],
+        };
+        if mismatch {
+            v.release(pool);
+            pool.give_array(result);
+            return None;
+        }
         match v {
-            VecValue::Scalar(s) => sub.fill(s),
-            VecValue::Array { data, origin } => {
-                if origin != r_lo || data.shape() != r_shape.as_slice() {
-                    return None;
+            VecValue::Scalar(s) => {
+                let mut sub = result.slice_each_axis_mut(|ax| {
+                    let d = ax.axis.index();
+                    let s0 = (r_lo[d] - lo_bb[d]) as usize;
+                    Slice::from(s0..s0 + r_shape[d])
+                });
+                sub.fill(s);
+            }
+            other => {
+                {
+                    let vview = other.view().expect("array operand has a view");
+                    let mut sub = result.slice_each_axis_mut(|ax| {
+                        let d = ax.axis.index();
+                        let s0 = (r_lo[d] - lo_bb[d]) as usize;
+                        Slice::from(s0..s0 + r_shape[d])
+                    });
+                    sub.assign(&vview);
                 }
-                sub.assign(&data);
+                other.release(pool);
             }
         }
     }
-    Some(VecValue::Array {
+    Some(VecValue::Owned {
         data: result,
         origin: lo_bb,
     })

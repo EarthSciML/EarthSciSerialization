@@ -559,22 +559,35 @@ impl Compiled {
                                 p: &diffsol::FaerVec<f64>,
                                 t: f64,
                                 dy: &mut diffsol::FaerVec<f64>| {
-            let mut y_eff: Vec<f64> = y.as_slice().to_vec();
             let p_s = p.as_slice();
             let mut obs_buf = vec![0.0f64; n_obs];
-            for (i, e) in observed_exprs.iter().enumerate() {
-                obs_buf[i] = interpret(e, &y_eff, p_s, &obs_buf, t);
-            }
-            for &idx in &algebraic_topo {
-                if let StateKind::Algebraic(expr) = &state_kinds[idx] {
-                    y_eff[idx] = interpret(expr, &y_eff, p_s, &obs_buf, t);
+            // Only the algebraic reconstruction below mutates the state the
+            // differential RHS reads. With no algebraic variables there is
+            // nothing to reconstruct, so read the integrator's state slice
+            // directly and skip the gratuitous full-state copy every step.
+            let mut y_owned: Vec<f64>;
+            let y_eff: &[f64] = if algebraic_topo.is_empty() {
+                for (i, e) in observed_exprs.iter().enumerate() {
+                    obs_buf[i] = interpret(e, y.as_slice(), p_s, &obs_buf, t);
                 }
-            }
+                y.as_slice()
+            } else {
+                y_owned = y.as_slice().to_vec();
+                for (i, e) in observed_exprs.iter().enumerate() {
+                    obs_buf[i] = interpret(e, &y_owned, p_s, &obs_buf, t);
+                }
+                for &idx in &algebraic_topo {
+                    if let StateKind::Algebraic(expr) = &state_kinds[idx] {
+                        y_owned[idx] = interpret(expr, &y_owned, p_s, &obs_buf, t);
+                    }
+                }
+                &y_owned
+            };
             let dy_s = dy.as_mut_slice();
             for (i, kind) in state_kinds.iter().enumerate() {
                 match kind {
                     StateKind::Differential(expr) => {
-                        dy_s[i] = interpret(expr, &y_eff, p_s, &obs_buf, t);
+                        dy_s[i] = interpret(expr, y_eff, p_s, &obs_buf, t);
                     }
                     StateKind::Algebraic(_) => {
                         dy_s[i] = 0.0;
