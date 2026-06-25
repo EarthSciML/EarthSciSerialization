@@ -457,6 +457,8 @@ function _lower_model_enums!(model::Model, enums::Dict{String,Dict{String,Int}})
     append!(model.initialization_equations, new_init_eqs)
 
     for (_, sub) in model.subsystems
+        # DataLoader / SubsystemRef subsystems carry no enums to lower.
+        sub isa Model || continue
         _lower_model_enums!(sub, enums)
     end
 end

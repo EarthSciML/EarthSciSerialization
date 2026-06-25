@@ -942,19 +942,21 @@ function coerce_model(data::Any)::Model
         EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
         EarthSciSerialization.Test[]
 
-    # Inline subsystems (schema §4.7): child Model objects keyed by name.
-    # Each value is either an inline Model dict (fully specified) or a
-    # SubsystemRef `{"ref": "..."}` dict (resolved later by
-    # resolve_subsystem_refs!). Inline entries are coerced recursively here;
-    # ref entries are stored as empty placeholder Models and filled in by the
-    # ref-resolution pass (esm-ol5qa).
-    subsystems = Dict{String,Model}()
+    # Inline subsystems (schema §4.7, oneOf [Model, DataLoader, SubsystemRef]):
+    # each value is a child Model, a pure-I/O DataLoader (RFC
+    # pure-io-data-loaders §4.3), or a `{"ref": "..."}` reference. Inline Model
+    # / DataLoader entries are coerced recursively here; ref entries become a
+    # `SubsystemRef` placeholder that `resolve_subsystem_refs!` replaces in
+    # place with the loaded component.
+    subsystems = Dict{String,Any}()
     if haskey(data, :subsystems) && data.subsystems !== nothing
         for (k, v) in pairs(data.subsystems)
             subsystems[string(k)] = if haskey(v, :ref) && v.ref !== nothing
-                # Placeholder — resolve_subsystem_refs! will replace this with
-                # the loaded external model. Store empty so the key exists.
-                Model(Dict{String,ModelVariable}(), Equation[])
+                SubsystemRef(string(v.ref))
+            elseif haskey(v, :kind) && haskey(v, :source)
+                # Loader-required fields (kind + source) discriminate an inline
+                # data loader from a Model, which carries equations instead.
+                coerce_data_loader(v)
             else
                 coerce_model(v)
             end
@@ -1894,12 +1896,42 @@ end
 
 Recursively resolve subsystem references within a Model's subsystems.
 """
-function _resolve_model_refs!(models_dict::Dict{String,Model}, name::String,
-                              model::Model, base_path::String, visited::Set{String})
-    for (sub_name, sub_model) in model.subsystems
-        # Recursively resolve nested subsystem refs
-        _resolve_model_refs!(model.subsystems, sub_name, sub_model, base_path, visited)
+function _resolve_model_refs!(models_dict, name::String,
+                              model, base_path::String, visited::Set{String})
+    # Only Model values carry subsystems to walk; DataLoader / SubsystemRef
+    # leaves have none.
+    model isa Model || return
+    for (sub_name, sub_value) in collect(model.subsystems)
+        if sub_value isa SubsystemRef
+            # Replace the reference in place with the loaded component. The
+            # loaded file's own refs are already resolved by `_load_ref`.
+            model.subsystems[sub_name] =
+                _resolve_subsystem_ref(sub_value.ref, base_path, visited)
+        else
+            # Inline Model (recurse into its subsystems) or DataLoader (leaf).
+            _resolve_model_refs!(model.subsystems, sub_name, sub_value, base_path, visited)
+        end
     end
+end
+
+"""
+    _resolve_subsystem_ref(ref, base_path, visited) -> Union{Model,DataLoader}
+
+Load the ESM file at `ref` and return its single top-level model or data loader
+(esm-spec §4.7). A single-loader file (RFC pure-io-data-loaders §4.4) resolves to
+that loader. Errors unless the file contains exactly one model or data loader.
+"""
+function _resolve_subsystem_ref(ref::String, base_path::String, visited::Set{String})
+    loaded = _load_ref(ref, base_path, visited)
+    n_models = loaded.models === nothing ? 0 : length(loaded.models)
+    n_loaders = loaded.data_loaders === nothing ? 0 : length(loaded.data_loaders)
+    total = n_models + n_loaders
+    if total != 1
+        throw(SubsystemRefError(
+            "Subsystem ref '$(ref)' must resolve to exactly one top-level model " *
+            "or data loader, found $(total)"))
+    end
+    return n_models == 1 ? first(values(loaded.models)) : first(values(loaded.data_loaders))
 end
 
 """

@@ -228,6 +228,9 @@ function validate_model_balance(model::Model, path::String)::Vector{StructuralEr
 
     # Recursively check subsystems
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_model_balance(subsys, "$path.subsystems.$subsys_name"))
     end
 
@@ -283,6 +286,9 @@ function validate_model_references(file::EsmFile, model::Model, path::String)::V
 
     # Recursively check subsystems
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_model_references(file, subsys, "$path.subsystems.$subsys_name"))
     end
 
@@ -756,6 +762,9 @@ function validate_model_gradient_units(file::EsmFile, model::Model, path::String
     end
 
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_model_gradient_units(file, subsys, "$path/subsystems/$subsys_name"))
     end
 
@@ -888,6 +897,9 @@ function validate_event_consistency(model::Model, path::String)::Vector{Structur
 
     # Recursively check subsystems
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_event_consistency(subsys, "$path.subsystems.$subsys_name"))
     end
 
@@ -1264,6 +1276,9 @@ function validate_physical_constant_units(model::Model, path::String)::Vector{St
 
     # Recurse into subsystems
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_physical_constant_units(subsys, "$path/subsystems/$subsys_name"))
     end
 
@@ -1347,6 +1362,9 @@ function validate_conversion_factor_consistency(model::Model, path::String)::Vec
 
     # Recurse into subsystems
     for (subsys_name, subsys) in model.subsystems
+        # Model-specific validators; DataLoader / SubsystemRef subsystems
+        # (RFC pure-io-data-loaders §4.3) carry no model semantics to check here.
+        subsys isa Model || continue
         append!(errors, validate_conversion_factor_consistency(subsys, "$path/subsystems/$subsys_name"))
     end
 

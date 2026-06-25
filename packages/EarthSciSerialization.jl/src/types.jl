@@ -583,17 +583,34 @@ struct IndexSetRef
 end
 
 """
+    SubsystemRef(ref::String)
+
+Unresolved reference to an external ESM file used as a subsystem (esm-spec §4.7).
+Produced by `coerce_model` for a `{"ref": "..."}` subsystem entry and replaced
+in place by `resolve_subsystem_refs!` with the loaded `Model` or `DataLoader`.
+A `SubsystemRef` only survives parsing when references are not resolved (e.g.
+`load(::IO)` without a base path); `load(::String)` always resolves them.
+"""
+struct SubsystemRef
+    ref::String
+end
+
+"""
     Model
 
 ODE-based model component containing variables, equations, and optional subsystems.
-Supports hierarchical composition through subsystems.
+Supports hierarchical composition through subsystems. A subsystem value is a
+child `Model`, a pure-I/O `DataLoader` (RFC pure-io-data-loaders §4.3), or — only
+until references are resolved — a `SubsystemRef`; the field is therefore typed
+`Dict{String,Any}` (DataLoader is declared later in this file, so a concrete
+`Union` field type is not available at this point).
 """
 struct Model
     variables::Dict{String,ModelVariable}
     equations::Vector{Equation}
     discrete_events::Vector{DiscreteEvent}
     continuous_events::Vector{ContinuousEvent}
-    subsystems::Dict{String,Model}
+    subsystems::Dict{String,Any}
     domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
@@ -612,7 +629,7 @@ struct Model
     # Primary constructor with separate event arrays
     Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
-          subsystems::AbstractDict{String,Model};
+          subsystems::AbstractDict{String};
           domain=nothing, tolerance=nothing, tests=Test[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
@@ -620,7 +637,7 @@ struct Model
           index_sets=Dict{String,IndexSet}(),
           regrid=Dict{String,RegridSpec}()) =
         new(Dict{String,ModelVariable}(variables), equations,
-            discrete_events, continuous_events, Dict{String,Model}(subsystems),
+            discrete_events, continuous_events, Dict{String,Any}(subsystems),
             domain, tolerance, tests,
             initialization_equations, guesses, system_kind,
             Dict{String,IndexSet}(index_sets),
@@ -634,7 +651,7 @@ struct Model
                    discrete_events=DiscreteEvent[],
                    continuous_events=ContinuousEvent[],
                    events=nothing,
-                   subsystems=Dict{String,Model}(),
+                   subsystems=Dict{String,Any}(),
                    domain=nothing,
                    tolerance=nothing,
                    tests=Test[],
@@ -657,7 +674,7 @@ struct Model
             end
         end
         return new(Dict{String,ModelVariable}(variables), equations,
-                   discrete_events, continuous_events, Dict{String,Model}(subsystems),
+                   discrete_events, continuous_events, Dict{String,Any}(subsystems),
                    domain, tolerance, tests,
                    initialization_equations, guesses, system_kind,
                    Dict{String,IndexSet}(index_sets),

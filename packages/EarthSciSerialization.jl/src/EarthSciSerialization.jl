@@ -70,7 +70,7 @@ export
     Equation, AffectEquation,
     # Model component types
     ModelVariableType, StateVariable, ParameterVariable, ObservedVariable, BrownianVariable,
-    ModelVariable, Model, Species, Parameter, Reaction, ReactionSystem,
+    ModelVariable, Model, SubsystemRef, Species, Parameter, Reaction, ReactionSystem,
     # Event types
     EventType, ContinuousEvent, DiscreteEvent, FunctionalAffect, DiscreteEventTrigger,
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger,

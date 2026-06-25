@@ -365,6 +365,23 @@ function serialize_equation(eq::Equation)::Dict{String,Any}
 end
 
 """
+    _serialize_subsystem(v) -> Dict{String,Any}
+
+Serialize a single model subsystem value: a child `Model`, a pure-I/O
+`DataLoader` (RFC pure-io-data-loaders §4.3), or an unresolved `SubsystemRef`
+(which round-trips back to `{"ref": ...}`).
+"""
+function _serialize_subsystem(v)::Dict{String,Any}
+    if v isa DataLoader
+        return serialize_data_loader(v)
+    elseif v isa SubsystemRef
+        return Dict{String,Any}("ref" => v.ref)
+    else
+        return serialize_model(v)
+    end
+end
+
+"""
     serialize_model(model::Model) -> Dict{String,Any}
 
 Serialize Model to JSON-compatible format.
@@ -385,9 +402,10 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["continuous_events"] = [serialize_continuous_event(ev) for ev in model.continuous_events]
     end
 
-    # Add subsystems if present
+    # Add subsystems if present. A subsystem value is a child Model, a
+    # DataLoader (RFC pure-io-data-loaders §4.3), or an unresolved SubsystemRef.
     if !isempty(model.subsystems)
-        result["subsystems"] = Dict(k => serialize_model(v) for (k, v) in model.subsystems)
+        result["subsystems"] = Dict(k => _serialize_subsystem(v) for (k, v) in model.subsystems)
     end
 
     if model.domain !== nothing

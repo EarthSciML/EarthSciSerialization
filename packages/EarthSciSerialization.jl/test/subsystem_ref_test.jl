@@ -165,4 +165,114 @@
             rm(tmp_dir, recursive=true, force=true)
         end
     end
+
+    # --- Data loaders as model subsystems (RFC pure-io-data-loaders §4.3/§4.4) ---
+
+    # A minimal schema-valid pure-I/O data loader, reused below.
+    loader_json = """{
+        "kind": "grid",
+        "source": {"url_template": "file:///data/{date:%Y%m%d}.nc"},
+        "variables": {"emis": {"file_variable": "EMIS", "units": "kg/m^2/s"}}
+    }"""
+
+    @testset "loader-only file is a valid document" begin
+        tmp_dir = mktempdir()
+        try
+            path = joinpath(tmp_dir, "loader_only.esm")
+            write(path, """{
+                "esm": "0.1.0",
+                "metadata": {"name": "loader only", "authors": ["Test"]},
+                "data_loaders": {"Met": $loader_json}
+            }""")
+            loaded = EarthSciSerialization.load(path)
+            @test loaded isa EsmFile
+            @test loaded.data_loaders !== nothing
+            @test haskey(loaded.data_loaders, "Met")
+            @test loaded.data_loaders["Met"] isa DataLoader
+            @test loaded.models === nothing || isempty(loaded.models)
+        finally
+            rm(tmp_dir, recursive=true, force=true)
+        end
+    end
+
+    @testset "inline data-loader subsystem parses as a DataLoader" begin
+        tmp_dir = mktempdir()
+        try
+            path = joinpath(tmp_dir, "main.esm")
+            write(path, """{
+                "esm": "0.1.0",
+                "metadata": {"name": "main", "authors": ["Test"]},
+                "models": {"Regridder": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {"Met": $loader_json}
+                }}
+            }""")
+            loaded = EarthSciSerialization.load(path)
+            met = loaded.models["Regridder"].subsystems["Met"]
+            @test met isa DataLoader
+            @test met.kind == "grid"
+            # Round-trips back to a loader-shaped subsystem (not an empty model).
+            roundtrip = EarthSciSerialization.serialize_esm_file(loaded)
+            sub = roundtrip["models"]["Regridder"]["subsystems"]["Met"]
+            @test sub["kind"] == "grid"
+            @test haskey(sub, "source")
+        finally
+            rm(tmp_dir, recursive=true, force=true)
+        end
+    end
+
+    @testset "single-loader-file reference resolves as a subsystem" begin
+        tmp_dir = mktempdir()
+        try
+            write(joinpath(tmp_dir, "loader.esm"), """{
+                "esm": "0.1.0",
+                "metadata": {"name": "loader", "authors": ["Test"]},
+                "data_loaders": {"GEOSFP": $loader_json}
+            }""")
+            main_path = joinpath(tmp_dir, "main.esm")
+            write(main_path, """{
+                "esm": "0.1.0",
+                "metadata": {"name": "main", "authors": ["Test"]},
+                "models": {"Regridder": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {"Met": {"ref": "./loader.esm"}}
+                }}
+            }""")
+            loaded = EarthSciSerialization.load(main_path)
+            met = loaded.models["Regridder"].subsystems["Met"]
+            # Named by the parent subsystem key; the ref placeholder is gone.
+            @test met isa DataLoader
+            @test !(met isa SubsystemRef)
+            @test haskey(met.variables, "emis")
+        finally
+            rm(tmp_dir, recursive=true, force=true)
+        end
+    end
+
+    @testset "ref to a file without exactly one component errors" begin
+        tmp_dir = mktempdir()
+        try
+            # Two top-level loaders: ambiguous, not a single-component file.
+            write(joinpath(tmp_dir, "two_loaders.esm"), """{
+                "esm": "0.1.0",
+                "metadata": {"name": "two loaders", "authors": ["Test"]},
+                "data_loaders": {"A": $loader_json, "B": $loader_json}
+            }""")
+            main_path = joinpath(tmp_dir, "main.esm")
+            write(main_path, """{
+                "esm": "0.1.0",
+                "metadata": {"name": "main", "authors": ["Test"]},
+                "models": {"Outer": {
+                    "variables": {},
+                    "equations": [],
+                    "subsystems": {"Bad": {"ref": "./two_loaders.esm"}}
+                }}
+            }""")
+            @test_throws EarthSciSerialization.SubsystemRefError EarthSciSerialization.load(main_path)
+        finally
+            rm(tmp_dir, recursive=true, force=true)
+        end
+    end
 end

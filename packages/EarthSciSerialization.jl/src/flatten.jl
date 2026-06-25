@@ -528,6 +528,11 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
     end
 
     for (sub_name, sub_model) in model.subsystems
+        # A DataLoader subsystem (RFC pure-io-data-loaders §4.3) exposes its
+        # variables to the owning model's equations; lowering that consumption
+        # (reprojection / regridding) is a downstream model concern, not part of
+        # plain flattening. Skip non-Model subsystems here.
+        sub_model isa Model || continue
         _collect_model!(states, params, observeds, equations,
                         continuous_events, discrete_events,
                         sub_model, "$(prefix).$(sub_name)")
@@ -631,6 +636,8 @@ function _collect_explicit_derivative_lhs!(acc::Set{String}, model::Model, prefi
         end
     end
     for (sub_name, sub) in model.subsystems
+        # Only Model subsystems contribute explicit-derivative LHS names.
+        sub isa Model || continue
         _collect_explicit_derivative_lhs!(acc, sub, "$(prefix).$(sub_name)")
     end
 end
