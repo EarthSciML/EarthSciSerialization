@@ -110,6 +110,12 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
+    // Pre-0.7.0 loader files that still carry the removed DataLoader.regridding
+    // / DataLoader.spatial blocks are rejected at load with named, version-keyed
+    // diagnostics (esm-spec §8 / RFC pure-io-data-loaders §4.1, ess-v9a.7).
+    crate::reject_legacy_loaders::reject_legacy_data_loader_shapes(&json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
     // Validate against schema
     validate_schema(&json_value)?;
 
@@ -183,6 +189,12 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
         .map_err(EsmError::SchemaValidation)?;
 
     crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
+        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
+
+    // Pre-0.7.0 loader files that still carry the removed DataLoader.regridding
+    // / DataLoader.spatial blocks are rejected at load with named, version-keyed
+    // diagnostics (esm-spec §8 / RFC pure-io-data-loaders §4.1, ess-v9a.7).
+    crate::reject_legacy_loaders::reject_legacy_data_loader_shapes(&json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
     validate_schema(&json_value)?;

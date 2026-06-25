@@ -70,6 +70,12 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 			if err := RejectExpressionTemplatesPreV04(preCheck); err != nil {
 				return nil, err
 			}
+			// v0.7.0 pure-I/O hard break: reject pre-0.7.0 loader files
+			// still carrying the removed DataLoader.regridding / .spatial
+			// blocks (RFC pure-io-data-loaders §4.1, bead ess-v9a.7).
+			if err := RejectLegacyDataLoaderShapes(preCheck); err != nil {
+				return nil, err
+			}
 		}
 	}
 

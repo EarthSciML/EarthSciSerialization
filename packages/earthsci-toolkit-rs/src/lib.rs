@@ -55,6 +55,7 @@ pub mod lower_expression_templates;
 pub mod migration;
 pub mod parse;
 pub mod reactions;
+pub mod reject_legacy_loaders;
 pub mod ref_loading;
 pub mod reference_resolution;
 pub mod registered_functions;

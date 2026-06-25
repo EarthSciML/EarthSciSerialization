@@ -81,10 +81,14 @@ class SubsystemRefError(Exception):
     pass
 
 
-# Current library version for compatibility checking. Bumped to 0.4.0 with the
-# sampled-function-tables landing (esm-spec.md §9.5 / esm-jcj / esm-hid):
-# the top-level `function_tables` block plus the `table_lookup` AST op.
-_CURRENT_VERSION = (0, 4, 0)
+# Current library version for compatibility checking. Bumped to 0.7.0 with the
+# pure-I/O data-loaders hard break (esm-spec.md §8 / RFC pure-io-data-loaders
+# §4.1 / ess-v9a.7): `DataLoader.regridding` and `DataLoader.spatial` are
+# removed and a pre-0.7.0 loader file carrying them is rejected at load
+# (see reject_legacy_data_loader_shapes). Prior steps: 0.4.0 added the
+# sampled-function-tables block + `table_lookup`; 0.5.0 widened `plots.y`;
+# 0.6.0 added the `integral` AST op.
+_CURRENT_VERSION = (0, 7, 0)
 
 
 def _check_version_compatibility(version_string: str) -> None:
@@ -3130,6 +3134,14 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
         lower_expression_templates,
     )
     reject_expression_templates_pre_v04(data)
+
+    # v0.7.0 pure-I/O hard break: reject a pre-0.7.0 loader still carrying the
+    # removed `regridding` / `spatial` blocks with a named, version-keyed
+    # diagnostic before schema validation, so the user sees the migration hint
+    # instead of a generic "extra property" error (esm-spec §8 / RFC
+    # pure-io-data-loaders §4.1).
+    from .reject_legacy_loaders import reject_legacy_data_loader_shapes
+    reject_legacy_data_loader_shapes(data)
 
     # Load and validate against schema
     schema = _get_schema()

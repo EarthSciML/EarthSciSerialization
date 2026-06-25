@@ -27,6 +27,7 @@ using JSON3
     include("subsystem_ref_test.jl")
     include("editing_test.jl")
     include("data_loader_fixtures_test.jl")
+    include("reject_legacy_loaders_test.jl")
     include("arrayed_vars_test.jl")
     include("canonicalize_test.jl")
     include("relational_test.jl")

@@ -161,6 +161,13 @@ export {
   ExpressionTemplateError,
 } from './lower_expression_templates.js'
 
+// Load-time rejection of pre-0.7.0 data-loader shapes (RFC pure-io-data-loaders
+// §4.1, bead ess-v9a.7).
+export {
+  rejectLegacyDataLoaderShapes,
+  LegacyDataLoaderError,
+} from './reject_legacy_loaders.js'
+
 // Grid accessor contract (gt-j2b8, 2026-04-22 grid-inversion decision).
 // ESS owns the interface and registry; ESD ships concrete families and
 // registers them at runtime.

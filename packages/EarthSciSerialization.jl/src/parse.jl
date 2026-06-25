@@ -1771,6 +1771,13 @@ function load(io::IO)::EsmFile
         # version hint instead of a generic "extra property" error.
         reject_expression_templates_pre_v04(raw_data)
 
+        # v0.7.0 pure-I/O hard break: a pre-0.7.0 loader still carrying the
+        # removed `regridding` / `spatial` blocks is rejected with a named,
+        # version-keyed diagnostic before schema validation, so the user sees
+        # the migration hint instead of a generic "extra property" error
+        # (esm-spec §8 / RFC pure-io-data-loaders §4.1).
+        reject_legacy_data_loader_shapes(raw_data)
+
         # Validate schema
         schema_errors = validate_schema(raw_data)
         if !isempty(schema_errors)
@@ -2075,6 +2082,7 @@ function _load_remote_ref(ref::String)::EsmFile
     raw_data = JSON3.read(content)
 
     reject_expression_templates_pre_v04(raw_data)
+    reject_legacy_data_loader_shapes(raw_data)
 
     schema_errors = validate_schema(raw_data)
     if !isempty(schema_errors)

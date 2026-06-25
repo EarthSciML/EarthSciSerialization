@@ -27,6 +27,7 @@ include("flatten.jl")
 include("mock_systems.jl")
 include("registered_functions.jl")
 include("lower_expression_templates.jl")
+include("reject_legacy_loaders.jl")
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -165,6 +166,8 @@ export
     # Expression-template expansion (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md)
     lower_expression_templates, reject_expression_templates_pre_v04,
     ExpressionTemplateError,
+    # Legacy pure-I/O data-loader rejection (esm-spec §8 / RFC pure-io-data-loaders §4.1)
+    reject_legacy_data_loader_shapes, LegacyDataLoaderError,
     # GridAccessor interface (gt-hvl4; concrete impls live in ESD)
     GridAccessor, GridAccessorError,
     cell_centers, neighbors, metric_eval,

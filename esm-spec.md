@@ -1,6 +1,6 @@
 # ESM Format Specification
 
-**EarthSciML Serialization Format — Version 0.5.0**
+**EarthSciML Serialization Format — Version 0.7.0**
 
 ## 1. Overview
 
@@ -40,7 +40,7 @@ The full authoring stance, normatively:
 
 ```json
 {
-  "esm": "0.5.0",
+  "esm": "0.7.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
@@ -550,7 +550,7 @@ GDD files are published by the EarthSciDiscretizations (ESD) project at stable U
 
 ```json
 {
-  "esm": "0.5.0",
+  "esm": "0.7.0",
   "kind": "grid_discretization_descriptor",
   "metadata": {
     "title": "Cartesian 1-D dx=0.03125 with centered-2nd FD",
@@ -1810,7 +1810,9 @@ variables:
 
 ### 8.6 Regridding — removed (now a model concern)
 
-Earlier revisions carried a loader-level `regridding` block (`fill_value`, `extrapolation`). It has been **removed**: a data loader is pure I/O and performs no regridding. Transferring a loader's native fields onto a consuming model's target grid — and the choice of method (conservative for cell-centered fields, interpolating for staggered fields, cell-averaging with a configurable missing value for scattered points) — is a **model** concern, selected **per variable** on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1, §5.2, §6). A loader that still carries a `regridding` block (or the old `spatial` block) is **rejected** at load: both are unknown properties under the pure-I/O `DataLoader`.
+Earlier revisions carried a loader-level `regridding` block (`fill_value`, `extrapolation`). It has been **removed**: a data loader is pure I/O and performs no regridding. Transferring a loader's native fields onto a consuming model's target grid — and the choice of method (conservative for cell-centered fields, interpolating for staggered fields, cell-averaging with a configurable missing value for scattered points) — is a **model** concern, selected **per variable** on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1, §5.2, §6). Both blocks were removed in the **v0.7.0** hard break.
+
+A loader that still carries a `regridding` block (or the old `spatial` block) is **rejected** at load. Two layers enforce this: the pure-I/O `DataLoader` declares `additionalProperties: false`, so JSON-Schema validation reports each stale block as an unknown property; and, independently, bindings MUST emit a named, version-keyed load-time diagnostic that reads the file's declared `esm` version and points at this revision — **`data_loader_regridding_removed`** for a surviving `regridding` block and **`data_loader_spatial_removed`** for a surviving `spatial` block. (These mirror `apply_expression_template_version_too_old`: a clear, migration-directing error keyed on the declared `esm` version, rather than a bare schema rejection.) Loading MUST fail. A pre-0.7.0 loader file is migrated by deleting the `spatial`/`regridding` blocks, describing the native grid under `grid` (a GDD `Grid`, §8.4), and moving any per-variable regridding choice to the owning model's `Model.regrid` map (§6.2).
 
 The per-variable choice is expressed by the optional **`Model.regrid`** map (§6.2), keyed by the loader-field variable name. Each entry is a `RegridSpec` with these optional fields:
 

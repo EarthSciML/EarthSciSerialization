@@ -15,6 +15,7 @@ import {
   lowerExpressionTemplates,
   rejectExpressionTemplatesPreV04,
 } from './lower_expression_templates.js'
+import { rejectLegacyDataLoaderShapes } from './reject_legacy_loaders.js'
 import { schema } from './embedded-schema.js'
 
 /**
@@ -607,6 +608,13 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   // Surfaced with a stable diagnostic before schema validation so the user
   // sees the version hint instead of a generic "extra property" error.
   rejectExpressionTemplatesPreV04(validationView)
+
+  // Step 2c: v0.7.0 pure-I/O hard break — reject pre-0.7.0 loader files that
+  // still carry the removed DataLoader.regridding / DataLoader.spatial blocks
+  // (RFC pure-io-data-loaders §4.1). Surfaced with named, version-keyed
+  // diagnostics before schema validation so the user sees the migration hint
+  // instead of a generic "extra property" error.
+  rejectLegacyDataLoaderShapes(validationView)
 
   // Step 3: Schema validation with version compatibility
   const schemaErrors = validateSchemaWithVersionCompatibility(validationView)
