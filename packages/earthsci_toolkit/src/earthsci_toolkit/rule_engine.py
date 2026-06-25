@@ -283,8 +283,67 @@ def apply_bindings(template: Expr, b: Bindings) -> Expr:
         new_wrt = _apply_name_field(template.wrt, b)
         new_dim = _apply_name_field(template.dim, b)
         new_fn = _apply_name_field(template.fn, b)
-        return replace(template, args=new_args, wrt=new_wrt, dim=new_dim, fn=new_fn)
+        # Recurse pattern-variable substitution into the structural sub-trees and
+        # loop-index name fields of compound ops (arrayop / integral / select).
+        # Without this, pattern variables ($u, $x, …) inside an arrayop
+        # replacement's body, output_idx, and ranges leak through verbatim as
+        # literal "$x"/"$u" and crash the downstream evaluator
+        # (E_TREEWALK_UNBOUND_VARIABLE) — the discretization use case. Mirrors the
+        # Julia binding's ``apply_bindings``.
+        new_expr = (
+            apply_bindings(template.expr, b) if template.expr is not None else None
+        )
+        new_values = (
+            [apply_bindings(x, b) for x in template.values]
+            if template.values is not None
+            else None
+        )
+        new_lower = (
+            apply_bindings(template.lower, b) if template.lower is not None else None
+        )
+        new_upper = (
+            apply_bindings(template.upper, b) if template.upper is not None else None
+        )
+        new_output_idx = (
+            [_apply_idx_name(x, b) for x in template.output_idx]
+            if template.output_idx is not None
+            else None
+        )
+        new_ranges = (
+            {_apply_idx_name(k, b): val for k, val in template.ranges.items()}
+            if isinstance(template.ranges, dict)
+            else template.ranges
+        )
+        return replace(
+            template,
+            args=new_args,
+            wrt=new_wrt,
+            dim=new_dim,
+            fn=new_fn,
+            expr=new_expr,
+            values=new_values,
+            lower=new_lower,
+            upper=new_upper,
+            output_idx=new_output_idx,
+            ranges=new_ranges,
+        )
     return template
+
+
+def _apply_idx_name(name: Any, b: Bindings) -> Any:
+    """Substitute a loop-index / range-key name that may be a pattern variable.
+
+    ``output_idx`` entries and ``ranges`` keys are bare names (e.g. ``"x"``) or
+    pattern variables (e.g. ``"$x"``). A bound pattern variable resolves to the
+    bare name it was unified with; anything else is passed through unchanged.
+    """
+    if _is_pvar_string(name) and name in b:
+        v = b[name]
+        if isinstance(v, str):
+            return v
+        if isinstance(v, ExprNode) and v.op == "var" and v.name is not None:
+            return v.name
+    return name
 
 
 def _apply_name_field(field_val: Optional[str], b: Bindings) -> Optional[str]:
@@ -847,12 +906,60 @@ def _parse_expr(v: Any) -> Expr:
                 dim = v.get("side")
             if fn is None:
                 fn = v.get("kind")
+
+        # Compound ops (arrayop / integral / makearray / reshape / select / …)
+        # carry structural fields beyond op/args. The previous version dropped
+        # every one of them, collapsing an arrayop replacement to a content-free
+        # ``arrayop{args:[…]}`` marker — so a finite-difference stencil rule
+        # whose ``replacement`` is an arrayop fired but lowered to nothing,
+        # leaving the downstream PDE op un-discretized. Carry the full op schema,
+        # recursing the parser into expression-valued fields. This matches the
+        # Julia binding's ``_parse_expr`` (which delegates to the canonical
+        # ``parse_expression``) and is the root-cause fix for the cross-binding
+        # gap behind ESD's arrayop-replacement finite-difference rules.
+        def _sub(key: str) -> Optional[Expr]:
+            return _parse_expr(v[key]) if v.get(key) is not None else None
+
+        table_axes_raw = v.get("table_axes")
         return ExprNode(
             op=op,
             args=args,
             wrt=None if wrt is None else str(wrt),
             dim=None if dim is None else str(dim),
             fn=None if fn is None else str(fn),
+            var=v.get("var"),
+            lower=_sub("lower"),
+            upper=_sub("upper"),
+            output_idx=v.get("output_idx"),
+            expr=_sub("expr"),
+            reduce=v.get("reduce"),
+            semiring=v.get("semiring"),
+            ranges=v.get("ranges"),
+            join=v.get("join"),
+            filter=_sub("filter"),
+            distinct=v.get("distinct"),
+            key=_sub("key"),
+            regions=v.get("regions"),
+            values=(
+                [_parse_expr(x) for x in v["values"]]
+                if v.get("values") is not None
+                else None
+            ),
+            shape=v.get("shape"),
+            perm=v.get("perm"),
+            axis=v.get("axis"),
+            id=v.get("id"),
+            manifold=v.get("manifold"),
+            handler_id=v.get("handler_id"),
+            name=v.get("name"),
+            value=v.get("value"),
+            table=v.get("table"),
+            table_axes=(
+                {k: _parse_expr(x) for k, x in table_axes_raw.items()}
+                if isinstance(table_axes_raw, Mapping)
+                else None
+            ),
+            output=v.get("output"),
         )
     raise RuleEngineError(
         "E_RULE_PARSE", f"cannot parse expression of type {type(v).__name__}"

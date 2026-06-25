@@ -1129,11 +1129,38 @@ def _apply_equation_to_dy(
                     shape = shapes[head]
                     layout_start = state_layout[head].start
                     it = np.ndindex(*(len(r) for r in ranges)) if ranges else [()]
+                    sym_pos = {s: i for i, s in enumerate(syms)}
+
+                    # Vectorized fast path: a pure (non-contracted) arrayop RHS —
+                    # the discretized stencil form — materializes its whole output
+                    # box in one pass (see numpy_interpreter._materialize_map),
+                    # rather than rebuilding the region-wise makearray once per
+                    # grid point. The materialized array is then scattered into dy.
+                    # Falls through to the per-point loop on any shape mismatch.
+                    if (not rhs_contract_syms
+                            and isinstance(rhs, ExprNode) and is_aggregate_op(rhs.op)):
+                        full = np.asarray(eval_expr(rhs, ctx), dtype=float)
+                        exp_shape = tuple(len(r) for r in ranges)
+                        if full.shape == exp_shape:
+                            prev_locals = dict(ctx.locals)
+                            try:
+                                for multi in (np.ndindex(*exp_shape) if exp_shape else [()]):
+                                    for s, pos in zip(syms, multi):
+                                        ctx.locals[s] = ranges[sym_pos[s]][pos]
+                                    idx_vals = [
+                                        int(round(float(eval_expr(e, ctx)))) for e in idx_exprs
+                                    ]
+                                    flat_pos = layout_start + _linear_pos(shape, idx_vals)
+                                    dy[flat_pos] = full[multi]
+                            finally:
+                                ctx.locals = prev_locals
+                            return
+
                     prev_locals = dict(ctx.locals)
                     try:
                         for multi in it:
                             for s, pos in zip(syms, multi):
-                                ctx.locals[s] = ranges[syms.index(s)][pos]
+                                ctx.locals[s] = ranges[sym_pos[s]][pos]
                             idx_vals = [
                                 int(round(float(eval_expr(e, ctx)))) for e in idx_exprs
                             ]

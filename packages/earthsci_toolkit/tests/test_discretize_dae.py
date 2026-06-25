@@ -8,6 +8,9 @@ The Python strategy is trivial-factor + error otherwise:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from earthsci_toolkit import discretize, DiscretizationError
@@ -76,7 +79,23 @@ def test_input_is_not_mutated():
 def test_provenance_stamped():
     esm = _mk(_dx_eq())
     out = discretize(esm)
-    assert out["metadata"]["discretized_from"] == "t"
+    # Object shape {"name": ...}, matching the cross-language discretize goldens.
+    assert out["metadata"]["discretized_from"] == {"name": "t"}
+
+
+def test_discretize_metadata_matches_conformance_golden():
+    """Lock the Python discretize() metadata block to the cross-language
+    conformance golden (RFC §12). The diagnostics — system_class, dae_info,
+    discretized_from {"name": ...}, and the `discretized` tag — must match
+    byte-for-byte. Uses the simplest ODE fixture (no PDE/scheme machinery)."""
+    conf = Path(__file__).resolve().parents[3] / "tests" / "conformance" / "discretize"
+    inp_path = conf / "inputs" / "scalar_ode.esm"
+    gold_path = conf / "golden" / "scalar_ode.json"
+    if not (inp_path.exists() and gold_path.exists()):
+        pytest.skip("discretize conformance fixtures not present")
+    out = discretize(json.loads(inp_path.read_text()))
+    gold = json.loads(gold_path.read_text())
+    assert out["metadata"] == gold["metadata"]
 
 
 # ---------------------------------------------------------------------------

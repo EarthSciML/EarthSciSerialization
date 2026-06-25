@@ -121,7 +121,11 @@ def _view_state_array(name: str, ctx: EvalContext) -> np.ndarray:
 def _resolve_symbol(name: str, ctx: EvalContext) -> Union[float, np.ndarray]:
     """Resolve a bare name reference."""
     if name in ctx.locals:
-        return float(ctx.locals[name])
+        v = ctx.locals[name]
+        # Index symbols are usually scalars, but the vectorized stencil path
+        # (``_materialize_map``) binds them to ndarray ranges so a whole region
+        # evaluates in one pass; pass arrays through unchanged.
+        return v if isinstance(v, np.ndarray) else float(v)
     if name == "t":
         return float(ctx.t)
     # A materialized derived ring (RFC §8.1): an `intersect_polygon` node id
@@ -557,6 +561,19 @@ def _eval_index(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
         if not idxs:
             return float(arr_val)
         raise NumpyInterpreterError("index applied to scalar value")
+    # Vectorized gather: at least one subscript is an ndarray (the stencil fast
+    # path binds index symbols to ranges). Convert 1-based -> 0-based and gather
+    # with the *same* NumPy indexing semantics as the scalar branch below
+    # (negative indices wrap), so the two paths are bit-identical. The discretized
+    # makearray uses disjoint interior / boundary regions
+    # (spatial_discretize._make_regions), so no stencil body reads out of bounds.
+    if any(isinstance(i, np.ndarray) for i in idxs):
+        if len(idxs) != arr_val.ndim:
+            raise NumpyInterpreterError(
+                f"index got {len(idxs)} indices for array of shape {arr_val.shape}"
+            )
+        gathered = [np.rint(np.asarray(i, dtype=float)).astype(np.intp) - 1 for i in idxs]
+        return arr_val[tuple(gathered)]
     # 1-based -> 0-based.
     zero_idx = tuple(int(round(float(i))) - 1 for i in idxs)
     if len(zero_idx) != arr_val.ndim:
@@ -731,6 +748,96 @@ def _eval_arrayop_vectorized(
     return None
 
 
+def _bind_broadcast_range(ctx: EvalContext, sym: str, values: np.ndarray,
+                          axis: int, ndim: int) -> None:
+    """Bind ``sym`` to ``values`` reshaped to broadcast on ``axis`` of an
+    ``ndim``-D output box (so an N-D region body evaluates in one pass)."""
+    shp = [1] * ndim
+    shp[axis] = values.size
+    ctx.locals[sym] = np.asarray(values, dtype=float).reshape(shp)
+
+
+def _materialize_makearray_vectorized(
+    ma: ExprNode, ctx: EvalContext, out_syms: List[str], out_shape: Tuple[int, ...],
+) -> np.ndarray:
+    """Materialize a ``makearray`` in one pass per region (no per-cell loop).
+
+    Each region's body is evaluated with the output index symbols bound to that
+    region's 1-based ``arange`` (reshaped to broadcast over the region box), and
+    the resulting sub-array is written into the output slice. Regions are applied
+    in order with last-wins overwrite — identical semantics to the scalar
+    :func:`_eval_makearray`, but vectorized via shifted-slice ``index`` gathers.
+    """
+    regions = ma.regions or []
+    values = ma.values or []
+    if not regions or len(regions) != len(values):
+        raise NumpyInterpreterError("makearray: empty or mismatched regions/values")
+    ndim = len(out_syms)
+    out = np.zeros(out_shape, dtype=float)
+    prev = dict(ctx.locals)
+    try:
+        for region, val_expr in zip(regions, values):
+            if len(region) != ndim:
+                raise NumpyInterpreterError("makearray region ndim mismatch")
+            slicer: List[slice] = []
+            for axis, (lo, hi) in enumerate(region):
+                lo_i, hi_i = int(lo), int(hi)
+                _bind_broadcast_range(
+                    ctx, out_syms[axis],
+                    np.arange(lo_i, hi_i + 1, dtype=float), axis, ndim)
+                slicer.append(slice(lo_i - 1, hi_i))
+            out[tuple(slicer)] = eval_expr(val_expr, ctx)
+    finally:
+        ctx.locals = prev
+    return out
+
+
+def _materialize_map(
+    body: Expr, ctx: EvalContext, out_syms: List[str],
+    out_ranges_exp: List[List[int]], out_shape: Tuple[int, ...],
+) -> Optional[np.ndarray]:
+    """Vectorized fast path for a pure (non-reducing) arrayop map — the shape
+    finite-difference / level-set stencils take.
+
+    Two patterns are handled, both by binding the output index symbols to
+    ``arange`` vectors so the body evaluates over the whole index box in one
+    pass (``index`` gathers become shifted slices, see :func:`_eval_index`):
+
+    * ``index(makearray(...), x, y, ...)`` — an identity gather over a
+      region-wise ``makearray`` (the discretized state RHS). Materialized
+      region-by-region.
+    * any other body — bound directly over the full box.
+
+    Returns ``None`` (caller falls back to the scalar loop) if the body does not
+    match or the vectorized evaluation does not produce the output shape.
+    """
+    if not out_syms or not out_shape:
+        return None
+    try:
+        if (isinstance(body, ExprNode) and body.op == "index" and body.args
+                and isinstance(body.args[0], ExprNode)
+                and body.args[0].op == "makearray"
+                and list(body.args[1:]) == list(out_syms)):
+            return _materialize_makearray_vectorized(
+                body.args[0], ctx, out_syms, out_shape)
+
+        prev = dict(ctx.locals)
+        try:
+            for axis, s in enumerate(out_syms):
+                _bind_broadcast_range(
+                    ctx, s, np.asarray(out_ranges_exp[axis], dtype=float),
+                    axis, len(out_syms))
+            val = eval_expr(body, ctx)
+        finally:
+            ctx.locals = prev
+        res = np.asarray(val, dtype=float)
+        if res.shape == tuple(out_shape):
+            return res
+        return np.broadcast_to(res, tuple(out_shape)).astype(float)
+    except (NumpyInterpreterError, IndexError, ValueError, TypeError):
+        return None
+
+
 def _eval_arrayop(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
     """Evaluate an aggregate / arrayop body over its output index box.
 
@@ -825,6 +932,16 @@ def _eval_arrayop(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
         )
         if fast is not None:
             return fast
+
+    # Pure-map (no contraction) vectorized fast path: stencils — affine
+    # subscripts, sums, sqrt/max/min, makearray regions — that the einsum
+    # decomposer above rejects. Binds the output indices to ranges and evaluates
+    # the body over the whole box via shifted-slice gathers, one pass instead of
+    # one Python interpreter pass per cell. Falls through on any mismatch.
+    if not reduce_syms:
+        mapped = _materialize_map(expr.expr, ctx, out_syms, out_ranges_exp, out_shape)
+        if mapped is not None:
+            return mapped
 
     # Scalar fallback: hoist the cartesian reduction product outside the output loop.
     out = np.zeros(out_shape, dtype=float)

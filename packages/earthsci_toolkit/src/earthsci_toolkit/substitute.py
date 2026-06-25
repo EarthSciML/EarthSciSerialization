@@ -2,6 +2,7 @@
 Expression substitution and variable replacement functions.
 """
 
+from dataclasses import replace
 from typing import Dict, Union, List
 from .esm_types import (
     Expr, ExprNode, Model, ReactionSystem, ModelVariable, Equation,
@@ -44,27 +45,20 @@ def substitute(expr: Expr, bindings: Dict[str, Expr]) -> Expr:
         # and ``key`` are nested Expressions and must themselves be substituted.
         substituted_filter = substitute(expr.filter, bindings) if expr.filter is not None else None
         substituted_key = substitute(expr.key, bindings) if expr.key is not None else None
-        return ExprNode(
-            op=expr.op,
+        # Use ``replace`` so closed-function / lookup metadata (``name``,
+        # ``value``, ``id``, ``manifold``, ``handler_id``, ``table``,
+        # ``table_axes``, ``output``) is carried verbatim. The previous explicit
+        # field list silently dropped them, so a ``const`` table substituted
+        # through a ``param_to_var`` coupling lost its ``value`` and the
+        # discretized document failed schema validation with an empty
+        # ``{"op": "const", "args": []}`` node.
+        return replace(
+            expr,
             args=substituted_args,
-            wrt=expr.wrt,
-            dim=expr.dim,
-            output_idx=expr.output_idx,
             expr=substituted_body,
-            reduce=expr.reduce,
-            semiring=expr.semiring,
-            ranges=expr.ranges,
-            join=expr.join,
             filter=substituted_filter,
-            distinct=expr.distinct,
             key=substituted_key,
-            regions=expr.regions,
             values=substituted_values,
-            shape=expr.shape,
-            perm=expr.perm,
-            axis=expr.axis,
-            fn=expr.fn,
-            var=expr.var,
             lower=substituted_lower,
             upper=substituted_upper,
         )
