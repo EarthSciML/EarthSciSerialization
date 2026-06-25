@@ -43,7 +43,8 @@ class SpatialDiscretizeError(Exception):
 
 
 def flattened_to_esm(flat: Any, domains: Dict[str, Any],
-                     name: str = "Flattened") -> Dict[str, Any]:
+                     name: str = "Flattened",
+                     boundary_conditions: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Adapt a :class:`FlattenedSystem` (the output of ``earthsci_toolkit.flatten``)
     into a single-model ``.esm`` dict that :func:`spatial_discretize` consumes.
 
@@ -52,6 +53,9 @@ def flattened_to_esm(flat: Any, domains: Dict[str, Any],
     rate substituted into the level-set's ``R_0``); this adapter exposes the
     resolved equation set on the PDE domain so the spatial pass can lower it.
     ``domains`` is the coupled file's ``domains`` block (re-used verbatim).
+    ``boundary_conditions`` carries the PDE model's BCs (``flatten`` does not
+    preserve them); without them the spatial pass falls back to Dirichlet
+    defaults and mis-sizes the grid.
     """
     # flatten() dot-namespaces names (e.g. "LevelSet.psi"); a dot in an array
     # state name breaks simulate()'s element expansion, so sanitize "." -> "_"
@@ -72,10 +76,13 @@ def flattened_to_esm(flat: Any, domains: Dict[str, Any],
                                 "default": v.default if v.default is not None else 0.0}
     equations = [{"lhs": _rename(_to_json(e.lhs)), "rhs": _rename(_to_json(e.rhs))}
                  for e in flat.equations]
+    model: Dict[str, Any] = {"domain": next(iter(domains)), "system_kind": "pde",
+                             "variables": variables, "equations": equations}
+    if boundary_conditions:
+        model["boundary_conditions"] = boundary_conditions
     return {
         "esm": "0.5.0", "metadata": {"name": name}, "domains": domains,
-        "models": {name: {"domain": next(iter(domains)), "system_kind": "pde",
-                          "variables": variables, "equations": equations}},
+        "models": {name: model},
     }
 
 
@@ -326,11 +333,14 @@ def _make_regions(interior, state, dims, sizes, bc_by_side):
 
 
 def _observed_exprs(model: Dict[str, Any]) -> Dict[str, Any]:
-    """Collect observed-variable definitions (name -> expression).
+    """Collect inline-able algebraic definitions (name -> expression).
 
-    Supports both the variable-level ``expression`` form (e.g. the level-set's
-    ``psi_x = grad(psi, x)``) and algebraic equations whose LHS is a bare
-    observed name.
+    Covers the variable-level ``expression`` form (e.g. the level-set's
+    ``psi_x = grad(psi, x)``) and **any** algebraic equation whose LHS is a bare
+    variable name — regardless of the variable's declared ``type``. The latter is
+    essential for observed-only components like RothermelFireSpread, whose 27
+    algebraic unknowns are typed ``state`` but defined by ``var = expr`` (no time
+    derivative); they must be inlined, not left as undefined states.
     """
     obs: Dict[str, Any] = {}
     for name, v in model.get("variables", {}).items():
@@ -338,7 +348,7 @@ def _observed_exprs(model: Dict[str, Any]) -> Dict[str, Any]:
             obs[name] = v["expression"]
     for eq in model.get("equations", []):
         lhs = eq.get("lhs")
-        if isinstance(lhs, str) and model.get("variables", {}).get(lhs, {}).get("type") == "observed":
+        if isinstance(lhs, str):              # algebraic definition: var = expr
             obs[lhs] = eq["rhs"]
     return obs
 
