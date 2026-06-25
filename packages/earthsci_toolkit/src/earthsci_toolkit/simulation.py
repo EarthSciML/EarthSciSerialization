@@ -1416,6 +1416,20 @@ def _build_numpy_rhs(
         y0, state_layout, shapes, state_names, initial_conditions
     )
 
+    # Per-call buffers hoisted out of rhs_function and reused across every
+    # solver step, eliminating the two guaranteed per-step allocations.
+    # solve_ivp's RK/BDF/LSODA integrators copy the returned dydt into their
+    # own workspace before the next call, so returning one shared `dy` each
+    # step is safe (calls are sequential, never concurrent). `dy.fill(0.0)`
+    # restores the exact zero-initialized start state a fresh
+    # `np.zeros(total_size)` would give — slots that no equation writes stay
+    # 0 — so results are byte-for-byte identical. `_finite_mask` lets the
+    # divergence guard reuse one bool array via `np.isfinite(dy, out=...)`
+    # instead of allocating a full-size transient mask every step; the
+    # predicate (all-finite) is unchanged.
+    dy = np.zeros(total_size, dtype=float)
+    _finite_mask = np.empty(total_size, dtype=bool)
+
     def rhs_function(t: float, y: np.ndarray) -> np.ndarray:
         ctx = EvalContext(
             state_layout=state_layout,
@@ -1435,13 +1449,14 @@ def _build_numpy_rhs(
             _materialize_observeds(ordered_observed, ctx)
         except NumpyInterpreterError as exc:
             raise SimulationError(str(exc)) from exc
-        dy = np.zeros(total_size, dtype=float)
+        dy.fill(0.0)
         for eq in working_equations:
             try:
                 _apply_equation_to_dy(eq, ctx, shapes, state_layout, dy)
             except NumpyInterpreterError as exc:
                 raise SimulationError(str(exc)) from exc
-        if not np.all(np.isfinite(dy)):
+        np.isfinite(dy, out=_finite_mask)
+        if not _finite_mask.all():
             raise SimulationError("Non-finite derivatives encountered")
         return dy
     elem_names = _element_names(state_names, shapes)
