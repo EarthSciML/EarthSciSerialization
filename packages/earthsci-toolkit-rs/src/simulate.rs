@@ -1281,6 +1281,9 @@ fn eval_op(
         "sinh" => v(0).sinh(),
         "cosh" => v(0).cosh(),
         "tanh" => v(0).tanh(),
+        "asinh" => v(0).asinh(),
+        "acosh" => v(0).acosh(),
+        "atanh" => v(0).atanh(),
 
         // n-ary min / max (esm-spec §4.2 — arity ≥ 2)
         "min" => args

@@ -1,5 +1,7 @@
-//! Cross-binding conformance tests for the inverse-trigonometric scalar leaf
-//! ops acos / asin / atan / atan2 (bead ess-9x1).
+//! Cross-binding conformance tests for transcendental scalar leaf ops: the
+//! inverse-trigonometric family acos / asin / atan / atan2 (bead ess-9x1) and
+//! the hyperbolic family sinh / cosh / tanh / asinh / acosh / atanh
+//! (bead ess-v9a.1). Both share the generic `run_named` harness below.
 //!
 //! Loads the shared fixture under `../../tests/valid/scalar_leaves/` that
 //! carries inline `tests` / `tolerance` blocks, compiles it through
@@ -195,4 +197,12 @@ fn run_named(name: &str) {
 #[test]
 fn inverse_trig_leaves() {
     run_named("inverse_trig_leaves.esm");
+}
+
+/// sinh / cosh / tanh and inverses asinh / acosh / atanh scalar leaves,
+/// integrated as constant RHS from zero ICs: sinh(1)=1.1752…, cosh(1)=1.5431…,
+/// tanh(1)=0.7616…, asinh(1)=0.8814…, acosh(2)=1.3170…, atanh(0.5)=0.5493….
+#[test]
+fn hyperbolic_trig_leaves() {
+    run_named("hyperbolic_trig_leaves.esm");
 }

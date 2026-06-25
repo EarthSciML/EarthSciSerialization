@@ -1397,7 +1397,8 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
 
         // Unary / scalar transcendentals.
         "exp" | "log" | "ln" | "log10" | "sqrt" | "abs" | "sign" | "floor" | "ceil" | "sin"
-        | "cos" | "tan" | "asin" | "acos" | "atan" | "sinh" | "cosh" | "tanh" => {
+        | "cos" | "tan" | "asin" | "acos" | "atan" | "sinh" | "cosh" | "tanh" | "asinh"
+        | "acosh" | "atanh" => {
             eval_unary(&node.op, &node.args, ctx)
         }
 
@@ -1712,6 +1713,9 @@ fn apply_unary(op: &str, x: f64) -> f64 {
         "sinh" => x.sinh(),
         "cosh" => x.cosh(),
         "tanh" => x.tanh(),
+        "asinh" => x.asinh(),
+        "acosh" => x.acosh(),
+        "atanh" => x.atanh(),
         _ => f64::NAN,
     }
 }

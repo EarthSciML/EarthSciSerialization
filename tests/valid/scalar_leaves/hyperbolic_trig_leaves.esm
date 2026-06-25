@@ -1,0 +1,93 @@
+{
+  "esm": "0.6.0",
+  "metadata": {
+    "name": "hyperbolic_trig_leaves",
+    "description": "Cross-binding conformance fixture (bead ess-v9a.1) for the six hyperbolic scalar leaf ops sinh / cosh / tanh and their inverses asinh / acosh / atanh. Each state variable integrates a CONSTANT hyperbolic RHS from a zero initial condition, so y(t=1) = rate*1 = rate exactly — no integrator-tolerance dependency and all bindings (Julia tree_walk, Python numpy simulate, Rust simulate) must agree on the same inline `tests[].assertions[].expected`. sinh(1)=1.1752011936438014, cosh(1)=1.5430806348152437, tanh(1)=0.7615941559557649, asinh(1)=0.881373587019543, acosh(2)=1.3169578969248166 (arg>1, a non-trivial inverse value rather than acosh(1)=0), and atanh(0.5)=0.5493061443340549 (|arg|<1). The hyperbolic family is unary, elementwise, and spec'd like the trigonometric family (esm-spec.md §4.2) with no new control primitive; these leaves support future Mercator-style reprojection work under RFC pure-io-data-loaders §4.5.",
+    "authors": [
+      "EarthSciSerialization/polecats/gastown.nux"
+    ],
+    "tags": [
+      "scalar-leaves",
+      "hyperbolic-trig",
+      "sinh",
+      "cosh",
+      "tanh",
+      "asinh",
+      "acosh",
+      "atanh",
+      "conformance",
+      "ess-v9a"
+    ]
+  },
+  "models": {
+    "HyperbolicTrigLeaves": {
+      "tolerance": {
+        "rel": 1e-6,
+        "abs": 1e-9
+      },
+      "variables": {
+        "sinh_v": { "type": "state", "default": 0.0 },
+        "cosh_v": { "type": "state", "default": 0.0 },
+        "tanh_v": { "type": "state", "default": 0.0 },
+        "asinh_v": { "type": "state", "default": 0.0 },
+        "acosh_v": { "type": "state", "default": 0.0 },
+        "atanh_v": { "type": "state", "default": 0.0 }
+      },
+      "equations": [
+        {
+          "_comment": "D(sinh_v)/dt = sinh(1.0) = 1.1752011936438014.",
+          "lhs": { "op": "D", "args": ["sinh_v"], "wrt": "t" },
+          "rhs": { "op": "sinh", "args": [1.0] }
+        },
+        {
+          "_comment": "D(cosh_v)/dt = cosh(1.0) = 1.5430806348152437.",
+          "lhs": { "op": "D", "args": ["cosh_v"], "wrt": "t" },
+          "rhs": { "op": "cosh", "args": [1.0] }
+        },
+        {
+          "_comment": "D(tanh_v)/dt = tanh(1.0) = 0.7615941559557649.",
+          "lhs": { "op": "D", "args": ["tanh_v"], "wrt": "t" },
+          "rhs": { "op": "tanh", "args": [1.0] }
+        },
+        {
+          "_comment": "D(asinh_v)/dt = asinh(1.0) = 0.881373587019543.",
+          "lhs": { "op": "D", "args": ["asinh_v"], "wrt": "t" },
+          "rhs": { "op": "asinh", "args": [1.0] }
+        },
+        {
+          "_comment": "D(acosh_v)/dt = acosh(2.0) = 1.3169578969248166.",
+          "lhs": { "op": "D", "args": ["acosh_v"], "wrt": "t" },
+          "rhs": { "op": "acosh", "args": [2.0] }
+        },
+        {
+          "_comment": "D(atanh_v)/dt = atanh(0.5) = 0.5493061443340549.",
+          "lhs": { "op": "D", "args": ["atanh_v"], "wrt": "t" },
+          "rhs": { "op": "atanh", "args": [0.5] }
+        }
+      ],
+      "tests": [
+        {
+          "id": "hyperbolic_trig_t1",
+          "description": "Constant hyperbolic RHS integrated from zero ICs over [0,1]; each var equals its op's value at t=1.",
+          "initial_conditions": {
+            "HyperbolicTrigLeaves.sinh_v": 0.0,
+            "HyperbolicTrigLeaves.cosh_v": 0.0,
+            "HyperbolicTrigLeaves.tanh_v": 0.0,
+            "HyperbolicTrigLeaves.asinh_v": 0.0,
+            "HyperbolicTrigLeaves.acosh_v": 0.0,
+            "HyperbolicTrigLeaves.atanh_v": 0.0
+          },
+          "time_span": { "start": 0.0, "end": 1.0 },
+          "assertions": [
+            { "variable": "HyperbolicTrigLeaves.sinh_v", "time": 1.0, "expected": 1.1752011936438014 },
+            { "variable": "HyperbolicTrigLeaves.cosh_v", "time": 1.0, "expected": 1.5430806348152437 },
+            { "variable": "HyperbolicTrigLeaves.tanh_v", "time": 1.0, "expected": 0.7615941559557649 },
+            { "variable": "HyperbolicTrigLeaves.asinh_v", "time": 1.0, "expected": 0.881373587019543 },
+            { "variable": "HyperbolicTrigLeaves.acosh_v", "time": 1.0, "expected": 1.3169578969248166 },
+            { "variable": "HyperbolicTrigLeaves.atanh_v", "time": 1.0, "expected": 0.5493061443340549 }
+          ]
+        }
+      ]
+    }
+  }
+}

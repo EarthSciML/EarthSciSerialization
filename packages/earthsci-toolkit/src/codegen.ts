@@ -159,6 +159,26 @@ function evalExprNode(expr: Expr, bindings: Map<string, number>): number {
       case 'atan2':
         if (args.length !== 2) throw new Error('atan2 requires exactly 2 arguments')
         return Math.atan2(args[0], args[1])
+      case 'sinh':
+        if (args.length !== 1) throw new Error('sinh requires exactly 1 argument')
+        return Math.sinh(args[0])
+      case 'cosh':
+        if (args.length !== 1) throw new Error('cosh requires exactly 1 argument')
+        return Math.cosh(args[0])
+      case 'tanh':
+        if (args.length !== 1) throw new Error('tanh requires exactly 1 argument')
+        return Math.tanh(args[0])
+      case 'asinh':
+        if (args.length !== 1) throw new Error('asinh requires exactly 1 argument')
+        return Math.asinh(args[0])
+      case 'acosh':
+        if (args.length !== 1) throw new Error('acosh requires exactly 1 argument')
+        if (args[0] < 1) throw new Error('acosh argument must be >= 1')
+        return Math.acosh(args[0])
+      case 'atanh':
+        if (args.length !== 1) throw new Error('atanh requires exactly 1 argument')
+        if (args[0] <= -1 || args[0] >= 1) throw new Error('atanh argument must be in (-1, 1)')
+        return Math.atanh(args[0])
       case 'min':
         if (args.length < 2) throw new Error('min requires at least 2 arguments')
         return Math.min(...args)

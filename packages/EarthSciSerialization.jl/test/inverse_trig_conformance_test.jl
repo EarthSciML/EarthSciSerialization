@@ -50,3 +50,20 @@ end
     @test du[vmap["atan_v"]]  ≈ 0.7853981633974483   # atan(1)    = π/4
     @test du[vmap["atan2_v"]] ≈ 2.356194490192345    # atan2(1,-1) = 3π/4
 end
+
+# Hyperbolic family sinh / cosh / tanh and inverses asinh / acosh / atanh
+# (bead ess-v9a.1). Same constant-RHS-from-zero worked-example construction as
+# the inverse-trig set above, so each du element IS the op's value at t=1; the
+# asserted constants mirror the shared fixture's inline `tests[].expected`,
+# which Python (simulate) and Rust (simulate) also check.
+@testset "hyperbolic-trig scalar-leaf conformance (ess-v9a.1)" begin
+    du, vmap = _eval_invtrig_fixture(
+        "hyperbolic_trig_leaves.esm", "HyperbolicTrigLeaves",
+        ["sinh_v", "cosh_v", "tanh_v", "asinh_v", "acosh_v", "atanh_v"])
+    @test du[vmap["sinh_v"]]  ≈ 1.1752011936438014   # sinh(1)
+    @test du[vmap["cosh_v"]]  ≈ 1.5430806348152437   # cosh(1)
+    @test du[vmap["tanh_v"]]  ≈ 0.7615941559557649   # tanh(1)
+    @test du[vmap["asinh_v"]] ≈ 0.881373587019543    # asinh(1)
+    @test du[vmap["acosh_v"]] ≈ 1.3169578969248166   # acosh(2)
+    @test du[vmap["atanh_v"]] ≈ 0.5493061443340549   # atanh(0.5)
+end

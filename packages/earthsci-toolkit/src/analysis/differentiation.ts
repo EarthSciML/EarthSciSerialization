@@ -342,6 +342,102 @@ function computeDerivative(expr: Expr, variable: string): Expr {
         }
         break;
 
+      case 'sinh':
+        // d/dx (sinh(u)) = cosh(u) * u'
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '*',
+            args: [{ op: 'cosh', args: [u] }, du]
+          };
+        }
+        break;
+
+      case 'cosh':
+        // d/dx (cosh(u)) = sinh(u) * u'
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '*',
+            args: [{ op: 'sinh', args: [u] }, du]
+          };
+        }
+        break;
+
+      case 'tanh':
+        // d/dx (tanh(u)) = sech²(u) * u' = (1/cosh²(u)) * u'
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '*',
+            args: [
+              {
+                op: '/',
+                args: [1, { op: '^', args: [{ op: 'cosh', args: [u] }, 2] }]
+              },
+              du
+            ]
+          };
+        }
+        break;
+
+      case 'asinh':
+        // d/dx (asinh(u)) = u'/√(u²+1)
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '/',
+            args: [
+              du,
+              {
+                op: 'sqrt',
+                args: [{ op: '+', args: [{ op: '^', args: [u, 2] }, 1] }]
+              }
+            ]
+          };
+        }
+        break;
+
+      case 'acosh':
+        // d/dx (acosh(u)) = u'/√(u²-1)
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '/',
+            args: [
+              du,
+              {
+                op: 'sqrt',
+                args: [{ op: '-', args: [{ op: '^', args: [u, 2] }, 1] }]
+              }
+            ]
+          };
+        }
+        break;
+
+      case 'atanh':
+        // d/dx (atanh(u)) = u'/(1-u²)
+        if (args.length === 1) {
+          const u = args[0];
+          const du = computeDerivative(u, variable);
+          return {
+            op: '/',
+            args: [
+              du,
+              {
+                op: '-',
+                args: [1, { op: '^', args: [u, 2] }]
+              }
+            ]
+          };
+        }
+        break;
+
       case 'sqrt':
         // d/dx (√u) = u'/(2√u)
         if (args.length === 1) {

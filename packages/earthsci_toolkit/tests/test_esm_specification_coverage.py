@@ -338,6 +338,7 @@ class TestSection04ExpressionAST:
         elementary_functions = [
             "exp", "log", "log10", "sqrt", "abs", "sign",
             "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+            "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
             "min", "max", "floor", "ceil"
         ]
 

@@ -380,6 +380,30 @@ def _expr_to_sympy(
             if len(sympy_args) != 2:
                 raise SimulationError(f"atan2 requires exactly 2 arguments, got {len(sympy_args)}")
             return sp.atan2(sympy_args[0], sympy_args[1])
+        elif expr.op == 'sinh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"sinh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sinh(sympy_args[0])
+        elif expr.op == 'cosh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"cosh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.cosh(sympy_args[0])
+        elif expr.op == 'tanh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"tanh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.tanh(sympy_args[0])
+        elif expr.op == 'asinh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"asinh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.asinh(sympy_args[0])
+        elif expr.op == 'acosh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"acosh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.acosh(sympy_args[0])
+        elif expr.op == 'atanh':
+            if len(sympy_args) != 1:
+                raise SimulationError(f"atanh requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.atanh(sympy_args[0])
         elif expr.op == 'ifelse':
             if len(sympy_args) != 3:
                 raise SimulationError(f"ifelse requires exactly 3 arguments, got {len(sympy_args)}")

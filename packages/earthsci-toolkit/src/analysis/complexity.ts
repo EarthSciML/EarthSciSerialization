@@ -90,6 +90,12 @@ function calculateComputationalCost(metrics: ComplexityMetrics): number {
     'acos': 18,
     'atan': 18,
     'atan2': 20,
+    'sinh': 15,
+    'cosh': 15,
+    'tanh': 15,
+    'asinh': 18,
+    'acosh': 18,
+    'atanh': 18,
 
     // Logic operations
     '>': 2,

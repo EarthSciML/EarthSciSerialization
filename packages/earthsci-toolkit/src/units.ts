@@ -198,6 +198,12 @@ export function checkDimensions(
     case 'asin':
     case 'acos':
     case 'atan':
+    case 'sinh':
+    case 'cosh':
+    case 'tanh':
+    case 'asinh':
+    case 'acosh':
+    case 'atanh':
       for (let i = 0; i < argDims.length; i++) {
         const arg = get(i)
         if (!isDimensionless(arg)) {

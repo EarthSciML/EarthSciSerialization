@@ -315,7 +315,7 @@ fn propagate_operator(
         // Transcendental and trigonometric functions: argument must be
         // dimensionless, result is dimensionless.
         "exp" | "log" | "log10" | "ln" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan"
-        | "sinh" | "cosh" | "tanh" => {
+        | "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" => {
             if op.args.len() != 1 {
                 return Err(UnitError::ParseError(format!(
                     "'{}' requires exactly 1 argument",

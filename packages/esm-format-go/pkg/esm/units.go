@@ -509,7 +509,9 @@ func propagateExprNode(node ExprNode, env map[string]Unit, coordEnv map[string]*
 		r := base.Power(int(expVal))
 		return &r, nil
 
-	case "sin", "cos", "tan", "asin", "acos", "atan", "exp", "log", "log10", "ln", "sqrt":
+	case "sin", "cos", "tan", "asin", "acos", "atan",
+		"sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+		"exp", "log", "log10", "ln", "sqrt":
 		if node.Op == "sqrt" {
 			if len(node.Args) != 1 {
 				return nil, fmt.Errorf("sqrt requires 1 argument, got %d", len(node.Args))

@@ -156,7 +156,7 @@ Discretization of the resulting integral term is handled by EarthSciDiscretizati
 
 #### Elementary Functions
 
-`exp`, `log`, `log10`, `sqrt`, `abs`, `sign`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `min`, `max`, `floor`, `ceil`
+`exp`, `log`, `log10`, `sqrt`, `abs`, `sign`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `min`, `max`, `floor`, `ceil`
 
 All take their standard mathematical arguments in `args`. Most are unary (one
 scalar argument) except `atan2` (binary) and `min`/`max`, which are **n-ary
@@ -166,6 +166,17 @@ nodes with fewer than two arguments. `min`/`max` are the canonical, AST-level
 encoding of clamp / clip / limiter primitives — `clamp(x, lo, hi)` is
 `{"op": "min", "args": [hi, {"op": "max", "args": [lo, "x"]}]}` — and reviewers
 MUST reject `fn` nodes that only re-implement these in disguise (see §0).
+
+The hyperbolic family `sinh`, `cosh`, `tanh` and their inverses `asinh`,
+`acosh`, `atanh` are unary, elementwise transcendentals evaluated exactly like
+the trigonometric family — no new control primitive. They map to each binding's
+standard-library hyperbolic functions (`sinh`/`asinh`/… ≡ Julia `Base`, NumPy
+`np.sinh`/`np.arcsinh`/…, Rust `f64`, Go `math`, JS `Math`). Their real-valued
+domains follow the usual conventions: `acosh` requires `x ≥ 1` and `atanh`
+requires `|x| < 1` (paralleling the `[-1, 1]` domain of `asin`/`acos`). As with
+the trigonometric inverses, behavior on out-of-domain inputs is binding-defined
+(most bindings propagate their native `NaN`; some raise) and is not constrained
+by this spec.
 
 #### Conditionals
 

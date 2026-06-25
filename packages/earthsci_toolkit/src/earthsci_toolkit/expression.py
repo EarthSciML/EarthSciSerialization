@@ -266,6 +266,30 @@ def to_sympy(expr: Expr, symbol_map: Optional[Dict[str, sp.Symbol]] = None) -> s
                 raise TypeError(f"Arctangent2 requires exactly 2 arguments, got {len(sympy_args)}")
             # Use a custom function to preserve structure when possible
             return sp.Function('atan2')(sympy_args[0], sympy_args[1])
+        elif expr.op == "sinh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Hyperbolic sine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.sinh(sympy_args[0])
+        elif expr.op == "cosh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Hyperbolic cosine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.cosh(sympy_args[0])
+        elif expr.op == "tanh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Hyperbolic tangent requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.tanh(sympy_args[0])
+        elif expr.op == "asinh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Inverse hyperbolic sine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.asinh(sympy_args[0])
+        elif expr.op == "acosh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Inverse hyperbolic cosine requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.acosh(sympy_args[0])
+        elif expr.op == "atanh":
+            if len(sympy_args) != 1:
+                raise TypeError(f"Inverse hyperbolic tangent requires exactly 1 argument, got {len(sympy_args)}")
+            return sp.atanh(sympy_args[0])
         elif expr.op == "abs":
             if len(sympy_args) != 1:
                 raise TypeError(f"Absolute value requires exactly 1 argument, got {len(sympy_args)}")
@@ -417,6 +441,24 @@ def from_sympy(sympy_expr: sp.Expr) -> Expr:
     elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'atan2':
         # Arctangent2
         return ExprNode(op="atan2", args=[from_sympy(arg) for arg in sympy_expr.args])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'sinh':
+        # Hyperbolic sine
+        return ExprNode(op="sinh", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'cosh':
+        # Hyperbolic cosine
+        return ExprNode(op="cosh", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'tanh':
+        # Hyperbolic tangent
+        return ExprNode(op="tanh", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'asinh':
+        # Inverse hyperbolic sine
+        return ExprNode(op="asinh", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'acosh':
+        # Inverse hyperbolic cosine
+        return ExprNode(op="acosh", args=[from_sympy(sympy_expr.args[0])])
+    elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'atanh':
+        # Inverse hyperbolic tangent
+        return ExprNode(op="atanh", args=[from_sympy(sympy_expr.args[0])])
     elif hasattr(sympy_expr, 'func') and sympy_expr.func.__name__ == 'Abs':
         # Absolute value
         return ExprNode(op="abs", args=[from_sympy(sympy_expr.args[0])])

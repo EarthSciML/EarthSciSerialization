@@ -302,6 +302,18 @@ func tryConstantFolding(node ExprNode) Expression {
 		if len(numbers) == 1 {
 			return math.Tan(numbers[0])
 		}
+	case "sinh":
+		if len(numbers) == 1 {
+			return math.Sinh(numbers[0])
+		}
+	case "cosh":
+		if len(numbers) == 1 {
+			return math.Cosh(numbers[0])
+		}
+	case "tanh":
+		if len(numbers) == 1 {
+			return math.Tanh(numbers[0])
+		}
 	case "abs":
 		if len(numbers) == 1 {
 			return math.Abs(numbers[0])
@@ -468,6 +480,36 @@ func evaluateExprNode(node ExprNode, bindings map[string]float64) (float64, erro
 			return 0, fmt.Errorf("atan2 requires 2 arguments, got %d", len(args))
 		}
 		return math.Atan2(args[0], args[1]), nil
+	case "sinh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("sinh requires 1 argument, got %d", len(args))
+		}
+		return math.Sinh(args[0]), nil
+	case "cosh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("cosh requires 1 argument, got %d", len(args))
+		}
+		return math.Cosh(args[0]), nil
+	case "tanh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("tanh requires 1 argument, got %d", len(args))
+		}
+		return math.Tanh(args[0]), nil
+	case "asinh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("asinh requires 1 argument, got %d", len(args))
+		}
+		return math.Asinh(args[0]), nil
+	case "acosh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("acosh requires 1 argument, got %d", len(args))
+		}
+		return math.Acosh(args[0]), nil
+	case "atanh":
+		if len(args) != 1 {
+			return 0, fmt.Errorf("atanh requires 1 argument, got %d", len(args))
+		}
+		return math.Atanh(args[0]), nil
 	case "sign":
 		if len(args) != 1 {
 			return 0, fmt.Errorf("sign requires 1 argument, got %d", len(args))
