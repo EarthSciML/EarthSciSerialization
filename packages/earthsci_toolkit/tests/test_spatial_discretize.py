@@ -339,15 +339,21 @@ def test_discretize_single_entry_with_gdd():
     assert disc["metadata"]["system_class"] == "ode"            # PDE -> ODE in one call
     assert disc["models"]["Heat"]["variables"]["u"]["shape"] == ["x"]
 
+    # Homogeneous Dirichlet now lowers to the declarative reflected ghost
+    # (u[0] = 2*0 - u[1]) on the FULL N=6 grid, at parity with Julia — a
+    # face-centred Dirichlet Laplacian whose eigenmode is sin(k*pi*(i-0.5)/N)
+    # with eigenvalue (1/dx^2)(2 cos(k*pi/N) - 2), NOT the old drop-a-cell
+    # interior-point form sin(k*pi*i/5).
     f = et.load(disc)   # loads directly: discretize's diagnostic metadata is now schema-valid
-    ic = {f"u[{i}]": math.sin(math.pi * i / 5) for i in range(1, 5)}
+    n, dx = 6, 0.2
+    ic = {f"u[{i}]": math.sin(math.pi * (i - 0.5) / n) for i in range(1, n + 1)}
     r = simulate(f, (0.0, 0.1), initial_conditions=ic, method="LSODA")
     assert r.success
-    lam = (1 / 0.2**2) * (2 * math.cos(math.pi / 5) - 2)
-    for i in range(1, 5):
-        idx = next(k for k, n in enumerate(r.vars) if n.endswith(f"[{i}]"))
+    lam = (1 / dx**2) * (2 * math.cos(math.pi / n) - 2)
+    for i in range(1, n + 1):
+        idx = next(k for k, nm in enumerate(r.vars) if nm.endswith(f"[{i}]"))
         assert float(np.interp(0.1, r.t, r.y[idx])) == pytest.approx(
-            math.exp(lam * 0.1) * math.sin(math.pi * i / 5), rel=1e-6)
+            math.exp(lam * 0.1) * math.sin(math.pi * (i - 0.5) / n), rel=1e-6)
 
 
 def test_heat_runs_end_to_end_via_gdd():
@@ -364,14 +370,17 @@ def test_heat_runs_end_to_end_via_gdd():
     }
     disc = spatial_discretize(heat, {"discretizations": {"d2": _CENTERED_D2}})
     f = et.load(disc)
-    ic = {f"u[{i}]": math.sin(math.pi * i / 5) for i in range(1, 5)}
+    # Reflected-ghost Dirichlet on the full N=6 grid (see
+    # test_discretize_single_entry_with_gdd): face-centred eigenmode.
+    n, dx = 6, 0.2
+    ic = {f"u[{i}]": math.sin(math.pi * (i - 0.5) / n) for i in range(1, n + 1)}
     r = simulate(f, (0.0, 0.1), initial_conditions=ic, method="LSODA")
     assert r.success
-    lam = (1 / 0.2**2) * (2 * math.cos(math.pi / 5) - 2)
-    for i in range(1, 5):
-        idx = next(k for k, n in enumerate(r.vars) if n.endswith(f"[{i}]"))
+    lam = (1 / dx**2) * (2 * math.cos(math.pi / n) - 2)
+    for i in range(1, n + 1):
+        idx = next(k for k, nm in enumerate(r.vars) if nm.endswith(f"[{i}]"))
         got = float(np.interp(0.1, r.t, r.y[idx]))
-        assert got == pytest.approx(math.exp(lam * 0.1) * math.sin(math.pi * i / 5), rel=1e-6)
+        assert got == pytest.approx(math.exp(lam * 0.1) * math.sin(math.pi * (i - 0.5) / n), rel=1e-6)
 
 
 # --- width-N halo + vectorized stencil evaluation --------------------------

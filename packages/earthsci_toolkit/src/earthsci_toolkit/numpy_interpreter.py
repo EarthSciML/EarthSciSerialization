@@ -565,8 +565,8 @@ def _eval_index(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
     # path binds index symbols to ranges). Convert 1-based -> 0-based and gather
     # with the *same* NumPy indexing semantics as the scalar branch below
     # (negative indices wrap), so the two paths are bit-identical. The discretized
-    # makearray uses disjoint interior / boundary regions
-    # (spatial_discretize._make_regions), so no stencil body reads out of bounds.
+    # makearray uses a disjoint interior box + single-cell boundary regions
+    # (spatial_discretize._apply_makearray_bcs), so no stencil body reads out of bounds.
     if any(isinstance(i, np.ndarray) for i in idxs):
         if len(idxs) != arr_val.ndim:
             raise NumpyInterpreterError(

@@ -18,9 +18,22 @@ into ``grad`` observeds, and whatever ``grad`` rule the GDD selects (centered,
 ``upwind_1st``, …) is applied to each.
 
 Scope of this module: Cartesian uniform grids; ``grad`` / ``d2`` (atomic) and
-``laplacian`` (expanded to per-dimension ``d2``); ``dirichlet`` / ``zero_gradient``
-BCs lowered to ``makearray`` ghost regions. BC-as-declarative-rules and
-non-uniform / curvilinear grids remain follow-ups (the Julia binding covers them).
+``laplacian`` (expanded to per-dimension ``d2``).
+
+Boundary conditions are lowered **declaratively**, at parity with the Julia
+reference (``EarthSciSerialization.jl/src/discretize.jl``): each model BC is
+wrapped as a synthetic ``bc(variable, …)`` op (``kind``→``fn``, ``side``→``dim``,
+Robin coefficients as trailing args) and run through the **shared rule engine**
+(:func:`earthsci_toolkit.rule_engine.rewrite`) against the ESD
+``{dirichlet,neumann,robin}_bc.json`` ghost rules — sourced from the document's
+own ``rules`` (same input Julia consumes) with the canonical finite-difference
+ghosts bundled as defaults. The rewritten ghost AST is spliced into ``makearray``
+boundary regions (``_apply_makearray_bcs`` / ``_reindex_ghost`` /
+``_instantiate_bc_cell_ghost``), mirroring Julia's ``_apply_makearray_bcs!``. All
+kinds dirichlet / neumann / zero_gradient / robin / interface / periodic flow
+through this one generic path (2-D corners fall out as multiply-bounded cells);
+there is **no per-kind imperative BC physics** in this module. Non-uniform /
+curvilinear grids remain follow-ups (the Julia binding covers them).
 """
 
 from __future__ import annotations
@@ -33,7 +46,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from dataclasses import replace
 
-from .rule_engine import parse_rule, rewrite, _parse_expr
+from .rule_engine import (
+    parse_rule, rewrite, _parse_expr, RuleContext, _SIDE_TO_AXIS_IDX,
+)
 from .canonicalize import canonicalize
 from .esm_types import ExprNode
 
@@ -162,6 +177,13 @@ def _subst_symbol(node: Any, name: str, value: Any) -> Any:
     return _map_expr(node, lambda n: value if n == name else n)
 
 
+def _restore_neg(node: Any) -> Any:
+    """Rewrite ``canonicalize``'s internal unary ``neg`` back to the wire op
+    ``-`` so the discretized document validates against the schema."""
+    return _map_expr(node, lambda n: {"op": "-", "args": n["args"]}
+                     if isinstance(n, dict) and n.get("op") == "neg" else n)
+
+
 def _canon_for_match(node: Any) -> Any:
     """Canonical form used for composite-rule pattern matching.
 
@@ -226,8 +248,7 @@ def _apply_gdd_rules(expr: Any, rules: Dict[str, Any], dims: List[str],
         expr = _to_json(rewrite(_parse_expr(expr), composite))
         # canonicalize emits its internal `neg` for unary minus; restore the
         # wire op `-` so the discretized document validates.
-        expr = _map_expr(expr, lambda n: {"op": "-", "args": n["args"]}
-                         if isinstance(n, dict) and n.get("op") == "neg" else n)
+        expr = _restore_neg(expr)
         dxs = set(dx_by_dim.values())
         if len(dxs) > 1:
             raise SpatialDiscretizeError(
@@ -257,47 +278,312 @@ def _apply_gdd_rules(expr: Any, rules: Dict[str, Any], dims: List[str],
     return _map_expr(expr, f)
 
 
-# --- boundary conditions -> ghost regions ------------------------------------
+# --- boundary conditions -> declarative makearray ghost regions --------------
+# Faithful port of the Julia reference (EarthSciSerialization.jl/src/discretize.jl):
+# _discretize_bc! (synthetic `bc` wrapper -> shared rule engine -> ghost AST),
+# _apply_makearray_bcs! / _reindex_ghost / _instantiate_bc_cell_ghost (splice the
+# ghost into makearray boundary regions). No per-kind imperative BC physics lives
+# here — the ghost is whatever the ESD `*_bc.json` rules rewrite the `bc` op to.
+
+# v0.1 domain-level BC `type` aliases -> v0.2 `kind`.
 _BC_ALIAS = {"zero_gradient": "neumann", "constant": "dirichlet"}
-_DEFAULT_BC = {"kind": "dirichlet", "value": 0.0}
+# Sides whose axis index counts from the high (max) end.
+_BC_SIDE_MAX = {"xmax", "ymax", "zmax", "east", "north", "top"}
+# Robin coefficient fields, appended to the `bc` wrapper in this fixed order so a
+# robin rule binds them positionally (`args: [$u, $a, $b, $g]`), matching Julia.
+_ROBIN_COEFFS = ("robin_alpha", "robin_beta", "robin_gamma")
+
+# Canonical ESD finite-difference BC ghost rules — the same rule ASTs the Julia
+# reference inlines into `esm["rules"]` (mirror ESD's finite_difference/
+# {dirichlet,neumann,robin}_bc.json). The ghost is authored in the rule-local
+# 0-based frame: `index($u, 0)` = first interior cell; `$h` from
+# `bind_side_spacing` (= 1/N). These are declarative rule data, NOT a per-kind
+# code table — the shared rule engine interprets them generically. A document's
+# own `rules` take precedence (interface and other custom ghosts live there).
+_BUNDLED_BC_RULES: List[Dict[str, Any]] = [
+    {"name": "dirichlet_bc",
+     "pattern": {"op": "bc", "kind": "dirichlet", "side": "$side",
+                 "args": ["$u", "$value"]},
+     "replacement": {"op": "-", "args": [
+         {"op": "*", "args": [2, "$value"]},
+         {"op": "index", "args": ["$u", 0]}]}},
+    {"name": "neumann_bc",
+     "pattern": {"op": "bc", "kind": "neumann", "side": "$side",
+                 "args": ["$u", "$value"]},
+     "where": [
+         {"guard": "var_has_grid", "pvar": "$u", "grid": "$g"},
+         {"guard": "bind_side_spacing", "pvar": "$h", "side": "$side", "grid": "$g"}],
+     "replacement": {"op": "+", "args": [
+         {"op": "index", "args": ["$u", 0]},
+         {"op": "*", "args": ["$h", "$value"]}]}},
+    {"name": "robin_bc",
+     "pattern": {"op": "bc", "kind": "robin", "side": "$side",
+                 "args": ["$u", "$a", "$b", "$g"]},
+     "where": [
+         {"guard": "var_has_grid", "pvar": "$u", "grid": "$gr"},
+         {"guard": "bind_side_spacing", "pvar": "$h", "side": "$side", "grid": "$gr"}],
+     "replacement": {"op": "/", "args": [
+         {"op": "+", "args": [
+             {"op": "*", "args": [{"op": "*", "args": [2, "$h"]}, "$g"]},
+             {"op": "*", "args": [
+                 {"op": "-", "args": [{"op": "*", "args": [2, "$b"]},
+                                     {"op": "*", "args": ["$a", "$h"]}]},
+                 {"op": "index", "args": ["$u", 0]}]}]},
+         {"op": "+", "args": [{"op": "*", "args": ["$a", "$h"]},
+                             {"op": "*", "args": [2, "$b"]}]}]}},
+]
 
 
-def _split_side(side: str, dims: List[str]) -> Tuple[Optional[str], Optional[str]]:
-    for end, suffix in (("low", "min"), ("high", "max")):
-        if side.endswith(suffix) and side[:-len(suffix)] in dims:
-            return side[:-len(suffix)], end
-    return None, None
+def _bc_rules(esm: Dict[str, Any]) -> List[Any]:
+    """Parse the BC ghost rules consumed by :func:`_discretize_bc`.
 
-
-def _bcs_by_side(model, domain, dims) -> Dict[Tuple[str, str], Dict[str, Any]]:
-    out: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    for bc in (model.get("boundary_conditions") or {}).values():
-        dim, end = _split_side(str(bc.get("side", "")), dims)
-        if dim is not None:
-            out[(dim, end)] = {"kind": _BC_ALIAS.get(bc.get("kind"), bc.get("kind", "dirichlet")),
-                               "value": float(bc.get("value", 0.0))}
-    for bc in domain.get("boundary_conditions", []) or []:
-        kind = _BC_ALIAS.get(bc.get("type"), bc.get("type", "dirichlet"))
-        value = float(bc.get("value", 0.0))
-        for d in bc.get("dimensions", []):
-            for end in ("low", "high"):
-                out.setdefault((d, end), {"kind": kind, "value": value})
+    Sources, in match order: every ``bc``-pattern rule the document declares in
+    its own top-level ``rules`` (the same input Julia consumes — e.g. interface
+    rules), then the bundled canonical finite-difference ghosts. First match
+    wins, so a document rule overrides a bundled default of the same kind/side.
+    """
+    out: List[Any] = []
+    for spec in esm.get("rules") or []:
+        pat = spec.get("pattern") or spec.get("applies_to") if isinstance(spec, dict) else None
+        if isinstance(pat, dict) and pat.get("op") == "bc":
+            s = dict(spec)
+            if "applies_to" in s and "pattern" not in s:
+                s["pattern"] = s.pop("applies_to")
+            out.append(parse_rule(s, name=str(s.get("name", "bc_rule"))))
+    for spec in _BUNDLED_BC_RULES:
+        out.append(parse_rule(dict(spec), name=str(spec["name"])))
     return out
 
 
-def _bc(bc_by_side, dim, end):
-    return bc_by_side.get((dim, end), _DEFAULT_BC)
+def _periodic_dims(domain: Dict[str, Any], dims: List[str]) -> set:
+    spatial = domain.get("spatial") or {}
+    return {d for d in dims if (spatial.get(d) or {}).get("periodic")}
 
 
-def _grid_sizes(domain, dims, bc_by_side) -> Dict[str, Tuple[int, float]]:
+def _bc_rule_ctx(grid_name: str, dims: List[str], dim_sizes: Dict[str, int],
+                 periodic: set, model: Dict[str, Any]) -> RuleContext:
+    """Build the rule-engine context the BC ghost rules need: grid metadata for
+    ``bind_side_spacing`` / ``bind_side_dim_size`` (1/N and N keyed off the side's
+    axis index), and per-variable ``grid`` / ``shape`` for ``var_has_grid``."""
+    grids = {grid_name: {"spatial_dims": list(dims),
+                         "dim_sizes": dict(dim_sizes),
+                         "periodic_dims": list(periodic)}}
+    variables: Dict[str, Dict[str, Any]] = {}
+    for n, v in (model.get("variables") or {}).items():
+        meta: Dict[str, Any] = {}
+        if v.get("type") == "state":
+            meta["grid"] = grid_name
+            meta["shape"] = list(dims)
+        variables[n] = meta
+    return RuleContext(grids=grids, variables=variables)
+
+
+def _axis_side_name(axis: int, is_max: bool) -> str:
+    """Axis-position side string (`xmin`/`xmax`/`ymin`/…) for the side's axis
+    index, matching the rule engine's ``_SIDE_TO_AXIS_IDX`` guard convention."""
+    return "xyz"[axis] + ("max" if is_max else "min")
+
+
+def _resolve_bc_side(side: str, dims: List[str]) -> Optional[Tuple[str, bool]]:
+    """Resolve a BC ``side`` string to ``(dim_name, is_max)`` — axis-position
+    convention first (``xmin``/``ymax``/compass aliases via ``_SIDE_TO_AXIS_IDX``,
+    matching ``bind_side_spacing``), then the ``<dim>min``/``<dim>max`` fallback."""
+    axis = _SIDE_TO_AXIS_IDX.get(side)
+    if axis is not None and axis < len(dims):
+        return dims[axis], side in _BC_SIDE_MAX
+    for d in dims:
+        if side == d + "min":
+            return d, False
+        if side == d + "max":
+            return d, True
+    return None
+
+
+def _collect_bcs(model: Dict[str, Any], domain: Dict[str, Any],
+                 dims: List[str], state_names: List[str]) -> List[Dict[str, Any]]:
+    """Normalize the model's v0.2 ``boundary_conditions`` map and any v0.1
+    domain-level list into one list of BC dicts (``variable``/``kind``/``side``/
+    ``value``/``coupled_variable``/Robin coeffs). v0.2 entries keep their map key
+    in ``_name`` so the lowered ghost can be written back for golden parity; the
+    nameless v0.1 list applies each entry to every state variable, both ends."""
+    out: List[Dict[str, Any]] = []
+    for name, bc in (model.get("boundary_conditions") or {}).items():
+        kind = _BC_ALIAS.get(bc.get("kind"), bc.get("kind"))
+        out.append({"_name": name, "variable": bc.get("variable"), "kind": kind,
+                    "side": bc.get("side"), "value": bc.get("value"),
+                    "coupled_variable": bc.get("coupled_variable"),
+                    **{c: bc.get(c) for c in _ROBIN_COEFFS}})
+    for bc in domain.get("boundary_conditions", []) or []:
+        kind = _BC_ALIAS.get(bc.get("type"), bc.get("type", "dirichlet"))
+        value = bc.get("value")
+        for d in bc.get("dimensions", []):
+            if d not in dims:
+                continue
+            axis = dims.index(d)
+            for is_max in (False, True):
+                side = _axis_side_name(axis, is_max)
+                for var in state_names:
+                    out.append({"_name": None, "variable": var, "kind": kind,
+                                "side": side, "value": value,
+                                "coupled_variable": None})
+    return out
+
+
+def _discretize_bc(bc: Dict[str, Any], rules: List[Any], ctx: RuleContext,
+                   max_passes: int = 32) -> Optional[Any]:
+    """Rewrite one BC into its ghost AST via the shared rule engine — the Python
+    twin of Julia ``_discretize_bc!``.
+
+    Builds the synthetic ``bc(variable[, coupled][, value][, robin α,β,γ])`` op
+    (``kind``→``fn``, ``side``→``dim`` are promoted by the rule-engine parser),
+    runs the rule engine, and returns the canonicalized ghost (rule-local 0-based
+    frame). Returns ``None`` if no rule fired (the node is still a ``bc`` op)."""
+    variable, kind = bc.get("variable"), bc.get("kind")
+    if variable is None or kind is None:
+        return None
+    wrapper: Dict[str, Any] = {"op": "bc", "kind": kind, "args": [variable]}
+    if bc.get("side") is not None:
+        wrapper["side"] = bc["side"]
+    if bc.get("coupled_variable") is not None:
+        wrapper["args"].append(bc["coupled_variable"])
+    if bc.get("value") is not None:
+        wrapper["args"].append(bc["value"])
+    for coeff in _ROBIN_COEFFS:
+        if bc.get(coeff) is not None:
+            wrapper["args"].append(bc[coeff])
+    rewritten = rewrite(_parse_expr(wrapper), rules, ctx, max_passes=max_passes)
+    if isinstance(rewritten, ExprNode) and rewritten.op == "bc":
+        return None
+    return _restore_neg(_to_json(canonicalize(rewritten)))
+
+
+def _fold_index_arg(a: Any, fixed: Dict[str, int]) -> Optional[int]:
+    """Fold an index-argument expression to a concrete int given fixed index
+    values; ``None`` when symbols remain (mirror Julia ``_fold_index_arg``)."""
+    if isinstance(a, bool):
+        return None
+    if isinstance(a, int):
+        return a
+    if isinstance(a, float):
+        return int(a) if a.is_integer() else None
+    if isinstance(a, str):
+        return fixed.get(a)
+    if not isinstance(a, dict) or a.get("op") not in ("+", "-"):
+        return None
+    args = a.get("args") or []
+    if len(args) != 2:
+        return None
+    x, y = _fold_index_arg(args[0], fixed), _fold_index_arg(args[1], fixed)
+    if x is None or y is None:
+        return None
+    return x + y if a["op"] == "+" else x - y
+
+
+def _reindex_ghost(node: Any, var: str, pos: int, is_max: bool, n: int,
+                   other_idx: Dict[int, int], rank: int) -> Any:
+    """Re-index a BC-rule ghost AST from the rule's local 0-based frame into the
+    absolute grid frame (mirror Julia ``_reindex_ghost``).
+
+    Each ``index($u, L)`` read (L 0-based, cells inward from the boundary face)
+    maps to the absolute grid index along the BC axis — min side ``1 + L``, max
+    side ``n - L`` — while the variable's other axes inherit the concrete indices
+    of the out-of-range read being replaced (``other_idx``). 1-based output."""
+    if not isinstance(node, dict):
+        return node
+    if node.get("op") == "index":
+        args = node.get("args") or []
+        if args and isinstance(args[0], str) and args[0] == var:
+            ell = _fold_index_arg(args[1], {}) if len(args) >= 2 else 0
+            if ell is None:
+                ell = 0
+            full: List[Any] = [var]
+            for p in range(rank):
+                if p == pos:
+                    full.append(n - ell if is_max else 1 + ell)
+                else:
+                    full.append(other_idx.get(p, 1))
+            return {"op": "index", "args": full}
+    out: Dict[str, Any] = {}
+    for k, v in node.items():
+        out[k] = ([_reindex_ghost(a, var, pos, is_max, n, other_idx, rank) for a in v]
+                  if k == "args" and isinstance(v, list) else v)
+    return out
+
+
+def _instantiate_bc_cell_ghost(node: Any, fixed: Dict[str, int],
+                               variables: Dict[str, Dict[str, Any]],
+                               dim_sizes: Dict[str, int], periodic: set,
+                               bc_ghost_map: Dict[Tuple[str, str, str], Any]) -> Any:
+    """Instantiate a stencil body at literal cell indices, splicing the
+    declarative BC-rule ghost at bounded out-of-range reads (mirror Julia
+    ``_instantiate_bc_cell_ghost``).
+
+    Index variables resolve via ``fixed``; a bounded out-of-range read of ``v`` on
+    side ``s`` is replaced by ``bc_ghost_map[(v, dim, s)]`` re-indexed into the
+    grid frame, then re-instantiated so corner reads (out-of-range on ≥2 axes)
+    compose their per-axis ghosts. Periodic reads wrap modulo the dim size;
+    undeclared out-of-range reads keep the zero-ghost convention (concrete index
+    passes through)."""
+    if not isinstance(node, dict):
+        return node
+    if node.get("op") == "index":
+        args = node.get("args") or []
+        if args and isinstance(args[0], str):
+            vname = args[0]
+            vmeta = variables.get(vname)
+            vshape = vmeta.get("shape") if vmeta else None
+            if isinstance(vshape, list) and len(vshape) == len(args) - 1:
+                rank = len(vshape)
+                folded = [_fold_index_arg(a, fixed) for a in args[1:]]
+                for p in range(rank):
+                    e = folded[p]
+                    if e is None:
+                        continue
+                    dn = vshape[p]
+                    n = int(dim_sizes.get(dn, 0))
+                    if not (n > 0 and dn not in periodic and (e < 1 or e > n)):
+                        continue
+                    is_max = e > n
+                    ghost = bc_ghost_map.get((vname, dn, "max" if is_max else "min"))
+                    if ghost is None:
+                        continue
+                    other_idx = {q: folded[q] for q in range(rank)
+                                 if q != p and folded[q] is not None}
+                    spliced = _reindex_ghost(copy.deepcopy(ghost), vname, p, is_max,
+                                             n, other_idx, rank)
+                    return _instantiate_bc_cell_ghost(spliced, fixed, variables,
+                                                      dim_sizes, periodic, bc_ghost_map)
+                new_args: List[Any] = [vname]
+                for p, a in enumerate(args[1:]):
+                    e = folded[p]
+                    if e is None:
+                        new_args.append(a)
+                        continue
+                    dn = vshape[p]
+                    n = int(dim_sizes.get(dn, 0))
+                    if n > 0 and dn in periodic:
+                        e = (e - 1) % n + 1
+                    new_args.append(e)
+                return {"op": "index", "args": new_args}
+    out: Dict[str, Any] = {}
+    for k, v in node.items():
+        out[k] = ([_instantiate_bc_cell_ghost(a, fixed, variables, dim_sizes,
+                                              periodic, bc_ghost_map) for a in v]
+                  if k == "args" and isinstance(v, list) else v)
+    return out
+
+
+def _grid_sizes(domain, dims) -> Dict[str, Tuple[int, float]]:
+    """Grid size (cell count, spacing) per dim — the FULL grid (no Dirichlet
+    cell-dropping). Boundary cells stay state cells; their RHS uses the rewritten
+    BC ghost (e.g. the Dirichlet reflected ghost ``2·value − u[boundary]``), at
+    parity with Julia's makearray lowering."""
     out: Dict[str, Tuple[int, float]] = {}
     spatial = domain.get("spatial") or {}
     for name in dims:
         spec = spatial[name]
         n_points = int(round((spec["max"] - spec["min"]) / spec["grid_spacing"])) + 1
-        drop = sum(1 for end in ("low", "high")
-                   if _bc(bc_by_side, name, end)["kind"] in ("dirichlet", "constant"))
-        out[name] = (n_points - drop, float(spec["grid_spacing"]))
+        out[name] = (n_points, float(spec["grid_spacing"]))
     return out
 
 
@@ -322,103 +608,99 @@ def _affine_offset(sub: Any, dim: str) -> Optional[int]:
     return None
 
 
-def _halo_by_dim(body: Any, state: str, dims: List[str]) -> Dict[str, int]:
-    """Largest absolute stencil offset on ``state`` per spatial dim — the ghost
-    halo width each boundary needs (1 for a centred 2nd-order / Godunov stencil,
-    2 for WENO5, etc.)."""
-    halo = {d: 0 for d in dims}
+def _stencil_reach(body: Any, dims: List[str]) -> Dict[str, int]:
+    """Largest absolute stencil offset per spatial dim across every grid-shaped
+    index read in ``body`` (any variable, not just the LHS state) — the ghost
+    halo width each boundary needs (1 for a centred / Godunov stencil, 2 for
+    WENO5). Mirrors Julia ``_scan_stencil_reach!``."""
+    reach = {d: 0 for d in dims}
 
     def f(n):
         if (isinstance(n, dict) and n.get("op") == "index"
-                and n.get("args") and n["args"][0] == state):
+                and n.get("args") and isinstance(n["args"][0], str)):
             subs = n["args"][1:]
             if len(subs) == len(dims):
                 for pos, d in enumerate(dims):
                     k = _affine_offset(subs[pos], d)
                     if k is not None:
-                        halo[d] = max(halo[d], abs(k))
+                        reach[d] = max(reach[d], abs(k))
         return n
     _map_expr(body, f)
-    return halo
+    return reach
 
 
-def _ghost_subst_cell(expr, state, pos, ndim, cell, n, bc_kind, bc_value, dim):
-    """Substitute out-of-range ghost accesses for one concrete boundary cell.
+def _apply_makearray_bcs(interior: Any, state: str, dims: List[str],
+                         sizes: Dict[str, Tuple[int, float]], periodic: set,
+                         bc_ghost_map: Dict[Tuple[str, str, str], Any],
+                         variables: Dict[str, Dict[str, Any]]
+                         ) -> Tuple[List[Any], List[Any]]:
+    """Lower the interior stencil body into ``(regions, values)`` for a
+    ``makearray``, splicing the declarative BC ghosts (Python twin of Julia
+    ``_apply_makearray_bcs!``).
 
-    For an ``index(state, …)`` whose subscript along ``pos`` is affine in ``dim``
-    (offset ``k``), the resolved index at this cell is ``cell + k``; when that
-    falls outside ``[1, n]`` it is a ghost: replaced by the Dirichlet/constant
-    value, or (Neumann / zero-gradient) by the nearest in-range cell. Matching
-    the canonical ``{+,[dim,k]}`` affine form fixes the long-standing low-side
-    miss (the old ``{-,[dim,1]}`` target never matched ``{+,[dim,-1]}``), and the
-    per-cell resolution generalizes from a 1-cell to an N-cell halo."""
-    def f(node):
-        if (isinstance(node, dict) and node.get("op") == "index"
-                and node.get("args") and node["args"][0] == state):
-            subs = node["args"][1:]
-            if len(subs) == ndim:
-                k = _affine_offset(subs[pos], dim)
-                if k is not None:
-                    resolved = cell + k
-                    if resolved < 1 or resolved > n:
-                        if bc_kind in ("dirichlet", "constant"):
-                            return float(bc_value)
-                        new = list(subs)
-                        new[pos] = min(max(resolved, 1), n)   # clamp to boundary cell
-                        return {"op": "index", "args": [state] + new}
-        return node
-    return _map_expr(expr, f)
+    Region 0 is the interior box ``[lo, hi]`` — shrunk on each bounded side by
+    the stencil reach (a non-periodic side carrying a BC ghost, or either side of
+    a periodic axis). Every cell outside that box becomes a single-cell region
+    whose body is the interior re-instantiated at that cell with out-of-range
+    reads ghost-spliced; 2-D corners fall out as cells bounded on ≥2 axes. Region
+    0 stays disjoint from the boundary cells (not Julia's overlapping full box) so
+    the vectorized evaluator never eagerly evaluates an out-of-range interior
+    read — numerically identical, since boundary cells override region 0 anyway."""
+    nd = len(dims)
+    sizes_n = [sizes[d][0] for d in dims]
+    dim_sizes = {d: sizes[d][0] for d in dims}
+    reach = _stencil_reach(interior, dims)
 
+    lo = [1] * nd
+    hi = list(sizes_n)
+    bounded = [False] * nd
+    for d in range(nd):
+        dn = dims[d]
+        r = reach.get(dn, 0)
+        if r == 0:
+            continue
+        if dn in periodic:
+            lo[d], hi[d], bounded[d] = 1 + r, sizes_n[d] - r, True
+        else:
+            for is_max in (False, True):
+                if (state, dn, "max" if is_max else "min") not in bc_ghost_map:
+                    continue
+                if is_max:
+                    hi[d] = sizes_n[d] - r
+                else:
+                    lo[d] = 1 + r
+                bounded[d] = True
 
-def _make_regions(interior, state, dims, sizes, bc_by_side):
-    """Carve the index box into an interior region plus per-cell boundary
-    regions of the stencil's halo width, applying ghost substitution per cell.
+    # No bounded side -> a single full-box region (makearray identity).
+    if not any(bounded):
+        return [[[1, sizes_n[d]] for d in range(nd)]], [copy.deepcopy(interior)]
 
-    The interior body covers the full box first; boundary cells (depth ``1..h``
-    from each side, ``h`` = stencil halo) overwrite it last-wins. A 1-cell halo
-    reproduces the original 3^D layout; wider stencils (WENO) get a width-``h``
-    band on each side, so a ``±h`` access never reads past the domain edge."""
-    ndim = len(dims)
-    halo = _halo_by_dim(interior, state, dims)
+    for d in range(nd):
+        # A periodic axis with lo>hi just means every cell wraps; only a bounded
+        # non-periodic axis whose two sides overlap is a genuine too-small grid.
+        if dims[d] in periodic:
+            continue
+        if lo[d] > hi[d]:
+            raise SpatialDiscretizeError(
+                f"dimension {dims[d]!r} (size {sizes_n[d]}) is too small for the "
+                f"stencil reach {reach.get(dims[d], 0)} with boundary conditions "
+                "on both sides")
 
-    # Per-dim position options: a DISJOINT interior band [h+1, n-h] plus the
-    # low/high boundary cells (depth 1..h each side). Disjoint (not the full
-    # box) so an interior ``±h`` access never reaches a domain edge — the
-    # vectorized evaluator can slice it directly, and boundary cells carry the
-    # ghost-substituted bodies. h=0 dims keep the full [1, n] band.
-    dim_opts: List[List[Tuple[Any, Tuple[int, int]]]] = []
-    for dim in dims:
-        n = sizes[dim][0]
-        h = min(halo[dim], n)
-        opts: List[Tuple[Any, Tuple[int, int]]] = []
-        if n - h >= h + 1:                              # non-empty interior band
-            opts.append(("I", (h + 1, n - h)))
-        for p in range(1, h + 1):                       # low cells 1..h
-            opts.append((("low", p), (p, p)))
-        for p in range(max(h + 1, n - h + 1), n + 1):   # high cells, no overlap with low
-            opts.append((("high", p), (p, p)))
-        if not opts:                                    # degenerate (n==0); keep full box
-            opts = [("I", (1, n))]
-        dim_opts.append(opts)
-
-    combos = sorted(
-        itertools.product(*[range(len(o)) for o in dim_opts]),
-        key=lambda c: sum(1 for pos, i in enumerate(c) if dim_opts[pos][i][0] != "I"))
-
-    regions, values = [], []
-    for combo in combos:
-        rng, value = [], copy.deepcopy(interior)
-        for pos in range(ndim):
-            tag, (lo, hi) = dim_opts[pos][combo[pos]]
-            rng.append([lo, hi])
-            if tag != "I":
-                side, cell = tag
-                n = sizes[dims[pos]][0]
-                b = _bc(bc_by_side, dims[pos], side)
-                value = _ghost_subst_cell(value, state, pos, ndim, cell, n,
-                                          b["kind"], b["value"], dims[pos])
-        regions.append(rng)
-        values.append(value)
+    regions: List[Any] = []
+    values: List[Any] = []
+    have_interior = all(lo[d] <= hi[d] for d in range(nd))
+    if have_interior:
+        regions.append([[lo[d], hi[d]] for d in range(nd)])
+        values.append(copy.deepcopy(interior))
+    for cell in itertools.product(*[range(1, sizes_n[d] + 1) for d in range(nd)]):
+        if have_interior and all(lo[d] <= cell[d] <= hi[d] for d in range(nd)):
+            continue
+        fixed = {dims[d]: cell[d] for d in range(nd)}
+        body_cell = _instantiate_bc_cell_ghost(copy.deepcopy(interior), fixed,
+                                               variables, dim_sizes, periodic,
+                                               bc_ghost_map)
+        regions.append([[cell[d], cell[d]] for d in range(nd)])
+        values.append(body_cell)
     return regions, values
 
 
@@ -482,7 +764,12 @@ def spatial_discretize(esm: Dict[str, Any], gdd: Dict[str, Any]) -> Dict[str, An
     this function contains no stencil coefficients and no operator special-cases.
     """
     rules = _gdd_rules(gdd)
+    bc_rules = _bc_rules(esm)
     out = copy.deepcopy(esm)
+    # The document's top-level `rules` (BC ghost rules) are a discretization
+    # input, consumed above into `bc_rules`; the lowered ODE is self-contained,
+    # so drop them from the output (they are not a discretized-ODE schema field).
+    out.pop("rules", None)
     domains = out.get("domains", {})
     for model in out.get("models", {}).values():
         dom = model.get("domain")
@@ -492,15 +779,35 @@ def spatial_discretize(esm: Dict[str, Any], gdd: Dict[str, Any]) -> Dict[str, An
         dims = list((domain.get("spatial") or {}).keys())
         if not dims:
             continue
-        bc_by_side = _bcs_by_side(model, domain, dims)
-        sizes = _grid_sizes(domain, dims, bc_by_side)
+        sizes = _grid_sizes(domain, dims)
         ranges = {d: [1, sizes[d][0]] for d in dims}
         dx_by_dim = {d: sizes[d][1] for d in dims}
+        periodic = _periodic_dims(domain, dims)
+        dim_sizes = {d: sizes[d][0] for d in dims}
 
         state_names = [n for n, v in model.get("variables", {}).items()
                        if v.get("type") == "state"]
         for n in state_names:
             model["variables"][n]["shape"] = list(dims)
+        var_meta = {n: {"shape": list(dims)} for n in state_names}
+
+        # Lower each BC to its ghost AST through the shared rule engine (the same
+        # ESD `*_bc.json` rules Julia consumes), keyed by (variable, dim, side).
+        # The rewritten ghost is also written back onto the model BC `value`
+        # (golden parity with the Julia discretize output).
+        ctx = _bc_rule_ctx(dom, dims, dim_sizes, periodic, model)
+        bc_ghost_map: Dict[Tuple[str, str, str], Any] = {}
+        for bc in _collect_bcs(model, domain, dims, state_names):
+            ghost = _discretize_bc(bc, bc_rules, ctx)
+            if ghost is None:
+                continue
+            resolved = _resolve_bc_side(str(bc.get("side", "")), dims)
+            if resolved is None:
+                continue
+            dn, is_max = resolved
+            bc_ghost_map[(bc["variable"], dn, "max" if is_max else "min")] = ghost
+            if bc.get("_name") is not None:
+                model["boundary_conditions"][bc["_name"]]["value"] = ghost
 
         # Observed spatial sub-expressions (e.g. psi_x = grad(psi,x)) are inlined
         # into each state PDE's RHS so their operators discretize in place; the
@@ -515,7 +822,8 @@ def spatial_discretize(esm: Dict[str, Any], gdd: Dict[str, Any]) -> Dict[str, An
                 continue  # observed/algebraic defn — folded in by inlining
             inlined = _inline_observeds(eq["rhs"], obs_raw, obs_cache, set())
             rhs = _apply_gdd_rules(_expand_laplacian(inlined, dims), rules, dims, dx_by_dim)
-            regions, values = _make_regions(rhs, state, dims, sizes, bc_by_side)
+            regions, values = _apply_makearray_bcs(rhs, state, dims, sizes, periodic,
+                                                   bc_ghost_map, var_meta)
             new_eqs.append({
                 "lhs": {"op": "arrayop", "args": [], "output_idx": list(dims),
                         "expr": {"op": "D", "args": [{"op": "index", "args": [state] + list(dims)}],
