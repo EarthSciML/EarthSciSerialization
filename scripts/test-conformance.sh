@@ -469,7 +469,13 @@ run_cadence_conformance_python() {
         return 0
     fi
     log "Running cadence-partition conformance with the Python partition pass..."
+    # PYTHONPATH pins the adapter to THIS worktree's src (mirrors the PDE-sim
+    # adapter below). Without it, `python3 -m earthsci_toolkit...` imports
+    # whatever earthsci_toolkit is globally installed — an editable install
+    # points at a FIXED path (another worktree), so the adapter runs stale code
+    # and emits no conforming output for any branch that changed cadence.py.
     EARTHSCI_CADENCE_ADAPTER_PYTHON="python3 -m earthsci_toolkit.cli.cadence_adapter" \
+    PYTHONPATH="$PYTHON_DIR/src:${PYTHONPATH:-}" \
         python3 "$SCRIPT_DIR/run-cadence-conformance.py" \
             --bindings python \
             --output "$OUTPUT_DIR/cadence/python_report.json"
