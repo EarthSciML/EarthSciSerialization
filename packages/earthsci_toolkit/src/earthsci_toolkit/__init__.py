@@ -86,10 +86,6 @@ from .validation import validate, ValidationResult, ValidationError
 # Discretization pipeline / RFC §12 DAE binding contract
 from .discretize import discretize, DiscretizationError
 
-# Method-of-lines PDE driver: lower a continuous PDE component to an ArrayOp
-# ODE system runnable by simulate() (Python counterpart to Julia build_ode_problem)
-from .discretize_pde import discretize_pde, DiscretizePDEError
-
 # Grid accessor ABC + registry (ESD registers concrete family impls)
 from .grid_accessor import (
     GridAccessor,
