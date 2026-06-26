@@ -53,6 +53,7 @@ using JSON3
     include("tree_walk_vectorized_test.jl")
     include("tree_walk_allocation_test.jl")
     include("tree_walk_param_gather_test.jl")
+    include("data_refresh_test.jl")
     include("tree_walk_cse_test.jl")
     include("tree_walk_const_array_boundary_test.jl")
     include("tree_walk_semiring_test.jl")

@@ -49,6 +49,7 @@ include("mtk_export.jl")
 include("geometry.jl")
 include("area_faq.jl")
 include("tree_walk.jl")
+include("data_refresh.jl")
 include("reference_graph.jl")
 include("cadence.jl")
 include("value_invention.jl")
@@ -156,6 +157,12 @@ export
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
     build_evaluator, evaluate_expr, TreeWalkError,
+    # Discrete-cadence loader refresh (ess-14f.4, JL-J1; callback ctor in the
+    # DiffEqCallbacks/SciMLBase extension). Provider + regrid protocols have
+    # concrete impls in the data binding (EarthSciIO) and ESD-rule applier (JL-J2).
+    build_refresh_callback, RefreshBuffers, RefreshError,
+    RegridApplier, IdentityRegrid, apply_regrid!,
+    provider_refresh_times, provider_is_const, provider_sample,
     # Inline-test runner (esm-ol5qa; spec §6.6)
     AssertionStatus, AssertionResult, PASS, FAIL, ERROR, SKIP,
     esm_root, esm_path,
