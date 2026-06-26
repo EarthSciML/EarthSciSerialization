@@ -14,6 +14,7 @@ Limitations: 0D box model only, no spatial operators, limited event support.
 This enables atmospheric chemistry simulation in Python.
 """
 
+import datetime as _dt
 import numpy as np
 import sympy as sp
 from typing import Dict, List, Set, Tuple, Optional, Union, Any, Callable
@@ -429,6 +430,7 @@ def simulate(
     atol: float = 1e-14,
     cse: bool = True,
     loader_provider: Optional["LoaderProvider"] = None,
+    provider_factory: Optional[Callable] = None,
 ) -> SimulationResult:
     """Simulate an ESM model via the flattened representation (spec §4.7.5).
 
@@ -467,13 +469,26 @@ def simulate(
         for ``cse=True`` and ``cse=False`` are cached separately on the
         FlattenedSystem so flipping the flag does not invalidate the other.
     loader_provider:
-        Optional callable ``(LoaderField, t) -> ndarray`` used to execute the
-        system's data-loader fields (RFC pure-io-data-loaders §4.3). Only
-        consulted when the flattened system has loader fields; the returned
-        array is bound into the RHS as a read-only input, refreshed at the
-        loader's cadence (const loaders once, discrete loaders per segment).
-        Defaults to the real loader I/O path; tests / offline runs inject a
-        deterministic stub. Ignored for systems without data loaders.
+        Optional **legacy** per-call callable ``(LoaderField, t) -> ndarray``
+        used to execute the system's data-loader fields (RFC
+        pure-io-data-loaders §4.3). Only consulted when the flattened system has
+        loader fields; the returned array is bound into the RHS as a read-only
+        input, refreshed at the loader's cadence (const loaders once, discrete
+        loaders per segment) with boundaries from local frequency arithmetic.
+        Tests / offline runs inject a deterministic stub here. Ignored for
+        systems without data loaders.
+    provider_factory:
+        Optional factory ``(LoaderField, window) -> Provider`` building one
+        cadence-aware
+        :class:`~earthsci_toolkit.data_loaders.provider.Provider` per loader
+        field (the EarthSciIO Provider contract: ``materialize`` / ``refresh`` /
+        ``refresh_times``). When omitted (and no ``loader_provider`` is given)
+        the in-tree
+        :func:`~earthsci_toolkit.data_loaders.provider.build_default_provider`
+        is used, so the default path GETs + REFRESHes loader arrays through the
+        provider and takes its segment boundaries from ``refresh_times()``.
+        Inject a real EarthSciIO provider here. Ignored for systems without data
+        loaders, and superseded by ``loader_provider`` when both are given.
 
     Raises
     ------
@@ -526,6 +541,7 @@ def simulate(
         return _simulate_with_loaders(
             flat, tspan, parameters, initial_conditions, method,
             rtol=rtol, atol=atol, loader_provider=loader_provider,
+            provider_factory=provider_factory,
         )
 
     # Array-op detection: if any equation contains an array op, route through
@@ -1784,42 +1800,117 @@ def _simulate_with_numpy(
 LoaderProvider = Callable[[LoaderField, float], "np.ndarray"]
 
 
-def _default_loader_provider(
-    field: LoaderField, t: float, target: Optional[Any] = None
-) -> np.ndarray:
-    """Execute ``field``'s data loader and return its ``field.var`` array.
+def _field_epoch(field: LoaderField) -> Optional[_dt.datetime]:
+    """Absolute instant of simulation-clock 0 for ``field`` (C1's clock mapping).
 
-    Maps the simulation clock ``t`` to an absolute instant via the loader's
-    ``temporal.start`` (when present) and calls :func:`load_data`, returning the
-    requested variable as a flat ``float`` array.
-
-    When a ``target`` :class:`~earthsci_toolkit.data_loaders.regrid_driver.TargetGrid`
-    is supplied and ``field.regrid`` selects a method, the C4 driver reprojects +
-    horizontally regrids (and, for a 3-D field, reduces ``lev=min``) the raw
-    array onto the target domain grid before flattening — the per-variable
-    lowering layered on top of C1's injection + cadence machinery. If the source
-    exposes no lon/lat coordinates (e.g. a fixture array with no dataset), the
-    raw flattened array is returned unchanged.
+    ``temporal.start`` is sim-clock zero, so a provider's ``refresh_times``
+    anchor converts back to the simulation clock by subtracting it. ``None`` when
+    the loader has no temporal anchor (a CONST loader, or a discrete loader with
+    no ``start``) — the caller then falls back to local frequency arithmetic.
     """
-    from .data_loaders.runtime import load_data
-
-    when: Optional[Any] = None
     temporal = field.loader.temporal
-    if temporal is not None and temporal.start is not None:
-        import datetime as _dt
+    start = getattr(temporal, "start", None) if temporal is not None else None
+    if not start:
+        return None
+    from .data_loaders.time_resolution import _coerce_datetime
 
-        from .data_loaders.time_resolution import _coerce_datetime
+    return _coerce_datetime(start)
 
-        when = _coerce_datetime(temporal.start) + _dt.timedelta(seconds=float(t))
-    result = load_data(field.loader, time=when)
+
+def _coerce_field_values(obj: Any) -> np.ndarray:
+    """Float array from a provider field, regardless of its container.
+
+    Handles an EarthSciIO ``NativeField`` (``.data`` + ``.dims``), an xarray
+    ``DataArray`` (``.values``), and a bare ndarray / list.
+    """
+    if hasattr(obj, "values") and not isinstance(obj, np.ndarray):
+        return np.asarray(obj.values, dtype=float)
+    if hasattr(obj, "data") and hasattr(obj, "dims"):
+        return np.asarray(obj.data, dtype=float)
+    return np.asarray(obj, dtype=float)
+
+
+def _extract_loader_var(native: Any, var: str) -> np.ndarray:
+    """Pull ``var``'s raw values from a provider's native dataset.
+
+    Accepts a :class:`~earthsci_toolkit.data_loaders.grid.GridLoadResult` or an
+    EarthSciIO ``NativeDataset`` (either exposes a ``.variables`` mapping), or a
+    bare array returned by a minimal stub provider.
+    """
+    variables = getattr(native, "variables", None)
+    if variables is not None:
+        return _coerce_field_values(variables[var])
+    return _coerce_field_values(native)
+
+
+def _regrid_native_field(
+    field: LoaderField, native: Any, target: Any
+) -> Optional[np.ndarray]:
+    """Apply the C4 regrid driver to an EarthSciIO ``NativeDataset`` field.
+
+    A ``NativeDataset`` carries its grid in a ``.coords`` mapping of
+    ``NativeField``s (lat/lon/lev). Returns ``None`` (keep the raw array) when no
+    regrid method is configured or the horizontal coords are absent; the
+    GridLoadResult shape is handled by :func:`_regrid_loaded_field`.
+    """
+    spec = getattr(field, "regrid", None)
+    method = getattr(spec, "method", None) if spec is not None else None
+    if not method:
+        return None
+    coords = getattr(native, "coords", None)
+    if not isinstance(coords, dict):
+        return None
+    from .data_loaders.regrid_driver import (
+        _LAT_NAMES,
+        _LEV_NAMES,
+        _LON_NAMES,
+        regrid_loader_field,
+    )
+
+    values = _extract_loader_var(native, field.var)
+
+    def _pick(names) -> Optional[np.ndarray]:
+        for n in names:
+            if n in coords:
+                return _coerce_field_values(coords[n])
+        return None
+
+    src_lon = _pick(_LON_NAMES)
+    src_lat = _pick(_LAT_NAMES)
+    lev_coord = _pick(_LEV_NAMES) if values.ndim >= 3 else None
+    if src_lon is None or src_lat is None:
+        return None
+    if values.ndim >= 3 and lev_coord is None:
+        return None
+    missing = (
+        float(spec.missing_value)
+        if getattr(spec, "missing_value", None) is not None
+        else float("nan")
+    )
+    return regrid_loader_field(
+        values, src_lon, src_lat, target, method,
+        lev_coord=lev_coord, missing_value=missing,
+    )
+
+
+def _provider_array(field: LoaderField, native: Any, target: Any) -> np.ndarray:
+    """Lower a provider's native field to the flat sim-grid array the RHS reads.
+
+    Runs the C4 regrid (reproject + per-variable regrid + ``lev=min``) when a
+    ``target`` grid and a regrid method apply — dispatching to
+    :func:`_regrid_loaded_field` for an in-tree ``GridLoadResult`` or
+    :func:`_regrid_native_field` for an EarthSciIO ``NativeDataset``. Otherwise
+    the raw ``field.var`` array is flattened unchanged (identity for a
+    native==sim-grid fixture or a stub provider).
+    """
     if target is not None:
-        regridded = _regrid_loaded_field(field, result, target)
+        if getattr(native, "dataset", None) is not None:
+            regridded = _regrid_loaded_field(field, native, target)
+        else:
+            regridded = _regrid_native_field(field, native, target)
         if regridded is not None:
             return np.asarray(regridded, dtype=float).reshape(-1)
-    arr = result.variables[field.var]
-    # xarray DataArray → ndarray; already-ndarray passes through.
-    values = getattr(arr, "values", arr)
-    return np.asarray(values, dtype=float).reshape(-1)
+    return _extract_loader_var(native, field.var).reshape(-1)
 
 
 def _regrid_loaded_field(
@@ -1925,6 +2016,59 @@ def _loader_cadence_boundaries(
     return sorted(boundaries)
 
 
+def _delta_seconds(later: _dt.datetime, earlier: _dt.datetime) -> float:
+    """Seconds between two datetimes, tolerant of mixed tz-awareness.
+
+    The in-tree provider's anchors and epoch are both naive (from
+    ``_coerce_datetime``); a real EarthSciIO provider may return tz-aware
+    anchors. Normalise so the wall-clock difference is well defined either way.
+    """
+    if later.tzinfo is not None and earlier.tzinfo is None:
+        later = later.replace(tzinfo=None)
+    elif later.tzinfo is None and earlier.tzinfo is not None:
+        earlier = earlier.replace(tzinfo=None)
+    return (later - earlier).total_seconds()
+
+
+def _provider_segment_boundaries(
+    discrete_fields: List[LoaderField],
+    providers: Dict[str, Any],
+    epochs: Dict[str, Optional[_dt.datetime]],
+    t0: float,
+    t1: float,
+) -> List[float]:
+    """Interior cadence boundaries (sim-clock) from providers' refresh_times.
+
+    Each discrete provider's :meth:`Provider.refresh_times` gives absolute
+    cadence anchors; subtracting the loader epoch maps them onto the simulation
+    clock. A provider that supplies no times (unbounded, or an in-tree provider
+    without a usable epoch/frequency) falls back to local frequency arithmetic
+    (:func:`_loader_cadence_boundaries`) so the behaviour degrades gracefully.
+    Only strictly-interior boundaries ``t0 < b < t1`` are returned; the seed at
+    ``t0`` and the final time ``t1`` are added by the caller.
+    """
+    boundaries: Set[float] = set()
+    for f in discrete_fields:
+        provider = providers.get(f.name)
+        epoch = epochs.get(f.name)
+        times: List[Any] = []
+        if provider is not None:
+            try:
+                times = list(provider.refresh_times())
+            except Exception:
+                times = []
+        if times and epoch is not None:
+            for anchor in times:
+                b = _delta_seconds(anchor, epoch)
+                if t0 < b < t1:
+                    boundaries.add(float(b))
+        else:
+            for b in _loader_cadence_boundaries([f], t0, t1):
+                if t0 < b < t1:
+                    boundaries.add(float(b))
+    return sorted(boundaries)
+
+
 def _simulate_with_loaders(
     flat: FlattenedSystem,
     tspan: Tuple[float, float],
@@ -1934,6 +2078,7 @@ def _simulate_with_loaders(
     rtol: float = 1e-10,
     atol: float = 1e-12,
     loader_provider: Optional[LoaderProvider] = None,
+    provider_factory: Optional[Callable] = None,
 ) -> SimulationResult:
     """Integrate a system whose RHS reads data-loader fields (RFC §4.3).
 
@@ -1953,20 +2098,22 @@ def _simulate_with_loaders(
     The RHS reads a single shared array registry that is mutated only between
     segments, so within any segment the forcing is constant and the derivative
     is a pure function of the state. With no loader fields this function is
-    never reached (``simulate`` routes elsewhere)."""
+    never reached (``simulate`` routes elsewhere).
+
+    Two provider seams feed the registry:
+
+    * ``loader_provider`` — a legacy per-call callable ``(LoaderField, t) ->
+      ndarray`` (offline stubs / backward compatibility); cadence boundaries
+      come from local frequency arithmetic.
+    * otherwise the **provider-object** path (default): one
+      :class:`~earthsci_toolkit.data_loaders.provider.Provider` is built per
+      loader field at setup (the in-tree :class:`LoadDataProvider` by default, or
+      an injected ``provider_factory`` — e.g. a real EarthSciIO provider).
+      CONST → ``materialize()`` once, DISCRETE → ``refresh(t)`` at the seed and
+      each boundary, with boundaries taken from ``Provider.refresh_times()``.
+      Native arrays are reprojected + regridded onto the model grid (C4) before
+      binding."""
     try:
-        if loader_provider is not None:
-            provider = loader_provider
-        else:
-            # Build the lon/lat target grid ONCE (geometry cached) and bind it to
-            # the default provider so each loaded field is reprojected + regridded
-            # onto the domain grid at its cadence. No target ⇒ C1 raw injection.
-            _target = _build_loader_target(flat)
-            if _target is not None:
-                def provider(f: LoaderField, when: float) -> np.ndarray:
-                    return _default_loader_provider(f, when, target=_target)
-            else:
-                provider = _default_loader_provider
         t0, t1 = float(tspan[0]), float(tspan[1])
 
         const_fields = [f for f in flat.loader_fields if f.cadence == "const"]
@@ -1976,14 +2123,85 @@ def _simulate_with_loaders(
         # rebound) so every per-step EvalContext sees the current segment's data.
         loader_arrays: Dict[str, np.ndarray] = {}
 
-        def _load_into(fields: List[LoaderField], when: float) -> None:
-            for f in fields:
-                loader_arrays[f.name] = np.asarray(provider(f, when), dtype=float)
+        if loader_provider is not None:
+            # Legacy seam: a per-call callable, kept for offline stub tests and
+            # backward compatibility. Invoked once per segment (never per RHS);
+            # boundaries from local frequency arithmetic.
+            def _seed() -> None:
+                for f in const_fields:
+                    loader_arrays[f.name] = np.asarray(
+                        loader_provider(f, t0), dtype=float
+                    )
+                for f in discrete_fields:
+                    loader_arrays[f.name] = np.asarray(
+                        loader_provider(f, t0), dtype=float
+                    )
+
+            def _refresh_discrete(when: float) -> None:
+                for f in discrete_fields:
+                    loader_arrays[f.name] = np.asarray(
+                        loader_provider(f, when), dtype=float
+                    )
+
+            seg_ends = [
+                b for b in _loader_cadence_boundaries(discrete_fields, t0, t1)
+                if t0 < b < t1
+            ] + [t1]
+        else:
+            # Provider-object path (default): build one Provider per loader field
+            # at setup (EarthSciIO Provider contract; in-tree default backed by
+            # load_data), CONST → materialize() once, DISCRETE → refresh() at the
+            # seed and each boundary. Build the lon/lat target grid ONCE (geometry
+            # cached) so each native field is reprojected + regridded (C4) onto
+            # the domain grid before binding; no target ⇒ raw injection.
+            from .data_loaders.provider import build_default_provider
+
+            factory = provider_factory or build_default_provider
+            target = _build_loader_target(flat)
+            epochs = {f.name: _field_epoch(f) for f in flat.loader_fields}
+
+            def _window(f: LoaderField):
+                epoch = epochs[f.name]
+                if epoch is None:
+                    return None
+                return (
+                    epoch + _dt.timedelta(seconds=t0),
+                    epoch + _dt.timedelta(seconds=t1),
+                )
+
+            providers = {
+                f.name: factory(f, _window(f)) for f in flat.loader_fields
+            }
+
+            def _abs(f: LoaderField, when: float):
+                epoch = epochs[f.name]
+                if epoch is None:
+                    return None
+                return epoch + _dt.timedelta(seconds=when)
+
+            def _seed() -> None:
+                for f in const_fields:
+                    loader_arrays[f.name] = _provider_array(
+                        f, providers[f.name].materialize(), target
+                    )
+                for f in discrete_fields:
+                    loader_arrays[f.name] = _provider_array(
+                        f, providers[f.name].refresh(_abs(f, t0)), target
+                    )
+
+            def _refresh_discrete(when: float) -> None:
+                for f in discrete_fields:
+                    loader_arrays[f.name] = _provider_array(
+                        f, providers[f.name].refresh(_abs(f, when)), target
+                    )
+
+            seg_ends = _provider_segment_boundaries(
+                discrete_fields, providers, epochs, t0, t1
+            ) + [t1]
 
         # CONST loaders: execute ONCE before integration. DISCRETE loaders: seed
         # the first segment's value (refreshed at boundaries below).
-        _load_into(const_fields, t0)
-        _load_into(discrete_fields, t0)
+        _seed()
 
         build = _build_numpy_rhs(
             flat, parameters, initial_conditions, loader_arrays=loader_arrays
@@ -1991,11 +2209,6 @@ def _simulate_with_loaders(
         rhs_function = build.rhs_function
         elem_names = _element_names(build.state_names, build.shapes)
 
-        # Segment endpoints: each interior cadence boundary, then the final time.
-        seg_ends = [
-            b for b in _loader_cadence_boundaries(discrete_fields, t0, t1)
-            if t0 < b < t1
-        ] + [t1]
         # Spread the dense-output budget across segments so a multi-segment run
         # does not multiply the per-segment grid (parity with the single-call
         # path when there is exactly one segment).
@@ -2046,7 +2259,7 @@ def _simulate_with_loaders(
             y_current = sol.y[:, -1]
             # Advance the cadence: refresh discrete loaders for the NEXT segment.
             if seg_end < t1:
-                _load_into(discrete_fields, seg_end)
+                _refresh_discrete(seg_end)
 
         t_out = np.concatenate(t_chunks)
         y_out = np.concatenate(y_chunks, axis=1)
