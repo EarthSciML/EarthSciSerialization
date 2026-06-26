@@ -122,6 +122,17 @@ _interp_bilinear_model(N) = ESM.Model(
                            _const([10.0, 100.0, 1000.0]), _const([0.1, 0.5, 1.0]),
                            _idx("u", _v("i")), _v("cz"); name="interp.bilinear"), "i", 1, N))])
 
+# Live forcing gather (ess-14f.3): D(u[i]) = forcing[i] + u[i]. `forcing` is a
+# refreshable buffer bound BY REFERENCE via `param_arrays` and read through the
+# new `_VK_PGATHER` kernel — the zero-alloc dual of a frozen const-array gather.
+# Pins that a discrete-cadence forcing read stays allocation-free and
+# N-independent: the only Float64 arrays are the captured flat buffer and the
+# preallocated gather `slots`/`buf`, none allocated per call.
+_forcing_gather_model(N) = ESM.Model(
+    Dict("u" => ModelVariable(StateVariable)),
+    [ESM.Equation(_ao1(_Didx("u", _v("i")), "i", 1, N),
+                  _ao1(_op("+", _idx("forcing", _v("i")), _idx("u", _v("i"))), "i", 1, N))])
+
 @testset "tree_walk PDE RHS is allocation-free (ess-9cc)" begin
 
     @testset "vectorized stencil RHS: 0 bytes, N-independent" begin
@@ -177,6 +188,18 @@ _interp_bilinear_model(N) = ESM.Model(
         for N in (32, 128)
             ics = Dict("u[$k]" => 10.0 + 990.0 * (k - 1) / N for k in 1:N)
             @test built_rhs_alloc_bytes(_interp_bilinear_model(N); initial_conditions=ics) == 0
+        end
+    end
+
+    @testset "vectorized forcing gather (param_arrays) RHS: 0 bytes, N-independent (ess-14f.3)" begin
+        # Two+ grid sizes — the per-RHS allocation must be EXACTLY 0 at every size
+        # (a per-cell leak in the live forcing read would grow with N). Mirrors the
+        # stencil/reduction cases but exercises the `_VK_PGATHER` kernel.
+        for N in (64, 256, 1024)
+            ics = Dict("u[$k]" => 0.1k for k in 1:N)
+            forcing = collect(1.0:Float64(N))
+            @test built_rhs_alloc_bytes(_forcing_gather_model(N);
+                initial_conditions=ics, param_arrays=Dict("forcing" => forcing)) == 0
         end
     end
 

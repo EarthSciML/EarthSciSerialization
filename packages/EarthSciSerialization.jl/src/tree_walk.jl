@@ -239,6 +239,16 @@ function _build_evaluator_impl(model::Model;
                          tspan::Union{Nothing,Tuple{<:Real,<:Real}}=nothing,
                          registered_functions::AbstractDict=Dict{String,Function}(),
                          const_arrays::AbstractDict=Dict{String,Vector{Float64}}(),
+                         # Live forcing buffers bound BY REFERENCE (ess-14f.3, JL-J0).
+                         # Each value MUST be a dense `Array{Float64}`; its `index(…)`
+                         # reads compile to live `_NK_PARAM_GATHER`/`_VK_PGATHER`
+                         # nodes over an aliased flat view, so a discrete-cadence
+                         # refresh callback's in-place `buffer .= …` is seen by the
+                         # RHS with zero reallocation. This is the discrete-cadence
+                         # channel; const-cadence data stays on `const_arrays` (frozen
+                         # literal inlining). Disjoint from the scalar `p` NamedTuple
+                         # so existing scalar-param reads stay byte-identical + 0-alloc.
+                         param_arrays::AbstractDict=Dict{String,Any}(),
                          # Per-const-array boundary policy (ess-gj4): name → an
                          # iterable of per-dimension policy symbols (:periodic |
                          # :clamp | :error). A const array named here is wrapped so
@@ -311,10 +321,13 @@ function _build_evaluator_impl(model::Model;
                 # An array-shaped parameter is supported only when supplied as
                 # const data (e.g. the polygon operands of an intersect_polygon
                 # clip, RFC Appendix B.1; or the connectivity / coordinate factors
-                # a value-invention key is computed from, §5.2). It is
-                # const_array-backed, not a scalar parameter, so it is NOT added to
-                # param_names.
+                # a value-invention key is computed from, §5.2) OR as a live
+                # forcing buffer via `param_arrays` (a discrete-cadence loader
+                # buffer, ess-14f.3). Either way it is array-backed, not a scalar
+                # parameter, so it is NOT added to param_names (the scalar `p`
+                # NamedTuple stays homogeneous Float64 — see the JL-J0 note).
                 ((_has_geometry || _has_value_invention) && haskey(const_arrays, name)) ||
+                    haskey(param_arrays, name) ||
                     throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
             else
                 push!(param_names, name)
@@ -539,6 +552,47 @@ function _build_evaluator_impl(model::Model;
         _const_arrays[k] = ring
     end
 
+    # ---- Live forcing buffers (ess-14f.3, JL-J0 — the one engine touch) ----
+    #
+    # FEASIBILITY GATE (declarative-or-fail). A refreshable forcing read CANNOT be
+    # expressed over the existing runtime vocabulary the closure `f!(du,u,p,t)`
+    # already reads, as each candidate was checked and rejected:
+    #   • const_arrays   — `index(arr,…)` const-folds to a `NumExpr` literal at
+    #     build time (the const-array branch of `_resolve_indices`); post-build
+    #     mutation has zero effect. A refreshable buffer cannot ride it.
+    #   • scalar `p` cells (one named Float64 per cell) — keeps `p` homogeneous but
+    #     a NamedTuple of thousands of fields compiles pathologically AND scattered
+    #     named scalars cannot gather as a contiguous slice, breaking the
+    #     N-independent vectorized kernel. Refresh needs an `integrator.p` rebind.
+    #   • state `u` — live + callback-mutable, but the integrator INTEGRATES it
+    #     (pollutes the user's `u0`/solution + the adaptive error norm) and a
+    #     callback write needs `u_modified!(true)` ⇒ trajectory re-init each
+    #     boundary. Forcing is exogenous, not a state.
+    #   • an array field in the SAME `p`, read via `getfield(p, n.sym)` (the plan's
+    #     literal mechanism) — MEASURED to allocate: a runtime-symbol `getfield` on
+    #     a heterogeneous NamedTuple boxes the union (~48 B/call) and regresses the
+    #     EXISTING scalar `_NK_PARAM` path too. "Monomorphic getfield" holds only
+    #     for a compile-time-literal symbol, never the tree-walk's runtime `n.sym`.
+    # CONCLUSION: node JUSTIFIED. Realize the read as a build-time-CAPTURED,
+    # by-reference flat `Vector{Float64}` aliasing the caller's dense buffer
+    # (`vec` shares storage; the J1 refresh callback's in-place `.=` shows
+    # through). `_NK_PARAM_GATHER` (+ vectorized `_VK_PGATHER`) is the zero-alloc
+    # dual of the const-fold: the SAME `index` IR, rerouted by binding-time cadence
+    # class. No new IR op / schema field / declarative vocabulary; disjoint from
+    # the scalar `p`, so existing scalar reads stay byte-identical.
+    _pgather = Dict{String,_PGatherArray}()
+    for (k, v) in param_arrays
+        k_str = String(k)
+        v isa Array{Float64} ||
+            throw(TreeWalkError("E_TREEWALK_PARAM_ARRAY_TYPE",
+                  "param_arrays['$(k_str)'] must be a dense Array{Float64} " *
+                  "(captured by reference for live refresh), got $(typeof(v))"))
+        # `vec` of a dense Array{Float64} ALIASES its buffer — captured by
+        # reference, NOT copied (unlike const_arrays), so the caller's / J1
+        # callback's in-place `v .= …` refreshes what the RHS reads.
+        _pgather[k_str] = _PGatherArray(vec(v), collect(size(v)))
+    end
+
     # ---- Evaluate arrayop-valued initialization_equations into u0 ----
     # When discretize() materializes an IC equation as an arrayop (coord-subst
     # x→index(coord_x,i)), we evaluate it per-cell here using the same
@@ -566,7 +620,7 @@ function _build_evaluator_impl(model::Model;
             slot == 0 && continue
             haskey(initial_conditions, cname) && continue   # explicit override wins
             sub_body = _sub_preserving(body, idx_exprs)
-            body_r   = _resolve_indices(sub_body, array_var_info, var_map, _const_arrays)
+            body_r   = _resolve_indices(sub_body, array_var_info, var_map, _const_arrays, _pgather)
             node     = _compile(body_r, var_map, param_sym_set, reg_funcs)
             u0[slot] = _eval_node(node, u0, isnothing(p) ? NamedTuple() : p, 0.0)
         end
@@ -595,7 +649,7 @@ function _build_evaluator_impl(model::Model;
             covered[idx] = true
             rhs = isempty(resolved_obs) ? eq.rhs :
                   _sub_preserving(eq.rhs, resolved_obs)
-            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays)
+            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays, _pgather)
             push!(scalar_entries, (idx, rhs_r))
 
         elseif _is_indexed_D_lhs(eq.lhs)
@@ -616,7 +670,7 @@ function _build_evaluator_impl(model::Model;
             covered[idx] = true
             rhs = isempty(resolved_obs) ? eq.rhs :
                   _sub_preserving(eq.rhs, resolved_obs)
-            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays)
+            rhs_r = _resolve_indices(rhs, array_var_info, var_map, _const_arrays, _pgather)
             push!(scalar_entries, (idx, rhs_r))
 
         elseif _is_arrayop_D_lhs(eq.lhs)
@@ -709,7 +763,7 @@ function _build_evaluator_impl(model::Model;
                     # No contracted indices — standard unrolled-body path.
                     sub_rhs = isempty(resolved_obs) ? sub_rhs_outer :
                               _sub_preserving(sub_rhs_outer, resolved_obs)
-                    rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays)
+                    rhs_r = _resolve_indices(sub_rhs, array_var_info, var_map, _const_arrays, _pgather)
                     push!(cell_entries, (idx, _compile(rhs_r, var_map, param_sym_set, reg_funcs)))
                 else
                     # Generalized einsum: compile each contracted-index term
@@ -756,7 +810,7 @@ function _build_evaluator_impl(model::Model;
                         end
                         term = isempty(resolved_obs) ? term :
                                _sub_preserving(term, resolved_obs)
-                        rhs_r = _resolve_indices(term, array_var_info, var_map, _const_arrays)
+                        rhs_r = _resolve_indices(term, array_var_info, var_map, _const_arrays, _pgather)
                         push!(k_nodes, _compile(rhs_r, var_map, param_sym_set, reg_funcs))
                     end
                     if isempty(k_nodes)
@@ -970,6 +1024,7 @@ const _NK_TIME         = UInt8(4)   # return t
 const _NK_OP           = UInt8(5)   # apply op to children
 const _NK_CONTRACTION  = UInt8(6)   # runtime ⊕-reduction over children (seq. fold)
 const _NK_CACHED       = UInt8(7)   # common-subexpression ref: read cache[idx] (ess-r7h)
+const _NK_PARAM_GATHER = UInt8(8)   # read a captured live forcing buffer: handler[idx] (ess-14f.3)
 
 struct _Node
     kind::UInt8
@@ -1127,7 +1182,19 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
                             "$(expr.op) (not yet supported in tree-walk path)"))
     elseif op_sym === :index || op_sym === :bc
-        # index ops must be resolved to state-slot references by
+        # A forcing gather over a live `param_arrays` buffer (ess-14f.3): the
+        # `index` branch of `_resolve_indices` already bounds-checked and
+        # linearized it, stashing `(flat::Vector{Float64}, lin::Int)` in `value`
+        # (the `index` op is CSE-opaque, so `value` is never canonicalized). Lower
+        # it to a live-read `_NK_PARAM_GATHER` instead of the const-fold a frozen
+        # `const_arrays` entry would get. This is the binding-time reroute of an
+        # EXISTING gather by its cadence class — no new IR op (the wire op is still
+        # `index`); see the JL-J0 feasibility-gate note in `_build_evaluator_impl`.
+        if op_sym === :index && expr.value isa Tuple{Vector{Float64},Int}
+            flat, lin = expr.value::Tuple{Vector{Float64},Int}
+            return _mknode(kind=_NK_PARAM_GATHER, idx=lin, handler=flat)
+        end
+        # Otherwise: index ops must be resolved to state-slot references by
         # _resolve_indices before reaching _compile; encountering one here
         # means the caller skipped that pass.
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
@@ -1330,6 +1397,14 @@ end
         @inbounds return u[n.idx]
     elseif k === _NK_PARAM
         return getfield(p, n.sym)
+    elseif k === _NK_PARAM_GATHER
+        # Live read of a captured forcing buffer (ess-14f.3). `handler` is the
+        # aliased flat `Vector{Float64}` (a `_PGatherArray.flat`) and `idx` the
+        # pre-linearized column-major offset, both fixed at build time; the buffer
+        # CONTENTS are refreshed in place by the J1 discrete callback. The concrete
+        # `::Vector{Float64}` assert keeps this monomorphic + zero-alloc (no
+        # runtime-symbol `getfield`, so the scalar `p` NamedTuple stays homogeneous).
+        @inbounds return (n.handler::Vector{Float64})[n.idx]
     elseif k === _NK_TIME
         return t
     elseif k === _NK_CACHED
@@ -1642,6 +1717,7 @@ const _VK_TIME     = UInt8(6)   # scalar t, broadcast
 const _VK_OP       = UInt8(7)   # elementwise broadcast of op over child vectors
 const _VK_REDUCE   = UInt8(8)   # contraction: axis fold over children (semiring)
 const _VK_FN       = UInt8(9)   # closed-function map (interp.* = whole-array)
+const _VK_PGATHER  = UInt8(10)  # forcing[slots] — gather over a captured live p-buffer (ess-14f.3)
 
 # Each node owns a preallocated `buf` (length = the kernel's lane count) into
 # which `_eval_vec` writes its lane values IN PLACE at runtime, then returns it.
@@ -1718,6 +1794,12 @@ function _struct_sig(n::_Node)::String
         return "L"
     elseif k === _NK_PARAM
         return string("P:", n.sym)
+    elseif k === _NK_PARAM_GATHER
+        # Cells gathering from the SAME captured buffer (same `handler` object)
+        # merge into one `_VK_PGATHER`, exactly as same-array STATE cells merge to
+        # `_VK_GATHER`; the per-lane linear `idx` becomes the gather `slots`.
+        # Different buffers ⇒ different `objectid` ⇒ separate kernels.
+        return string("PG:", objectid(n.handler))
     elseif k === _NK_TIME
         return "T"
     elseif k === _NK_CONTRACTION
@@ -1764,6 +1846,14 @@ function _merge_nodes(nodes::Vector{_Node}, len::Int)::_VecNode
                         buf=Vector{Float64}(undef, len))
     elseif k === _NK_PARAM
         return _mkvnode(kind=_VK_PARAM, sym=n1.sym, buf=Vector{Float64}(undef, len))
+    elseif k === _NK_PARAM_GATHER
+        # All cells share the captured buffer (`handler`, guaranteed equal by
+        # `_struct_sig`); the per-lane linear offsets become the gather `slots`.
+        # Mirrors the STATE→`_VK_GATHER` lowering, reading the live forcing buffer
+        # instead of `u` (ess-14f.3).
+        return _mkvnode(kind=_VK_PGATHER, handler=n1.handler,
+                        slots=Int[nd.idx for nd in nodes],
+                        buf=Vector{Float64}(undef, len))
     elseif k === _NK_TIME
         return _mkvnode(kind=_VK_TIME, buf=Vector{Float64}(undef, len))
     elseif k === _NK_CONTRACTION
@@ -1893,6 +1983,16 @@ function _eval_vec(n::_VecNode, u, p, t)::Vector{Float64}
         b = n.buf; s = n.slots
         @inbounds for j in eachindex(s)
             b[j] = u[s[j]]
+        end
+        return b
+    elseif k === _VK_PGATHER
+        # Gather over a captured live forcing buffer (ess-14f.3): identical to
+        # `_VK_GATHER` but reads the aliased flat `Vector{Float64}` in `handler`
+        # (refreshed in place by the J1 callback) instead of the state `u`. The
+        # concrete assert + preallocated `buf`/`slots` keep it zero-alloc.
+        b = n.buf; f = n.handler::Vector{Float64}; s = n.slots
+        @inbounds for j in eachindex(s)
+            b[j] = f[s[j]]
         end
         return b
     elseif k === _VK_LITERAL
@@ -2997,7 +3097,8 @@ end
 # build time. Mirrors the LHS-arrayop expansion in build_evaluator (lines
 # ~280-370) but produces a scalar Expr instead of writing to rhs_list.
 function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
-                                    array_var_info, var_map, const_arrays)
+                                    array_var_info, var_map, const_arrays,
+                                    pgather::AbstractDict=_EMPTY_PGATHER)
     output_idx_raw = arrayop_expr.output_idx === nothing ? Any[] : arrayop_expr.output_idx
     output_idx_strs = [String(s) for s in output_idx_raw if s isa AbstractString]
     length(output_idx_strs) == length(idx_args) ||
@@ -3030,7 +3131,7 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
     gates = arrayop_expr.join_gates
     filt0 = arrayop_expr.filter
     if isempty(contract_names) && gates === nothing && filt0 === nothing
-        return _resolve_indices(sub_body, array_var_info, var_map, const_arrays)
+        return _resolve_indices(sub_body, array_var_info, var_map, const_arrays, pgather)
     end
 
     terms = Expr[]
@@ -3053,7 +3154,7 @@ function _resolve_index_of_arrayop(arrayop_expr::OpExpr, idx_args::Vector{Expr},
             filt = _sub_preserving(_sub_preserving(filt0, idx_exprs), k_exprs)
             term = OpExpr("ifelse", Expr[filt, term, NumExpr(zerobar)])
         end
-        push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
+        push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays, pgather))
     end
     return _combine_with_reducer(oplus, zerobar, terms)
 end
@@ -3063,7 +3164,8 @@ end
 # Later regions overwrite earlier ones, matching the Python reference
 # semantics (_eval_makearray in numpy_interpreter.py:429-457).
 function _resolve_index_of_makearray(makearray_expr::OpExpr, idx_args::Vector{Expr},
-                                      array_var_info, var_map, const_arrays)
+                                      array_var_info, var_map, const_arrays,
+                                      pgather::AbstractDict=_EMPTY_PGATHER)
     regions = makearray_expr.regions === nothing ?
               Vector{Vector{Vector{Int}}}() : makearray_expr.regions
     values  = makearray_expr.values  === nothing ? Expr[] : makearray_expr.values
@@ -3082,14 +3184,15 @@ function _resolve_index_of_makearray(makearray_expr::OpExpr, idx_args::Vector{Ex
                         for d in 1:ndim)
         in_region && (result_expr = val_expr)  # overwrite; last match wins
     end
-    return _resolve_indices(result_expr, array_var_info, var_map, const_arrays)
+    return _resolve_indices(result_expr, array_var_info, var_map, const_arrays, pgather)
 end
 
 # Expand a scalar arrayop (empty output_idx) to a plain scalar Expr by
 # unrolling all contracted indices at build time and combining them with the
 # declared reducer. This is the build-time equivalent of an einsum over a
 # general expression body — compile once, evaluate cheaply at every RHS call.
-function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, const_arrays)
+function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, const_arrays,
+                                 pgather::AbstractDict=_EMPTY_PGATHER)
     body = arrayop_expr.expr_body
     body === nothing &&
         throw(TreeWalkError("E_TREEWALK_ARRAYOP_NO_BODY",
@@ -3116,7 +3219,7 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
     gates = arrayop_expr.join_gates
     filt0 = arrayop_expr.filter
     if isempty(contract_names) && gates === nothing && filt0 === nothing
-        return _resolve_indices(body, array_var_info, var_map, const_arrays)
+        return _resolve_indices(body, array_var_info, var_map, const_arrays, pgather)
     end
     terms = Expr[]
     for k_tuple in Iterators.product(contract_iters...)
@@ -3135,7 +3238,7 @@ function _resolve_scalar_arrayop(arrayop_expr::OpExpr, array_var_info, var_map, 
             filt = _sub_preserving(filt0, k_exprs)
             term = OpExpr("ifelse", Expr[filt, term, NumExpr(zerobar)])
         end
-        push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays))
+        push!(terms, _resolve_indices(term, array_var_info, var_map, const_arrays, pgather))
     end
     return _combine_with_reducer(oplus, zerobar, terms)
 end
@@ -3150,28 +3253,50 @@ end
 #   also used for indirect gather: u[index(conn, c, k)] resolves conn[c,k] as an integer index.
 const _EMPTY_CONST_ARRAYS = Dict{String,AbstractArray{Float64}}()
 
+# A live forcing buffer bound by reference into the evaluator (ess-14f.3, JL-J0).
+# Unlike `const_arrays` (build-time-FROZEN: `index(arr,…)` const-folds to a
+# `NumExpr` literal, tree_walk.jl const-array branch), a `_PGatherArray` reroutes
+# the SAME `index(forcing,…)` gather to a LIVE read of a captured `flat`
+# `Vector{Float64}`. `flat = vec(buffer)` aliases the caller's dense
+# `Array{Float64}` buffer, so a discrete refresh callback's in-place `buffer .= …`
+# (ess-14f.3 J1) shows through to the RHS with zero reallocation. `dims` carries
+# the source shape for bounds-checking + column-major linearization at build time.
+# Reading the captured `flat` (NOT `getfield(p, runtime_sym)`) is what keeps the
+# read zero-alloc: a runtime-symbol `getfield` on a heterogeneous NamedTuple boxes
+# the union (measured 48 B/call) and would also regress the scalar `_NK_PARAM`
+# path — see the JL-J0 feasibility-gate note in `_build_evaluator_impl`.
+struct _PGatherArray
+    flat::Vector{Float64}   # aliased flat view of the caller's buffer (live, by-ref)
+    dims::Vector{Int}       # original shape — bounds-check + linearize at build time
+end
+const _EMPTY_PGATHER = Dict{String,_PGatherArray}()
+
 function _resolve_indices(expr::NumExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS,
+                          pgather::AbstractDict=_EMPTY_PGATHER)
     return expr
 end
 function _resolve_indices(expr::IntExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS,
+                          pgather::AbstractDict=_EMPTY_PGATHER)
     return expr
 end
 function _resolve_indices(expr::VarExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS,
+                          pgather::AbstractDict=_EMPTY_PGATHER)
     return expr
 end
 function _resolve_indices(expr::OpExpr,
                           array_var_info::Dict{String,Tuple{Vector{Int},Vector{Int}}},
                           var_map::Dict{String,Int},
-                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS)
+                          const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS,
+                          pgather::AbstractDict=_EMPTY_PGATHER)
     if expr.op == "index"
         isempty(expr.args) &&
             throw(TreeWalkError("E_TREEWALK_INDEX_EMPTY", "index op requires at least one arg"))
@@ -3182,13 +3307,13 @@ function _resolve_indices(expr::OpExpr,
         # equation path in build_evaluator, ~lines 280-370).
         if first_arg isa OpExpr && _is_aggregate_op(first_arg.op)
             return _resolve_index_of_arrayop(first_arg::OpExpr, expr.args[2:end],
-                                             array_var_info, var_map, const_arrays)
+                                             array_var_info, var_map, const_arrays, pgather)
         end
         # Expression-position makearray: index(makearray(...), k1, k2, ...)
         # Select the value whose region covers (k1,...); later regions win.
         if first_arg isa OpExpr && first_arg.op == "makearray"
             return _resolve_index_of_makearray(first_arg::OpExpr, expr.args[2:end],
-                                               array_var_info, var_map, const_arrays)
+                                               array_var_info, var_map, const_arrays, pgather)
         end
         if first_arg isa VarExpr && haskey(array_var_info, first_arg.name)
             vname = first_arg.name
@@ -3210,6 +3335,33 @@ function _resolve_indices(expr::OpExpr,
                 throw(TreeWalkError("E_TREEWALK_MISSING_CELL", cname))
             return VarExpr(cname)
         end
+        # Live forcing buffer bound via `param_arrays` (ess-14f.3, JL-J0): reroute
+        # this gather to a LIVE read instead of the frozen const-fold below. The
+        # array is a discrete-cadence loader buffer (the driver routes const-cadence
+        # data to `const_arrays` and discrete-cadence data here), so its contents
+        # change at refresh boundaries and MUST NOT be inlined as a build-time
+        # literal. Bounds-check and column-major-linearize the constant indices at
+        # build time, then carry the aliased flat buffer + the offset to `_compile`
+        # (which emits a `_NK_PARAM_GATHER`). `index` is CSE-opaque, so stashing the
+        # `(flat, lin)` pair in `value` is canonicalization-safe.
+        if first_arg isa VarExpr && haskey(pgather, first_arg.name)
+            pg = pgather[first_arg.name]::_PGatherArray
+            idx_args_expr = expr.args[2:end]
+            length(idx_args_expr) == length(pg.dims) ||
+                throw(TreeWalkError("E_TREEWALK_PGATHER_NDIM",
+                      "forcing array '$(first_arg.name)' is $(length(pg.dims))D " *
+                      "but got $(length(idx_args_expr)) indices"))
+            int_indices = [_eval_const_int(a, Dict{String,Int}(), const_arrays)
+                           for a in idx_args_expr]
+            for d in 1:length(pg.dims)
+                (1 <= int_indices[d] <= pg.dims[d]) ||
+                    throw(TreeWalkError("E_TREEWALK_PGATHER_OOB",
+                          "forcing array '$(first_arg.name)' index $(int_indices[d]) " *
+                          "out of range [1, $(pg.dims[d])] on dim $(d)"))
+            end
+            lin = LinearIndices(Tuple(pg.dims))[int_indices...]
+            return OpExpr("index", Expr[]; value=(pg.flat, lin))
+        end
         # Pre-computed constant arrays (1D Fornberg weights, or ND mesh arrays):
         # inline the value as a NumExpr literal.
         if first_arg isa VarExpr && haskey(const_arrays, first_arg.name)
@@ -3227,7 +3379,7 @@ function _resolve_indices(expr::OpExpr,
             return NumExpr(Float64(vals[int_indices...]))
         end
         # scalar or unknown variable inside index — recurse on sub-exprs only
-        new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays) for a in expr.args]
+        new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays, pgather) for a in expr.args]
         return OpExpr(expr.op, new_args;
                       wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                       lower=expr.lower, upper=expr.upper,
@@ -3276,16 +3428,16 @@ function _resolve_indices(expr::OpExpr,
         output_idx_raw = expr.output_idx === nothing ? Any[] : expr.output_idx
         output_idx_strs = [s for s in output_idx_raw if s isa AbstractString]
         if isempty(output_idx_strs)
-            return _resolve_scalar_arrayop(expr, array_var_info, var_map, const_arrays)
+            return _resolve_scalar_arrayop(expr, array_var_info, var_map, const_arrays, pgather)
         end
         # Non-scalar arrayop without index() — pass through (will become a
         # compile-time error in _compile with a helpful message).
     end
-    new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays) for a in expr.args]
+    new_args = Expr[_resolve_indices(a, array_var_info, var_map, const_arrays, pgather) for a in expr.args]
     new_body = expr.expr_body === nothing ? nothing :
-               _resolve_indices(expr.expr_body, array_var_info, var_map, const_arrays)
+               _resolve_indices(expr.expr_body, array_var_info, var_map, const_arrays, pgather)
     new_values = expr.values === nothing ? nothing :
-                 Expr[_resolve_indices(v, array_var_info, var_map, const_arrays) for v in expr.values]
+                 Expr[_resolve_indices(v, array_var_info, var_map, const_arrays, pgather) for v in expr.values]
     return OpExpr(expr.op, new_args;
                   wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var,
                   lower=expr.lower, upper=expr.upper,
