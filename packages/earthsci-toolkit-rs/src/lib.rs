@@ -54,6 +54,7 @@ pub mod lower_enums;
 pub mod lower_expression_templates;
 pub mod migration;
 pub mod parse;
+pub mod provider;
 pub mod reactions;
 pub mod reject_legacy_loaders;
 pub mod ref_loading;
