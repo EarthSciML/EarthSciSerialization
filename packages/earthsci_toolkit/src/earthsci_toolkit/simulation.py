@@ -37,6 +37,7 @@ from .esm_types import (
 from .flatten import (
     FlattenedEquation,
     FlattenedSystem,
+    LoaderField,
     UnsupportedDimensionalityError,
     _expand_range,
     _has_array_op,
@@ -426,6 +427,7 @@ def simulate(
     rtol: float = 1e-10,
     atol: float = 1e-14,
     cse: bool = True,
+    loader_provider: Optional["LoaderProvider"] = None,
 ) -> SimulationResult:
     """Simulate an ESM model via the flattened representation (spec §4.7.5).
 
@@ -463,6 +465,14 @@ def simulate(
         to compare lambdified output against an un-CSE'd reference. Compiles
         for ``cse=True`` and ``cse=False`` are cached separately on the
         FlattenedSystem so flipping the flag does not invalidate the other.
+    loader_provider:
+        Optional callable ``(LoaderField, t) -> ndarray`` used to execute the
+        system's data-loader fields (RFC pure-io-data-loaders §4.3). Only
+        consulted when the flattened system has loader fields; the returned
+        array is bound into the RHS as a read-only input, refreshed at the
+        loader's cadence (const loaders once, discrete loaders per segment).
+        Defaults to the real loader I/O path; tests / offline runs inject a
+        deterministic stub. Ignored for systems without data loaders.
 
     Raises
     ------
@@ -505,6 +515,16 @@ def simulate(
             success=False,
             message="SciPy is required for simulation but not available.",
             nfev=0, njev=0, nlu=0,
+        )
+
+    # Data-loader injection (RFC pure-io-data-loaders §4.3): if the system has
+    # loader fields, execute them at their cadence and bind the resulting arrays
+    # into the RHS. Routes through the NumPy path (loader values are arrays).
+    # Empty loader_fields ⇒ skipped entirely, so existing models are unaffected.
+    if flat.loader_fields:
+        return _simulate_with_loaders(
+            flat, tspan, parameters, initial_conditions, method,
+            rtol=rtol, atol=atol, loader_provider=loader_provider,
         )
 
     # Array-op detection: if any equation contains an array op, route through
@@ -1335,6 +1355,7 @@ def _build_numpy_rhs(
     flat: FlattenedSystem,
     parameters: Dict[str, float],
     initial_conditions: Dict[str, float],
+    loader_arrays: Optional[Dict[str, "np.ndarray"]] = None,
 ) -> "_NumpyRhsBuild":
     """Assemble the NumPy-interpreter RHS closure + state layout for a flattened
     array/PDE system. Shared by :func:`_simulate_with_numpy` (which integrates
@@ -1439,6 +1460,10 @@ def _build_numpy_rhs(
             y=y,
             t=t,
             index_sets=flat.index_sets,
+            # Bind the SHARED loader-array registry by reference. Within a cadence
+            # segment its contents are fixed, so the RHS is pure; the segmenting
+            # driver mutates it in place between segments to advance the cadence.
+            input_arrays=loader_arrays if loader_arrays is not None else {},
         )
         # Materialize array-valued observeds + derived rings and scalar
         # observeds into the context (dependency-ordered) so the state
@@ -1624,6 +1649,210 @@ def _simulate_with_numpy(
             nfev=0,
             njev=0,
             nlu=0,
+        )
+
+
+# A loader provider executes one data-loader field at a simulation time and
+# returns its current value as a flat float array. Time is the simulation
+# clock (the same ``t`` the RHS sees); a const field is queried once at the
+# start, a discrete field once per cadence segment. Inject a custom provider
+# (e.g. a fixture stub) via ``simulate(..., loader_provider=...)``; the default
+# executes the real loader I/O.
+LoaderProvider = Callable[[LoaderField, float], "np.ndarray"]
+
+
+def _default_loader_provider(field: LoaderField, t: float) -> np.ndarray:
+    """Execute ``field``'s data loader and return its ``field.var`` array.
+
+    Maps the simulation clock ``t`` to an absolute instant via the loader's
+    ``temporal.start`` (when present) and calls :func:`load_data`, returning the
+    requested variable as a flat ``float`` array. This is the production path;
+    the reproject + regrid lowering of the raw array onto the consumer's target
+    grid (threading ``field.regrid``) is the C4 driver's responsibility and is
+    layered on top of this seam — C1 establishes the injection + cadence
+    machinery, not the regrid kernel selection.
+    """
+    from .data_loaders.runtime import load_data
+
+    when: Optional[Any] = None
+    temporal = field.loader.temporal
+    if temporal is not None and temporal.start is not None:
+        import datetime as _dt
+
+        from .data_loaders.time_resolution import _coerce_datetime
+
+        when = _coerce_datetime(temporal.start) + _dt.timedelta(seconds=float(t))
+    result = load_data(field.loader, time=when)
+    arr = result.variables[field.var]
+    # xarray DataArray → ndarray; already-ndarray passes through.
+    values = getattr(arr, "values", arr)
+    return np.asarray(values, dtype=float).reshape(-1)
+
+
+def _loader_cadence_boundaries(
+    discrete_fields: List[LoaderField], t0: float, t1: float
+) -> List[float]:
+    """Interior cadence-boundary times in the open interval ``(t0, t1)``.
+
+    Each discrete loader refreshes every ``temporal.frequency`` seconds; the
+    union of those tick times (relative to the integration start ``t0``) marks
+    where the integration must pause, refresh the loader arrays, and restart so
+    the forcing is piecewise-constant and the RHS stays pure within a segment
+    (the terminal-event segmentation the campaign spike calls for). A discrete
+    loader with no parseable frequency contributes no interior boundary (a
+    single segment over the whole span)."""
+    from .data_loaders.time_resolution import (
+        TimeResolutionError,
+        parse_iso_duration,
+    )
+
+    boundaries: Set[float] = set()
+    for f in discrete_fields:
+        temporal = f.loader.temporal
+        freq = getattr(temporal, "frequency", None) if temporal is not None else None
+        if not freq:
+            continue
+        try:
+            step = parse_iso_duration(freq).approximate_seconds()
+        except TimeResolutionError:
+            continue
+        if step <= 0:
+            continue
+        k = 1
+        while True:
+            b = t0 + k * step
+            if b >= t1:
+                break
+            boundaries.add(b)
+            k += 1
+    return sorted(boundaries)
+
+
+def _simulate_with_loaders(
+    flat: FlattenedSystem,
+    tspan: Tuple[float, float],
+    parameters: Dict[str, float],
+    initial_conditions: Dict[str, float],
+    method: str,
+    rtol: float = 1e-10,
+    atol: float = 1e-12,
+    loader_provider: Optional[LoaderProvider] = None,
+) -> SimulationResult:
+    """Integrate a system whose RHS reads data-loader fields (RFC §4.3).
+
+    Loader fields are external inputs, not equations: a coupling edge already
+    substituted each loader's producer symbol (e.g. ``ERA5.pl.u``) into its
+    consumer's equation at flatten time. Here we execute the loaders and bind
+    their arrays into the NumPy RHS as read-only inputs, updated at each
+    loader's cadence:
+
+    * **const** (static loader, no ``temporal``): loaded once before
+      integration; the value is fixed for the whole run.
+    * **discrete** (temporal loader): loaded at the start, then refreshed at
+      every cadence boundary via terminal-event-style segmentation — the
+      integration is split at the boundaries, the loader arrays are reloaded
+      between segments, and the solver restarts from the carried-over state.
+
+    The RHS reads a single shared array registry that is mutated only between
+    segments, so within any segment the forcing is constant and the derivative
+    is a pure function of the state. With no loader fields this function is
+    never reached (``simulate`` routes elsewhere)."""
+    try:
+        provider = loader_provider or _default_loader_provider
+        t0, t1 = float(tspan[0]), float(tspan[1])
+
+        const_fields = [f for f in flat.loader_fields if f.cadence == "const"]
+        discrete_fields = [f for f in flat.loader_fields if f.cadence != "const"]
+
+        # The shared registry the RHS reads each step. Mutated in place (never
+        # rebound) so every per-step EvalContext sees the current segment's data.
+        loader_arrays: Dict[str, np.ndarray] = {}
+
+        def _load_into(fields: List[LoaderField], when: float) -> None:
+            for f in fields:
+                loader_arrays[f.name] = np.asarray(provider(f, when), dtype=float)
+
+        # CONST loaders: execute ONCE before integration. DISCRETE loaders: seed
+        # the first segment's value (refreshed at boundaries below).
+        _load_into(const_fields, t0)
+        _load_into(discrete_fields, t0)
+
+        build = _build_numpy_rhs(
+            flat, parameters, initial_conditions, loader_arrays=loader_arrays
+        )
+        rhs_function = build.rhs_function
+        elem_names = _element_names(build.state_names, build.shapes)
+
+        # Segment endpoints: each interior cadence boundary, then the final time.
+        seg_ends = [
+            b for b in _loader_cadence_boundaries(discrete_fields, t0, t1)
+            if t0 < b < t1
+        ] + [t1]
+        # Spread the dense-output budget across segments so a multi-segment run
+        # does not multiply the per-segment grid (parity with the single-call
+        # path when there is exactly one segment).
+        per_seg_pts = max(11, (10001 // len(seg_ends)) + 1)
+
+        t_current = t0
+        y_current = build.y0
+        t_chunks: List[np.ndarray] = []
+        y_chunks: List[np.ndarray] = []
+        nfev = njev = nlu = 0
+        last_message = ""
+        for seg_idx, seg_end in enumerate(seg_ends):
+            sol = solve_ivp(
+                fun=rhs_function,
+                t_span=(t_current, seg_end),
+                y0=y_current,
+                method=method,
+                rtol=rtol,
+                atol=atol,
+                dense_output=True,
+            )
+            nfev += int(sol.nfev)
+            njev += int(sol.njev)
+            nlu += int(sol.nlu)
+            last_message = sol.message
+            if not sol.success:
+                return SimulationResult(
+                    t=np.array([]), y=np.array([[]]), vars=[], success=False,
+                    message=(
+                        f"Simulation failed in cadence segment "
+                        f"[{t_current}, {seg_end}]: {sol.message}"
+                    ),
+                    nfev=nfev, njev=njev, nlu=nlu,
+                )
+            seg_t, seg_y = _densify_solution(
+                sol, (t_current, seg_end), min_points=per_seg_pts
+            )
+            # Drop the seam node (shared with the previous segment's end; the
+            # state is continuous across a loader refresh, only the forcing
+            # jumps) so the stitched trajectory has no duplicated time point.
+            if seg_idx == 0:
+                t_chunks.append(seg_t)
+                y_chunks.append(seg_y)
+            else:
+                t_chunks.append(seg_t[1:])
+                y_chunks.append(seg_y[:, 1:])
+            t_current = seg_end
+            y_current = sol.y[:, -1]
+            # Advance the cadence: refresh discrete loaders for the NEXT segment.
+            if seg_end < t1:
+                _load_into(discrete_fields, seg_end)
+
+        t_out = np.concatenate(t_chunks)
+        y_out = np.concatenate(y_chunks, axis=1)
+        return SimulationResult(
+            t=t_out, y=y_out, vars=list(elem_names), success=True,
+            message=last_message, nfev=nfev, njev=njev, nlu=nlu,
+        )
+
+    except UnsupportedDimensionalityError:
+        raise
+    except Exception as e:
+        return SimulationResult(
+            t=np.array([]), y=np.array([[]]), vars=[], success=False,
+            message=f"Simulation failed: {e}", nfev=0, njev=0, nlu=0,
         )
 
 

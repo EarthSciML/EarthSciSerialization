@@ -1,0 +1,59 @@
+{
+  "esm": "0.7.0",
+  "metadata": {
+    "name": "loader_consumer_injection",
+    "description": "Two-component loader->consumer fixture (RFC pure-io-data-loaders). Model 'Met' mounts two data loaders as subsystems: 'pl' (temporal grid -> discrete cadence) exposing wind 'u', and 'sfc' (static -> const cadence) exposing roughness 'z0'. They flatten to observed arrays Met.pl.u and Met.sfc.z0. Model 'Plume' consumes element 2 of each via coupling edges, integrating D(c) = u[2] + z0[2] - c. Run through simulate() with a deterministic loader_provider so the trajectory is analytic and network-free; the discrete loader refreshes via terminal-event segmentation, the static loader is read once."
+  },
+  "models": {
+    "Met": {
+      "variables": {},
+      "equations": [],
+      "subsystems": {
+        "pl": {
+          "kind": "grid",
+          "source": {"url_template": "file:///met/{date:%Y%m%d}.nc"},
+          "temporal": {"frequency": "PT1S", "start": "2018-01-01"},
+          "variables": {
+            "u": {"file_variable": "U", "units": "m/s", "description": "eastward wind"}
+          }
+        },
+        "sfc": {
+          "kind": "static",
+          "source": {"url_template": "file:///met/z0.nc"},
+          "variables": {
+            "z0": {"file_variable": "Z0", "units": "m", "description": "surface roughness length"}
+          }
+        }
+      }
+    },
+    "Plume": {
+      "variables": {
+        "c": {"type": "state", "default": 0.0, "description": "tracer concentration"},
+        "wind": {"type": "parameter", "default": 0.0, "description": "wind forcing (coupled from Met.pl.u)"},
+        "rough": {"type": "parameter", "default": 0.0, "description": "roughness forcing (coupled from Met.sfc.z0)"}
+      },
+      "equations": [
+        {
+          "lhs": {"op": "D", "args": ["c"], "wrt": "t"},
+          "rhs": {
+            "op": "-",
+            "args": [
+              {
+                "op": "+",
+                "args": [
+                  {"op": "index", "args": ["wind", 2]},
+                  {"op": "index", "args": ["rough", 2]}
+                ]
+              },
+              "c"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "coupling": [
+    {"type": "variable_map", "from": "Met.pl.u", "to": "Plume.wind", "transform": "param_to_var"},
+    {"type": "variable_map", "from": "Met.sfc.z0", "to": "Plume.rough", "transform": "param_to_var"}
+  ]
+}

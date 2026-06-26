@@ -75,6 +75,15 @@ class EvalContext:
     # (`derived_rings`) to the relational engine. A `kind:"derived"` set whose
     # `from_faq` is here resolves to the dense extent `[1, n]`. Empty ⇒ none.
     derived_extents: Dict[str, int] = field(default_factory=dict)
+    # Externally-injected read-only input arrays (RFC pure-io-data-loaders §4.3),
+    # keyed by the flattened observed-array symbol (e.g. ``ERA5.pl.u``). The
+    # simulator executes each data loader at its cadence and binds the resulting
+    # array here so a consumer equation that referenced the loader field (via a
+    # coupling edge) resolves it as a value. Distinct from ``derived_rings``
+    # (computed per step from observed equations): these are inputs, refreshed
+    # only at cadence boundaries, so the RHS is pure within a segment. Empty ⇒ no
+    # data-loader fields are bound. See `simulation._simulate_with_loaders`.
+    input_arrays: Dict[str, np.ndarray] = field(default_factory=dict)
 
 
 class NumpyInterpreterError(Exception):
@@ -133,6 +142,12 @@ def _resolve_symbol(name: str, ctx: EvalContext) -> Union[float, np.ndarray]:
     # `index(<id>, v, c)` into the overlap vertices.
     if name in ctx.derived_rings:
         return ctx.derived_rings[name]
+    # An externally-injected data-loader field (RFC pure-io-data-loaders §4.3):
+    # a coupling edge substituted the loader's producer symbol (e.g. ``ERA5.pl.u``)
+    # into this consumer equation; resolve it to the array bound for the current
+    # cadence segment. Checked before state/param so the producer symbol wins.
+    if name in ctx.input_arrays:
+        return ctx.input_arrays[name]
     if name in ctx.state_layout:
         return _view_state_array(name, ctx)
     if name in ctx.param_values:

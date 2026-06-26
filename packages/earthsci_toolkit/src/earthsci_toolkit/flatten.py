@@ -30,6 +30,7 @@ from .esm_types import (
     OperatorApplyCoupling,
     OperatorComposeCoupling,
     ReactionSystem,
+    RegridSpec,
     VariableMapCoupling,
 )
 from .reactions import derive_odes
@@ -115,6 +116,35 @@ class FlattenedVariable:
 
 
 @dataclass
+class LoaderField:
+    """A data-loader variable lowered to a flattened observed array.
+
+    A ``DataLoader`` mounted as a model subsystem (RFC pure-io-data-loaders §4.3)
+    exposes its variables to the owning model under the dot-path
+    ``<owner>.<subkey>.<var>`` (e.g. ``ERA5.pl.u`` — owner model ``ERA5``,
+    subsystem key ``pl``, loader variable ``u``). Flatten lowers each such
+    variable to an ``observed`` :class:`FlattenedVariable` of that name AND
+    records this descriptor so the simulator can execute the loader at its
+    cadence and bind the resulting array into the RHS as a read-only input —
+    the loader symbol then resolves wherever a coupling edge substituted it
+    into a consumer's equation. Loader fields carry no defining equation
+    (their value is injected, not computed).
+
+    ``cadence`` follows the loader-seeded refinement (§5.7.2, cadence.py): a
+    loader WITH a ``temporal`` block is time-varying → ``"discrete"`` (updated
+    in a discrete solver callback at its cadence); a loader WITHOUT ``temporal``
+    is static → ``"const"`` (loaded once before integration).
+    """
+    name: str                            # "ERA5.pl.u" — the observed-array symbol
+    owner: str                           # "ERA5" — the owning model's namespaced prefix
+    subkey: str                          # "pl" — the subsystem key the loader mounts under
+    var: str                             # "u" — the loader variable name
+    loader: DataLoader                   # the source loader (carries source/temporal/grid)
+    cadence: str                         # "const" | "discrete"
+    regrid: Optional[RegridSpec] = None  # owning model's per-variable regrid config, if any
+
+
+@dataclass
 class FlattenedEquation:
     """An equation in the flattened system, with namespaced Expr trees.
 
@@ -190,6 +220,12 @@ class FlattenedSystem:
     # merged across the flattened models. Threaded to the evaluator so it can
     # resolve arrayop / aggregate range references of the form {"from": <name>}.
     index_sets: Dict[str, Any] = field(default_factory=dict)
+    # Data-loader variables lowered to observed arrays (RFC pure-io-data-loaders
+    # §4.3). Each is an external input the simulator executes at the loader's
+    # cadence and binds into the RHS as a read-only array (see LoaderField).
+    # Empty ⇒ the system has no data-loader subsystems, so simulate() behaves
+    # exactly as before (no injection path).
+    loader_fields: List[LoaderField] = field(default_factory=list)
 
     @property
     def variables(self) -> Dict[str, str]:
@@ -465,6 +501,7 @@ class _ComponentSystem:
     parameters: "OrderedDict[str, FlattenedVariable]" = field(default_factory=OrderedDict)
     observed: "OrderedDict[str, FlattenedVariable]" = field(default_factory=OrderedDict)
     equations: List[FlattenedEquation] = field(default_factory=list)
+    loader_fields: List[LoaderField] = field(default_factory=list)
 
 
 def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _ComponentSystem:
@@ -513,11 +550,35 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
 
     for sub_name, sub_model in model.subsystems.items():
         # A data-loader subsystem (RFC pure-io-data-loaders §4.3) exposes its
-        # variables to the owning model's equations; lowering that consumption
-        # (reprojection / regridding) is a downstream model concern, not part of
-        # plain flattening. Skip it here so a model carrying a loader subsystem
-        # still flattens its own equations.
+        # variables to the owning model under the dot-path
+        # ``<owner>.<subkey>.<var>``. Lower each loader variable to an observed
+        # ARRAY of that name and record a LoaderField descriptor; the loader has
+        # no defining equation (its array value is injected at the RHS boundary
+        # by the simulator, executed at the loader's cadence), so the observed
+        # placeholder resolves wherever a coupling edge substituted the producer
+        # symbol into a consumer equation. ESS has no array-valued parameter
+        # path, so the observed-as-array vehicle is how loader outputs reach a
+        # consumer (LANDFIRE / USGS3DEP close the same way via re-exposure).
         if isinstance(sub_model, DataLoader):
+            cadence = "discrete" if sub_model.temporal is not None else "const"
+            for var_name, loader_var in sub_model.variables.items():
+                namespaced = f"{full_prefix}.{sub_name}.{var_name}"
+                component.observed[namespaced] = FlattenedVariable(
+                    name=namespaced,
+                    type="observed",
+                    units=loader_var.units,
+                    description=loader_var.description,
+                    source_system=f"{full_prefix}.{sub_name}",
+                )
+                component.loader_fields.append(LoaderField(
+                    name=namespaced,
+                    owner=full_prefix,
+                    subkey=sub_name,
+                    var=var_name,
+                    loader=sub_model,
+                    cadence=cadence,
+                    regrid=model.regrid.get(var_name),
+                ))
             continue
         sub_prefix = f"{full_prefix}.{sub_name}"
         sub_component = _collect_model(sub_name, sub_model, sub_prefix)
@@ -525,6 +586,7 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
         component.parameters.update(sub_component.parameters)
         component.observed.update(sub_component.observed)
         component.equations.extend(sub_component.equations)
+        component.loader_fields.extend(sub_component.loader_fields)
 
     return component
 
@@ -914,6 +976,7 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
             flat.parameters[name] = var
         for name, var in comp.observed.items():
             flat.observed_variables[name] = var
+        flat.loader_fields.extend(comp.loader_fields)
         for eq in comp.equations:
             dep = _lhs_dependent_var(eq.lhs)
             # Equations that use array ops may legitimately define different
