@@ -56,10 +56,10 @@ pub mod migration;
 pub mod parse;
 pub mod provider;
 pub mod reactions;
-pub mod reject_legacy_loaders;
 pub mod ref_loading;
 pub mod reference_resolution;
 pub mod registered_functions;
+pub mod reject_legacy_loaders;
 pub mod relational;
 pub mod rule_applier;
 pub mod rule_engine;
@@ -90,6 +90,17 @@ pub mod simulate_array;
 // the imperative `geometry::polygon_area`).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod area_faq;
+
+// C4 regrid bridge (bead ess-14f.10): reproject + horizontal regrid of the
+// provider's raw native loader arrays onto the model sim grid, via the ESD
+// reproject/regrid rules reproduced numerically. `reproject` is pure closed-form
+// math (wasm-safe); the kernels/driver evaluate the conservative overlap through
+// the native `geometry` kernel, so they are native-only like `area_faq`.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod regrid_driver;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod regrid_kernels;
+pub mod reproject;
 
 // Build-time value-invention front-door — derived index-sets (skolem/distinct/
 // rank) resolved via the relational engine, ONCE at setup (RFC §6.1 / §5.5).
@@ -135,9 +146,22 @@ pub use reference_resolution::{
 pub use registered_functions::{
     ClosedArg, ClosedFunctionError, ClosedValue, closed_function_names, evaluate_closed_function,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use regrid_driver::{
+    RegridDriverError, SpatialDim, TargetGrid, build_target_grid, build_target_grid_from_domain,
+    lev_min_reduce, regrid_field, regrid_loader_field,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use regrid_kernels::{
+    RegridKernelError, cell_average_regrid, conservative_regrid, overlap_area_matrix,
+};
 pub use relational::{
     FloatKeyError, Key, Num, Ranking, SemiringOp, canonical_index_set_json, distinct, equijoin,
     group_aggregate, rank, rank_with_base, serialize_keys, serialize_pairs, skolem, skolem_edge,
+};
+pub use reproject::{
+    LccCone, ProjValue, ReprojectError, Reprojector, lcc_cone, lcc_forward, lcc_inverse,
+    parse_proj_string, reproject_xy_to_lonlat,
 };
 pub use rule_engine::{
     DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
