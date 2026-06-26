@@ -40,6 +40,7 @@
 use crate::aggregate::{
     ReduceKind, effective_reduce_kind, is_aggregate_op, resolve_aggregate_ranges,
 };
+use crate::flatten::FlattenedSystem;
 use crate::simulate::{CompileError, SimulateError, SimulateOptions, SolutionMetadata};
 use crate::simulate::{SimulateOptions as _SimOpts, Solution, SolverChoice};
 use crate::types::{EsmFile, Expr, ExpressionNode, Model, ModelVariable, RangeSpec, VariableType};
@@ -611,6 +612,103 @@ impl ArrayCompiled {
         }
         let (_model_name, model) = models.iter().next().unwrap();
         Self::from_model(model)
+    }
+
+    /// Build from a [`FlattenedSystem`] — the array-runtime analogue of the
+    /// scalar [`crate::simulate::Compiled::from_flattened`].
+    ///
+    /// [`crate::flatten::flatten`] already merges a coupled, multi-component
+    /// file into a single dot-namespaced system (coupling rules applied, every
+    /// variable reference namespaced). The array path historically only had
+    /// [`Self::from_file`], which rejects `models.len() != 1` outright because
+    /// it operates on a raw [`Model`] and has no coupling machinery of its own.
+    /// This constructor closes that seam: it consumes the already-coupled
+    /// flatten output directly, so a discretized **coupled** spatial model
+    /// compiles + evaluates through the vectorized array runtime, reusing
+    /// `flatten.rs`'s coupling verbatim (no new coupling logic here). The raw
+    /// single-model `from_file` guard is intentionally left intact — the real
+    /// pipeline flattens first and reaches the array runtime through here
+    /// (ess-14f.8).
+    ///
+    /// The flattened system splits variables into typed maps; [`Self::from_model`]
+    /// expects a single registry discriminated by [`ModelVariable::var_type`].
+    /// We merge them back into one synthetic [`Model`] (each variable already
+    /// carries its `var_type`) and delegate, so every downstream stage — shape
+    /// inference, arrayop lowering, the diffsol RHS build — is shared bit-for-bit
+    /// with the single-model path.
+    pub fn from_flattened(flat: &FlattenedSystem) -> Result<Self, CompileError> {
+        // Reject hybrid dimensionality and model events, mirroring the scalar
+        // `Compiled::from_flattened`. The data-loader refresh path that drives
+        // this seam is event-free by design (a driver-level segmented solve,
+        // not an in-solver event), so rejecting here loses no in-scope
+        // capability while preventing a model that *does* declare events from
+        // compiling with its events silently dropped.
+        if flat.independent_variables != ["t"] {
+            return Err(CompileError::UnsupportedDimensionalityError {
+                independent_variables: flat.independent_variables.clone(),
+            });
+        }
+        if !flat.continuous_events.is_empty() {
+            return Err(CompileError::UnsupportedFeatureError {
+                feature: "continuous_events".to_string(),
+                message: "array-op path does not support continuous (root-finding) events. \
+                          Track the future Rust events bead for support."
+                    .to_string(),
+            });
+        }
+        if !flat.discrete_events.is_empty() {
+            return Err(CompileError::UnsupportedFeatureError {
+                feature: "discrete_events".to_string(),
+                message: "array-op path does not support discrete events. \
+                          Track the future Rust events bead for support."
+                    .to_string(),
+            });
+        }
+
+        // Re-merge the typed variable maps into one registry. The maps are
+        // disjoint by construction (a variable has exactly one `var_type`), so
+        // no key collides; brownian variables are included so `from_model`
+        // surfaces its explicit "no SDE" rejection rather than dropping them.
+        let mut variables: HashMap<String, ModelVariable> = HashMap::new();
+        for (name, var) in &flat.state_variables {
+            variables.insert(name.clone(), var.clone());
+        }
+        for (name, var) in &flat.parameters {
+            variables.insert(name.clone(), var.clone());
+        }
+        for (name, var) in &flat.observed_variables {
+            variables.insert(name.clone(), var.clone());
+        }
+        for (name, var) in &flat.brownian_variables {
+            variables.insert(name.clone(), var.clone());
+        }
+
+        // `index_sets` is not carried through flatten today, so coupled models
+        // that address `arrayop`/`aggregate` ranges via `{ "from": <set> }`
+        // are not yet resolvable on this path (tracked as follow-up). Dense
+        // `[lo, hi]` ranges — what discretized stencils emit — need no
+        // registry and work here.
+        let model = Model {
+            name: None,
+            domain: None,
+            index_sets: None,
+            coupletype: None,
+            reference: None,
+            variables,
+            equations: flat.equations.clone(),
+            discrete_events: None,
+            continuous_events: None,
+            subsystems: None,
+            description: None,
+            tolerance: None,
+            tests: None,
+            boundary_conditions: None,
+            initialization_equations: None,
+            guesses: None,
+            system_kind: None,
+            regrid: None,
+        };
+        Self::from_model(&model)
     }
 
     pub fn from_model(model: &Model) -> Result<Self, CompileError> {

@@ -19,6 +19,7 @@ use crate::types::{
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use thiserror::Error;
 
 // ============================================================================
@@ -567,34 +568,100 @@ fn build_reaction_block(
 /// `GEOSFP.T` in a `SimpleOzone` equation) survive unchanged. The independent
 /// variable `t` is never namespaced — it's a global symbol resolved to
 /// [`ResolvedExpr::Time`] during compile, not a component-scoped name.
+///
+/// Array nodes (`arrayop`/`aggregate`/`makearray`/`integral`/…) carry their
+/// body in out-of-band fields (`expr`, `filter`, `lower`, `upper`, `values`,
+/// `axes`) plus structural metadata (`output_idx`, `ranges`, `reduce`,
+/// `semiring`, `join`, `shape`, …). Every such field is preserved and the
+/// expression-bearing ones are recursively namespaced, so a discretized
+/// `arrayop` survives coupling. Loop-index symbols introduced by an enclosing
+/// `arrayop`/`aggregate` (`output_idx` + `ranges` keys) or `integral`
+/// (`int_var`) are component-local — the array interpreter resolves them
+/// positionally against `loop_binds`, never against the variable registry — so
+/// they are excluded from namespacing within that node's scope (ess-14f.8).
 fn namespace_expr(expr: &Expr, system_name: &str) -> Expr {
+    namespace_expr_scoped(expr, system_name, &HashSet::new())
+}
+
+fn namespace_expr_scoped(expr: &Expr, system_name: &str, bound: &HashSet<String>) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
         Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) => {
-            if name.contains('.') || name == "t" {
+            if name.contains('.') || name == "t" || bound.contains(name) {
                 Expr::Variable(name.clone())
             } else {
                 Expr::Variable(format!("{system_name}.{name}"))
             }
         }
-        Expr::Operator(node) => Expr::Operator(ExpressionNode {
-            op: node.op.clone(),
-            args: node
+        Expr::Operator(node) => {
+            // Extend the bound-index set with the loop symbols this node
+            // introduces so its body / filter / bound expressions skip them.
+            // `ranges` keys cover both the output and contracted indices of an
+            // `arrayop`/`aggregate`; `output_idx` is added defensively; an
+            // `integral` binds its `int_var`.
+            let mut child_bound = bound.clone();
+            if let Some(output_idx) = &node.output_idx {
+                child_bound.extend(output_idx.iter().cloned());
+            }
+            if let Some(ranges) = &node.ranges {
+                child_bound.extend(ranges.keys().cloned());
+            }
+            if let Some(int_var) = &node.int_var {
+                child_bound.insert(int_var.clone());
+            }
+
+            // Clone to preserve EVERY structural/metadata field verbatim, then
+            // re-namespace only the expression-bearing children. The previous
+            // `..Default::default()` form silently dropped `expr`, `ranges`,
+            // `output_idx`, `reduce`, … — corrupting every array node the
+            // moment a model was flattened.
+            let mut out = node.clone();
+            out.args = node
                 .args
                 .iter()
-                .map(|a| namespace_expr(a, system_name))
-                .collect(),
-            wrt: node.wrt.as_ref().map(|w| {
-                if w.contains('.') || w == "t" {
+                .map(|a| namespace_expr_scoped(a, system_name, &child_bound))
+                .collect();
+            out.wrt = node.wrt.as_ref().map(|w| {
+                if w.contains('.') || w == "t" || child_bound.contains(w) {
                     w.clone()
                 } else {
                     format!("{system_name}.{w}")
                 }
-            }),
-            dim: node.dim.clone(),
-            ..Default::default()
-        }),
+            });
+            out.expr = node
+                .expr
+                .as_ref()
+                .map(|e| Box::new(namespace_expr_scoped(e, system_name, &child_bound)));
+            out.filter = node
+                .filter
+                .as_ref()
+                .map(|e| Box::new(namespace_expr_scoped(e, system_name, &child_bound)));
+            out.lower = node
+                .lower
+                .as_ref()
+                .map(|e| Box::new(namespace_expr_scoped(e, system_name, &child_bound)));
+            out.upper = node
+                .upper
+                .as_ref()
+                .map(|e| Box::new(namespace_expr_scoped(e, system_name, &child_bound)));
+            out.values = node.values.as_ref().map(|vs| {
+                vs.iter()
+                    .map(|v| namespace_expr_scoped(v, system_name, &child_bound))
+                    .collect()
+            });
+            out.axes = node.axes.as_ref().map(|axes| {
+                axes.iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            namespace_expr_scoped(v, system_name, &child_bound),
+                        )
+                    })
+                    .collect()
+            });
+            Expr::Operator(out)
+        }
     }
 }
 

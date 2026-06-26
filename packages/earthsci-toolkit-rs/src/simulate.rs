@@ -915,7 +915,18 @@ pub fn simulate(
     if crate::simulate_array::file_has_array_ops(file)
         || crate::simulate_array::file_has_spatial_model(file)
     {
-        let compiled = crate::simulate_array::ArrayCompiled::from_file(file)?;
+        // A coupled (multi-model) file has no single raw `Model` for the array
+        // runtime to consume — `ArrayCompiled::from_file` rejects `models.len()
+        // != 1`. Flatten the coupling into one namespaced system first, then
+        // build the array runtime from that flatten output (ess-14f.8). The
+        // single-model array path is left byte-identical (`from_file`).
+        let model_count = file.models.as_ref().map_or(0, |m| m.len());
+        let compiled = if model_count > 1 {
+            let flat = flatten(file).map_err(CompileError::from)?;
+            crate::simulate_array::ArrayCompiled::from_flattened(&flat)?
+        } else {
+            crate::simulate_array::ArrayCompiled::from_file(file)?
+        };
         return compiled.simulate(tspan, params, initial_conditions, opts);
     }
     let compiled = Compiled::from_file(file)?;
