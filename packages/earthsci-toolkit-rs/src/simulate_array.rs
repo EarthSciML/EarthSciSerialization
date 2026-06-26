@@ -48,6 +48,7 @@ use ndarray::{ArrayD, ArrayViewD, IxDyn, Slice};
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 /// Stack-inlined index vectors for per-axis kernel bookkeeping. Grid rank stays
 /// ≤ 4 in practice, so these never touch the heap — a precondition for the
@@ -257,6 +258,32 @@ pub struct ArrayCompiled {
     rhs_rules: Vec<RhsRule>,
     /// Number of flat state slots.
     n_states: usize,
+    /// External refreshable forcing-array channel (PR-1, ess-14f.7): the live
+    /// runtime input a discrete-cadence loader's regridded field lands in, read
+    /// by the RHS each step. Keyed by variable name; a forcing-fed variable
+    /// resolves here (see [`lookup_variable`]) when it is bound in no other
+    /// channel. `Rc<RefCell<…>>` for the same reason [`RhsScratch`] is a
+    /// `RefCell` — diffsol's RHS is `Fn`, so the buffer needs interior
+    /// mutability — *plus* an `Rc` so a segmented driver (the future R-3
+    /// example-harness) can hold a clone and refresh entries *between* segments
+    /// while the captured closure reads the same buffer. Empty for every model
+    /// with no loader forcing, so the scalar-`p` path is byte-identical.
+    ///
+    /// Feasibility-gate verdict (the bead's declarative-or-fail opener): no
+    /// existing runtime channel suffices for a *refreshable external
+    /// forcing-array*. diffsol's `p` slice (`p.as_slice()`) is scalar-typed and
+    /// shape-less — fine for scalar forcings (which keep going through
+    /// `p`/`set_params`), awkward for fields; `state_arrays` is the integrator
+    /// state `y` (refilled from the solver, not a free input); `observed_arrays`
+    /// is a pure function of state, cleared and recomputed each call;
+    /// `derived_rings` is interior-mutable but built *fresh per RHS call*
+    /// (intra-evaluation FAQ-geometry scratch, wrong lifetime and overwritten by
+    /// `intersect_polygon` producers). The gap is real, so the channel is added
+    /// — as a runtime *binding*, not a new engine primitive (no arrayop, no
+    /// scalarizer arm, no `Discrete` `VariableType`). The optional typed
+    /// `ModelVariable.refresh` field (plan PR-2) is deferred: forcing resolves
+    /// by name at runtime and does not need it.
+    forcing: Rc<RefCell<HashMap<String, ArrayD<f64>>>>,
 }
 
 // ============================================================================
@@ -935,7 +962,21 @@ impl ArrayCompiled {
             observed_shapes,
             rhs_rules,
             n_states,
+            forcing: Rc::new(RefCell::new(HashMap::new())),
         })
+    }
+
+    /// A clonable handle to the external forcing buffer (PR-1, ess-14f.7). A
+    /// driver that integrates this model in discrete-cadence segments holds the
+    /// returned `Rc` and, at each cadence boundary, refreshes a loader-fed
+    /// field: `compiled.forcing_handle().borrow_mut().insert(var, regridded)`.
+    /// The captured RHS/Jacobian closures read the *same* buffer live on the
+    /// next `step()`, so the refresh is reflected without rebuilding the
+    /// problem. The buffer is shared (the handle and the closures clone one
+    /// `Rc`); mutate it only *between* segments, never inside a solver step, to
+    /// keep the RHS pure within a segment.
+    pub fn forcing_handle(&self) -> Rc<RefCell<HashMap<String, ArrayD<f64>>>> {
+        Rc::clone(&self.forcing)
     }
 
     pub fn state_variable_names(&self) -> &[String] {
@@ -977,6 +1018,7 @@ impl ArrayCompiled {
             &self.param_names,
             state,
             &param_vec,
+            &self.forcing,
             t,
             &mut dy,
             force_scalar,
@@ -1035,6 +1077,7 @@ impl ArrayCompiled {
             &self.param_names,
             state,
             param_vec,
+            &self.forcing,
             t,
             dy,
             false,
@@ -1107,6 +1150,14 @@ impl ArrayCompiled {
         let rhs_scratch = RefCell::new(RhsScratch::new(&var_shapes));
         let jac_scratch = RefCell::new(RhsScratch::new(&var_shapes_jac));
 
+        // External forcing channel (PR-1, ess-14f.7): clone the `Rc` handle into
+        // each closure so both the RHS and the Jacobian read the *same*
+        // model-lifetime buffer the caller mutates via `forcing_handle()`. The
+        // closures capture by move; the original `self.forcing` stays owned by
+        // the model (used for output-time observed exposure below).
+        let forcing_rhs = Rc::clone(&self.forcing);
+        let forcing_jac = Rc::clone(&self.forcing);
+
         let rhs_closure = move |y: &diffsol::FaerVec<f64>,
                                 p: &diffsol::FaerVec<f64>,
                                 t: f64,
@@ -1126,6 +1177,7 @@ impl ArrayCompiled {
                 &param_names,
                 y_s,
                 p_s,
+                &forcing_rhs,
                 t,
                 dy_s,
                 false,
@@ -1166,6 +1218,7 @@ impl ArrayCompiled {
                 &param_names_jac,
                 y_s,
                 p_s,
+                &forcing_jac,
                 t,
                 &mut f_y,
                 false,
@@ -1180,6 +1233,7 @@ impl ArrayCompiled {
                 &param_names_jac,
                 &y_perturbed,
                 p_s,
+                &forcing_jac,
                 t,
                 &mut f_yp,
                 false,
@@ -1270,6 +1324,7 @@ impl ArrayCompiled {
                     &self.param_names,
                     time[k],
                     &dr,
+                    &self.forcing,
                 )
             };
             let obs0 = obs_at(0);
@@ -1456,6 +1511,7 @@ fn materialize_observeds(
     param_names: &[String],
     t: f64,
     derived_rings: &RefCell<HashMap<String, ArrayD<f64>>>,
+    forcing: &RefCell<HashMap<String, ArrayD<f64>>>,
 ) -> HashMap<String, ArrayD<f64>> {
     let mut observed_arrays: HashMap<String, ArrayD<f64>> = HashMap::new();
     for rule in observed_rules {
@@ -1469,6 +1525,7 @@ fn materialize_observeds(
                     loop_binds: HashMap::new(),
                     t,
                     derived_rings,
+                    forcing,
                 };
                 let arr = match eval(body, &mut ctx) {
                     Value::Array(a) => a,
@@ -1500,6 +1557,7 @@ fn materialize_observeds(
                         loop_binds: HashMap::new(),
                         t,
                         derived_rings,
+                        forcing,
                     };
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
@@ -1533,6 +1591,7 @@ fn materialize_observeds_into(
     param_names: &[String],
     t: f64,
     derived_rings: &RefCell<HashMap<String, ArrayD<f64>>>,
+    forcing: &RefCell<HashMap<String, ArrayD<f64>>>,
 ) {
     dst.clear();
     for rule in observed_rules {
@@ -1546,6 +1605,7 @@ fn materialize_observeds_into(
                     loop_binds: HashMap::new(),
                     t,
                     derived_rings,
+                    forcing,
                 };
                 let arr = match eval(body, &mut ctx) {
                     Value::Array(a) => a,
@@ -1573,6 +1633,7 @@ fn materialize_observeds_into(
                         loop_binds: HashMap::new(),
                         t,
                         derived_rings,
+                        forcing,
                     };
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
@@ -1599,6 +1660,12 @@ fn evaluate_rhs_with_scratch(
     param_names: &[String],
     state: &[f64],
     params: &[f64],
+    // External refreshable forcing-array channel (PR-1, ess-14f.7): the
+    // model-lifetime buffer a discrete-cadence driver refreshes between
+    // segments. Borrowed (not owned by the per-call scratch) so the same buffer
+    // is read across every RHS call within a segment. Empty ⇒ no behaviour
+    // change vs. the scalar-`p` path.
+    forcing: &RefCell<HashMap<String, ArrayD<f64>>>,
     t: f64,
     dy: &mut [f64],
     // When true, skip the vectorized fast path and evaluate every array-op
@@ -1638,6 +1705,7 @@ fn evaluate_rhs_with_scratch(
         param_names,
         t,
         &derived_rings,
+        forcing,
     );
 
     // Emit observed shapes we need for downstream variable lookups.
@@ -1661,6 +1729,7 @@ fn evaluate_rhs_with_scratch(
                     loop_binds: HashMap::new(),
                     t,
                     derived_rings: &derived_rings,
+                    forcing,
                 };
                 let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
                 dy[*slot] = v;
@@ -1674,6 +1743,7 @@ fn evaluate_rhs_with_scratch(
                     loop_binds: HashMap::new(),
                     t,
                     derived_rings: &derived_rings,
+                    forcing,
                 };
                 let v = eval(body, &mut ctx).as_scalar().unwrap_or(f64::NAN);
                 dy[*slot] = v;
@@ -1720,6 +1790,7 @@ fn evaluate_rhs_with_scratch(
                             loop_binds: HashMap::new(),
                             t,
                             derived_rings: &derived_rings,
+                            forcing,
                         };
                         if let Some((val, ops)) = try_eval_arrayop_vectorized(
                             output_idx_names,
@@ -1757,6 +1828,7 @@ fn evaluate_rhs_with_scratch(
                         loop_binds: HashMap::new(),
                         t,
                         derived_rings: &derived_rings,
+                        forcing,
                     };
                     for (name, val) in output_idx_names.iter().zip(tuple.iter()) {
                         ctx.loop_binds.insert(name.clone(), *val);
@@ -2202,7 +2274,15 @@ fn eval_vec_variable<'a>(name: &str, bx: &VecBox, ctx: &EvalCtx<'a>) -> Option<V
     if let Some(i) = ctx.param_names.iter().position(|p| p == name) {
         return Some(VecValue::Scalar(ctx.params[i]));
     }
-    // Unknown bare symbol (e.g. an outer-scope loop bind): bail.
+    // Unknown bare symbol (e.g. an outer-scope loop bind, or an external
+    // forcing-fed field — PR-1, ess-14f.7): bail. The per-cell oracle resolves
+    // it via [`lookup_variable`], which reads `ctx.forcing`. Forcing is
+    // intentionally *not* resolved here: `ctx.forcing` is a `RefCell`, so it
+    // cannot hand back a `'a`-lifetime borrowed `VecValue::View` the way the
+    // persistent state/observed arrays do — a zero-copy vectorized forcing read
+    // would need the buffer restructured. Correctness holds (the oracle reads
+    // the live buffer); only the whole-array fast path is forgone for a rule
+    // that reads forcing. Optimizing that is a separate, optional follow-up.
     None
 }
 
@@ -2781,6 +2861,13 @@ struct EvalCtx<'a> {
     /// register while the same borrow chain reads it; empty for models with no
     /// derived sets (byte-identical to the pre-geometry path).
     derived_rings: &'a RefCell<HashMap<String, ArrayD<f64>>>,
+    /// External refreshable forcing-array channel (PR-1, ess-14f.7). Unlike
+    /// `derived_rings` (rebuilt fresh every RHS call), this borrows the
+    /// model-lifetime [`ArrayCompiled::forcing`] buffer a driver refreshes
+    /// between cadence segments; a forcing-fed variable name resolves to its
+    /// entry here (see [`lookup_variable`]). Empty for models with no loader
+    /// forcing, so the scalar-`p` path reads identically.
+    forcing: &'a RefCell<HashMap<String, ArrayD<f64>>>,
 }
 
 /// The distinct-vertex extent of the FAQ-materialized ring registered under
@@ -2830,6 +2917,21 @@ fn lookup_variable(name: &str, ctx: &EvalCtx) -> Value {
     }
     if let Some(i) = ctx.param_names.iter().position(|p| p == name) {
         return Value::Scalar(ctx.params[i]);
+    }
+    // External forcing channel (PR-1, ess-14f.7): a loader-fed field a driver
+    // refreshed into the buffer. Checked *last* — after t, loop binds, state,
+    // observed, and params — so it can only resolve a name that is otherwise
+    // unbound (it would read NaN today). That makes the scalar-`p` path and
+    // every existing model byte-identical: forcing only ever fills a gap, never
+    // shadows a live binding. (When R-1 wires `cadence.rs` it can carry the set
+    // of declared-loader-fed names and, if a name ever legitimately collides
+    // with a state, promote this lookup for those names — the seam is here.)
+    if let Some(a) = ctx.forcing.borrow().get(name) {
+        return if a.ndim() == 0 {
+            Value::Scalar(a[IxDyn(&[])])
+        } else {
+            Value::Array(a.clone())
+        };
     }
     Value::Scalar(f64::NAN)
 }
@@ -3403,6 +3505,9 @@ pub fn eval_expression(
 ) -> Value {
     let empty: HashMap<String, ArrayD<f64>> = HashMap::new();
     let derived_rings: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
+    // Standalone expression evaluation (FAQ rings, area integrands) carries no
+    // loader forcing — an empty buffer keeps the channel byte-identical here.
+    let forcing: RefCell<HashMap<String, ArrayD<f64>>> = RefCell::new(HashMap::new());
     let mut ctx = EvalCtx {
         state_arrays: &empty,
         observed_arrays: inputs,
@@ -3411,6 +3516,7 @@ pub fn eval_expression(
         loop_binds: HashMap::new(),
         t,
         derived_rings: &derived_rings,
+        forcing: &forcing,
     };
     eval(expr, &mut ctx)
 }
@@ -4593,5 +4699,175 @@ mod ragged_eval_tests {
             }
             Value::Scalar(s) => panic!("expected a [0, 3] array, got scalar {s}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod forcing_channel_tests {
+    //! PR-1 (ess-14f.7): the external refreshable forcing-array channel into the
+    //! diffsol array RHS. These tests are the bead's acceptance evidence:
+    //!   1. the RHS reads a forcing array *live* from the buffer,
+    //!   2. a buffer mutation (a driver refreshing between cadence segments) is
+    //!      reflected in the RHS output, and
+    //!   3. the existing scalar-`p` / parameter path is unaffected.
+    //!
+    //! The forcing buffer is the runtime landing zone for a discrete-cadence
+    //! loader's regridded field; here it is driven by hand (no I/O), exactly the
+    //! "testable with a hand-built buffer" contract the plan (PR-1) specifies.
+    use super::*;
+    use crate::parse::load;
+
+    fn arr1(v: &[f64]) -> ArrayD<f64> {
+        ArrayD::from_shape_vec(IxDyn(&[v.len()]), v.to_vec()).unwrap()
+    }
+
+    /// A model whose state derivative reads an external forcing array `w`
+    /// elementwise: `D(u[i]) = w[i]`, i ∈ [1,3]. `w` is declared in no variable
+    /// block — it is a loader-fed field that resolves through the forcing buffer
+    /// (the new lowest-precedence binding), precisely the channel PR-1 adds.
+    fn forced_model() -> ArrayCompiled {
+        let json = r#"{
+         "esm": "0.1.0",
+         "metadata": {"name": "forcing_channel"},
+         "models": {
+          "Forced": {
+           "variables": {"u": {"type": "state", "shape": ["i"], "default": 0.0}},
+           "equations": [
+            {
+             "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+                     "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"},
+                     "ranges": {"i": [1, 3]}},
+             "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+                     "ranges": {"i": [1, 3]},
+                     "expr": {"op": "index", "args": ["w", "i"]}}
+            }
+           ]
+          }
+         }
+        }"#;
+        let file = load(json).expect("parse forcing model");
+        ArrayCompiled::from_file(&file).expect("compile forcing model")
+    }
+
+    #[test]
+    fn rhs_reads_forcing_array_and_reflects_mutation() {
+        let compiled = forced_model();
+        let forcing = compiled.forcing_handle();
+        let params = HashMap::new();
+        let state = vec![0.0, 0.0, 0.0];
+
+        // Refresh #1 — the RHS reads the forcing array live from the buffer.
+        forcing
+            .borrow_mut()
+            .insert("w".to_string(), arr1(&[10.0, 20.0, 30.0]));
+        let (dy1, _) = compiled.debug_eval_rhs(&state, 0.0, &params, false);
+        assert_eq!(
+            dy1,
+            vec![10.0, 20.0, 30.0],
+            "RHS must read the forcing array live from the buffer"
+        );
+
+        // Refresh #2 — a driver mutating the buffer between segments. The change
+        // is reflected in the RHS output: the channel is live, not build-frozen.
+        forcing
+            .borrow_mut()
+            .insert("w".to_string(), arr1(&[1.0, 2.0, 3.0]));
+        let (dy2, _) = compiled.debug_eval_rhs(&state, 0.0, &params, false);
+        assert_eq!(
+            dy2,
+            vec![1.0, 2.0, 3.0],
+            "a buffer mutation must change the RHS output"
+        );
+        assert_ne!(dy1, dy2, "the refreshed forcing must produce a different RHS");
+
+        // The per-cell oracle path (force_scalar = true) reads the same buffer —
+        // the production vectorized path bails forcing reads to this oracle.
+        let (dy_oracle, _) = compiled.debug_eval_rhs(&state, 0.0, &params, true);
+        assert_eq!(
+            dy_oracle,
+            vec![1.0, 2.0, 3.0],
+            "the oracle path resolves forcing identically"
+        );
+    }
+
+    #[test]
+    fn forcing_flows_through_the_production_solve() {
+        // The forcing buffer is captured (Rc clone) into the diffsol RHS closure,
+        // so a constant forcing `D(u[i]) = w[i]` integrates to `u(t) = u0 + w·t`
+        // through the real solver — proving the channel is wired into `simulate`,
+        // not only the debug RHS entry point.
+        let compiled = forced_model();
+        compiled
+            .forcing_handle()
+            .borrow_mut()
+            .insert("w".to_string(), arr1(&[2.0, 4.0, 6.0]));
+        let params = HashMap::new();
+        let ics = HashMap::new(); // states default to 0
+        let opts = SimulateOptions::default();
+        let sol = compiled
+            .simulate((0.0, 1.0), &params, &ics, &opts)
+            .expect("solve with forcing");
+        // Final state ≈ u0 + w·1 = [2, 4, 6].
+        for (i, want) in [2.0, 4.0, 6.0].iter().enumerate() {
+            let got = *sol.state[i].last().expect("trajectory non-empty");
+            assert!(
+                (got - want).abs() < 1e-6,
+                "forcing must drive the solve: state[{i}] got {got}, want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_forcing_leaves_param_path_unaffected() {
+        // A parameter+state model `D(u[i]) = k·u[i]` with no forcing reference.
+        // With an empty buffer the parameter/state path is byte-identical; and an
+        // *unrelated* forcing entry does not perturb it, because forcing is
+        // resolved last and only fills otherwise-unbound names.
+        let json = r#"{
+         "esm": "0.1.0",
+         "metadata": {"name": "param_path"},
+         "models": {
+          "P": {
+           "variables": {
+             "u": {"type": "state", "shape": ["i"]},
+             "k": {"type": "parameter"}
+           },
+           "equations": [
+            {
+             "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+                     "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"},
+                     "ranges": {"i": [1, 2]}},
+             "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+                     "ranges": {"i": [1, 2]},
+                     "expr": {"op": "*", "args": ["k", {"op": "index", "args": ["u", "i"]}]}}
+            }
+           ]
+          }
+         }
+        }"#;
+        let file = load(json).expect("parse param model");
+        let compiled = ArrayCompiled::from_file(&file).expect("compile param model");
+        let mut params = HashMap::new();
+        params.insert("k".to_string(), 2.0);
+        let state = vec![3.0, 5.0];
+
+        let (dy_no_forcing, _) = compiled.debug_eval_rhs(&state, 0.0, &params, false);
+        assert_eq!(
+            dy_no_forcing,
+            vec![6.0, 10.0],
+            "empty forcing leaves the parameter path identical (k·u)"
+        );
+
+        // An unrelated forcing entry must not leak into the parameter path.
+        compiled
+            .forcing_handle()
+            .borrow_mut()
+            .insert("unrelated".to_string(), arr1(&[99.0]));
+        let (dy_with_junk, _) = compiled.debug_eval_rhs(&state, 0.0, &params, false);
+        assert_eq!(
+            dy_with_junk,
+            vec![6.0, 10.0],
+            "an unrelated forcing entry must not perturb the parameter path"
+        );
     }
 }
