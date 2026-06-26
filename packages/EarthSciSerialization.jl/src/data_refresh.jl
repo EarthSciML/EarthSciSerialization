@@ -247,10 +247,13 @@ object; it is then sampled once per cadence boundary.
 
 * **DISCRETE** providers (non-empty `provider_refresh_times`) are refreshed at
   each anchor: `affect!` samples, regrids, and writes the buffer in place, then
-  calls `u_modified!(integrator, false)` so the integrator treats it as a
-  parameter-only update (no trajectory re-init). Dependent/observed variables
-  need no separate refresh — they are RHS expressions over the buffers, so they
-  recompute automatically on the next step.
+  calls `u_modified!(integrator, true)`. The forcing lives in `p`, so changing it
+  changes `f(u, p, t)` even though `u` is untouched; `true` forces an FSAL
+  integrator (Tsit5, …) to recompute its cached derivative from the refreshed
+  buffer instead of reusing the stale pre-refresh one for a stage. It does NOT
+  reset `u` or the trajectory — only the derivative cache. Dependent/observed
+  variables need no separate refresh — they are RHS expressions over the buffers,
+  so they recompute automatically on the next step.
 * **CONST** providers ([`provider_is_const`](@ref)) are materialized once into
   `const_arrays` at `build_evaluator` time; they contribute no tstops and are
   absent from the callback.
