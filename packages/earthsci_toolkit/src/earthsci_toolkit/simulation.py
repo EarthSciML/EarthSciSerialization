@@ -33,6 +33,7 @@ from .esm_types import (
     ReactionSystem,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
     AffectEquation, FunctionalAffect, is_aggregate_op,
+    InitialConditionType,
 )
 from .flatten import (
     FlattenedEquation,
@@ -831,6 +832,124 @@ def _resolve_state_element(
     return var_name, flat_pos
 
 
+def _grid_coords_from_spatial(spatial: Dict[str, Any]) -> "Dict[str, np.ndarray]":
+    """Build a 1-D coordinate array for each spatial dimension.
+
+    The point count matches the method-of-lines discretization
+    (``spatial_discretize._grid_sizes``): ``round((max - min)/grid_spacing) + 1``
+    nodes from ``min`` to ``max`` inclusive. Returns an insertion-ordered map
+    ``dim_name -> coordinate ndarray`` (dict preserves order on py>=3.7).
+    """
+    coords: Dict[str, np.ndarray] = {}
+    for dim_name, spec in spatial.items():
+        lo = float(spec.min)
+        hi = float(spec.max)
+        spacing = getattr(spec, "grid_spacing", None)
+        if spacing is None or float(spacing) <= 0:
+            raise NumpyInterpreterError(
+                f"expression initial condition needs a positive grid_spacing on "
+                f"spatial dimension {dim_name!r} to build grid coordinates"
+            )
+        n_points = int(round((hi - lo) / float(spacing))) + 1
+        coords[dim_name] = np.linspace(lo, hi, n_points)
+    return coords
+
+
+def _seed_expression_initial_conditions(
+    y0: np.ndarray,
+    flat: "FlattenedSystem",
+    state_layout: Dict[str, slice],
+    shapes: Dict[str, Tuple[int, ...]],
+    state_names: List[str],
+) -> None:
+    """Seed ``y0`` from a domain-level ``expression`` initial condition.
+
+    The IC expression for each variable is the EXISTING expression AST
+    evaluated over the domain's spatial grid at t=0 — reusing the NumPy
+    interpreter (:func:`eval_expr`), not a new primitive. Free symbols in the
+    expression are the spatial dimension names (e.g. ``"x"``, ``"y"``); the
+    expression is evaluated at every grid node to produce the variable's
+    initial field ``u(x, 0)``, written into the flat state vector in C order
+    (matching the interpreter's read layout in ``_view_state_array``).
+
+    Runs before :func:`_apply_initial_conditions` so explicit per-element
+    ``initial_conditions`` passed to :func:`simulate` still override the field.
+    Only domain-level expression ICs are consumed here — PDE components route
+    through the NumPy backend, which is the one path with a grid. Non-spatial
+    systems never carry one, so this is a no-op for them.
+    """
+    domain = getattr(flat, "domain", None)
+    if domain is None:
+        return
+    ic = getattr(domain, "initial_conditions", None)
+    if ic is None or ic.type != InitialConditionType.EXPRESSION:
+        return
+    if not ic.expression_values:
+        return
+    spatial = getattr(domain, "spatial", None)
+    if not spatial:
+        raise NumpyInterpreterError(
+            "expression initial condition requires the domain to declare "
+            "spatial dimensions (domains.<d>.spatial) so grid coordinates can "
+            "be built"
+        )
+
+    coords = _grid_coords_from_spatial(spatial)
+    dim_names = list(coords.keys())
+    dim_sizes = [int(c.shape[0]) for c in coords.values()]
+
+    for var, expr in ic.expression_values.items():
+        # Resolve the (possibly dot-namespaced) flat state name.
+        resolved = None
+        for n in state_names:
+            if n == var or n.endswith("." + var):
+                resolved = n
+                break
+        if resolved is None:
+            raise NumpyInterpreterError(
+                f"expression initial condition names unknown variable {var!r}; "
+                f"known state variables: {state_names}"
+            )
+
+        shape = tuple(shapes.get(resolved, ()))
+        # Map the variable's array axes to spatial dimensions positionally,
+        # verifying each axis size matches the grid. Unambiguous for the
+        # supported case: a field declared over the leading spatial dims in
+        # domain order (the camp_fire ignition front and the conformance
+        # golden). Mismatches surface loudly rather than silently miscompute.
+        if len(shape) > len(dim_names) or list(shape) != dim_sizes[: len(shape)]:
+            raise NumpyInterpreterError(
+                f"expression initial condition for {var!r}: variable shape "
+                f"{shape} is not consistent with the spatial grid "
+                f"{dict(zip(dim_names, dim_sizes))} (axes map positionally to "
+                f"spatial dimensions {dim_names})"
+            )
+
+        used_dims = list(dim_names[: len(shape)]) if shape else dim_names[:1]
+        used_coords = [coords[d] for d in used_dims]
+        if shape:
+            meshes = np.meshgrid(*used_coords, indexing="ij")
+        else:
+            # 0-D variable (meaningless per spec): evaluate at the first node.
+            meshes = [c[0] for c in used_coords]
+        locals_env = {d: m for d, m in zip(used_dims, meshes)}
+
+        ctx = EvalContext(
+            state_layout=state_layout,
+            state_shapes=shapes,
+            param_values={},
+            observed_values={},
+            y=y0,
+            t=0.0,
+            locals=locals_env,
+        )
+        field = np.asarray(eval_expr(expr, ctx), dtype=float)
+        # A constant expression (no free spatial symbol) evaluates to a scalar;
+        # broadcast it across the whole field.
+        target = np.broadcast_to(field, shape) if shape else field
+        y0[state_layout[resolved]] = np.asarray(target, dtype=float).reshape(-1, order="C")
+
+
 def _apply_initial_conditions(
     y0: np.ndarray,
     state_layout: Dict[str, slice],
@@ -1433,6 +1552,10 @@ def _build_numpy_rhs(
         if isinstance(default, (int, float)):
             sl = state_layout[name]
             y0[sl] = float(default)
+    # Domain-level ``expression`` initial conditions: evaluate the IC AST over
+    # the grid at t=0 into y0 (reusing the NumPy interpreter). Runs before the
+    # explicit per-element overrides so those still win.
+    _seed_expression_initial_conditions(y0, flat, state_layout, shapes, state_names)
     _apply_initial_conditions(
         y0, state_layout, shapes, state_names, initial_conditions
     )

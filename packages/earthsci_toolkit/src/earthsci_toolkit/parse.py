@@ -511,20 +511,31 @@ def _parse_parameter_sweep(data: Dict[str, Any]) -> ParameterSweep:
 
 def _parse_example_initial_state(data: Dict[str, Any]) -> InitialCondition:
     """Parse an Example.initial_state block. Mirrors the top-level
-    InitialConditions schema (constant / per_variable / from_file)."""
+    InitialConditions schema (constant / per_variable / from_file / expression)."""
     type_str = data["type"]
     type_mapping = {
         "constant": InitialConditionType.CONSTANT,
         "per_variable": InitialConditionType.PER_VARIABLE,
         "from_file": InitialConditionType.DATA,
+        "expression": InitialConditionType.EXPRESSION,
     }
     ic_type = type_mapping.get(type_str, InitialConditionType.CONSTANT)
+    values = None
+    expression_values = None
+    if ic_type == InitialConditionType.EXPRESSION:
+        expression_values = {
+            var: _parse_expression(expr)
+            for var, expr in (data.get("values") or {}).items()
+        }
+    else:
+        values = data.get("values")
     return InitialCondition(
         type=ic_type,
         value=data.get("value"),
-        values=data.get("values"),
+        values=values,
         function=None,
         data_source=data.get("path"),
+        expression_values=expression_values,
     )
 
 
@@ -1175,23 +1186,38 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
         type_mapping = {
             "constant": InitialConditionType.CONSTANT,
             "per_variable": InitialConditionType.PER_VARIABLE,
-            "from_file": InitialConditionType.DATA
+            "from_file": InitialConditionType.DATA,
+            "expression": InitialConditionType.EXPRESSION,
         }
 
         ic_type = type_mapping.get(ic_type_str, InitialConditionType.CONSTANT)
 
         # Extract appropriate fields based on type
         value = ic_data.get("value")
-        values = ic_data.get("values")  # For per_variable type
         function = None
         data_source = ic_data.get("path")  # Schema uses "path" for file source
+
+        # The ``expression`` type stores its ``values`` map as a variable->Expression
+        # AST (parsed), distinct from ``per_variable`` whose ``values`` are plain
+        # numbers. Keep them on separate fields so consumers never confuse a
+        # number map with an AST map.
+        values = None
+        expression_values = None
+        if ic_type == InitialConditionType.EXPRESSION:
+            expression_values = {
+                var: _parse_expression(expr)
+                for var, expr in (ic_data.get("values") or {}).items()
+            }
+        else:
+            values = ic_data.get("values")  # For per_variable type
 
         domain.initial_conditions = InitialCondition(
             type=ic_type,
             value=value,
             values=values,
             function=function,
-            data_source=data_source
+            data_source=data_source,
+            expression_values=expression_values,
         )
 
     # v0.2.0 deprecation warning: domain-level boundary_conditions is retained
@@ -1274,6 +1300,11 @@ def _validate_domain(domain: Domain) -> None:
             errors.append("Initial condition type 'function' requires a function specification")
         elif ic.type == InitialConditionType.DATA and ic.data_source is None:
             errors.append("Initial condition type 'data' requires a data source")
+        elif ic.type == InitialConditionType.EXPRESSION and not ic.expression_values:
+            errors.append(
+                "Initial condition type 'expression' requires a non-empty "
+                "'values' map (variable -> Expression)"
+            )
 
     if errors:
         raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))

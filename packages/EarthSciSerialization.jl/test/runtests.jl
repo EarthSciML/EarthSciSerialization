@@ -59,6 +59,7 @@ using JSON3
     include("cadence_test.jl")
     include("value_invention_frontdoor_test.jl")
     include("aggregate_conformance_test.jl")
+    include("expression_ic_conformance_test.jl")
     include("inverse_trig_conformance_test.jl")
     include("geometry_conformance_test.jl")
     include("geometry_assembly_conformance_test.jl")

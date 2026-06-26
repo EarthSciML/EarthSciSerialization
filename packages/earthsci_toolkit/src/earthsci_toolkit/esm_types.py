@@ -683,6 +683,7 @@ class InitialConditionType(Enum):
     PER_VARIABLE = "per_variable"
     FUNCTION = "function"
     DATA = "data"
+    EXPRESSION = "expression"
 
 
 @dataclass
@@ -693,6 +694,13 @@ class InitialCondition:
     values: Optional[Dict[str, float]] = None  # For per_variable type
     function: Optional[str] = None
     data_source: Optional[str] = None
+    # For the ``expression`` type: a map from variable name to an Expression
+    # AST whose free symbols are the component domain's spatial dimensions
+    # (e.g. "x", "y"). The runtime evaluates each expression at every grid
+    # point at t=0 to produce u(x, 0). Only meaningful on PDE (>=1-D spatial)
+    # components. See esm-schema.json $defs/InitialConditions and esm-spec.md
+    # §11.4.
+    expression_values: Optional[Dict[str, Expr]] = None
 
 
 class BoundaryConditionKind(Enum):

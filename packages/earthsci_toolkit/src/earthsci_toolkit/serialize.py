@@ -331,6 +331,11 @@ def _serialize_example_initial_state(ic: InitialCondition) -> Dict[str, Any]:
         result["value"] = ic.value
     if ic.values is not None:
         result["values"] = dict(ic.values)
+    if ic.expression_values is not None:
+        result["values"] = {
+            var: _serialize_expression(e)
+            for var, e in ic.expression_values.items()
+        }
     if ic.data_source is not None:
         result["path"] = ic.data_source
     return result
@@ -612,6 +617,11 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
             ic_data["value"] = ic.value
         if ic.values is not None:
             ic_data["values"] = ic.values
+        if ic.expression_values is not None:
+            ic_data["values"] = {
+                var: _serialize_expression(e)
+                for var, e in ic.expression_values.items()
+            }
         if ic.function is not None:
             ic_data["function"] = ic.function
         if ic.data_source is not None:
