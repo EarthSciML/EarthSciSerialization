@@ -86,6 +86,42 @@ function _advection_esm(n)
                 "rhs" => Dict{String,Any}("op" => "grad", "args" => Any["u"], "dim" => "i"))])))
 end
 
+_const(val) = OpExpr("const", ESM.Expr[]; value=val)
+
+# Closed-function (`interp.*`) leaves on the array RHS (ess-wrh). Each is a single
+# arrayop `D(u[i]) = interp.<op>(<const table/axis>, …, u[i])` — the const table &
+# axis ride on the fn handler (lowered to a typed `_Interp*Spec` at build time);
+# the per-cell query `u[i]` merges to a GATHER. These exercise the de-boxed
+# whole-array `_eval_vec_interp_*` kernels: the only Float64 arrays are the
+# preallocated buffers, so a steady-state `f!` call must allocate 0 bytes even
+# though the RHS contains a table lookup. This coverage gap is exactly why the
+# per-lane `Float64`→`Any` box went unnoticed before ess-wrh.
+_interp_linear_model(N) = ESM.Model(
+    Dict("u" => ModelVariable(StateVariable)),
+    [ESM.Equation(_ao1(_Didx("u", _v("i")), "i", 1, N),
+                  _ao1(_op("fn", _const([10.0, 20.0, 40.0, 80.0, 160.0]),
+                           _const([0.0, 1.0, 2.0, 3.0, 4.0]),
+                           _idx("u", _v("i")); name="interp.linear"), "i", 1, N))])
+
+_interp_searchsorted_model(N) = ESM.Model(
+    Dict("u" => ModelVariable(StateVariable)),
+    [ESM.Equation(_ao1(_Didx("u", _v("i")), "i", 1, N),
+                  _ao1(_op("fn", _idx("u", _v("i")),
+                           _const([1.0, 2.0, 3.0, 4.0, 5.0]);
+                           name="interp.searchsorted"), "i", 1, N))])
+
+# Bilinear: x-query is the per-cell state `u[i]` (→ GATHER); y-query is a broadcast
+# parameter (→ PARAM). Both children stay non-constant, so the leaf runs the
+# whole-array kernel rather than folding.
+_interp_bilinear_model(N) = ESM.Model(
+    Dict("u" => ModelVariable(StateVariable),
+         "cz" => ModelVariable(ParameterVariable; default=0.5)),
+    [ESM.Equation(_ao1(_Didx("u", _v("i")), "i", 1, N),
+                  _ao1(_op("fn",
+                           _const(Any[Any[1.0, 1.5, 2.0], Any[1.1, 1.6, 2.1], Any[1.2, 1.7, 2.2]]),
+                           _const([10.0, 100.0, 1000.0]), _const([0.1, 0.5, 1.0]),
+                           _idx("u", _v("i")), _v("cz"); name="interp.bilinear"), "i", 1, N))])
+
 @testset "tree_walk PDE RHS is allocation-free (ess-9cc)" begin
 
     @testset "vectorized stencil RHS: 0 bytes, N-independent" begin
@@ -119,6 +155,28 @@ end
             end
             du = similar(u0)
             @test rhs_alloc_bytes(f!, du, u0, p, 0.0) == 0
+        end
+    end
+
+    @testset "vectorized interp.linear RHS: 0 bytes, N-independent (ess-wrh)" begin
+        # Query lands strictly inside the axis so the blend (not a clamp) runs.
+        for N in (32, 128)
+            ics = Dict("u[$k]" => 0.5 + 3.0 * (k - 1) / N for k in 1:N)
+            @test built_rhs_alloc_bytes(_interp_linear_model(N); initial_conditions=ics) == 0
+        end
+    end
+
+    @testset "vectorized interp.searchsorted RHS: 0 bytes, N-independent (ess-wrh)" begin
+        for N in (32, 128)
+            ics = Dict("u[$k]" => 1.0 + 4.0 * (k - 1) / N for k in 1:N)
+            @test built_rhs_alloc_bytes(_interp_searchsorted_model(N); initial_conditions=ics) == 0
+        end
+    end
+
+    @testset "vectorized interp.bilinear RHS: 0 bytes, N-independent (ess-wrh)" begin
+        for N in (32, 128)
+            ics = Dict("u[$k]" => 10.0 + 990.0 * (k - 1) / N for k in 1:N)
+            @test built_rhs_alloc_bytes(_interp_bilinear_model(N); initial_conditions=ics) == 0
         end
     end
 

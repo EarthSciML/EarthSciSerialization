@@ -1641,17 +1641,20 @@ const _VK_PARAM    = UInt8(5)   # scalar p.<sym>, broadcast
 const _VK_TIME     = UInt8(6)   # scalar t, broadcast
 const _VK_OP       = UInt8(7)   # elementwise broadcast of op over child vectors
 const _VK_REDUCE   = UInt8(8)   # contraction: axis fold over children (semiring)
-const _VK_FN       = UInt8(9)   # closed-function per-lane map
+const _VK_FN       = UInt8(9)   # closed-function map (interp.* = whole-array)
 
 # Each node owns a preallocated `buf` (length = the kernel's lane count) into
 # which `_eval_vec` writes its lane values IN PLACE at runtime, then returns it.
 # This — together with the explicit `du` scatter in `f!` — is what keeps the RHS
 # allocation-free (ess-9cc): the only Float64 arrays are these build-time `buf`s
 # captured in the closure, none are allocated per call. CONSTVEC has no `buf` and
-# is read straight from its stored `vals`. `fnargs`/`cvbufs` are per-`fn`-node
-# scratch (a reused closed-function argument vector and the child result buffers)
-# so the `fn` map reuses one `Any[]` across lanes instead of building a fresh one
-# per cell. They are shared empty sentinels on every non-`fn` node.
+# is read straight from its stored `vals`. `fnargs`/`cvbufs` are scratch ONLY for
+# the boxed all-scalar `fn` path (`datetime.*`): a reused closed-function argument
+# vector and the child result buffers, so that map reuses one `Any[]` across lanes
+# instead of building a fresh one per cell. The `interp.*` `fn` ops carry a typed
+# `_Interp*Spec` in `handler` instead and run zero-box whole-array kernels
+# (ess-wrh), leaving `fnargs`/`cvbufs` as shared empty sentinels; every non-`fn`
+# node shares those sentinels too.
 #
 # Because the buffers are mutable shared state, an evaluator is NON-REENTRANT: a
 # given `f!` must not run concurrently for one problem (the ODE integrator calls
@@ -1728,28 +1731,15 @@ function _struct_sig(n::_Node)::String
     end
 end
 
-# Preallocate the closed-function argument vector for a vectorized `fn` node,
-# prefilling the constant (per-spec) positions so the per-lane loop writes only
-# the varying scalar slots — reused across lanes instead of a fresh `Any[]` per
-# cell. (The per-lane `Float64`→`Any` box on the scalar slot is irreducible at
-# this layer — `evaluate_closed_function(name, ::AbstractVector)` mixes arrays
-# and scalars in one vector; eliminating it needs a scalar overload of that
-# function, a cross-binding change out of this bead's scope. `fn` in a vectorized
-# kernel is a cold path not on the diffusion RHS.)
-function _make_fnargs(handler, nchildren::Int)::Vector{Any}
-    fname, const_args = handler::Tuple{String,Any}
-    if const_args === nothing
-        return Vector{Any}(undef, nchildren)            # all args per-lane scalars
-    elseif fname == "interp.searchsorted"
-        return Any[0.0, const_args[1]]                  # [x, xs]; x per-lane
-    elseif fname == "interp.linear"
-        return Any[const_args[1], const_args[2], 0.0]   # [table, axis, x]
-    elseif fname == "interp.bilinear"
-        return Any[const_args[1], const_args[2], const_args[3], 0.0, 0.0]
-    else
-        return Vector{Any}(undef, nchildren)
-    end
-end
+# Allocate the closed-function argument vector for a vectorized all-scalar `fn`
+# node (e.g. `datetime.*`): one `Any` slot per child, filled per lane in
+# `_eval_vec_fn_boxed`. The `interp.*` ops do NOT use this path — they are lowered
+# to typed `_Interp*Spec` carriers at build time (`_merge_nodes`) and evaluated
+# through the validation-free `_interp_*_core` kernels with a typed `Float64`
+# query, so no `Float64`→`Any` box is ever created on the array RHS (ess-wrh). The
+# residual box on the all-scalar path is tolerated: those closed functions are a
+# cold case off the PDE diffusion RHS.
+_make_fnargs(nchildren::Int)::Vector{Any} = Vector{Any}(undef, nchildren)
 
 # Merge a structurally-identical group of per-cell nodes into one `_VecNode`
 # template. Precondition: all elements share `_struct_sig`. `len` is the group's
@@ -1785,14 +1775,80 @@ function _merge_nodes(nodes::Vector{_Node}, len::Int)::_VecNode
         m = length(n1.children)
         ch = _VecNode[_merge_nodes(_Node[nd.children[c] for nd in nodes], len) for c in 1:m]
         if n1.op === :fn
-            return _mkvnode(kind=_VK_FN, op=:fn, handler=n1.handler, children=ch,
-                            buf=Vector{Float64}(undef, len),
-                            fnargs=_make_fnargs(n1.handler, m),
-                            cvbufs=Vector{Vector{Float64}}(undef, m))
+            return _merge_fn_node(n1.handler, ch, len, m)
         end
         return _mkvnode(kind=_VK_OP, op=n1.op, handler=n1.handler, children=ch,
                         buf=Vector{Float64}(undef, len))
     end
+end
+
+# Build the vectorized node for a closed-function (`fn`) leaf. `interp.*` ops are
+# lowered to a typed `_Interp*Spec` handler (validated + coerced ONCE here at build
+# time) so `_eval_vec_fn` runs a zero-box whole-array kernel; all other closed
+# functions (`datetime.*`, all-scalar args) keep the boxed per-lane path. As a
+# build-time specialization (ess-wrh §4), an interp leaf whose query children are
+# all compile-time constants folds to a single `_VK_LITERAL` — the closed-function
+# call (and its box) vanish entirely for that leaf.
+function _merge_fn_node(handler, ch::Vector{_VecNode}, len::Int, m::Int)::_VecNode
+    fname, const_args = handler::Tuple{String,Any}
+    if fname == "interp.linear"
+        spec = _build_interp_linear_spec(fname, const_args[1], const_args[2])
+        folded = _try_fold_const_interp(spec, ch, len)
+        folded === nothing || return folded
+        return _mkvnode(kind=_VK_FN, op=:fn, handler=spec, children=ch,
+                        buf=Vector{Float64}(undef, len))
+    elseif fname == "interp.bilinear"
+        spec = _build_interp_bilinear_spec(fname, const_args[1], const_args[2], const_args[3])
+        folded = _try_fold_const_interp(spec, ch, len)
+        folded === nothing || return folded
+        return _mkvnode(kind=_VK_FN, op=:fn, handler=spec, children=ch,
+                        buf=Vector{Float64}(undef, len))
+    elseif fname == "interp.searchsorted"
+        spec = _build_interp_searchsorted_spec(fname, const_args[1])
+        folded = _try_fold_const_interp(spec, ch, len)
+        folded === nothing || return folded
+        return _mkvnode(kind=_VK_FN, op=:fn, handler=spec, children=ch,
+                        buf=Vector{Float64}(undef, len))
+    else
+        # All-scalar closed functions (e.g. `datetime.*`): boxed per-lane path.
+        return _mkvnode(kind=_VK_FN, op=:fn, handler=handler, children=ch,
+                        buf=Vector{Float64}(undef, len),
+                        fnargs=_make_fnargs(m),
+                        cvbufs=Vector{Vector{Float64}}(undef, m))
+    end
+end
+
+# (ess-wrh §4) On-knot / constant-query lowering. When EVERY query child of an
+# interp leaf merged to a `_VK_LITERAL` (i.e. all cells in the group share the
+# same compile-time-constant query), the whole closed-function call collapses to a
+# single compile-time value — no runtime kernel, no box. The value is computed
+# with the SAME validated `_interp_*_core` the runtime would use, so it is exact:
+# this subsumes the on-knot w=0 case the bead calls out (a query landing on an
+# affine/integer-axis knot folds to its table entry) WITHOUT the `0*Inf=NaN`
+# hazard a bare gather would hit on an infinite neighbor, because the full pinned
+# blend is evaluated rather than shortcut. A runtime query (`u[i]` → `_VK_STATE` /
+# `_VK_GATHER`) is not build-time known, so the prover declines (returns
+# `nothing`) and the node falls through to the whole-array kernel. Returns a
+# folded `_VK_LITERAL` `_VecNode`, or `nothing` if not foldable.
+function _try_fold_const_interp(spec::_InterpLinearSpec, ch::Vector{_VecNode},
+                                len::Int)::Union{_VecNode,Nothing}
+    (length(ch) == 1 && ch[1].kind === _VK_LITERAL) || return nothing
+    v = _interp_linear_core(spec.table, spec.axis, ch[1].literal)
+    return _mkvnode(kind=_VK_LITERAL, literal=Float64(v), buf=Vector{Float64}(undef, len))
+end
+function _try_fold_const_interp(spec::_InterpSearchsortedSpec, ch::Vector{_VecNode},
+                                len::Int)::Union{_VecNode,Nothing}
+    (length(ch) == 1 && ch[1].kind === _VK_LITERAL) || return nothing
+    v = _interp_searchsorted_core("interp.searchsorted", ch[1].literal, spec.xs)
+    return _mkvnode(kind=_VK_LITERAL, literal=Float64(v), buf=Vector{Float64}(undef, len))
+end
+function _try_fold_const_interp(spec::_InterpBilinearSpec, ch::Vector{_VecNode},
+                                len::Int)::Union{_VecNode,Nothing}
+    (length(ch) == 2 && ch[1].kind === _VK_LITERAL && ch[2].kind === _VK_LITERAL) ||
+        return nothing
+    v = _interp_bilinear_core(spec.table, spec.axis_x, spec.axis_y,
+                              ch[1].literal, ch[2].literal)
+    return _mkvnode(kind=_VK_LITERAL, literal=Float64(v), buf=Vector{Float64}(undef, len))
 end
 
 # Group an array equation's per-cell `(du_slot, node)` entries by structure and
@@ -1889,15 +1945,83 @@ function _eval_vec_reduce(n::_VecNode, u, p, t)::Vector{Float64}
     return b
 end
 
-# Closed-function map — one kernel node, evaluated per lane into `n.buf` (mirrors
-# the scalar `:fn` arm). Children are evaluated once and their result buffers
-# captured in `n.cvbufs` (each is read per lane); the closed-function argument
-# vector `n.fnargs` is reused across lanes. The only residual allocation is the
-# per-lane `Float64`→`Any` box on the scalar arg slot, inherent to
-# `evaluate_closed_function`'s `AbstractVector` contract — a cold path off the
-# array-RHS hot loop (see `_make_fnargs`).
+# Closed-function map — one kernel node writing its lane values into `n.buf`. The
+# `interp.*` ops run as zero-box whole-array kernels: their validated table/axis
+# live on the node's typed `_Interp*Spec` handler (built once in `_merge_fn_node`)
+# and the per-lane query is a typed `Float64`, so the only Float64 arrays are the
+# preallocated buffers (ess-wrh) — the `f!` stays allocation-free even with an
+# interp/table-lookup leaf on the RHS. Bit-identical to the scalar `:fn` arm: the
+# array kernels call the SAME `_interp_*_core` (registered_functions.jl). All other
+# closed functions (`datetime.*`, all-scalar args) keep the boxed `AbstractVector`
+# path — a cold case off the PDE array RHS. The `isa` ladder is a manual union
+# split: each branch narrows `n.handler::Any` to a concrete type, so the kernels
+# it calls are type-stable (no dispatch box).
 function _eval_vec_fn(n::_VecNode, u, p, t)::Vector{Float64}
+    h = n.handler
+    if h isa _InterpLinearSpec
+        return _eval_vec_interp_linear(h, n, u, p, t)
+    elseif h isa _InterpBilinearSpec
+        return _eval_vec_interp_bilinear(h, n, u, p, t)
+    elseif h isa _InterpSearchsortedSpec
+        return _eval_vec_interp_searchsorted(h, n, u, p, t)
+    else
+        return _eval_vec_fn_boxed(n, u, p, t)
+    end
+end
+
+# Design note (ess-wrh §2 — "whole-array" form). These kernels iterate lanes and
+# call the shared `_interp_*_core` once per lane rather than materializing
+# intermediate gathered-axis/table arrays and a fused `@.` blend. The choice is
+# deliberate: (a) bit-identity with the scalar `:fn` arm is guaranteed because the
+# SAME core (same clamp order, same locate, same pinned blend) runs on both paths
+# — a separate broadcast form would have to re-derive the fiddly clamp/NaN/on-knot
+# corners and risk divergence; (b) `interp.*` tables are §9.2-capped at ≤1024 (and
+# are usually tiny), so a materialized locate→gather→broadcast pass would add
+# several length-N scratch buffers and extra passes for no measurable gain. The
+# costs ess-wrh targets — the per-lane `Float64`→`Any` box, the per-lane axis
+# re-validation, and the boxed `AbstractVector` dispatch — are eliminated here
+# regardless of locate strategy: the query is a typed `Float64`, the table/axis
+# are validated once at build time, and the call is statically dispatched.
+function _eval_vec_interp_linear(h::_InterpLinearSpec, n::_VecNode, u, p, t)::Vector{Float64}
+    b = n.buf
+    xq = _eval_vec(n.children[1], u, p, t)   # query lane vector (disjoint from b)
+    table = h.table; axis = h.axis
+    @inbounds for lane in eachindex(b)
+        b[lane] = _interp_linear_core(table, axis, xq[lane])
+    end
+    return b
+end
+
+function _eval_vec_interp_searchsorted(h::_InterpSearchsortedSpec, n::_VecNode, u, p, t)::Vector{Float64}
+    b = n.buf
+    xq = _eval_vec(n.children[1], u, p, t)
+    xs = h.xs
+    @inbounds for lane in eachindex(b)
+        b[lane] = Float64(_interp_searchsorted_core("interp.searchsorted", xq[lane], xs))
+    end
+    return b
+end
+
+function _eval_vec_interp_bilinear(h::_InterpBilinearSpec, n::_VecNode, u, p, t)::Vector{Float64}
+    b = n.buf
+    xq = _eval_vec(n.children[1], u, p, t)
+    yq = _eval_vec(n.children[2], u, p, t)   # sibling buffer, disjoint from xq and b
+    table = h.table; axis_x = h.axis_x; axis_y = h.axis_y
+    @inbounds for lane in eachindex(b)
+        b[lane] = _interp_bilinear_core(table, axis_x, axis_y, xq[lane], yq[lane])
+    end
+    return b
+end
+
+# Boxed fallback for all-scalar closed functions (e.g. `datetime.*`) inside a
+# vectorized arrayop: one reusable `Any[]` (`n.fnargs`) is refilled per lane and
+# passed to `evaluate_closed_function`. Off the PDE RHS hot loop, so the residual
+# per-lane `Float64`→`Any` box is tolerated. `interp.*` never reaches here — those
+# are lowered to typed specs at build time.
+function _eval_vec_fn_boxed(n::_VecNode, u, p, t)::Vector{Float64}
     fname, const_args = n.handler::Tuple{String,Any}
+    const_args === nothing ||
+        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", string("fn:", fname)))
     c = n.children
     b = n.buf
     args = n.fnargs
@@ -1906,31 +2030,11 @@ function _eval_vec_fn(n::_VecNode, u, p, t)::Vector{Float64}
     @inbounds for a in eachindex(c)
         cv[a] = _eval_vec(c[a], u, p, t)
     end
-    if const_args === nothing
-        @inbounds for lane in 1:len
-            for a in 1:length(cv)
-                args[a] = cv[a][lane]
-            end
-            b[lane] = Float64(evaluate_closed_function(fname, args))
+    @inbounds for lane in 1:len
+        for a in 1:length(cv)
+            args[a] = cv[a][lane]
         end
-    elseif fname == "interp.searchsorted"
-        @inbounds for lane in 1:len
-            args[1] = cv[1][lane]
-            b[lane] = Float64(evaluate_closed_function(fname, args))
-        end
-    elseif fname == "interp.linear"
-        @inbounds for lane in 1:len
-            args[3] = cv[1][lane]
-            b[lane] = Float64(evaluate_closed_function(fname, args))
-        end
-    elseif fname == "interp.bilinear"
-        @inbounds for lane in 1:len
-            args[4] = cv[1][lane]
-            args[5] = cv[2][lane]
-            b[lane] = Float64(evaluate_closed_function(fname, args))
-        end
-    else
-        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_VEC_OP", string("fn:", fname)))
+        b[lane] = Float64(evaluate_closed_function(fname, args))
     end
     return b
 end

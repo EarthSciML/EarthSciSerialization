@@ -196,22 +196,15 @@ function _datetime_julian_day(t_utc::Float64)::Float64
     return Float64(jdn) + (seconds_in_day - 43200.0) / 86400.0
 end
 
-# `interp.searchsorted` per esm-spec §9.2.2: 1-based, left-side bias
-# (smallest `i` with `xs[i] ≥ x`), out-of-range below → 1, above → N+1,
-# NaN x → N+1, NaN entries in xs → error, non-monotonic xs → error.
-function _interp_searchsorted(name::String, x::Float64, xs)::Int32
+# Validate an `interp.searchsorted` table `xs`: must be a vector, non-decreasing,
+# with no NaN entries (esm-spec §9.2.2). Factored out of the per-call kernel so
+# the vectorized array path can validate ONCE at build time instead of re-walking
+# the build-time-constant table every lane (ess-wrh).
+function _validate_searchsorted_table(name::String, xs)::Nothing
     if !(xs isa AbstractVector)
         throw(ClosedFunctionError("closed_function_arity",
             "$(name): xs argument must be an array (got $(typeof(xs)))"))
     end
-    n = length(xs)
-    if n == 0
-        # An empty table has no valid index; return 1 per the "above-range
-        # → N+1" rule extended to N=0 (the only consistent extension that
-        # composes with `index`).
-        return Int32(1)
-    end
-    # Validate monotonicity + NaN-in-table once per call.
     prev = NaN
     for (i, raw) in enumerate(xs)
         v = Float64(raw)
@@ -225,10 +218,24 @@ function _interp_searchsorted(name::String, x::Float64, xs)::Int32
         end
         prev = v
     end
+    return nothing
+end
+
+# Validation-free `interp.searchsorted` kernel: 1-based, left-side bias (smallest
+# `i` with `xs[i] ≥ x`), out-of-range below → 1, above → N+1, NaN x → N+1, empty
+# table → 1. Precondition: `xs` is a validated non-decreasing NaN-free vector (see
+# `_validate_searchsorted_table`). Shared verbatim by the scalar
+# `evaluate_closed_function` path and the vectorized array kernel
+# (`_eval_vec_interp_searchsorted`), so the two are bit-identical by construction
+# (ess-wrh).
+@inline function _interp_searchsorted_core(name::String, x::Float64, xs)::Int32
+    n = length(xs)
+    # An empty table has no valid index; return 1 per the "above-range → N+1"
+    # rule extended to N=0 (the only consistent extension that composes with
+    # `index`).
+    n == 0 && return Int32(1)
     # NaN x → N+1 (treated as "greater than every finite element").
-    if isnan(x)
-        return _check_int32(name, n + 1)
-    end
+    isnan(x) && return _check_int32(name, n + 1)
     # Linear scan for the smallest 1-based index with xs[i] ≥ x. The spec
     # mandates left-side bias on duplicates; binary search would also work
     # but linear is O(N) on table sizes that the §9.2 inline-cap pins
@@ -239,6 +246,13 @@ function _interp_searchsorted(name::String, x::Float64, xs)::Int32
         end
     end
     return _check_int32(name, n + 1)
+end
+
+# `interp.searchsorted` per esm-spec §9.2.2 — validate the table, then run the
+# kernel. Behaviour is byte-identical to the pre-`ess-wrh` monolithic form.
+function _interp_searchsorted(name::String, x::Float64, xs)::Int32
+    _validate_searchsorted_table(name, xs)
+    return _interp_searchsorted_core(name, x, xs)
 end
 
 # Validate a 1-D axis used by `interp.linear` / `interp.bilinear`. Per
@@ -272,8 +286,43 @@ function _validate_interp_axis(name::String, axis_raw, axis_label::String)::Vect
     return out
 end
 
-# `interp.linear` per esm-spec §9.2: extrapolate-flat clamps + pinned
-# evaluation order `t[i] + w * (t[i+1] - t[i])` for endpoint exactness.
+# Validation-free `interp.linear` kernel: extrapolate-flat clamps + pinned
+# evaluation order `t[i] + w * (t[i+1] - t[i])` for endpoint exactness. `axis`
+# must be a validated strictly-increasing `Vector{Float64}` (≥ 2 entries) and
+# `len(table) == len(axis)`. `table` is read with an inline `Float64(...)` so the
+# scalar path may pass the raw const array while the vectorized path passes a
+# build-time-coerced `Vector{Float64}` (the coercion is then a no-op). Shared by
+# the scalar `:fn` arm and `_eval_vec_interp_linear` → bit-identical (ess-wrh).
+@inline function _interp_linear_core(table, axis, x::Float64)::Float64
+    n = length(axis)
+    @inbounds begin
+        # Extrapolate-flat clamps. NaN x bypasses both clamps (IEEE-754 ≤/≥ on
+        # NaN are false) and falls through to the in-cell blend, where
+        # (x - axis[i]) is NaN and propagates through the result — per the spec.
+        if x <= axis[1]
+            return Float64(table[1])
+        elseif x >= axis[n]
+            return Float64(table[n])
+        end
+        # In-range: locate i with axis[i] ≤ x < axis[i+1]. n ≥ 2 guaranteed by
+        # `_validate_interp_axis`. Linear scan; tables are §9.2-capped at the
+        # const-op inline limit, so this is O(N) on small N.
+        i = 1
+        for k in 1:(n - 1)
+            if axis[k] <= x < axis[k + 1]
+                i = k
+                break
+            end
+        end
+        ai   = axis[i];     ai1   = axis[i + 1]
+        ti   = Float64(table[i]);    ti1 = Float64(table[i + 1])
+        w    = (x - ai) / (ai1 - ai)
+        return ti + w * (ti1 - ti)
+    end
+end
+
+# `interp.linear` per esm-spec §9.2 — validate the axis/table, then run the
+# kernel. Behaviour is byte-identical to the pre-`ess-wrh` monolithic form.
 function _interp_linear(name::String, table_raw, axis_raw, x::Float64)::Float64
     if !(table_raw isa AbstractVector)
         throw(ClosedFunctionError("closed_function_arity",
@@ -284,62 +333,22 @@ function _interp_linear(name::String, table_raw, axis_raw, x::Float64)::Float64
         throw(ClosedFunctionError("interp_axis_length_mismatch",
             "$(name): `len(table)` = $(length(table_raw)) but `len(axis)` = $(length(axis))."))
     end
-    n = length(axis)
-    # Extrapolate-flat clamps. NaN x bypasses both clamps (IEEE-754 ≤/≥ on NaN
-    # are false) and falls through to the in-cell blend, where (x - axis[i])
-    # is NaN and propagates through the result — matching the spec.
-    if x <= axis[1]
-        return Float64(table_raw[1])
-    elseif x >= axis[n]
-        return Float64(table_raw[n])
-    end
-    # In-range: locate i with axis[i] ≤ x < axis[i+1]. n ≥ 2 guaranteed by
-    # `_validate_interp_axis`. Linear scan; tables are §9.2-capped at the
-    # const-op inline limit, so this is O(N) on small N.
-    i = 1
-    @inbounds for k in 1:(n - 1)
-        if axis[k] <= x < axis[k + 1]
-            i = k
-            break
-        end
-    end
-    @inbounds begin
-        ai   = axis[i];     ai1   = axis[i + 1]
-        ti   = Float64(table_raw[i]);    ti1 = Float64(table_raw[i + 1])
-        w    = (x - ai) / (ai1 - ai)
-        return ti + w * (ti1 - ti)
-    end
+    return _interp_linear_core(table_raw, axis, x)
 end
 
-# `interp.bilinear` per esm-spec §9.2: per-axis extrapolate-flat clamps,
-# cell-location convention "largest i with x_i ≤ x_q", pinned evaluation
-# order (two x-blends, one y-blend, each in `a + w*(b-a)` form).
-function _interp_bilinear(name::String, table_raw, axis_x_raw, axis_y_raw,
-                          x::Float64, y::Float64)::Float64
-    if !(table_raw isa AbstractVector)
-        throw(ClosedFunctionError("closed_function_arity",
-            "$(name): `table` must be an array (got $(typeof(table_raw)))"))
-    end
-    axis_x = _validate_interp_axis(name, axis_x_raw, "axis_x")
-    axis_y = _validate_interp_axis(name, axis_y_raw, "axis_y")
+# Validation-free `interp.bilinear` kernel: per-axis extrapolate-flat clamps,
+# cell-location convention "largest i with x_i ≤ x_q", pinned evaluation order
+# (two x-blends, one y-blend, each in `a + w*(b-a)` form). `axis_x`/`axis_y` must
+# be validated strictly-increasing `Vector{Float64}`s and `table` an `Nx × Ny`
+# nested vector (outer length Nx, each row length Ny). `table[i][j]` is read with
+# an inline `Float64(...)`, so the scalar path may pass the raw nested const array
+# while the vectorized path passes a build-time-coerced `Vector{Vector{Float64}}`
+# (no-op coercion). Shared by the scalar `:fn` arm and `_eval_vec_interp_bilinear`
+# → bit-identical (ess-wrh).
+@inline function _interp_bilinear_core(table, axis_x, axis_y,
+                                       x::Float64, y::Float64)::Float64
     Nx = length(axis_x)
     Ny = length(axis_y)
-    if length(table_raw) != Nx
-        throw(ClosedFunctionError("interp_axis_length_mismatch",
-            "$(name): outer `len(table)` = $(length(table_raw)) but `len(axis_x)` = $(Nx)."))
-    end
-    # Validate every inner row length matches Ny (rejects ragged tables).
-    @inbounds for i in 1:Nx
-        row = table_raw[i]
-        if !(row isa AbstractVector)
-            throw(ClosedFunctionError("closed_function_arity",
-                "$(name): `table[$(i)]` must be an array (got $(typeof(row)))"))
-        end
-        if length(row) != Ny
-            throw(ClosedFunctionError("interp_axis_length_mismatch",
-                "$(name): `len(table[$(i)])` = $(length(row)) but `len(axis_y)` = $(Ny)."))
-        end
-    end
     # Per-axis extrapolate-flat clamp. NaN x or y propagates through (IEEE-754
     # ≤/≥ on NaN are false → x_q stays NaN → wx is NaN → result is NaN).
     x_q = x <= axis_x[1] ? axis_x[1] :
@@ -371,14 +380,139 @@ function _interp_bilinear(name::String, table_raw, axis_x_raw, axis_y_raw,
         wy = (y_q - yj) / (yjp1 - yj)
         # Two 1-D x-blends, then one y-blend. Pinned form `a + w*(b - a)`
         # required for cross-binding bit-equivalence (esm-spec §9.2).
-        t_ij     = Float64(table_raw[i][j])
-        t_i1j    = Float64(table_raw[i + 1][j])
-        t_ijp1   = Float64(table_raw[i][j + 1])
-        t_i1jp1  = Float64(table_raw[i + 1][j + 1])
+        t_ij     = Float64(table[i][j])
+        t_i1j    = Float64(table[i + 1][j])
+        t_ijp1   = Float64(table[i][j + 1])
+        t_i1jp1  = Float64(table[i + 1][j + 1])
         row_j   = t_ij    + wx * (t_i1j   - t_ij)
         row_jp1 = t_ijp1  + wx * (t_i1jp1 - t_ijp1)
         return row_j + wy * (row_jp1 - row_j)
     end
+end
+
+# `interp.bilinear` per esm-spec §9.2 — validate the axes/table, then run the
+# kernel. Behaviour is byte-identical to the pre-`ess-wrh` monolithic form.
+function _interp_bilinear(name::String, table_raw, axis_x_raw, axis_y_raw,
+                          x::Float64, y::Float64)::Float64
+    if !(table_raw isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `table` must be an array (got $(typeof(table_raw)))"))
+    end
+    axis_x = _validate_interp_axis(name, axis_x_raw, "axis_x")
+    axis_y = _validate_interp_axis(name, axis_y_raw, "axis_y")
+    Nx = length(axis_x)
+    Ny = length(axis_y)
+    if length(table_raw) != Nx
+        throw(ClosedFunctionError("interp_axis_length_mismatch",
+            "$(name): outer `len(table)` = $(length(table_raw)) but `len(axis_x)` = $(Nx)."))
+    end
+    # Validate every inner row length matches Ny (rejects ragged tables).
+    @inbounds for i in 1:Nx
+        row = table_raw[i]
+        if !(row isa AbstractVector)
+            throw(ClosedFunctionError("closed_function_arity",
+                "$(name): `table[$(i)]` must be an array (got $(typeof(row)))"))
+        end
+        if length(row) != Ny
+            throw(ClosedFunctionError("interp_axis_length_mismatch",
+                "$(name): `len(table[$(i)])` = $(length(row)) but `len(axis_y)` = $(Ny)."))
+        end
+    end
+    return _interp_bilinear_core(table_raw, axis_x, axis_y, x, y)
+end
+
+# ============================================================
+# Build-time-validated typed carriers for the vectorized array path (ess-wrh)
+# ============================================================
+#
+# A vectorized `arrayop` whose body contains an `interp.*` leaf evaluates that
+# leaf once per cell (lane). Re-validating the build-time-constant table/axis and
+# re-coercing them to `Vector{Float64}` on every lane — and boxing the scalar
+# query into the `AbstractVector{Any}` that `evaluate_closed_function` consumes —
+# is pure overhead. These specs do that work ONCE at build time: validate (reusing
+# the same checks, hence the same diagnostic codes, as the scalar path) and coerce
+# to concrete `Vector{Float64}` storage. `_eval_vec_fn` then calls the
+# validation-free `_interp_*_core` kernels per lane with a typed `Float64` query —
+# no per-lane box, no per-lane validation, bit-identical to the scalar `:fn` arm
+# (same callee). The validation throw simply moves to build time (fail-fast); the
+# conformance error fixtures call `evaluate_closed_function` directly and are
+# unaffected.
+struct _InterpLinearSpec
+    table::Vector{Float64}
+    axis::Vector{Float64}
+end
+struct _InterpBilinearSpec
+    table::Vector{Vector{Float64}}
+    axis_x::Vector{Float64}
+    axis_y::Vector{Float64}
+end
+struct _InterpSearchsortedSpec
+    xs::Vector{Float64}
+end
+
+# Coerce a const-op array (statically `Any`-typed) to a concrete `Vector{Float64}`
+# for build-time storage. `Float64∘Float64` is idempotent and `Int→Float64→Float64`
+# equals the direct conversion, so this is bit-identical to the per-lane
+# `Float64(raw[i])` the scalar kernel would do.
+function _coerce_f64_vec(name::String, v, label::String)::Vector{Float64}
+    if !(v isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `$(label)` must be an array (got $(typeof(v)))"))
+    end
+    out = Vector{Float64}(undef, length(v))
+    @inbounds for i in eachindex(v)
+        out[i] = Float64(v[i])
+    end
+    return out
+end
+
+function _build_interp_linear_spec(name::String, table_raw, axis_raw)::_InterpLinearSpec
+    table = _coerce_f64_vec(name, table_raw, "table")
+    axis  = _validate_interp_axis(name, axis_raw, "axis")
+    if length(table) != length(axis)
+        throw(ClosedFunctionError("interp_axis_length_mismatch",
+            "$(name): `len(table)` = $(length(table)) but `len(axis)` = $(length(axis))."))
+    end
+    return _InterpLinearSpec(table, axis)
+end
+
+function _build_interp_bilinear_spec(name::String, table_raw, axis_x_raw,
+                                     axis_y_raw)::_InterpBilinearSpec
+    if !(table_raw isa AbstractVector)
+        throw(ClosedFunctionError("closed_function_arity",
+            "$(name): `table` must be an array (got $(typeof(table_raw)))"))
+    end
+    axis_x = _validate_interp_axis(name, axis_x_raw, "axis_x")
+    axis_y = _validate_interp_axis(name, axis_y_raw, "axis_y")
+    Nx = length(axis_x)
+    Ny = length(axis_y)
+    if length(table_raw) != Nx
+        throw(ClosedFunctionError("interp_axis_length_mismatch",
+            "$(name): outer `len(table)` = $(length(table_raw)) but `len(axis_x)` = $(Nx)."))
+    end
+    table = Vector{Vector{Float64}}(undef, Nx)
+    @inbounds for i in 1:Nx
+        row = table_raw[i]
+        if !(row isa AbstractVector)
+            throw(ClosedFunctionError("closed_function_arity",
+                "$(name): `table[$(i)]` must be an array (got $(typeof(row)))"))
+        end
+        if length(row) != Ny
+            throw(ClosedFunctionError("interp_axis_length_mismatch",
+                "$(name): `len(table[$(i)])` = $(length(row)) but `len(axis_y)` = $(Ny)."))
+        end
+        col = Vector{Float64}(undef, Ny)
+        for j in 1:Ny
+            col[j] = Float64(row[j])
+        end
+        table[i] = col
+    end
+    return _InterpBilinearSpec(table, axis_x, axis_y)
+end
+
+function _build_interp_searchsorted_spec(name::String, xs_raw)::_InterpSearchsortedSpec
+    _validate_searchsorted_table(name, xs_raw)
+    return _InterpSearchsortedSpec(_coerce_f64_vec(name, xs_raw, "xs"))
 end
 
 @inline function _expect_arity(name::String, args::AbstractVector, n::Int)
