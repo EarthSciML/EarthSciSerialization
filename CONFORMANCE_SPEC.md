@@ -1307,6 +1307,81 @@ analytic anchors, **failing loudly** (non-zero exit) on any divergence beyond
 tolerance. This is the capstone that proves the Julia/Python/Rust PDE simulators
 agree.
 
+### 5.10 Cross-Language Refresh-Path Conformance (normative)
+
+§5.9 governs a model whose discretized operator is fixed. This section governs
+the **discrete-cadence loader + dependent-variable refresh** consumer: the three
+simulation-capable bindings — **Rust, Python, Julia** — must agree, on a
+**numeric-tolerance** basis, when they read external forcing from data loaders at
+a cadence, **regrid** it onto the simulation grid, and integrate the resulting
+forced model. Shared **offline** fixtures live in `tests/conformance/refresh/`
+(bead `ess-14f.12`, epic `ess-14f`; plan `esio-consumer-rust-plan`).
+
+This is the **composition** capstone over two pieces governed elsewhere: §5.7
+pins *which cadence class* each node is (CONST materialized once vs DISCRETE
+refreshed at anchors), and §5.8 pins the *regrid kernel geometry* (overlap areas,
+conservation). §5.10 pins that a consumer composes them the same way —
+`refresh(t)` → **regrid native→sim grid** → write forcing buffer → integrate the
+segment — so the **refreshed+regridded arrays** and the **integrated trajectory**
+agree across bindings.
+
+Go and TypeScript are **out of scope** (no array simulator / refresh executor).
+
+#### 5.10.1 What is compared
+
+For each fixture, every in-scope binding loads the shared `.esm` in two views —
+the **classifier view** (raw, for the cadence partition + loader binding) and the
+**simulate view** (loader-fed `discrete` vars stripped, so the RHS compiler
+resolves them as forcing names; see the set's `README.md`) — seeds one provider
+per loader **offline** from the golden's `native_fields`, wires the regrid named
+in `golden.regrid`, and reports two quantities:
+
+1. **Refreshed+regridded arrays** — the forcing-buffer array each loader field
+   lands in, after `materialize_const` (CONST) and after each `refresh_at` anchor
+   (DISCRETE), compared to `golden.regridded_fields`. The native fields are
+   delivered on a **coarser** grid than the sim grid, so this exercises a genuine
+   non-identity regrid (a conservative area-weighted remap through the §5.8
+   kernel); an identity pass-through fails.
+2. **Integrated trajectory** — each cadence-boundary state from the segmented
+   solve (refresh once per boundary, forcing frozen within a segment, state
+   threaded, fresh solver per segment), compared to `golden.trajectory`. The
+   forcing is piecewise-constant across segments, so the golden is **analytic**.
+
+| Band | rtol | atol |
+|------|------|------|
+| Refreshed+regridded arrays (vs analytic) | 1e-9 | 1e-11 |
+| Integrated trajectory (vs analytic) | 1e-4 | 1e-6 |
+
+The regrid band is tight — a conservative remap on exact (here unit) overlap
+areas is exact up to floating-point. The trajectory band matches §5.9's
+manufactured-solution band, absorbing integrator truncation.
+
+#### 5.10.2 ⛔ Numeric-tolerance and strictly offline
+
+As in §5.9, trajectories are floating-point and MUST NOT be asserted
+byte-identical; the integrator is pinned per binding in `manifest.json`
+(`integrators`). The providers are seeded from the golden's `native_fields` —
+**no network, no file I/O** — so the suite is deterministic and CI-safe.
+
+#### 5.10.3 Coverage
+
+The fixture `coupled_refresh_regrid` is a discretized, **coupled**, non-PDE
+forced model (`D(c[i]) = scale[i]·src[i]`; `D(d[i]) = Box.c[i]`) with **one CONST
+loader** (`factors` → `scale`, no `temporal`) and **one DISCRETE loader**
+(`emis` → `src`, hourly `temporal`), both regridded by a conservative 2:1
+coarsening. It exercises: CONST-once vs DISCRETE-per-anchor cadence, the
+non-identity regrid seam, cross-component coupling threaded across segments, and
+the closed-form check the piecewise-constant forcing affords.
+
+#### 5.10.4 Gate
+
+The Rust producer (`cargo test --test refresh_conformance`, run by
+`test-conformance.sh`) drives the path and gates both bands against the committed
+golden, **failing loudly** on any divergence. `bindings_required` is currently
+`["rust"]`: RS-R4 establishes the shared fixture + golden and the Rust producer;
+the Python (`ess-14f.2`) and Julia (`ess-14f.6`) consumer adapters reproduce the
+same golden and move themselves into `bindings_required` when wired.
+
 ## 6. CI Integration
 
 ### 6.1 GitHub Actions Workflow
