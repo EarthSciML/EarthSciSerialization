@@ -115,13 +115,23 @@ fn vectorized_path_is_taken_for_1d_and_2d_diffusion() {
 fn vectorized_matches_per_cell_oracle() {
     // The whole-array path must be numerically identical to the per-cell
     // reference (it is a perf/architecture overlay, not a new numeric method).
-    for name in ["15_discretized_1d_heat.esm", "16_discretized_2d_heat.esm"] {
+    // Covers all four discretized-PDE stencil shapes the vectorizer handles:
+    // 1-D/2-D affine-ghost diffusion (15/16), the einsum-contraction form (19),
+    // and the periodic-wrap lat-lon form (17). The vectorized vs oracle equality
+    // is bit-exact (≤1e-12 is slack for the identical-fp left-fold).
+    for name in [
+        "15_discretized_1d_heat.esm",
+        "16_discretized_2d_heat.esm",
+        "17_discretized_latlon_heat.esm",
+        "19_einsum_1d_stencil.esm",
+    ] {
         let compiled = compile_fixture(name);
         let n = compiled.state_variable_names().len();
         let state = sample_state(n);
         let (dy_vec, vstats) = compiled.debug_eval_rhs(&state, 0.0, &HashMap::new(), false);
         let (dy_scalar, sstats) = compiled.debug_eval_rhs(&state, 0.0, &HashMap::new(), true);
         assert_eq!(vstats.vectorized_rules, 1, "{name}: not vectorized");
+        assert_eq!(vstats.scalar_rules, 0, "{name}: vectorized run hit the oracle");
         assert_eq!(
             sstats.scalar_rules, 1,
             "{name}: force_scalar did not use oracle"
@@ -133,6 +143,28 @@ fn vectorized_matches_per_cell_oracle() {
                 "{name}: vectorized vs oracle mismatch at slot {k}: {a} vs {b}"
             );
         }
+    }
+}
+
+#[test]
+fn vectorized_path_is_taken_for_einsum_and_periodic_wrap() {
+    // The two shapes ess-p9s adds: the contracted einsum stencil (19) and the
+    // periodic-wrap lat-lon stencil (17) must each evaluate via the vectorized
+    // whole-array path, not the per-cell oracle.
+    for name in ["17_discretized_latlon_heat.esm", "19_einsum_1d_stencil.esm"] {
+        let compiled = compile_fixture(name);
+        let n = compiled.state_variable_names().len();
+        let state = sample_state(n);
+        let (_dy, stats) = compiled.debug_eval_rhs(&state, 0.0, &HashMap::new(), false);
+        assert_eq!(
+            stats.vectorized_rules, 1,
+            "{name}: spatial derivative did not take the vectorized path, got {stats:?}"
+        );
+        assert_eq!(
+            stats.scalar_rules, 0,
+            "{name}: spatial derivative fell back to the oracle, got {stats:?}"
+        );
+        assert!(stats.kernel_ops > 0, "{name}: no kernel ops recorded");
     }
 }
 
@@ -276,5 +308,134 @@ fn advection_1d_integrates_end_to_end_via_vectorized_path() {
     assert!(
         centroidf > centroid0 + 1.0,
         "advection must move the pulse downstream: centroid {centroid0:.3} -> {centroidf:.3}"
+    );
+}
+
+/// A 1-D heat equation in generalized-einsum form (mirrors fixture 19's interior
+/// stencil but covering every cell with homogeneous-Dirichlet ghosts), so the
+/// same contracted-`k` stencil AST can be evaluated at two grid sizes. The body
+/// `sum_k 25·ifelse(k==0,-2,1)·u[i+k]` contracts `k ∈ [-1,1]`.
+fn einsum_heat1d_json(n: usize) -> String {
+    const TEMPLATE: &str = r#"{
+ "esm": "0.1.0",
+ "metadata": {"name": "einsum_heat1d_param"},
+ "models": {
+  "Heat1DEinsum": {
+   "variables": {"u": {"type": "state", "shape": ["i"]}},
+   "equations": [
+    {
+     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"},
+             "ranges": {"i": [1, __N__]}},
+     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "reduce": "+",
+             "ranges": {"i": [1, __N__], "k": [-1, 1]},
+             "expr": {"op": "*", "args": [
+               25,
+               {"op": "ifelse", "args": [{"op": "==", "args": ["k", 0]}, -2, 1]},
+               {"op": "index", "args": ["u", {"op": "+", "args": ["i", "k"]}]}
+             ]}}
+    }
+   ]
+  }
+ }
+}"#;
+    TEMPLATE.replace("__N__", &n.to_string())
+}
+
+/// A lat-lon heat equation with a periodic longitude (`i`, period `nlon`,
+/// wrap-indexed) and Dirichlet latitude (`j`, ghost cells), parameterized by
+/// grid size — identical stencil AST at every size. Mirrors fixture 17.
+fn latlon_heat_json(nlon: usize, nlat: usize) -> String {
+    const TEMPLATE: &str = r#"{
+ "esm": "0.1.0",
+ "metadata": {"name": "latlon_heat_param"},
+ "models": {
+  "HeatLatLon": {
+   "variables": {"u": {"type": "state", "shape": ["i", "j"]}},
+   "equations": [
+    {
+     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i", "j"],
+             "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i", "j"]}], "wrt": "t"},
+             "ranges": {"i": [1, __NLON__], "j": [1, __NLAT__]}},
+     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i", "j"],
+             "ranges": {"i": [1, __NLON__], "j": [1, __NLAT__]},
+             "expr": {"op": "*", "args": [0.4, {"op": "+", "args": [
+               {"op": "index", "args": ["u",
+                 {"op": "ifelse", "args": [
+                   {"op": "<", "args": [{"op": "-", "args": ["i", 1]}, 1]},
+                   {"op": "+", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                   {"op": "ifelse", "args": [
+                     {"op": ">", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": ["i", 1]}
+                   ]}
+                 ]}, "j"]},
+               {"op": "*", "args": [-2, {"op": "index", "args": ["u", "i", "j"]}]},
+               {"op": "index", "args": ["u",
+                 {"op": "ifelse", "args": [
+                   {"op": "<", "args": [{"op": "+", "args": ["i", 1]}, 1]},
+                   {"op": "+", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                   {"op": "ifelse", "args": [
+                     {"op": ">", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                     {"op": "+", "args": ["i", 1]}
+                   ]}
+                 ]}, "j"]}
+             ]}]}}
+    }
+   ]
+  }
+ }
+}"#;
+    TEMPLATE
+        .replace("__NLON__", &nlon.to_string())
+        .replace("__NLAT__", &nlat.to_string())
+}
+
+#[test]
+fn einsum_kernel_op_count_is_independent_of_grid_size() {
+    // The contracted-`k` stencil walks its body once per contraction value
+    // regardless of N, so kernel_ops is identical at N=4 and N=8.
+    let c4 = compile_json(&einsum_heat1d_json(4));
+    let c8 = compile_json(&einsum_heat1d_json(8));
+    assert_eq!(c4.state_variable_names().len(), 4);
+    assert_eq!(c8.state_variable_names().len(), 8);
+
+    let (_d4, s4) = c4.debug_eval_rhs(&sample_state(4), 0.0, &HashMap::new(), false);
+    let (_d8, s8) = c8.debug_eval_rhs(&sample_state(8), 0.0, &HashMap::new(), false);
+
+    assert_eq!(s4.vectorized_rules, 1, "N=4 einsum not vectorized: {s4:?}");
+    assert_eq!(s8.vectorized_rules, 1, "N=8 einsum not vectorized: {s8:?}");
+    assert_eq!(s4.scalar_rules, 0, "N=4 einsum fell back: {s4:?}");
+    assert_eq!(s8.scalar_rules, 0, "N=8 einsum fell back: {s8:?}");
+    assert_eq!(
+        s4.kernel_ops, s8.kernel_ops,
+        "einsum kernel-op count must be independent of N (N=4 -> {}, N=8 -> {})",
+        s4.kernel_ops, s8.kernel_ops
+    );
+}
+
+#[test]
+fn periodic_wrap_kernel_op_count_is_independent_of_grid_size() {
+    // The periodic-wrap stencil walks its body once regardless of the periodic
+    // dimension's size: kernel_ops is identical at nlon=4 and nlon=8.
+    let c4 = compile_json(&latlon_heat_json(4, 2));
+    let c8 = compile_json(&latlon_heat_json(8, 2));
+    assert_eq!(c4.state_variable_names().len(), 8);
+    assert_eq!(c8.state_variable_names().len(), 16);
+
+    let (_d4, s4) = c4.debug_eval_rhs(&sample_state(8), 0.0, &HashMap::new(), false);
+    let (_d8, s8) = c8.debug_eval_rhs(&sample_state(16), 0.0, &HashMap::new(), false);
+
+    assert_eq!(s4.vectorized_rules, 1, "nlon=4 wrap not vectorized: {s4:?}");
+    assert_eq!(s8.vectorized_rules, 1, "nlon=8 wrap not vectorized: {s8:?}");
+    assert_eq!(s4.scalar_rules, 0, "nlon=4 wrap fell back: {s4:?}");
+    assert_eq!(s8.scalar_rules, 0, "nlon=8 wrap fell back: {s8:?}");
+    assert_eq!(
+        s4.kernel_ops, s8.kernel_ops,
+        "periodic-wrap kernel-op count must be independent of grid size \
+         (nlon=4 -> {}, nlon=8 -> {})",
+        s4.kernel_ops, s8.kernel_ops
     );
 }

@@ -273,6 +273,14 @@ fn arrayop_fixture_16_discretized_2d_heat() {
 }
 
 #[test]
+fn arrayop_fixture_17_discretized_latlon_heat() {
+    // Periodic-longitude lat-lon heat equation — exercises the vectorized
+    // periodic-wrap gather (ess-p9s) end-to-end through `simulate`.
+    let p = find_fixture("17_discretized_latlon_heat.esm");
+    run_fixture(&p);
+}
+
+#[test]
 fn arrayop_fixture_19_einsum_1d_stencil() {
     let p = find_fixture("19_einsum_1d_stencil.esm");
     run_fixture(&p);

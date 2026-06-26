@@ -392,22 +392,30 @@ fn refill_state_arrays(
 /// column-major order (the state-vector convention), in place — replacing the
 /// old `arrayd_to_col_major` + `copy_from_slice` (which allocated a `Vec` per
 /// rule). Addresses elements explicitly, so it is layout-agnostic.
-fn scatter_col_major(arr: ArrayViewD<f64>, dy: &mut [f64], offset: usize) {
+/// Scatter a logical array into a *sub-block* of a variable's flat `dy` block,
+/// in column-major order (the state-vector layout). `dest_lo[d]` is the 0-based
+/// start of the sub-block along axis `d` within the variable's box (extent
+/// `vs.shape`); the array's own extent must fit (`dest_lo[d] + arr.shape()[d] ≤
+/// vs.shape[d]`, guaranteed by [`subblock_dest`]). This is the placement for an
+/// affine-shifted LHS `D(u[i+c]) = …`; the bare-index method-of-lines case is
+/// `dest_lo = 0…` with `arr` spanning the whole variable box.
+fn scatter_col_major_offset(arr: ArrayViewD<f64>, dy: &mut [f64], vs: &VarShape, dest_lo: &[usize]) {
     let n = arr.ndim();
     if n == 0 {
-        dy[offset] = arr[IxDyn(&[])];
+        dy[vs.flat_offset] = arr[IxDyn(&[])];
         return;
     }
     let total: usize = arr.shape().iter().product();
     let mut multi = DimU::from_elem(0usize, n);
     for _ in 0..total {
+        // Column-major flat index of (dest_lo + multi) within the variable box.
         let mut cm = 0usize;
         let mut stride = 1usize;
         for d in 0..n {
-            cm += multi[d] * stride;
-            stride *= arr.shape()[d];
+            cm += (dest_lo[d] + multi[d]) * stride;
+            stride *= vs.shape[d];
         }
-        dy[offset + cm] = arr[IxDyn(&multi)];
+        dy[vs.flat_offset + cm] = arr[IxDyn(&multi)];
         for d in (0..n).rev() {
             multi[d] += 1;
             if multi[d] < arr.shape()[d] {
@@ -1684,44 +1692,57 @@ fn evaluate_rhs_with_scratch(
                 let vs = &var_shapes[var_name];
                 let filter = filter.as_deref();
 
-                // ---- Vectorized (whole-array) fast path (ess-bdm) ----------
-                // A pure-map spatial derivative (no contraction) whose LHS
-                // addresses the state variable by the bare output indices is
-                // the method-of-lines stencil shape. Evaluate its RHS body as
-                // whole-array kernels — shifted slices for `index(u, i±k)`,
-                // region sub-range writes for boundary makearrays, broadcast
-                // arithmetic for coefficients — then scatter the dy block in
-                // place. No per-element scalar loop walks the body, and (ess-mro)
-                // no heap allocation occurs: intermediates come from `pool`.
-                if !force_scalar
-                    && contract_names.is_empty()
-                    && lhs_is_identity(lhs_idx_exprs, output_idx_names)
-                    && var_box_matches(vs, output_ranges)
-                {
-                    let ctx = EvalCtx {
-                        state_arrays,
-                        observed_arrays,
-                        params,
-                        param_names,
-                        loop_binds: HashMap::new(),
-                        t,
-                        derived_rings: &derived_rings,
-                    };
-                    if let Some((val, ops)) =
-                        try_eval_arrayop_vectorized(output_idx_names, output_ranges, body, &ctx, pool)
+                // ---- Vectorized (whole-array) fast path (ess-bdm, ess-p9s) --
+                // A discretized spatial derivative whose LHS addresses the state
+                // by a constant per-axis shift of the output indices
+                // (`D(u[i+c])`, `c` constant; the bare-index method-of-lines
+                // case is `c = 0`) is evaluated as whole-array kernels:
+                //   * shifted slices for affine-ghost neighbours `index(u,i±k)`,
+                //   * cyclic rolls for periodic-wrap neighbours,
+                //   * a small static fold over einsum contraction indices,
+                //   * region sub-range writes for boundary makearrays,
+                //   * broadcast arithmetic for coefficients,
+                // then the dy sub-block is scattered in place. No per-element
+                // scalar loop walks the body, and (ess-mro) no heap allocation
+                // occurs: intermediates come from `pool`. A `filter`
+                // (data-dependent FAQ gating) is left to the per-cell oracle.
+                let lhs_shifts = lhs_constant_shifts(lhs_idx_exprs, output_idx_names);
+                if !force_scalar && filter.is_none() {
+                    if let Some(dest_lo) = lhs_shifts
+                        .as_ref()
+                        .and_then(|shifts| subblock_dest(vs, output_ranges, shifts))
                     {
-                        let start = vs.flat_offset;
-                        let total = vs.shape.iter().copied().product::<usize>().max(1);
-                        if start + total <= dy.len() {
-                            if let Some(view) = val.view() {
-                                scatter_col_major(view, dy, start);
+                        let ctx = EvalCtx {
+                            state_arrays,
+                            observed_arrays,
+                            params,
+                            param_names,
+                            loop_binds: HashMap::new(),
+                            t,
+                            derived_rings: &derived_rings,
+                        };
+                        if let Some((val, ops)) = try_eval_arrayop_vectorized(
+                            output_idx_names,
+                            output_ranges,
+                            body,
+                            contract_names,
+                            contract_dims,
+                            *reduce,
+                            &ctx,
+                            pool,
+                        ) {
+                            let total = vs.shape.iter().copied().product::<usize>().max(1);
+                            if vs.flat_offset + total <= dy.len() {
+                                if let Some(view) = val.view() {
+                                    scatter_col_major_offset(view, dy, vs, &dest_lo);
+                                }
+                                val.release(pool);
+                                stats.kernel_ops += ops;
+                                stats.vectorized_rules += 1;
+                                continue;
                             }
                             val.release(pool);
-                            stats.kernel_ops += ops;
-                            stats.vectorized_rules += 1;
-                            continue;
                         }
-                        val.release(pool);
                     }
                 }
 
@@ -1857,43 +1878,97 @@ struct VecBox<'a> {
     syms: &'a [String],
     lo: &'a [i64],
     shape: &'a [usize],
+    /// Bound contracted-index names (empty for a pure-map stencil). When an
+    /// einsum body is evaluated once per contraction tuple, the current tuple's
+    /// values live in `cvals` (parallel to `cnames`). A bare `cnames` symbol
+    /// then resolves to its `cvals` entry as a scalar (so `ifelse(k==0,…)` folds
+    /// per `k`), and an index offset `i + k` folds `k` into the affine shift —
+    /// making `sum_k 25·ifelse(k==0,-2,1)·u[i+k]` a small fold of shifted
+    /// whole-array slices instead of a per-cell semiring walk.
+    cnames: &'a [String],
+    cvals: &'a [i64],
 }
 
-/// Are the LHS index expressions exactly the bare output symbols, in order?
-/// (`D(u[i, j]) = …` with no offset/permutation) — the only shape for which a
-/// vectorized result maps directly onto the state block via a bulk copy.
-fn lhs_is_identity(lhs_idx_exprs: &[Expr], output_idx_names: &[String]) -> bool {
-    lhs_idx_exprs.len() == output_idx_names.len()
-        && lhs_idx_exprs
+impl<'a> VecBox<'a> {
+    /// Resolve a bound contracted-index symbol to its current integer value.
+    fn cbind(&self, name: &str) -> Option<i64> {
+        self.cnames
             .iter()
-            .zip(output_idx_names.iter())
-            .all(|(e, name)| matches!(e, Expr::Variable(v) if v == name))
+            .position(|n| n == name)
+            .map(|i| self.cvals[i])
+    }
 }
 
-/// Does the state variable's flat block span exactly the output box, so the
-/// vectorized array (laid out column-major) is the dy block verbatim?
-fn var_box_matches(vs: &VarShape, output_ranges: &[(i64, i64)]) -> bool {
-    vs.shape.len() == output_ranges.len()
-        && vs
-            .shape
-            .iter()
-            .zip(output_ranges.iter())
-            .all(|(&n, &(lo, hi))| n == (hi - lo + 1) as usize)
-        && vs
-            .origin
-            .iter()
-            .zip(output_ranges.iter())
-            .all(|(&o, &(lo, _))| o == lo)
+/// Per-axis constant LHS shift: if every LHS index expression is `sym_d + c_d`
+/// (bare `sym_d` ⇒ `c_d = 0`; the only shapes a vectorized box maps directly
+/// onto the state block), return the shifts `c_d`. `None` for a permutation or
+/// any non-constant-shift LHS (→ oracle). The bare-index method-of-lines stencil
+/// yields all-zero shifts; an einsum `D(u[i+1]) = …` yields `[1]`.
+fn lhs_constant_shifts(
+    lhs_idx_exprs: &[Expr],
+    output_idx_names: &[String],
+) -> Option<SmallVec<[i64; 4]>> {
+    if lhs_idx_exprs.len() != output_idx_names.len() {
+        return None;
+    }
+    // The LHS references only output symbols, never contraction indices.
+    let nobind = VecBox {
+        syms: &[],
+        lo: &[],
+        shape: &[],
+        cnames: &[],
+        cvals: &[],
+    };
+    let mut shifts = SmallVec::new();
+    for (e, sym) in lhs_idx_exprs.iter().zip(output_idx_names.iter()) {
+        shifts.push(affine_offset_in(e, sym, &nobind)?);
+    }
+    Some(shifts)
 }
 
-/// Try to evaluate a pure-map arrayop body over the output box as whole-array
-/// kernels. Returns `Some((array, kernel_ops))` on success — `kernel_ops` is
-/// the number of AST nodes visited (N-independent) — or `None` if the body
-/// contains a construct the vectorized path does not handle.
+/// Locate the output box within the state variable's flat block: the per-axis
+/// 0-based start `dest_lo[d] = output_lo[d] + shift[d] − origin[d]`, validated
+/// to fit inside the variable's extent. `None` if the rank disagrees or the
+/// shifted box would leave the variable (→ oracle). For the bare-index stencil
+/// (`shift = 0`, output box == variable box) every `dest_lo[d]` is 0.
+fn subblock_dest(
+    vs: &VarShape,
+    output_ranges: &[(i64, i64)],
+    shifts: &[i64],
+) -> Option<SmallVec<[usize; 4]>> {
+    if vs.shape.len() != output_ranges.len() || shifts.len() != output_ranges.len() {
+        return None;
+    }
+    let mut dest = SmallVec::new();
+    for d in 0..output_ranges.len() {
+        let (olo, ohi) = output_ranges[d];
+        let extent = ohi - olo + 1;
+        if extent <= 0 {
+            return None;
+        }
+        let dlo = olo + shifts[d] - vs.origin[d];
+        if dlo < 0 || dlo + extent > vs.shape[d] as i64 {
+            return None;
+        }
+        dest.push(dlo as usize);
+    }
+    Some(dest)
+}
+
+/// Try to evaluate an arrayop body over the output box as whole-array kernels.
+/// A pure-map stencil (`contract_names` empty) walks the body once; an einsum
+/// stencil folds the body over its contracted indices ([`eval_vec_contracted`]).
+/// Returns `Some((array, kernel_ops))` on success — `kernel_ops` is the number
+/// of AST nodes visited (N-independent) — or `None` if the body contains a
+/// construct the vectorized path does not handle (the caller then uses the
+/// per-cell oracle).
 fn try_eval_arrayop_vectorized<'a>(
     output_idx_names: &[String],
     output_ranges: &[(i64, i64)],
     body: &Expr,
+    contract_names: &[String],
+    contract_dims: &[ContractDim],
+    reduce: ReduceKind,
     ctx: &EvalCtx<'a>,
     pool: &mut Pool,
 ) -> Option<(VecValue<'a>, usize)> {
@@ -1905,13 +1980,30 @@ fn try_eval_arrayop_vectorized<'a>(
     if shape.contains(&0) {
         return None;
     }
-    let bx = VecBox {
-        syms: output_idx_names,
-        lo: &lo[..],
-        shape: &shape[..],
-    };
     let mut ops = 0usize;
-    let v = eval_vec(body, &bx, ctx, pool, &mut ops)?;
+    let v = if contract_names.is_empty() {
+        let bx = VecBox {
+            syms: output_idx_names,
+            lo: &lo[..],
+            shape: &shape[..],
+            cnames: &[],
+            cvals: &[],
+        };
+        eval_vec(body, &bx, ctx, pool, &mut ops)?
+    } else {
+        eval_vec_contracted(
+            output_idx_names,
+            &lo,
+            &shape,
+            body,
+            contract_names,
+            contract_dims,
+            reduce,
+            ctx,
+            pool,
+            &mut ops,
+        )?
+    };
     // The top-level result must already cover the output box exactly. A bare
     // scalar is broadcast over the box.
     let matches_box = match v.shape() {
@@ -1931,6 +2023,126 @@ fn try_eval_arrayop_vectorized<'a>(
         other => other,
     };
     Some((out, ops))
+}
+
+/// Map a reduction's ⊕ to the elementwise [`apply_binary`] op used to combine
+/// term arrays. `None` for the boolean reductions, which the fast path leaves to
+/// the oracle.
+fn reduce_combine_op(reduce: ReduceKind) -> Option<&'static str> {
+    match reduce {
+        ReduceKind::Sum => Some("+"),
+        ReduceKind::Product => Some("*"),
+        ReduceKind::Max => Some("max"),
+        ReduceKind::Min => Some("min"),
+        ReduceKind::Or | ReduceKind::And => None,
+    }
+}
+
+/// Evaluate an einsum arrayop body as a whole-array fold over its contracted
+/// indices: for each contraction tuple `k` (a small static window — fixed-width
+/// neighbour stencil), bind `k` and evaluate the body once as whole-array
+/// kernels, then ⊕-combine into the accumulator. Starting from a buffer filled
+/// with the reduction identity and left-folding makes this bit-identical to the
+/// per-cell oracle's `acc = reduce.combine(acc, term)` loop (`0+t`, `1·t`,
+/// `max(−∞,t)`, `min(+∞,t)` are exact). The number of kernel walks is the
+/// contraction-window size — independent of the grid size N.
+///
+/// Only **static** contraction bounds are vectorized; ragged/derived dims
+/// (per-output-tuple extents) and the boolean reductions return `None` so the
+/// caller falls back to the per-cell oracle.
+#[allow(clippy::too_many_arguments)]
+fn eval_vec_contracted<'a>(
+    output_idx_names: &[String],
+    lo: &[i64],
+    shape: &[usize],
+    body: &Expr,
+    contract_names: &[String],
+    contract_dims: &[ContractDim],
+    reduce: ReduceKind,
+    ctx: &EvalCtx<'a>,
+    pool: &mut Pool,
+    ops: &mut usize,
+) -> Option<VecValue<'a>> {
+    let combine_op = reduce_combine_op(reduce)?;
+    // Resolve each contracted dim to a static (lo, hi). A non-static dim
+    // (ragged/derived — per-output-tuple extent) can't be a uniform whole-array
+    // window, so bail to the oracle.
+    const MAXC: usize = 4;
+    let nc = contract_names.len();
+    if nc == 0 || nc > MAXC {
+        return None;
+    }
+    let mut clo = [0i64; MAXC];
+    let mut chi = [0i64; MAXC];
+    for (i, d) in contract_dims.iter().enumerate() {
+        match d {
+            ContractDim::Static(l, h) => {
+                clo[i] = *l;
+                chi[i] = *h;
+            }
+            _ => return None,
+        }
+    }
+
+    // Accumulator: a pooled buffer filled with the reduction identity.
+    let mut acc_buf = pool.take_array(shape);
+    let identity = reduce.identity();
+    if identity != 0.0 {
+        acc_buf.fill(identity);
+    }
+    let mut acc = VecValue::Owned {
+        data: acc_buf,
+        origin: lo.iter().copied().collect(),
+    };
+
+    // An empty window (lo > hi on any dim) contributes no terms — the result is
+    // the identity, matching the oracle's empty reduction.
+    if (0..nc).any(|i| clo[i] > chi[i]) {
+        return Some(acc);
+    }
+
+    // Iterate the contraction window with a mixed-radix counter (no allocation).
+    let mut cvals = [0i64; MAXC];
+    cvals[..nc].copy_from_slice(&clo[..nc]);
+    loop {
+        let bx = VecBox {
+            syms: output_idx_names,
+            lo,
+            shape,
+            cnames: contract_names,
+            cvals: &cvals[..nc],
+        };
+        let term = match eval_vec(body, &bx, ctx, pool, ops) {
+            Some(t) => t,
+            None => {
+                acc.release(pool);
+                return None;
+            }
+        };
+        // `vec_combine` releases both operands on a shape mismatch before
+        // returning `None`, so `?` (bail to the oracle) leaks no pooled buffer.
+        acc = vec_combine(combine_op, acc, term, pool)?;
+
+        // Mixed-radix increment over the contraction window.
+        let mut d = 0;
+        let mut done = false;
+        loop {
+            if d == nc {
+                done = true;
+                break;
+            }
+            cvals[d] += 1;
+            if cvals[d] <= chi[d] {
+                break;
+            }
+            cvals[d] = clo[d];
+            d += 1;
+        }
+        if done {
+            break;
+        }
+    }
+    Some(acc)
 }
 
 /// Vectorized evaluation of `expr` over the output box `bx`. Increments `ops`
@@ -1954,6 +2166,11 @@ fn eval_vec<'a>(
 fn eval_vec_variable<'a>(name: &str, bx: &VecBox, ctx: &EvalCtx<'a>) -> Option<VecValue<'a>> {
     if name == "t" {
         return Some(VecValue::Scalar(ctx.t));
+    }
+    // A bound contracted index (einsum fold) is a constant scalar for the whole
+    // output box on this tuple — so `k` in `ifelse(k==0,…)` folds per tuple.
+    if let Some(v) = bx.cbind(name) {
+        return Some(VecValue::Scalar(v as f64));
     }
     // A bare output index symbol as a *value* (rather than inside `index(...)`
     // addressing) is not part of the stencil fast path — bail to the oracle.
@@ -2016,9 +2233,72 @@ fn eval_vec_op<'a>(
             // Array-valued constants are not part of the stencil fast path.
             Value::Array(_) => None,
         },
-        // Everything else (ifelse, comparisons, aggregate, reshape, transpose,
+        // Scalar comparisons and `ifelse` over *scalar* operands — the einsum
+        // weight idiom `ifelse(k==0,-2,1)` folds to a constant per contraction
+        // tuple. Bit-identical to the oracle's `eval_op` (same `==`-via-abs and
+        // `c != 0.0` branch test). An *array* operand (a per-cell-varying
+        // condition) is not on the fast path and bails to the oracle.
+        "==" | "!=" | "<" | "<=" | ">" | ">=" => {
+            if node.args.len() != 2 {
+                return None;
+            }
+            let a = eval_vec_scalar(&node.args[0], bx, ctx, pool, ops)?;
+            let b = eval_vec_scalar(&node.args[1], bx, ctx, pool, ops)?;
+            Some(VecValue::Scalar(scalar_compare(&node.op, a, b)))
+        }
+        "ifelse" => {
+            if node.args.len() != 3 {
+                return None;
+            }
+            let c = eval_vec_scalar(&node.args[0], bx, ctx, pool, ops)?;
+            if c != 0.0 {
+                eval_vec(&node.args[1], bx, ctx, pool, ops)
+            } else {
+                eval_vec(&node.args[2], bx, ctx, pool, ops)
+            }
+        }
+        // Everything else (array-valued ifelse, aggregate, reshape, transpose,
         // concat, broadcast, transcendentals over arrays, D, …) falls back.
         _ => None,
+    }
+}
+
+/// Evaluate `expr` over the box and require a scalar result (a per-cell-varying
+/// array bails the fast path). Used for `ifelse` conditions / branches and
+/// comparison operands, which the einsum weight idiom keeps scalar.
+fn eval_vec_scalar(
+    expr: &Expr,
+    bx: &VecBox,
+    ctx: &EvalCtx,
+    pool: &mut Pool,
+    ops: &mut usize,
+) -> Option<f64> {
+    match eval_vec(expr, bx, ctx, pool, ops)? {
+        VecValue::Scalar(s) => Some(s),
+        other => {
+            other.release(pool);
+            None
+        }
+    }
+}
+
+/// Scalar comparison, bit-identical to the oracle's `eval_op` arm: `==`/`!=`
+/// test exact equality via `(a-b).abs()`, the orderings use the native `f64`
+/// relops; result is `1.0` (true) / `0.0` (false).
+fn scalar_compare(op: &str, a: f64, b: f64) -> f64 {
+    let t = match op {
+        "==" => (a - b).abs() == 0.0,
+        "!=" => (a - b).abs() != 0.0,
+        "<" => a < b,
+        "<=" => a <= b,
+        ">" => a > b,
+        ">=" => a >= b,
+        _ => return f64::NAN,
+    };
+    if t {
+        1.0
+    } else {
+        0.0
     }
 }
 
@@ -2110,12 +2390,14 @@ fn vec_combine<'a>(
     }
 }
 
-/// Vectorized `index(A, e_0, …, e_{n-1})`: a shifted array slice. Each index
-/// expression must be affine `sym_d ± k` in the positional output symbol for
-/// axis `d` (coefficient 1). The result spans the current output box; positions
-/// whose shifted source index leaves `A`'s extent are 0-filled — the existing
-/// homogeneous-Dirichlet ghost-cell convention (matches the scalar `eval_index`
-/// out-of-bounds → 0). Non-affine indexing (e.g. periodic wrap) returns `None`.
+/// Vectorized `index(A, e_0, …, e_{n-1})`: a shifted / rolled array slice. Each
+/// index expression is classified per axis ([`classify_axis_index`]) as either
+/// an affine shift `sym_d ± k` (a sub-range copy; positions whose source index
+/// leaves `A`'s extent stay ghost-0, matching the scalar `eval_index`
+/// out-of-bounds → 0 homogeneous-Dirichlet convention) or a periodic wrap (a
+/// cyclic roll of the full axis). The result spans the current output box. The
+/// gather is `≤ 2^(#wrap-axes)` whole-array block copies — independent of the
+/// grid size N. Any axis the classifier does not recognize returns `None`.
 fn eval_vec_index<'a>(
     node: &ExpressionNode,
     bx: &VecBox,
@@ -2143,54 +2425,105 @@ fn eval_vec_index<'a>(
     }
     let src_origin: DimI = arg0.origin().expect("array origin").iter().copied().collect();
     let src_shape: DimU = arg0.shape().expect("array").iter().copied().collect();
-    // Parse each index expression as `output_sym_d + k_d`.
-    let mut offsets = DimI::from_elem(0i64, n);
+
+    // Per axis, classify the index expression and build its source→output copy
+    // segments `(out_off, len, src_off)` (all 0-based). An affine axis yields a
+    // single in-bounds segment (ghost positions stay 0); a periodic-wrap axis
+    // yields the one or two segments of a cyclic roll (full coverage, no ghost).
+    let mut axis_segs: SmallVec<[SmallVec<[(usize, usize, usize); 2]>; 4]> = SmallVec::new();
     for d in 0..n {
-        match parse_affine_offset(&node.args[1 + d], &bx.syms[d]) {
-            Some(k) => offsets[d] = k,
+        let so = src_origin[d];
+        let ssz = src_shape[d] as i64;
+        match classify_axis_index(&node.args[1 + d], &bx.syms[d], bx) {
+            Some(AxisIndex::Affine(k)) => {
+                // output position p (0-based) → symbol bx.lo[d]+p → source 1-based
+                // bx.lo[d]+p+k → source 0-based −so; in-bounds when
+                // 0 ≤ bx.lo[d]+p+k−so ≤ ssz−1.
+                let lo_p = (so - bx.lo[d] - k).max(0);
+                let hi_p = (so + ssz - bx.lo[d] - k).min(bx.shape[d] as i64); // exclusive
+                if lo_p >= hi_p {
+                    // Entirely out of bounds on this axis ⇒ the whole result is
+                    // ghost-0 (the zero-filled pooled buffer).
+                    arg0.release(pool);
+                    return Some(VecValue::Owned {
+                        data: pool.take_array(bx.shape),
+                        origin: bx.lo.iter().copied().collect(),
+                    });
+                }
+                let mut segs = SmallVec::new();
+                segs.push((
+                    lo_p as usize,
+                    (hi_p - lo_p) as usize,
+                    (bx.lo[d] + lo_p + k - so) as usize,
+                ));
+                axis_segs.push(segs);
+            }
+            Some(AxisIndex::Wrap { k, period }) => {
+                // A roll requires the source axis to be the full period (origin
+                // == box low, extent == period == box extent).
+                if so != bx.lo[d] || ssz != period || bx.shape[d] as i64 != period {
+                    arg0.release(pool);
+                    return None;
+                }
+                let p = period as usize;
+                let s = (((k % period) + period) % period) as usize; // shift in [0,period)
+                let mut segs = SmallVec::new();
+                if s == 0 {
+                    segs.push((0usize, p, 0usize));
+                } else {
+                    // result[q] = src[(q+s) mod period]:
+                    //   out[0 .. p−s] ← src[s .. p];  out[p−s .. p] ← src[0 .. s].
+                    segs.push((0usize, p - s, s));
+                    segs.push((p - s, s, 0usize));
+                }
+                axis_segs.push(segs);
+            }
             None => {
                 arg0.release(pool);
                 return None;
             }
         }
     }
-    // Compute, per axis, the output sub-range that maps in-bounds into the
-    // source, and the matching source sub-range. Everything else stays 0
-    // (ghost — the homogeneous-Dirichlet convention; the pooled buffer is
-    // zero-filled on checkout).
-    let mut out_start = DimU::from_elem(0usize, n);
-    let mut out_len = DimU::from_elem(0usize, n);
-    let mut src_start = DimU::from_elem(0usize, n);
-    let mut all_ghost = false;
-    for d in 0..n {
-        let k = offsets[d];
-        let so = src_origin[d];
-        let ssz = src_shape[d] as i64;
-        // output position p (0-based) -> symbol value bx.lo[d] + p
-        //   -> source 1-based (bx.lo[d] + p + k) -> source 0-based - so.
-        // valid when 0 <= bx.lo[d] + p + k - so <= ssz - 1.
-        let lo_p = (so - bx.lo[d] - k).max(0);
-        let hi_p = (so + ssz - bx.lo[d] - k).min(bx.shape[d] as i64); // exclusive
-        if lo_p >= hi_p {
-            all_ghost = true;
-            break;
-        }
-        out_start[d] = lo_p as usize;
-        out_len[d] = (hi_p - lo_p) as usize;
-        src_start[d] = (bx.lo[d] + lo_p + k - so) as usize;
-    }
+
+    // Copy every cartesian combination of per-axis segments into the zero-filled
+    // pooled buffer (ghost positions keep the Dirichlet 0).
     let mut result = pool.take_array(bx.shape);
-    if !all_ghost {
+    {
         let src_view = arg0.view().expect("array");
-        let mut out_view = result.slice_each_axis_mut(|ax| {
-            let d = ax.axis.index();
-            Slice::from(out_start[d]..out_start[d] + out_len[d])
-        });
-        let src_sub = src_view.slice_each_axis(|ax| {
-            let d = ax.axis.index();
-            Slice::from(src_start[d]..src_start[d] + out_len[d])
-        });
-        out_view.assign(&src_sub);
+        let mut pick = DimU::from_elem(0usize, n);
+        loop {
+            {
+                let mut out_view = result.slice_each_axis_mut(|ax| {
+                    let d = ax.axis.index();
+                    let (o, l, _) = axis_segs[d][pick[d]];
+                    Slice::from(o..o + l)
+                });
+                let src_sub = src_view.slice_each_axis(|ax| {
+                    let d = ax.axis.index();
+                    let (_, l, s) = axis_segs[d][pick[d]];
+                    Slice::from(s..s + l)
+                });
+                out_view.assign(&src_sub);
+            }
+            // Mixed-radix increment over the per-axis segment counts.
+            let mut d = 0;
+            let mut done = false;
+            loop {
+                if d == n {
+                    done = true;
+                    break;
+                }
+                pick[d] += 1;
+                if pick[d] < axis_segs[d].len() {
+                    break;
+                }
+                pick[d] = 0;
+                d += 1;
+            }
+            if done {
+                break;
+            }
+        }
     }
     arg0.release(pool);
     Some(VecValue::Owned {
@@ -2242,6 +2575,8 @@ fn eval_vec_makearray<'a>(
             syms: bx.syms,
             lo: &r_lo[..],
             shape: &r_shape[..],
+            cnames: bx.cnames,
+            cvals: bx.cvals,
         };
         let v = match eval_vec(value_expr, &rbx, ctx, pool, ops) {
             Some(v) => v,
@@ -2289,43 +2624,142 @@ fn eval_vec_makearray<'a>(
     })
 }
 
-/// Parse `expr` as `sym ± k` (or bare `sym`) where `sym` is the given output
-/// index symbol and `k` is an integer literal. Returns the signed offset `k`,
-/// or `None` if `expr` is not affine in exactly `sym` with unit coefficient.
-fn parse_affine_offset(expr: &Expr, sym: &str) -> Option<i64> {
+/// How a single `index(...)` axis expression maps output positions to source
+/// positions along that axis, for the vectorized path.
+enum AxisIndex {
+    /// `sym ± k` with unit coefficient and a constant integer offset `k`
+    /// (bound contraction indices folded in): a shifted slice. Out-of-extent
+    /// positions stay ghost-0 (homogeneous Dirichlet).
+    Affine(i64),
+    /// Periodic wrap of base offset `k` over an axis of period `period`: a
+    /// cyclic roll, no ghost. See [`parse_wrap_axis`] for the recognized idiom.
+    Wrap { k: i64, period: i64 },
+}
+
+/// Classify one `index` axis expression: affine shift first (the common
+/// stencil/ghost case), then the periodic-wrap idiom. `None` for anything else,
+/// so the caller bails to the per-cell oracle.
+fn classify_axis_index(expr: &Expr, sym: &str, bx: &VecBox) -> Option<AxisIndex> {
+    if let Some(k) = affine_offset_in(expr, sym, bx) {
+        return Some(AxisIndex::Affine(k));
+    }
+    parse_wrap_axis(expr, sym, bx)
+}
+
+/// Parse `expr` as `1·sym + k` and return the integer offset `k`. Sub-terms not
+/// mentioning `sym` must fold to integer constants — literals and bound
+/// contraction indices ([`VecBox::cbind`]). `None` if `expr` is not affine in
+/// `sym` with unit coefficient and an integer constant part. Generalizes the
+/// former literal-only `sym ± int` parser so an einsum offset `(i+1)+k` folds
+/// the bound `k` into the shift.
+fn affine_offset_in(expr: &Expr, sym: &str, bx: &VecBox) -> Option<i64> {
+    let (coeff, konst) = affine_terms(expr, sym, bx)?;
+    if coeff == 1 { Some(konst) } else { None }
+}
+
+/// Reduce `expr` to `(coeff_of_sym, constant)` over the integers, folding bound
+/// contraction indices and integer literals. `None` for any non-integer or
+/// nonlinear (sym·sym) construct.
+fn affine_terms(expr: &Expr, sym: &str, bx: &VecBox) -> Option<(i64, i64)> {
     match expr {
-        Expr::Variable(v) if v == sym => Some(0),
-        Expr::Operator(node) => {
-            let as_int = |e: &Expr| -> Option<i64> {
-                match e {
-                    Expr::Integer(n) => Some(*n),
-                    Expr::Number(n) if n.fract() == 0.0 => Some(*n as i64),
-                    _ => None,
+        Expr::Integer(n) => Some((0, *n)),
+        Expr::Number(n) if n.fract() == 0.0 => Some((0, *n as i64)),
+        Expr::Number(_) => None,
+        Expr::Variable(v) if v == sym => Some((1, 0)),
+        Expr::Variable(v) => bx.cbind(v).map(|k| (0, k)),
+        Expr::Operator(node) => match node.op.as_str() {
+            "+" => {
+                let mut coeff = 0i64;
+                let mut konst = 0i64;
+                for a in &node.args {
+                    let (c, k) = affine_terms(a, sym, bx)?;
+                    coeff = coeff.checked_add(c)?;
+                    konst = konst.checked_add(k)?;
                 }
-            };
-            let is_sym = |e: &Expr| matches!(e, Expr::Variable(v) if v == sym);
-            match node.op.as_str() {
-                "+" if node.args.len() == 2 => {
-                    if is_sym(&node.args[0]) {
-                        as_int(&node.args[1])
-                    } else if is_sym(&node.args[1]) {
-                        as_int(&node.args[0])
-                    } else {
-                        None
-                    }
-                }
-                "-" if node.args.len() == 2 => {
-                    if is_sym(&node.args[0]) {
-                        as_int(&node.args[1]).map(|k| -k)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
+                Some((coeff, konst))
             }
-        }
+            "-" if node.args.len() == 2 => {
+                let (c0, k0) = affine_terms(&node.args[0], sym, bx)?;
+                let (c1, k1) = affine_terms(&node.args[1], sym, bx)?;
+                Some((c0.checked_sub(c1)?, k0.checked_sub(k1)?))
+            }
+            "-" | "neg" if node.args.len() == 1 => {
+                let (c, k) = affine_terms(&node.args[0], sym, bx)?;
+                Some((c.checked_neg()?, k.checked_neg()?))
+            }
+            "*" => {
+                // Linear ⇒ at most one factor carries `sym`; the others must be
+                // integer constants. `(c·sym + k)·M = (c·M)·sym + (k·M)`.
+                let mut sym_factor: Option<(i64, i64)> = None;
+                let mut m: i64 = 1;
+                for a in &node.args {
+                    let (c, k) = affine_terms(a, sym, bx)?;
+                    if c != 0 {
+                        if sym_factor.is_some() {
+                            return None; // sym·sym — nonlinear
+                        }
+                        sym_factor = Some((c, k));
+                    } else {
+                        m = m.checked_mul(k)?;
+                    }
+                }
+                match sym_factor {
+                    Some((c, k)) => Some((c.checked_mul(m)?, k.checked_mul(m)?)),
+                    None => Some((0, m)),
+                }
+            }
+            _ => None,
+        },
+    }
+}
+
+/// Recognize the periodic-wrap index idiom and return its base offset `k` and
+/// period `P`:
+///   `ifelse(inner < lo, inner + P, ifelse(inner > hi, inner − P, inner))`
+/// where `inner = sym + k` is affine, `lo`/`hi` are the integer axis bounds and
+/// `P = hi − lo + 1`. Both wrap branches must use the same `P`. This is the
+/// shape emitted by the lat-lon (periodic-longitude) discretization.
+fn parse_wrap_axis(expr: &Expr, sym: &str, bx: &VecBox) -> Option<AxisIndex> {
+    let outer = as_op(expr, "ifelse", 3)?;
+    // cond1: inner < lo  →  then1: inner + P
+    let (lt_lhs, lo_bound) = as_cmp_const(&outer.args[0], "<")?;
+    let k = affine_offset_in(lt_lhs, sym, bx)?;
+    let p1 = affine_offset_in(&outer.args[1], sym, bx)?.checked_sub(k)?;
+    // else1: ifelse(inner > hi, inner − P, inner)
+    let inner_if = as_op(&outer.args[2], "ifelse", 3)?;
+    let (gt_lhs, hi_bound) = as_cmp_const(&inner_if.args[0], ">")?;
+    if affine_offset_in(gt_lhs, sym, bx)? != k {
+        return None;
+    }
+    let p2 = k.checked_sub(affine_offset_in(&inner_if.args[1], sym, bx)?)?;
+    if affine_offset_in(&inner_if.args[2], sym, bx)? != k {
+        return None; // the fall-through branch must be the bare `inner`
+    }
+    let period = hi_bound.checked_sub(lo_bound)?.checked_add(1)?;
+    if p1 != period || p2 != period || period <= 0 {
+        return None;
+    }
+    Some(AxisIndex::Wrap { k, period })
+}
+
+/// Match `Expr::Operator(op, …)` of the given arity, returning the node.
+fn as_op<'e>(expr: &'e Expr, op: &str, arity: usize) -> Option<&'e ExpressionNode> {
+    match expr {
+        Expr::Operator(node) if node.op == op && node.args.len() == arity => Some(node),
         _ => None,
     }
+}
+
+/// Match `inner <op> <int-const>` (the comparison shape used inside the wrap
+/// idiom), returning `(&inner, const)`.
+fn as_cmp_const<'e>(expr: &'e Expr, op: &str) -> Option<(&'e Expr, i64)> {
+    let node = as_op(expr, op, 2)?;
+    let c = match &node.args[1] {
+        Expr::Integer(n) => *n,
+        Expr::Number(n) if n.fract() == 0.0 => *n as i64,
+        _ => return None,
+    };
+    Some((&node.args[0], c))
 }
 
 // ============================================================================

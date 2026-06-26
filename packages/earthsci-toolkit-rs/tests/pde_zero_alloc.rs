@@ -98,6 +98,85 @@ fn heat1d_json(n: usize) -> String {
     TEMPLATE.replace("__N__", &n.to_string())
 }
 
+/// A 1-D heat equation in generalized-einsum form (contracted index `k`),
+/// parameterized by grid size — the ess-p9s einsum stencil shape.
+fn einsum_heat1d_json(n: usize) -> String {
+    const TEMPLATE: &str = r#"{
+ "esm": "0.1.0",
+ "metadata": {"name": "einsum_heat1d_zero_alloc"},
+ "models": {
+  "Heat1DEinsum": {
+   "variables": {"u": {"type": "state", "shape": ["i"]}},
+   "equations": [
+    {
+     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"},
+             "ranges": {"i": [1, __N__]}},
+     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "reduce": "+",
+             "ranges": {"i": [1, __N__], "k": [-1, 1]},
+             "expr": {"op": "*", "args": [
+               25,
+               {"op": "ifelse", "args": [{"op": "==", "args": ["k", 0]}, -2, 1]},
+               {"op": "index", "args": ["u", {"op": "+", "args": ["i", "k"]}]}
+             ]}}
+    }
+   ]
+  }
+ }
+}"#;
+    TEMPLATE.replace("__N__", &n.to_string())
+}
+
+/// A lat-lon heat equation with periodic longitude (wrap-indexed) and Dirichlet
+/// latitude, parameterized by grid size — the ess-p9s periodic-wrap shape.
+fn latlon_heat_json(nlon: usize, nlat: usize) -> String {
+    const TEMPLATE: &str = r#"{
+ "esm": "0.1.0",
+ "metadata": {"name": "latlon_heat_zero_alloc"},
+ "models": {
+  "HeatLatLon": {
+   "variables": {"u": {"type": "state", "shape": ["i", "j"]}},
+   "equations": [
+    {
+     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i", "j"],
+             "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i", "j"]}], "wrt": "t"},
+             "ranges": {"i": [1, __NLON__], "j": [1, __NLAT__]}},
+     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i", "j"],
+             "ranges": {"i": [1, __NLON__], "j": [1, __NLAT__]},
+             "expr": {"op": "*", "args": [0.4, {"op": "+", "args": [
+               {"op": "index", "args": ["u",
+                 {"op": "ifelse", "args": [
+                   {"op": "<", "args": [{"op": "-", "args": ["i", 1]}, 1]},
+                   {"op": "+", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                   {"op": "ifelse", "args": [
+                     {"op": ">", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": [{"op": "-", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": ["i", 1]}
+                   ]}
+                 ]}, "j"]},
+               {"op": "*", "args": [-2, {"op": "index", "args": ["u", "i", "j"]}]},
+               {"op": "index", "args": ["u",
+                 {"op": "ifelse", "args": [
+                   {"op": "<", "args": [{"op": "+", "args": ["i", 1]}, 1]},
+                   {"op": "+", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                   {"op": "ifelse", "args": [
+                     {"op": ">", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                     {"op": "-", "args": [{"op": "+", "args": ["i", 1]}, __NLON__]},
+                     {"op": "+", "args": ["i", 1]}
+                   ]}
+                 ]}, "j"]}
+             ]}]}}
+    }
+   ]
+  }
+ }
+}"#;
+    TEMPLATE
+        .replace("__NLON__", &nlon.to_string())
+        .replace("__NLAT__", &nlat.to_string())
+}
+
 fn compile_json(json: &str) -> ArrayCompiled {
     let file = load(json).expect("load json model");
     ArrayCompiled::from_file(&file).expect("compile json model")
@@ -107,56 +186,62 @@ fn sample_state(n: usize) -> Vec<f64> {
     (0..n).map(|k| (0.7 * k as f64 + 0.3).sin()).collect()
 }
 
-#[test]
-fn vectorized_rhs_is_allocation_free_in_steady_state() {
-    // Counts must match at two grid sizes: both N-independent (equal) and ≈0.
-    let mut counts = Vec::new();
-    for &n in &[4usize, 8usize] {
-        let compiled = compile_json(&heat1d_json(n));
-        assert_eq!(compiled.state_variable_names().len(), n);
+/// Warm up the buffer pool, confirm the RHS takes the vectorized path, then
+/// measure heap allocations over a tight loop of RHS evaluations. The fences
+/// bracket only the measured loop; the counter reads are atomic loads and
+/// `debug_eval_rhs_into` borrows all its buffers, so nothing else allocates
+/// between them. Returns the allocation count (expected 0 in steady state).
+fn measure_steady_state_allocs(label: &str, compiled: &ArrayCompiled) -> usize {
+    let n = compiled.state_variable_names().len();
+    let state = sample_state(n);
+    let params = compiled.debug_resolve_params(&HashMap::new());
+    let mut scratch = compiled.debug_new_scratch();
+    let mut dy = vec![0.0f64; n];
+    let mut stats = RhsStats::default();
 
-        let state = sample_state(n);
-        let params = compiled.debug_resolve_params(&HashMap::new());
-        let mut scratch = compiled.debug_new_scratch();
-        let mut dy = vec![0.0f64; n];
-        let mut stats = RhsStats::default();
-
-        // Warm-up: the first calls populate the buffer pool and grow each buffer
-        // to the output-box capacity. Generous count so capacity is stable.
-        for _ in 0..32 {
-            compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut stats);
-        }
-
-        // Confirm the spatial derivative actually takes the vectorized path —
-        // a zero-allocation oracle fallback would be a meaningless pass.
-        let mut probe = RhsStats::default();
-        compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut probe);
-        assert_eq!(probe.vectorized_rules, 1, "N={n}: RHS did not vectorize");
-        assert_eq!(probe.scalar_rules, 0, "N={n}: RHS fell back to the oracle");
-
-        // Measure: a tight loop of RHS evaluations must request no new memory.
-        // Nothing else allocates between the fences (the counter reads are
-        // atomic loads and `debug_eval_rhs_into` borrows all its buffers).
-        let iters = 200usize;
-        let before = ALLOC_COUNT.load(Ordering::Relaxed);
-        MEASURING.store(true, Ordering::Relaxed);
-        for _ in 0..iters {
-            compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut stats);
-        }
-        MEASURING.store(false, Ordering::Relaxed);
-        let allocs = ALLOC_COUNT.load(Ordering::Relaxed) - before;
-
-        assert_eq!(
-            allocs, 0,
-            "N={n}: steady-state vectorized RHS allocated {allocs} times over {iters} calls \
-             (expected 0 — the scratch/pool must recycle every buffer)"
-        );
-        counts.push(allocs);
+    for _ in 0..32 {
+        compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut stats);
     }
 
-    // N-independence: the (zero) allocation count is identical across grid sizes.
+    let mut probe = RhsStats::default();
+    compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut probe);
+    assert_eq!(probe.vectorized_rules, 1, "{label}: RHS did not vectorize");
+    assert_eq!(probe.scalar_rules, 0, "{label}: RHS fell back to the oracle");
+
+    let iters = 200usize;
+    let before = ALLOC_COUNT.load(Ordering::Relaxed);
+    MEASURING.store(true, Ordering::Relaxed);
+    for _ in 0..iters {
+        compiled.debug_eval_rhs_into(&state, 0.0, &params, &mut dy, &mut scratch, &mut stats);
+    }
+    MEASURING.store(false, Ordering::Relaxed);
+    let allocs = ALLOC_COUNT.load(Ordering::Relaxed) - before;
     assert_eq!(
-        counts[0], counts[1],
-        "allocation count must be independent of grid size N (got {counts:?})"
+        allocs, 0,
+        "{label}: steady-state vectorized RHS allocated {allocs} times over {iters} calls \
+         (expected 0 — the scratch/pool must recycle every buffer)"
     );
+    allocs
+}
+
+#[test]
+fn vectorized_rhs_is_allocation_free_in_steady_state() {
+    // Every discretized-PDE stencil shape the vectorizer handles must be
+    // allocation-free in steady state, at two grid sizes each (so the property
+    // is both N-independent and ≈0). Covers the affine-ghost makearray stencil
+    // (ess-bdm) and the two ess-p9s additions: the einsum-contraction fold and
+    // the periodic-wrap gather. One test only — the allocation counter is
+    // process-global, so the cases must run sequentially (no parallel threads).
+    let cases: [(&str, ArrayCompiled); 6] = [
+        ("makearray N=4", compile_json(&heat1d_json(4))),
+        ("makearray N=8", compile_json(&heat1d_json(8))),
+        ("einsum N=4", compile_json(&einsum_heat1d_json(4))),
+        ("einsum N=8", compile_json(&einsum_heat1d_json(8))),
+        ("periodic-wrap 4x2", compile_json(&latlon_heat_json(4, 2))),
+        ("periodic-wrap 8x2", compile_json(&latlon_heat_json(8, 2))),
+    ];
+    for (label, compiled) in &cases {
+        let allocs = measure_steady_state_allocs(label, compiled);
+        assert_eq!(allocs, 0, "{label}: expected zero steady-state allocations");
+    }
 }
