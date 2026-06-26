@@ -50,6 +50,9 @@ include("geometry.jl")
 include("area_faq.jl")
 include("tree_walk.jl")
 include("data_refresh.jl")
+include("reproject.jl")
+include("regrid_kernels.jl")
+include("regrid_driver.jl")
 include("reference_graph.jl")
 include("cadence.jl")
 include("value_invention.jl")
@@ -163,6 +166,8 @@ export
     build_refresh_callback, RefreshBuffers, RefreshError,
     RegridApplier, IdentityRegrid, apply_regrid!,
     provider_refresh_times, provider_is_const, provider_sample,
+    # C4 regrid driver — reproject + per-method regrid + lev=min (ess-14f.5, JL-J2).
+    ESDRegrid,
     # Inline-test runner (esm-ol5qa; spec §6.6)
     AssertionStatus, AssertionResult, PASS, FAIL, ERROR, SKIP,
     esm_root, esm_path,
