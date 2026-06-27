@@ -183,7 +183,6 @@ def cached_opener(
     offline:
         Force cache-only. ``None`` (default) consults ``EARTHSCI_OFFLINE``.
     """
-    base_opener = opener if opener is not None else _default_dataset_opener()
     off = _offline_enabled(offline)
 
     def _open(url: str) -> Any:
@@ -193,6 +192,10 @@ def cached_opener(
                 raise CacheMiss(url, path)
             download = fetcher if fetcher is not None else _default_bytes_fetcher()
             _atomic_write(path, download(url))
+        # Resolve the base opener lazily — only when actually opening a cached
+        # file — so an offline miss raises CacheMiss above without requiring the
+        # (xarray) default opener to be importable.
+        base_opener = opener if opener is not None else _default_dataset_opener()
         return base_opener(os.fspath(path))
 
     return _open

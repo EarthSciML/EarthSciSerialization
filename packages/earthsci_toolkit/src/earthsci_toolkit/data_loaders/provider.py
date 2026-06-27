@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import math
+import os
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple
 
 try:  # Protocol is stdlib from 3.8; guard keeps the import defensive.
@@ -88,9 +89,32 @@ class LoadDataProvider:
     arithmetic in the driver.
     """
 
-    def __init__(self, field: "LoaderField", window: Optional[Window] = None) -> None:
+    def __init__(self, field: "LoaderField", window: Optional[Window] = None,
+                 *, opener: Optional[Callable[[str], Any]] = None,
+                 fetcher: Optional[Callable[[str], bytes]] = None,
+                 use_cache: bool = False) -> None:
         self.field = field
         self.window = window
+        # Explicitly-injected opener/fetcher for the loader DI seam (highest
+        # precedence). ``None`` + ``use_cache`` routes reads/writes through the
+        # EARTHSCIDATADIR content-addressed cache, built lazily in
+        # :meth:`_resolve_io` so merely constructing the provider (e.g. for
+        # :meth:`refresh_times`) needs no I/O backend.
+        self._opener = opener
+        self._fetcher = fetcher
+        self._use_cache = use_cache
+
+    def _resolve_io(self):
+        """Opener/fetcher for a read, built lazily. Explicit injection wins;
+        else the EARTHSCIDATADIR cache when ``use_cache``; else the un-cached
+        default (``None`` ⇒ the loader's own opener)."""
+        if self._opener is not None or self._fetcher is not None:
+            return self._opener, self._fetcher
+        if self._use_cache:
+            from .cache import cached_fetcher, cached_opener
+
+            return cached_opener(), cached_fetcher()
+        return None, None
 
     @property
     def _temporal(self) -> Any:
@@ -118,13 +142,15 @@ class LoadDataProvider:
         """CONST: read the single file once (sim time is irrelevant)."""
         from .runtime import load_data
 
-        return load_data(self.field.loader, time=None)
+        opener, fetcher = self._resolve_io()
+        return load_data(self.field.loader, time=None, opener=opener, fetcher=fetcher)
 
     def refresh(self, t: Optional[_dt.datetime]) -> Any:
         """Load the file covering absolute time ``t`` (``None`` ⇒ unanchored)."""
         from .runtime import load_data
 
-        return load_data(self.field.loader, time=t)
+        opener, fetcher = self._resolve_io()
+        return load_data(self.field.loader, time=t, opener=opener, fetcher=fetcher)
 
     def refresh_times(self) -> List[_dt.datetime]:
         """Cadence anchors in the run window — the solver tstops.
@@ -165,5 +191,16 @@ class LoadDataProvider:
 def build_default_provider(
     field: "LoaderField", window: Optional[Window] = None
 ) -> Provider:
-    """Default :data:`ProviderFactory`: the in-tree :class:`LoadDataProvider`."""
-    return LoadDataProvider(field, window)
+    """Default :data:`ProviderFactory`: the in-tree :class:`LoadDataProvider`.
+
+    When a cache root is configured — ``EARTHSCIDATADIR`` is set, or
+    ``EARTHSCI_OFFLINE`` is truthy — the provider reads (and, online, writes)
+    through the content-addressed disk cache (:func:`cached_opener` /
+    :func:`cached_fetcher`), so loads consult ``EARTHSCIDATADIR`` instead of
+    always hitting the network. With neither set the loaders' un-cached default
+    opener is used unchanged (so e.g. OPeNDAP direct opens still work).
+    """
+    from .cache import DATADIR_ENV, _offline_enabled
+
+    use_cache = bool(os.environ.get(DATADIR_ENV)) or _offline_enabled(None)
+    return LoadDataProvider(field, window, use_cache=use_cache)
