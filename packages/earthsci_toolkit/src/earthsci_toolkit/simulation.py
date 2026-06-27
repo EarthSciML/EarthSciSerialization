@@ -2187,8 +2187,15 @@ def _simulate_with_loaders(
             # the domain grid before binding; no target ⇒ raw injection.
             from .data_loaders.provider import build_default_provider
 
-            factory = provider_factory or build_default_provider
             target = _build_loader_target(flat)
+            # The in-tree default provider also derives server-side-subset URL
+            # fills (WGS84 bbox / image size) from the target grid; an injected
+            # provider_factory keeps the public (field, window) contract.
+            if provider_factory is not None:
+                factory = provider_factory
+            else:
+                def factory(f, w):
+                    return build_default_provider(f, w, target=target)
             # Sim-clock 0 is the run domain's reference_time (shared by all
             # loaders); only when the domain carries no temporal anchor do we
             # fall back to each loader's own temporal.start (its availability

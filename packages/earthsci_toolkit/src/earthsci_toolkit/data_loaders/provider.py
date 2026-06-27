@@ -92,9 +92,15 @@ class LoadDataProvider:
     def __init__(self, field: "LoaderField", window: Optional[Window] = None,
                  *, opener: Optional[Callable[[str], Any]] = None,
                  fetcher: Optional[Callable[[str], bytes]] = None,
-                 use_cache: bool = False) -> None:
+                 use_cache: bool = False,
+                 url_substitutions: Optional[dict] = None) -> None:
         self.field = field
         self.window = window
+        # Constant + domain-derived url_template fills (version/product, and the
+        # WGS84 bbox / image size for server-side-subsetting loaders like the
+        # LANDFIRE / USGS 3DEP ArcGIS ImageServers). Passed verbatim into
+        # load_data so StaticLoader/GridLoader can expand their url_template.
+        self._url_substitutions = dict(url_substitutions or {})
         # Explicitly-injected opener/fetcher for the loader DI seam (highest
         # precedence). ``None`` + ``use_cache`` routes reads/writes through the
         # EARTHSCIDATADIR content-addressed cache, built lazily in
@@ -143,14 +149,16 @@ class LoadDataProvider:
         from .runtime import load_data
 
         opener, fetcher = self._resolve_io()
-        return load_data(self.field.loader, time=None, opener=opener, fetcher=fetcher)
+        return load_data(self.field.loader, time=None, opener=opener, fetcher=fetcher,
+                         **self._url_substitutions)
 
     def refresh(self, t: Optional[_dt.datetime]) -> Any:
         """Load the file covering absolute time ``t`` (``None`` ⇒ unanchored)."""
         from .runtime import load_data
 
         opener, fetcher = self._resolve_io()
-        return load_data(self.field.loader, time=t, opener=opener, fetcher=fetcher)
+        return load_data(self.field.loader, time=t, opener=opener, fetcher=fetcher,
+                         **self._url_substitutions)
 
     def refresh_times(self) -> List[_dt.datetime]:
         """Cadence anchors in the run window — the solver tstops.
@@ -188,8 +196,56 @@ class LoadDataProvider:
         return out
 
 
+def _static_url_substitutions(loader: Any, target: Any) -> dict:
+    """url_template fills for a server-side-subsetting loader (e.g. the LANDFIRE /
+    USGS 3DEP ArcGIS ImageServers).
+
+    Constant fills (``version``/``product`` and the optional ``resolution_deg`` /
+    ``size_cap``) come from the loader's structured ``metadata.url_defaults``.
+    When the template has a ``{bbox…}`` placeholder and a ``target`` grid is
+    available, the WGS84 request box and output image size are derived from the
+    target's lon/lat envelope — a port of EarthSciData.jl ``_domain_bbox_wgs84``
+    / ``LANDFIREFileSet``: pad the envelope by one resolution cell, size =
+    ceil(span_deg / resolution_deg) clamped to [1, size_cap]. Resolution defaults
+    to ``metadata.native_resolution_deg.lon`` (then 1″). Both placeholder
+    spellings (``bbox_west``/``bbox_west_deg``, ``width``/``image_width``) are
+    emitted so either loader's template fills.
+    """
+    meta = getattr(loader, "metadata", None) or {}
+    defaults = meta.get("url_defaults") or {}
+    # constant scalar fills (e.g. version, product) — skip the sizing knobs
+    subs = {k: v for k, v in defaults.items()
+            if k not in ("resolution_deg", "size_cap") and not isinstance(v, (dict, list))}
+    url = getattr(getattr(loader, "source", None), "url_template", "") or ""
+    if target is None or "{bbox" not in url:
+        return subs
+    import math
+
+    import numpy as np
+
+    lon = np.asarray(getattr(target, "center_lon"))
+    lat = np.asarray(getattr(target, "center_lat"))
+    native = meta.get("native_resolution_deg") or {}
+    res_deg = float(defaults.get("resolution_deg")
+                    or native.get("lon") or (1.0 / 3600.0))
+    cap = int(defaults.get("size_cap", 4000))
+    west, east = float(lon.min()) - res_deg, float(lon.max()) + res_deg
+    south, north = float(lat.min()) - res_deg, float(lat.max()) + res_deg
+    width = max(1, min(cap, math.ceil((east - west) / res_deg)))
+    height = max(1, min(cap, math.ceil((north - south) / res_deg)))
+    subs.update({
+        "bbox_west": west, "bbox_west_deg": west,
+        "bbox_south": south, "bbox_south_deg": south,
+        "bbox_east": east, "bbox_east_deg": east,
+        "bbox_north": north, "bbox_north_deg": north,
+        "width": width, "image_width": width,
+        "height": height, "image_height": height,
+    })
+    return subs
+
+
 def build_default_provider(
-    field: "LoaderField", window: Optional[Window] = None
+    field: "LoaderField", window: Optional[Window] = None, *, target: Any = None
 ) -> Provider:
     """Default :data:`ProviderFactory`: the in-tree :class:`LoadDataProvider`.
 
@@ -203,4 +259,6 @@ def build_default_provider(
     from .cache import DATADIR_ENV, _offline_enabled
 
     use_cache = bool(os.environ.get(DATADIR_ENV)) or _offline_enabled(None)
-    return LoadDataProvider(field, window, use_cache=use_cache)
+    url_substitutions = _static_url_substitutions(field.loader, target)
+    return LoadDataProvider(field, window, use_cache=use_cache,
+                            url_substitutions=url_substitutions)
