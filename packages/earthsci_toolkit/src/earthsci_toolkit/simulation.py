@@ -1817,6 +1817,37 @@ def _field_epoch(field: LoaderField) -> Optional[_dt.datetime]:
     return _coerce_datetime(start)
 
 
+def _sim_clock_epoch(flat: "FlattenedSystem") -> Optional[_dt.datetime]:
+    """Absolute instant of simulation-clock 0: the run domain's ``reference_time``
+    (falling back to its ``temporal.start``), as a naive UTC datetime.
+
+    This is the clock origin that maps a loader refresh at sim-time ``when`` to
+    the absolute instant ``epoch + when``. A loader's own ``temporal.start`` is a
+    data-availability bound and cadence-alignment anchor (e.g. 1940 for ERA5),
+    NOT the simulation clock origin; anchoring the clock there made loaders
+    request data at the availability start (1940) instead of the actual run
+    window. Normalised to naive UTC so it stays comparable with the loaders'
+    naive temporal anchors (avoids aware/naive datetime errors in the cadence
+    path). Returns ``None`` when the domain has no temporal anchor, so the caller
+    falls back to the per-loader epoch (unchanged behaviour for such systems).
+    """
+    domain = getattr(flat, "domain", None)
+    temporal = getattr(domain, "temporal", None) if domain is not None else None
+    if temporal is None:
+        return None
+    from .data_loaders.time_resolution import _coerce_datetime
+
+    for attr in ("reference_time", "start"):
+        value = getattr(temporal, attr, None)
+        if not value:
+            continue
+        when = _coerce_datetime(value)
+        if when.tzinfo is not None:
+            when = when.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+        return when
+    return None
+
+
 def _coerce_field_values(obj: Any) -> np.ndarray:
     """Float array from a provider field, regardless of its container.
 
@@ -2158,7 +2189,15 @@ def _simulate_with_loaders(
 
             factory = provider_factory or build_default_provider
             target = _build_loader_target(flat)
-            epochs = {f.name: _field_epoch(f) for f in flat.loader_fields}
+            # Sim-clock 0 is the run domain's reference_time (shared by all
+            # loaders); only when the domain carries no temporal anchor do we
+            # fall back to each loader's own temporal.start (its availability
+            # start), preserving behaviour for systems without a reference_time.
+            sim_epoch = _sim_clock_epoch(flat)
+            epochs = {
+                f.name: (sim_epoch if sim_epoch is not None else _field_epoch(f))
+                for f in flat.loader_fields
+            }
 
             def _window(f: LoaderField):
                 epoch = epochs[f.name]

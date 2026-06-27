@@ -75,22 +75,35 @@ def parse_iso_duration(duration: str) -> Duration:
 
 
 def _coerce_datetime(value: Union[_dt.datetime, _dt.date, str]) -> _dt.datetime:
+    """Coerce to a **naive UTC** datetime.
+
+    The loader cadence / file-resolution code mixes datetimes from several
+    sources — ISO strings with a ``Z``/offset (tz-aware), bare ISO strings and
+    ``date`` objects (naive). Comparing an aware with a naive datetime raises
+    ``TypeError``, which surfaces deep in ``_snap_to_period`` / ``refresh_times``.
+    Normalising every coerced value to naive UTC keeps the whole loader time
+    path comparable.
+    """
     if isinstance(value, _dt.datetime):
-        return value
-    if isinstance(value, _dt.date):
+        dt = value
+    elif isinstance(value, _dt.date):
         return _dt.datetime(value.year, value.month, value.day)
-    if isinstance(value, str):
+    elif isinstance(value, str):
         if value.endswith("Z"):
             value = value[:-1] + "+00:00"
         try:
-            return _dt.datetime.fromisoformat(value)
+            dt = _dt.datetime.fromisoformat(value)
         except ValueError as exc:
             raise TimeResolutionError(
                 f"cannot parse {value!r} as ISO-8601 datetime"
             ) from exc
-    raise TimeResolutionError(
-        f"expected datetime/date/str, got {type(value).__name__}"
-    )
+    else:
+        raise TimeResolutionError(
+            f"expected datetime/date/str, got {type(value).__name__}"
+        )
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _add_months(dt: _dt.datetime, months: int) -> _dt.datetime:
