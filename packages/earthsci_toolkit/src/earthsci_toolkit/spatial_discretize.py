@@ -72,14 +72,52 @@ def flattened_to_esm(flat: Any, domains: Dict[str, Any],
     preserve them); without them the spatial pass falls back to Dirichlet
     defaults and mis-sizes the grid.
     """
+    # Loader fields (data-loader-fed observed arrays, e.g. "ERA5.pl.u") need
+    # special handling: flatten records them in BOTH observed_variables (no
+    # defining equation) and loader_fields. Emitting them as plain observeds
+    # produces schema-invalid `observed`-without-expression vars AND drops the
+    # loader semantics, so a discretized system can no longer be loader-driven.
+    # Instead re-mount each loader as an inline data-loader subsystem on the
+    # output model and rewrite its references "<owner>.<subkey>.<var>" ->
+    # "<owner>_<subkey>.<var>" (a local subsystem ref); re-flattening the emitted
+    # esm then re-creates the LoaderField descriptors so simulate()'s provider
+    # path can fill them.
+    from .serialize import _serialize_data_loader
+
+    loader_fields = list(getattr(flat, "loader_fields", []) or [])
+    loader_names = {lf.name for lf in loader_fields}
+    loader_rename: Dict[str, str] = {}
+    loader_groups: Dict[str, Tuple[Any, set]] = {}
+    for lf in loader_fields:
+        subkey = f"{lf.owner}.{lf.subkey}".replace(".", "_")
+        # Reference the loader by the name re-flatten will give it once mounted
+        # as subsystem `subkey` on this single model `name`: "<name>.<subkey>.<var>".
+        # flatten does not re-namespace symbols inside the lowered makearray, so
+        # the equation reference must already carry the model prefix to match the
+        # re-created LoaderField (else simulate raises "Unresolved symbol").
+        loader_rename[lf.name] = f"{name}.{subkey}.{lf.var}"
+        loader_groups.setdefault(subkey, (lf.loader, set()))[1].add(lf.var)
+    loader_subsystems: Dict[str, Any] = {}
+    for subkey, (loader_obj, used_vars) in loader_groups.items():
+        dl = _serialize_data_loader(loader_obj)
+        # keep only the variables actually consumed (avoids re-creating unused
+        # loader fields the provider would needlessly try to execute)
+        dl["variables"] = {v: spec for v, spec in dl.get("variables", {}).items()
+                           if v in used_vars}
+        loader_subsystems[subkey] = dl
+
     # flatten() dot-namespaces names (e.g. "LevelSet.psi"); a dot in an array
     # state name breaks simulate()'s element expansion, so sanitize "." -> "_"
-    # consistently across variable declarations and equation references.
+    # consistently across variable declarations and equation references. Loader
+    # names are excluded here — they keep their dotted "<subkey>.<var>" form
+    # (handled by loader_rename) so re-flatten re-mounts them as loader fields.
     rename = {n: n.replace(".", "_")
-              for n in (*flat.state_variables, *flat.observed_variables, *flat.parameters)}
+              for n in (*flat.state_variables, *flat.observed_variables, *flat.parameters)
+              if n not in loader_names}
+    eq_rename = {**rename, **loader_rename}
 
     def _rename(node):
-        return _map_expr(node, lambda x: rename.get(x, x) if isinstance(x, str) else x)
+        return _map_expr(node, lambda x: eq_rename.get(x, x) if isinstance(x, str) else x)
 
     # The `domains` block is reused verbatim below, but its expression-form
     # initial_conditions are written with component-LOCAL variable names (e.g.
@@ -111,6 +149,8 @@ def flattened_to_esm(flat: Any, domains: Dict[str, Any],
     for n, v in flat.state_variables.items():
         variables[rename[n]] = {"type": "state", "units": v.units or "1"}
     for n, v in flat.observed_variables.items():
+        if n in loader_names:
+            continue  # re-mounted as a loader subsystem below, not an observed
         variables[rename[n]] = {"type": "observed", "units": v.units or "1"}
     for n, v in flat.parameters.items():
         variables[rename[n]] = {"type": "parameter", "units": v.units or "1",
@@ -121,6 +161,8 @@ def flattened_to_esm(flat: Any, domains: Dict[str, Any],
                              "variables": variables, "equations": equations}
     if boundary_conditions:
         model["boundary_conditions"] = boundary_conditions
+    if loader_subsystems:
+        model["subsystems"] = loader_subsystems
     return {
         "esm": "0.5.0", "metadata": {"name": name}, "domains": domains,
         "models": {name: model},
