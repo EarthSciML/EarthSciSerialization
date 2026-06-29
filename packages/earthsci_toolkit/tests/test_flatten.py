@@ -6,6 +6,7 @@ from earthsci_toolkit.flatten import (
     ConflictingDerivativeError,
     FlattenedSystem,
     UnsupportedDimensionalityError,
+    _namespace_expr,
     flatten,
 )
 from earthsci_toolkit.esm_types import (
@@ -113,6 +114,36 @@ def test_flatten_recurses_into_subsystems():
     flat = flatten(file)
     assert "Outer.y" in flat.state_variables
     assert "Outer.Inner.x" in flat.state_variables
+
+
+def test_namespace_expr_qualifies_subsystem_local_refs():
+    """A reference rooted at a SUBSYSTEM KEY of the model being namespaced is
+    subsystem-local and must be qualified with the owner; a genuinely absolute
+    reference (head not a local subsystem) is left alone. Regression for the
+    camp_fire 'Unresolved symbol raw.fuel_model'."""
+    assert _namespace_expr("u", "M") == "M.u"                       # bare -> prefixed
+    assert _namespace_expr("Other.x", "M", subsystem_keys={"raw"}) == "Other.x"  # absolute
+    assert (_namespace_expr("raw.fuel_model", "LANDFIRE", subsystem_keys={"raw"})
+            == "LANDFIRE.raw.fuel_model")                          # subsystem-local -> qualified
+    assert _namespace_expr("raw.fuel_model", "LANDFIRE") == "raw.fuel_model"  # legacy: no keys
+    assert _namespace_expr("t", "M", leave_alone={"t"}, subsystem_keys={"t"}) == "t"  # leave_alone wins
+
+
+def test_flatten_qualifies_subsystem_local_expression_refs():
+    """An observed variable whose expression references a subsystem variable
+    (`sub.v`) is qualified to `Outer.sub.v`, matching the lowered subsystem var —
+    the pattern by which a model re-exposes a mounted data loader (LANDFIRE's
+    `fuel_model = raw.fuel_model`)."""
+    inner = Model(name="Inner", variables={"v": ModelVariable(type="state")})
+    outer = Model(
+        name="Outer",
+        variables={"out": ModelVariable(type="observed", expression="sub.v")},
+        subsystems={"sub": inner},
+    )
+    flat = flatten(_empty_file(models={"Outer": outer}))
+    eq = next(e for e in flat.equations if e.lhs == "Outer.out")
+    assert eq.rhs == "Outer.sub.v"               # subsystem-local ref qualified
+    assert "Outer.sub.v" in flat.state_variables  # matches the lowered subsystem var
 
 
 # ----------------------------------------------------------------------------

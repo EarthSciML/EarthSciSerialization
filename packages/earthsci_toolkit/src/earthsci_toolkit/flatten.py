@@ -317,18 +317,31 @@ def _expr_to_string(expr: Expr) -> str:
     return str(expr)
 
 
-def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = None) -> Expr:
+def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = None,
+                    subsystem_keys: Optional[Set[str]] = None) -> Expr:
     """Recursively prefix every variable reference in ``expr`` with ``prefix.``.
 
-    A reference is left alone if it already contains a dot (already namespaced)
-    or appears in ``leave_alone`` (e.g. independent variables like ``t``, ``x``).
+    A bare reference (no dot) is prefixed. A dotted reference is normally left
+    alone (already fully namespaced), or skipped if it appears in ``leave_alone``
+    (independent vars like ``t``, ``x``) — EXCEPT when its head segment is a key
+    in ``subsystem_keys`` (a subsystem mounted on the model being namespaced,
+    e.g. a data loader mounted under ``raw``). Such a reference is subsystem-
+    LOCAL (``raw.fuel_model``) and must be qualified with the owner
+    (``LANDFIRE.raw.fuel_model``) so it matches the lowered LoaderField /
+    subsystem variable name; the bare "contains a dot ⇒ leave alone" rule cannot
+    tell a subsystem-local reference from an already-absolute one.
     """
     leave_alone = leave_alone or set()
     if expr is None or _is_number(expr):
         return expr
     if isinstance(expr, str):
-        if expr in leave_alone or "." in expr:
+        if expr in leave_alone:
             return expr
+        if "." in expr:
+            head = expr.split(".", 1)[0]
+            if head not in leave_alone and subsystem_keys and head in subsystem_keys:
+                return f"{prefix}.{expr}"  # subsystem-local reference -> qualify
+            return expr                    # already fully namespaced -> leave alone
         return f"{prefix}.{expr}"
     if isinstance(expr, ExprNode):
         # For aggregate / arrayop, index symbols (output_idx and ranges keys) are
@@ -342,13 +355,15 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
             if expr.ranges:
                 for sym in expr.ranges.keys():
                     local_leave.add(sym)
-        new_args = [_namespace_expr(a, prefix, local_leave) for a in expr.args]
+        new_args = [_namespace_expr(a, prefix, local_leave, subsystem_keys)
+                    for a in expr.args]
         new_body = (
-            _namespace_expr(expr.expr, prefix, local_leave)
+            _namespace_expr(expr.expr, prefix, local_leave, subsystem_keys)
             if expr.expr is not None else None
         )
         new_values = (
-            [_namespace_expr(v, prefix, local_leave) for v in expr.values]
+            [_namespace_expr(v, prefix, local_leave, subsystem_keys)
+             for v in expr.values]
             if expr.values is not None else None
         )
         # Use ``replace`` so closed-function metadata (``name``, ``value``,
@@ -528,6 +543,11 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
 
     # _var is a placeholder used by operator_compose; never namespace it.
     leave_alone = {"t", "_var"}
+    # Subsystem keys mounted on this model (data loaders like `raw`, or nested
+    # models): references rooted at one of these (`raw.fuel_model`) are
+    # subsystem-LOCAL and must be qualified with the model prefix to match the
+    # lowered LoaderField / subsystem name (see _namespace_expr).
+    sub_keys = set(model.subsystems.keys())
     # Observed variables that carry an explicit `expression` define an
     # algebraic relation `name = expression`. Emit them as namespaced
     # equations so simulate() and codegen can inline them. Without this
@@ -537,13 +557,16 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
         if var.type != "observed" or var.expression is None:
             continue
         namespaced = f"{full_prefix}.{var_name}"
-        ns_rhs = _namespace_expr(var.expression, full_prefix, leave_alone=leave_alone)
+        ns_rhs = _namespace_expr(var.expression, full_prefix, leave_alone=leave_alone,
+                                 subsystem_keys=sub_keys)
         component.equations.append(FlattenedEquation(
             lhs=namespaced, rhs=ns_rhs, source_system=full_prefix,
         ))
     for eq in model.equations:
-        ns_lhs = _namespace_expr(eq.lhs, full_prefix, leave_alone=leave_alone)
-        ns_rhs = _namespace_expr(eq.rhs, full_prefix, leave_alone=leave_alone)
+        ns_lhs = _namespace_expr(eq.lhs, full_prefix, leave_alone=leave_alone,
+                                 subsystem_keys=sub_keys)
+        ns_rhs = _namespace_expr(eq.rhs, full_prefix, leave_alone=leave_alone,
+                                 subsystem_keys=sub_keys)
         component.equations.append(FlattenedEquation(
             lhs=ns_lhs, rhs=ns_rhs, source_system=full_prefix,
         ))
