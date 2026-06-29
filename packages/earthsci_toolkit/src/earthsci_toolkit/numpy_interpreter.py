@@ -28,7 +28,7 @@ Design notes
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -345,6 +345,38 @@ def _expand_ragged(rr: _RaggedRange, ctx: EvalContext, binding: Dict[str, int]) 
     return list(range(1, n + 1))
 
 
+def _eval_fn_lifted(name: str, args: List[Any], const_positions: Sequence[int]):
+    """Evaluate a closed function, LIFTING it element-wise over grid-valued args.
+
+    The registered closed functions (``interp.linear``, …) are scalar (0-D). When
+    a coupled/discretized system feeds a grid-valued "point" argument — e.g. a
+    per-cell LANDFIRE fuel code into ``FuelModelLookup``'s ``interp.linear`` — the
+    scalar function must be applied at every cell. The ``const_positions`` args
+    (interp tables/axes) are passed whole; the remaining "point" args are
+    broadcast together and the function is evaluated per element, returning the
+    matching grid. All-scalar point args keep the 0-D fast path (one call → a
+    Python float).
+    """
+    from .registered_functions import evaluate_closed_function
+
+    const = set(const_positions or ())
+    point_positions = [i for i in range(len(args)) if i not in const]
+    point_arrs = [np.asarray(args[i]) for i in point_positions]
+    if not point_arrs or all(a.ndim == 0 for a in point_arrs):
+        return float(evaluate_closed_function(name, args))
+    # np.broadcast_arrays (long-standing) instead of np.broadcast_shapes (>=1.20).
+    bcast = np.broadcast_arrays(*point_arrs)
+    shape = np.asarray(bcast[0]).shape
+    cols = [np.asarray(b, dtype=float).ravel() for b in bcast]
+    out = np.empty(cols[0].size, dtype=float)
+    scratch = list(args)
+    for k in range(out.size):
+        for pos, col in zip(point_positions, cols):
+            scratch[pos] = float(col[k])
+        out[k] = float(evaluate_closed_function(name, scratch))
+    return out.reshape(shape)
+
+
 def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
     """Recursively evaluate an ESM expression against ``ctx``.
 
@@ -386,7 +418,7 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
                 evaluated_args.append(extract_const_array(a))
             else:
                 evaluated_args.append(eval_expr(a, ctx))
-        return float(evaluate_closed_function(expr.name, evaluated_args))
+        return _eval_fn_lifted(expr.name, evaluated_args, const_arg_positions)
     if op == "enum":
         raise NumpyInterpreterError(
             "`enum` op encountered at evaluate time — `lower_enums(file)` should "
