@@ -1745,11 +1745,16 @@ Automatically resolves any subsystem references (local or remote) relative
 to the directory containing the file.
 """
 function load(path::String)::EsmFile
-    file = open(path, "r") do io
-        load(io)
-    end
-    # Resolve subsystem references relative to the file's directory
     base_path = dirname(abspath(path))
+    # Inline any top-level model `{ref}` stubs (schema §4.7: `models.*` is
+    # oneOf [Model, {ref}]) before the typed pipeline, so a simulation file that
+    # references its components by `{"ref": "..."}` — as the Python runner's
+    # by-name model resolver expects — loads here too. Returns `nothing` when the
+    # file has no such stubs (the common case), preserving the original path.
+    inlined = _inline_toplevel_model_refs(JSON3.read(read(path, String)), base_path)
+    file = inlined === nothing ? open(load, path) :
+                                 load(IOBuffer(JSON3.write(inlined)))
+    # Resolve nested subsystem references relative to the file's directory.
     resolve_subsystem_refs!(file, base_path)
     return file
 end
@@ -1810,6 +1815,135 @@ function load(io::IO)::EsmFile
             rethrow(e)
         end
     end
+end
+
+# ========================================
+# Top-level model {ref} resolution (schema §4.7: models.* = oneOf [Model, {ref}])
+# ========================================
+#
+# A bare `{"ref": "..."}` top-level model points at a component file's single
+# model (the WildlandFire-style simulation files wire their components this way,
+# matching the Python runner's by-name model resolver). The typed coercion path
+# requires a `Model` with `variables`, so the reference is inlined at the
+# raw-JSON level — before schema validation, expression-template lowering, and
+# coercion — and the blocks the model's AST references by name
+# (`function_tables`, `enums`, `data_loaders`) are merged in from the component.
+# Nested subsystem `{ref}`s inside the component are rewritten to absolute paths
+# so the later `resolve_subsystem_refs!` pass (anchored at the *parent* dir)
+# still finds them. Resolution recurses (a component may itself reference another
+# at top level) with cycle detection shared across the walk.
+
+"""
+    _inline_toplevel_model_refs(raw_data, base_path) -> Union{Nothing,Dict{String,Any}}
+
+Return a native ESM dict with every top-level model `{ref}` stub replaced by the
+referenced component's model (and its `function_tables` / `enums` /
+`data_loaders` merged in), or `nothing` when `raw_data` has no such stub.
+"""
+function _inline_toplevel_model_refs(raw_data, base_path::String)
+    models = get(raw_data, :models, nothing)
+    models === nothing && return nothing
+    has_stub = any(values(models)) do m
+        (m isa JSON3.Object || m isa AbstractDict) &&
+            haskey(m, :ref) && !haskey(m, :variables)
+    end
+    has_stub || return nothing
+    native = _deep_native(raw_data)
+    _inline_toplevel_model_refs!(native, base_path, Set{String}())
+    return native
+end
+
+"""
+    _inline_toplevel_model_refs!(native, base_path, visited)
+
+In-place native-dict worker for [`_inline_toplevel_model_refs`](@ref).
+"""
+function _inline_toplevel_model_refs!(native::Dict{String,Any}, base_path::String,
+                                      visited::Set{String})
+    models = get(native, "models", nothing)
+    models isa AbstractDict || return
+    for (name, entry) in collect(models)
+        (entry isa AbstractDict && haskey(entry, "ref") &&
+            !haskey(entry, "variables")) || continue
+        ref = String(entry["ref"])
+        # Optional model selector: when the referenced file holds several models
+        # (e.g. an ESD regridder library), `model` names which one to splice in.
+        sel = haskey(entry, "model") && entry["model"] !== nothing ?
+              String(entry["model"]) : nothing
+        refpath = abspath(joinpath(base_path, ref))
+        # Cycle detection is PATH-scoped (push on enter, pop on exit) so the same
+        # single-model file may be referenced by several model instances — only a
+        # reference cycle along the current resolution path is an error.
+        if refpath in visited
+            throw(SubsystemRefError("Circular top-level model reference detected: $(refpath)"))
+        end
+        push!(visited, refpath)
+        try
+            isfile(refpath) || throw(SubsystemRefError(
+                "Referenced model file not found: $(refpath) (from ref '$(ref)')"))
+            comp = _deep_native(JSON3.read(read(refpath, String)))
+            comp isa Dict{String,Any} || throw(SubsystemRefError(
+                "Referenced model file '$(ref)' did not parse as a JSON object"))
+            compdir = dirname(refpath)
+            _inline_toplevel_model_refs!(comp, compdir, visited)   # component-of-component
+            cmodels = get(comp, "models", nothing)
+            cmodels isa AbstractDict || throw(SubsystemRefError(
+                "Top-level model ref '$(ref)' resolves to a file with no models block"))
+            cmodel = if sel !== nothing
+                haskey(cmodels, sel) || throw(SubsystemRefError(
+                    "Top-level model ref '$(ref)' has no model '$(sel)' " *
+                    "(available: $(join(sort(collect(keys(cmodels))), ", ")))"))
+                cmodels[sel]
+            else
+                length(cmodels) == 1 || throw(SubsystemRefError(
+                    "Top-level model ref '$(ref)' resolves to $(length(cmodels)) models; " *
+                    "add a \"model\" selector to choose one " *
+                    "(available: $(join(sort(collect(keys(cmodels))), ", ")))"))
+                first(values(cmodels))
+            end
+            _absolutize_nested_refs!(cmodel, compdir)
+            models[name] = cmodel
+            # Merge the by-name blocks the model's AST references; the parent wins
+            # on a key clash (its own definitions take precedence).
+            for blk in ("function_tables", "data_loaders", "enums")
+                src = get(comp, blk, nothing)
+                (src isa AbstractDict && !isempty(src)) || continue
+                dst = get!(() -> Dict{String,Any}(), native, blk)
+                dst isa AbstractDict || continue
+                for (k, v) in src
+                    haskey(dst, k) || (dst[k] = v)
+                end
+            end
+        finally
+            delete!(visited, refpath)
+        end
+    end
+    return
+end
+
+"""
+    _absolutize_nested_refs!(node, compdir)
+
+Rewrite every relative `{"ref": "..."}` under `node` to an absolute path anchored
+at `compdir`, so the references resolve after the model is spliced into a parent
+whose directory differs.
+"""
+function _absolutize_nested_refs!(node, compdir::String)
+    if node isa AbstractDict
+        r = get(node, "ref", nothing)
+        if r isa AbstractString && !startswith(r, "/") &&
+           !startswith(r, "http://") && !startswith(r, "https://")
+            node["ref"] = abspath(joinpath(compdir, r))
+        end
+        for v in values(node)
+            _absolutize_nested_refs!(v, compdir)
+        end
+    elseif node isa AbstractVector
+        for v in node
+            _absolutize_nested_refs!(v, compdir)
+        end
+    end
+    return
 end
 
 """

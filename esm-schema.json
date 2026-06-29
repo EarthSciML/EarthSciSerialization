@@ -1538,7 +1538,11 @@
       "properties": {
         "ref": {
           "type": "string",
-          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model, reaction system, or data loader, which is used as the subsystem definition (esm-spec.md §4.7). A single top-level data loader is named by the parent's subsystem key; no fragment selector is needed because the file is single-component."
+          "description": "Local file path or URL pointing to an ESM file. The referenced file must contain exactly one top-level model, reaction system, or data loader (unless `model` selects one of several), which is used as the subsystem definition (esm-spec.md §4.7). A single top-level data loader is named by the parent's subsystem key; no fragment selector is needed because the file is single-component."
+        },
+        "model": {
+          "type": "string",
+          "description": "Optional model selector. When the referenced file defines more than one top-level model, names which one to splice in. Omit for single-model files. Lets a multi-model component library (e.g. an ESD regridder file holding several kernels) be referenced by one of its models."
         }
       }
     },
