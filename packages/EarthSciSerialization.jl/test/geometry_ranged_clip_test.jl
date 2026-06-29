@@ -259,3 +259,113 @@ end
     @test du[vmap["F_tgt[1]"]] ≈ 50.0 atol = 1e-12   # mean(100,0)
     @test du[vmap["F_tgt[2]"]] ≈ 0.0  atol = 1e-12   # mean(0,0)
 end
+
+# ---------------------------------------------------------------------------
+# COUPLED-ARRAY BRIDGE (the met→fire edge). A SEPARATE consumer per-cell ODE
+# reads the regrid output `F_tgt[j]` as an array observed indexed by its OWN loop
+# var — the level-set RHS reading a regridded coupling field per cell, NOT the
+# regrid extracting elements into scalar states. `F_tgt = A_ij ⊗ F_src / A_j` is
+# a LIVE-FIELD observed (F_src is a `param_arrays` buffer): A_ij/A_j build once at
+# setup, but F_tgt is INLINED into the consumer, so `index(F_tgt, j)` beta-reduces
+# to the proven array-state aggregate kernel (const weights + live field). The
+# whole chain — construct grids → clip → A_ij → regrid a live field → drive a
+# per-cell ODE — runs through one `build_evaluator`, no host-supplied geometry.
+#   D(u[j],t) = k * F_tgt[j];  F_src=[10,20,30,40] ⇒ F_tgt=[15,35], k=2 ⇒ [30,70].
+# ---------------------------------------------------------------------------
+
+function _coupled_bridge_esm()
+    ip = Dict{String,Any}("op" => "intersect_polygon", "id" => "overlap_clip",
+        "manifold" => "planar", "args" => Any[_ix("src_poly", "i"), _ix("tgt_poly", "j")])
+    clip = _arrop(["i", "j", "w", "c"],
+        ["i" => "src_cells", "j" => "tgt_cells", "w" => "clip_ring", "c" => "coord"], _ix(ip, "w", "c"))
+    vp1 = _eq("+", "v", 1)
+    shoe = _eq("*", 0.5, _eq("-",
+        _eq("*", _ix("clip","i","j","v",1), _ix("clip","i","j",vp1,2)),
+        _eq("*", _ix("clip","i","j",vp1,1), _ix("clip","i","j","v",2))))
+    A_ij = _arrop(["i", "j"], ["i" => "src_cells", "j" => "tgt_cells"], _agg("v", "clip_ring", shoe))
+    A_j  = _arrop(["j"], ["j" => "tgt_cells"], _agg("i", "src_cells", _ix("A_ij", "i", "j")))
+    num  = _agg("i", "src_cells", _eq("*", _ix("A_ij", "i", "j"), _ix("F_src", "i")))
+    F_tgt = _arrop(["j"], ["j" => "tgt_cells"], _eq("/", num, _ix("A_j", "j")))
+    # consumer: D(u[j],t) = k * F_tgt[j] — a DIFFERENT state reads the regrid output
+    cons_rhs = _arrop(["j"], ["j" => "tgt_cells"], _eq("*", "k", _ix("F_tgt", "j")))
+    cons_lhs = Dict{String,Any}("op" => "aggregate", "output_idx" => Any["j"],
+        "ranges" => Dict{String,Any}("j" => Dict{String,Any}("from" => "tgt_cells")),
+        "expr" => Dict{String,Any}("op" => "D", "args" => Any[_ix("u", "j")], "wrt" => "t"))
+    Pd(d) = Dict{String,Any}("type" => "parameter", "default" => d)
+    O(e, shape...) = Dict{String,Any}("type" => "observed", "shape" => collect(Any, shape), "expression" => e)
+    model = Dict{String,Any}(
+        "index_sets" => Dict{String,Any}(
+            "coord" => Dict{String,Any}("kind"=>"interval","size"=>2), "verts" => Dict{String,Any}("kind"=>"interval","size"=>4),
+            "src_cells" => Dict{String,Any}("kind"=>"interval","size"=>4), "tgt_cells" => Dict{String,Any}("kind"=>"interval","size"=>2),
+            "clip_ring" => Dict{String,Any}("kind"=>"derived","from_faq"=>"overlap_clip")),
+        "variables" => Dict{String,Any}(
+            "x0" => Pd(0.0), "dx_src" => Pd(0.5), "dx_tgt" => Pd(1.0), "k" => Pd(2.0),
+            "F_src" => Dict{String,Any}("type" => "parameter", "shape" => Any["src_cells"]),
+            "src_poly" => O(_cell_corners("x0", "dx_src", "src_cells"), "src_cells", "verts", "coord"),
+            "tgt_poly" => O(_cell_corners("x0", "dx_tgt", "tgt_cells"), "tgt_cells", "verts", "coord"),
+            "clip" => O(clip, "src_cells", "tgt_cells", "clip_ring", "coord"),
+            "A_ij" => O(A_ij, "src_cells", "tgt_cells"), "A_j" => O(A_j, "tgt_cells"),
+            "F_tgt" => O(F_tgt, "tgt_cells"),
+            "u" => Dict{String,Any}("type" => "state", "shape" => Any["tgt_cells"])),
+        "equations" => Any[Dict{String,Any}("lhs" => cons_lhs, "rhs" => cons_rhs)])
+    return Dict{String,Any}("esm" => "0.6.0", "metadata" => Dict{String,Any}("name" => "coupled_bridge"),
+                            "models" => Dict{String,Any}("CoupledBridge" => model))
+end
+
+@testset "Coupled-array bridge: consumer ODE reads a live regrid F_tgt observed (met→fire)" begin
+    esm = _coupled_bridge_esm()
+    F_src = [10.0, 20.0, 30.0, 40.0]               # a LIVE buffer
+    f!, u0, p, _t, vmap = build_evaluator(esm; param_arrays = Dict("F_src" => F_src),
+        initial_conditions = Dict("u[1]" => 0.0, "u[2]" => 0.0))
+    du = similar(u0); f!(du, u0, p, 0.0)
+    # F_tgt = [15,35] (the regrid of the live field); k=2 ⇒ the consumer RHS reads it.
+    @test du[vmap["u[1]"]] ≈ 30.0 atol = 1e-12
+    @test du[vmap["u[2]"]] ≈ 70.0 atol = 1e-12
+    # Refresh the live buffer (no rebuild) — the consumer's RHS tracks it.
+    F_src .= [100.0, 0.0, 0.0, 0.0]                # F_tgt = [50,0]
+    f!(du, u0, p, 0.0)
+    @test du[vmap["u[1]"]] ≈ 100.0 atol = 1e-12    # 2*50
+    @test du[vmap["u[2]"]] ≈ 0.0   atol = 1e-12    # 2*0
+end
+
+# ---------------------------------------------------------------------------
+# Multi-hop chain (the level-set coupling shape). The consumer does NOT read the
+# regrid output directly — it reads a DERIVED field one hop further on:
+#   F_tgt[j] = regrid(F_src)           (live-field observed)
+#   S_n[j]   = 1 + F_tgt[j]            (derived per-cell field — R_0·(1+φ) stand-in)
+#   D(u[j],t)= S_n[j]                  (the front RHS reads the derived field)
+# Both F_tgt and S_n are live-field array observeds; the chain S_n→F_tgt must
+# collapse transitively (the `_resolve_observed` fix that reads THROUGH arrayop
+# bodies), then `index(S_n, j)` nested-beta-reduces to the regrid kernel.
+#   F_src=[10,20,30,40] ⇒ F_tgt=[15,35] ⇒ S_n=[16,36] ⇒ du=[16,36].
+# ---------------------------------------------------------------------------
+
+function _chain_bridge_esm()
+    base = _coupled_bridge_esm()
+    model = base["models"]["CoupledBridge"]
+    O(e, shape...) = Dict{String,Any}("type" => "observed", "shape" => collect(Any, shape), "expression" => e)
+    # S_n[j] = 1 + F_tgt[j]
+    S_n = _arrop(["j"], ["j" => "tgt_cells"], _eq("+", 1.0, _ix("F_tgt", "j")))
+    model["variables"]["S_n"] = O(S_n, "tgt_cells")
+    # Retarget the consumer to read S_n (one hop past the regrid output).
+    model["equations"][1]["rhs"] =
+        _arrop(["j"], ["j" => "tgt_cells"], _ix("S_n", "j"))
+    base["metadata"]["name"] = "chain_bridge"
+    base["models"]["ChainBridge"] = model
+    delete!(base["models"], "CoupledBridge")
+    return base
+end
+
+@testset "Multi-hop chain: consumer reads a DERIVED field over a live regrid (level-set shape)" begin
+    esm = _chain_bridge_esm()
+    F_src = [10.0, 20.0, 30.0, 40.0]
+    f!, u0, p, _t, vmap = build_evaluator(esm; param_arrays = Dict("F_src" => F_src),
+        initial_conditions = Dict("u[1]" => 0.0, "u[2]" => 0.0))
+    du = similar(u0); f!(du, u0, p, 0.0)
+    @test du[vmap["u[1]"]] ≈ 16.0 atol = 1e-12     # 1 + mean(10,20)
+    @test du[vmap["u[2]"]] ≈ 36.0 atol = 1e-12     # 1 + mean(30,40)
+    F_src .= [100.0, 0.0, 0.0, 0.0]
+    f!(du, u0, p, 0.0)
+    @test du[vmap["u[1]"]] ≈ 51.0 atol = 1e-12     # 1 + mean(100,0)
+    @test du[vmap["u[2]"]] ≈ 1.0  atol = 1e-12     # 1 + mean(0,0)
+end

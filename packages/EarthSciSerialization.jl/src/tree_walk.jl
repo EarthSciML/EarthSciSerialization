@@ -441,7 +441,8 @@ function _referenced_var_names(expr, acc::Set{String}=Set{String}())
     return acc
 end
 
-function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names)
+function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names,
+                              live_params)
     defs = Dict{String,Expr}()
     for eq in equations
         eq.lhs isa VarExpr || continue
@@ -450,9 +451,28 @@ function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names)
     is_arr_obs(n) = haskey(model.variables, n) &&
         model.variables[n].type == ObservedVariable &&
         _is_array_shape(model.variables[n].shape)
+    # Live taint (ess-14f.4): a var whose defining expression (transitively)
+    # reads a `param_arrays` buffer is a LIVE-FIELD observed — its value changes
+    # each refresh, so it CANNOT be a build-once setup const. `F_tgt = A_ij ⊗
+    # F_src / A_j` mixes setup-const weights (A_ij/A_j) with a live field (F_src):
+    # the weights materialize at setup, but F_tgt itself must stay a runtime
+    # observed (inlined into its readers below), never pulled into setup where
+    # F_src is unbound. Seed from the live param names, propagate through `defs`.
+    tainted = Set{String}()
+    changed = true
+    while changed
+        changed = false
+        for (n, rhs) in defs
+            n in tainted && continue
+            refs = _referenced_var_names(rhs)
+            if any(r -> (r in live_params) || (r in tainted), refs)
+                push!(tainted, n); changed = true
+            end
+        end
+    end
     setup = Set{String}()
     for (n, _) in defs
-        (is_arr_obs(n) && !(n in geom_ring_vars) && haskey(defs, n)) || continue
+        (is_arr_obs(n) && !(n in geom_ring_vars) && !(n in tainted) && haskey(defs, n)) || continue
         _expr_has_intersect_polygon(defs[n]) && push!(setup, n)
     end
     mvars = Set{String}(keys(model.variables))
@@ -460,7 +480,7 @@ function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names)
     while changed
         changed = false
         for (n, rhs) in defs
-            (is_arr_obs(n) && !(n in setup) && !(n in geom_ring_vars)) || continue
+            (is_arr_obs(n) && !(n in setup) && !(n in geom_ring_vars) && !(n in tainted)) || continue
             refs = intersect(_referenced_var_names(rhs), mvars)
             if any(f -> (f in setup) || (f in geom_ring_vars), refs) &&
                !any(f -> f in state_var_names, refs)
@@ -476,14 +496,15 @@ function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names)
         changed = false
         for n in collect(setup)
             for r in intersect(_referenced_var_names(defs[n]), mvars)
-                (is_arr_obs(r) && !(r in setup) && !(r in geom_ring_vars) && haskey(defs, r)) || continue
+                (is_arr_obs(r) && !(r in setup) && !(r in geom_ring_vars) &&
+                 !(r in tainted) && haskey(defs, r)) || continue
                 rrefs = intersect(_referenced_var_names(defs[r]), mvars)
                 any(f -> f in state_var_names, rrefs) && continue
                 push!(setup, r); changed = true
             end
         end
     end
-    return setup, defs
+    return setup, defs, tainted
 end
 
 # Dependency order over the setup vars (clip before area before A_ij).
@@ -681,11 +702,29 @@ function _build_evaluator_impl(model::Model;
     # substitution — they are build-once functions of the const polygon inputs.
     _geom_setup_vars = Set{String}()
     _geom_defs = Dict{String,Expr}()
+    # Live-field geometry observeds (ess-14f.4): array observeds that are NOT
+    # build-once setup vars because they read a live `param_arrays` buffer (the
+    # conservative-regrid output F_tgt = A_ij ⊗ F_src / A_j is the motivating case).
+    # They are INLINED into the array-state RHS that consumes them, so the
+    # build-time `index(arrayop,…)` reducer collapses `index(F_tgt, j)` to F_tgt's
+    # body — yielding the proven array-state aggregate kernel (const A_ij/A_j +
+    # live F_src), the met→fire coupling edge. Empty (byte-identical) for files
+    # whose geometry outputs are all const-fed (they stay setup vars).
+    _geom_inline_vars = Set{String}()
     if _has_geometry
         _pre_state_names = Set{String}(n for (n, v) in model.variables
                                        if v.type == StateVariable && !(n in _vi_vars))
-        _geom_setup_vars, _geom_defs =
-            _geometry_setup_vars(model, _model_equations, _geom_ring_vars, _pre_state_names)
+        _live_param_names = Set{String}(String(k) for k in keys(param_arrays))
+        _geom_setup_vars, _geom_defs, _geom_live_tainted =
+            _geometry_setup_vars(model, _model_equations, _geom_ring_vars,
+                                 _pre_state_names, _live_param_names)
+        for (name, v) in model.variables
+            (v.type == ObservedVariable && _is_array_shape(v.shape) &&
+             !(name in _geom_setup_vars) && !(name in _geom_ring_vars) &&
+             name in _geom_live_tainted && haskey(_geom_defs, name) &&
+             _geom_defs[name] isa OpExpr) || continue
+            push!(_geom_inline_vars, name)
+        end
     end
 
     # ---- Partition variables ----
@@ -700,6 +739,9 @@ function _build_evaluator_impl(model::Model;
         name in _vi_vars && continue
         # Geometry-setup vars are materialized at setup; not an ODE partition member.
         name in _geom_setup_vars && continue
+        # Live-field geometry observeds (F_tgt …) are inlined into their readers
+        # (ess-14f.4); they carry no partition slot of their own.
+        name in _geom_inline_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
@@ -920,7 +962,11 @@ function _build_evaluator_impl(model::Model;
             push!(derivative_eqs, eq)
         elseif _is_indexed_D_lhs(eq.lhs) || _is_arrayop_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
-        elseif isa(eq.lhs, VarExpr) && eq.lhs.name in observed_names
+        elseif isa(eq.lhs, VarExpr) && (eq.lhs.name in observed_names ||
+                                        eq.lhs.name in _geom_inline_vars)
+            # A live-field geometry observed (F_tgt …) enters the substitution map
+            # as an arrayop value; `index(F_tgt, j)` in a reader beta-reduces to its
+            # body via `_resolve_indices` (ess-14f.4).
             observed_exprs[eq.lhs.name] = eq.rhs
         else
             # Algebraic constraint / unsupported equation form.
@@ -2849,7 +2895,15 @@ function _resolve_observed(obs::Dict{String,Expr})
     for _ in 1:(length(obs) + 1)
         any_change = false
         for (k, v) in resolved
-            fv = free_variables(v)
+            # `_referenced_var_names` (not `free_variables`) so a chain that runs
+            # THROUGH an arrayop/aggregate body is detected — a live-field geometry
+            # observed reads its upstream regrid output inside an arrayop, which
+            # `free_variables` treats as bound-away and would leave un-inlined
+            # (ess-14f.4). For a scalar value the two agree, so scalar observeds are
+            # byte-identical; only array-valued observeds gain transitive collapse.
+            # The `n in names` guard means only observed-named references trigger a
+            # rewrite, so the extra bound loop indices it surfaces are inert.
+            fv = _referenced_var_names(v)
             if any(n -> n in names, fv)
                 resolved[k] = _sub_preserving(v, resolved)
                 any_change = true
