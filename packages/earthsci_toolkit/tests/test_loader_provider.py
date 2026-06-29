@@ -305,3 +305,42 @@ def test_provider_array_identity_without_target_or_coords() -> None:
     # Target set but the native dataset exposes no coords → keep the raw array.
     out = _provider_array(_loader_field("u", "bspline"), native, object())
     assert np.array_equal(out, np.array([1.0, 2.0, 3.0, 4.0]))
+
+
+def test_provider_array_resolves_file_variable_band_name() -> None:
+    """Gap V: an EarthSciIO reader keys its NativeDataset by the loader's
+    ``file_variable`` (a GeoTIFF band ``"Band1"``), but the flattened
+    ``field.var`` is the model-facing semantic name (``"fuel_model"``). The
+    extraction must remap ``var -> file_variable`` to find the band."""
+    loader = SimpleNamespace(
+        temporal=None,
+        variables={"fuel_model": SimpleNamespace(file_variable="Band1")},
+    )
+    field = LoaderField(
+        name="LANDFIRE.raw.fuel_model", owner="LANDFIRE", subkey="raw",
+        var="fuel_model", loader=loader, cadence="const", regrid=None,
+    )
+    native = _NativeDataset({"Band1": _NativeField([[7.0, 8.0], [9.0, 10.0]], ("y", "x"))})
+    # No target → raw flatten, but the fuel_model → Band1 remap must still apply.
+    out = _provider_array(field, native, None)
+    assert np.array_equal(out, np.array([7.0, 8.0, 9.0, 10.0]))
+
+
+def test_provider_array_file_variable_matching_name_and_stub() -> None:
+    """When ``file_variable`` equals ``var`` (ERA5 ``"t"``), or the loader has no
+    variables mapping (a stub provider), extraction falls back to the semantic
+    ``var`` unchanged — the remap is a no-op."""
+    # Matching name: file_variable == var.
+    loader = SimpleNamespace(
+        temporal=None, variables={"t": SimpleNamespace(file_variable="t")}
+    )
+    field = LoaderField(
+        name="ERA5.pl.t", owner="ERA5", subkey="pl", var="t",
+        loader=loader, cadence="discrete", regrid=None,
+    )
+    native = _NativeDataset({"t": _NativeField([[1.0, 2.0]], ("y", "x"))})
+    assert np.array_equal(_provider_array(field, native, None), np.array([1.0, 2.0]))
+    # Stub loader (no .variables) → index by the semantic var.
+    native2 = _NativeDataset({"u": _NativeField([[5.0, 6.0]], ("y", "x"))})
+    assert np.array_equal(_provider_array(_loader_field("u", None), native2, None),
+                          np.array([5.0, 6.0]))

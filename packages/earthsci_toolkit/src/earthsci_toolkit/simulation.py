@@ -1882,15 +1882,42 @@ def _coerce_field_values(obj: Any) -> np.ndarray:
     return np.asarray(obj, dtype=float)
 
 
-def _extract_loader_var(native: Any, var: str) -> np.ndarray:
+def _loader_file_variable(field: "LoaderField") -> Optional[str]:
+    """The reader's on-disk / band key for ``field``, when it differs from ``var``.
+
+    EarthSciIO readers emit a ``NativeDataset`` keyed by ``file_variable`` — a
+    GeoTIFF band ``"Band1"``, a NetCDF short name ``"t"`` — declared per variable
+    on the loader. The flattened ``field.var`` is the model-facing *semantic*
+    name (``"fuel_model"``). Returns the declared ``file_variable`` when it
+    differs from ``field.var`` (so it must be remapped to index the native
+    dataset), else ``None`` (matching names, or a stub provider keyed by the
+    semantic name — no remapping).
+    """
+    loader = getattr(field, "loader", None)
+    variables = getattr(loader, "variables", None)
+    var = getattr(field, "var", None)
+    if isinstance(variables, dict):
+        decl = variables.get(var)
+        fv = getattr(decl, "file_variable", None) if decl is not None else None
+        if fv and str(fv) != var:
+            return str(fv)
+    return None
+
+
+def _extract_loader_var(native: Any, var: str, file_var: Optional[str] = None) -> np.ndarray:
     """Pull ``var``'s raw values from a provider's native dataset.
 
     Accepts a :class:`~earthsci_toolkit.data_loaders.grid.GridLoadResult` or an
     EarthSciIO ``NativeDataset`` (either exposes a ``.variables`` mapping), or a
-    bare array returned by a minimal stub provider.
+    bare array returned by a minimal stub provider. ``file_var`` is the reader's
+    on-disk key for the field (its ``file_variable``); when given and present it
+    indexes the dataset, since readers key output by the file/band name
+    (``"Band1"``) rather than the semantic ``var`` (``"fuel_model"``).
     """
     variables = getattr(native, "variables", None)
     if variables is not None:
+        if file_var is not None and file_var in variables:
+            return _coerce_field_values(variables[file_var])
         return _coerce_field_values(variables[var])
     return _coerce_field_values(native)
 
@@ -1919,7 +1946,7 @@ def _regrid_native_field(
         regrid_loader_field,
     )
 
-    values = _extract_loader_var(native, field.var)
+    values = _extract_loader_var(native, field.var, _loader_file_variable(field))
 
     def _pick(names) -> Optional[np.ndarray]:
         for n in names:
@@ -1962,7 +1989,7 @@ def _provider_array(field: LoaderField, native: Any, target: Any) -> np.ndarray:
             regridded = _regrid_native_field(field, native, target)
         if regridded is not None:
             return np.asarray(regridded, dtype=float).reshape(-1)
-    return _extract_loader_var(native, field.var).reshape(-1)
+    return _extract_loader_var(native, field.var, _loader_file_variable(field)).reshape(-1)
 
 
 def _regrid_loaded_field(
@@ -1984,7 +2011,9 @@ def _regrid_loaded_field(
     method = getattr(spec, "method", None) if spec is not None else None
     if not method:
         return None
-    arr = result.variables[field.var]
+    fvar = _loader_file_variable(field)
+    rvars = result.variables
+    arr = rvars[fvar] if (fvar is not None and fvar in rvars) else rvars[field.var]
     values = np.asarray(getattr(arr, "values", arr), dtype=float)
     ds = getattr(result, "dataset", None)
     src_lon, src_lat, lev_coord = extract_source_coords(ds, values.ndim)
