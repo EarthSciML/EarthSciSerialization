@@ -2004,21 +2004,23 @@ def _regrid_loaded_field(
 
 
 def _build_loader_target(flat: FlattenedSystem) -> Optional[Any]:
-    """Build the cached lon/lat target grid for loader regridding, or ``None``.
+    """Build the cached lon/lat target grid for loader regridding / URL bbox, or ``None``.
 
-    Only built when the system has a projected/spatial domain AND at least one
-    loader field requests a regrid method — otherwise the C1 raw-injection path
-    is used unchanged. A domain that cannot be turned into a grid (missing
-    spacing, unsupported projection) also yields ``None``.
+    Built whenever the system has a projected/spatial domain. Two consumers need
+    it: a loader that declares a regrid method (to land its field on the model
+    grid), AND a *static* loader (LANDFIRE/USGS) that needs the projected lon/lat
+    envelope to fill its ArcGIS ``{bbox…}`` URL placeholders (G1) — the latter
+    has no regrid method, so gating target construction on "a loader wants
+    regrid" left those URLs unfillable in the default-provider path. Building is
+    cheap and harmless when unused: the regrid step stays gated on a per-field
+    method (no method ⇒ raw injection), and the URL bbox substitution stays gated
+    on a ``{bbox}`` placeholder. A domain that cannot be turned into a grid
+    (missing spacing, unsupported projection) yields ``None``.
     """
     domain = getattr(flat, "domain", None)
     if domain is None:
         return None
-    wants_regrid = any(
-        getattr(getattr(f, "regrid", None), "method", None)
-        for f in flat.loader_fields
-    )
-    if not wants_regrid:
+    if not getattr(domain, "spatial", None):
         return None
     from .data_loaders.regrid_driver import RegridDriverError, build_target_grid
     from .data_loaders.reproject import ReprojectionError
