@@ -239,6 +239,51 @@ def test_expression_ic_2d_generality() -> None:
             )
 
 
+def test_expression_ic_seeds_discretized_makearray_storage() -> None:
+    """B2: a discretized makearray state is stored 1-based with a ghost-cell pad
+    per stencil-reached axis (the Godunov level-set reads ``psi[i+1]``, so a 3x3
+    grid is allocated 4x4). The expression IC must seed the LEADING grid block
+    and leave the ghost slots untouched — the same field the camp_fire level-set
+    previously had to seed by hand with a numeric 1-based IC."""
+    import earthsci_toolkit as et
+    from earthsci_toolkit.flatten import infer_variable_shapes
+    from earthsci_toolkit.simulation import _seed_expression_initial_conditions
+
+    flat = et.flatten(load(_two_d_field_fixture()))
+    state = next(iter(flat.state_variables.keys()))
+    assert infer_variable_shapes(flat)[state] == (3, 3)  # grid nodes
+
+    # Simulate the discretizer's high-end ghost pad: store the 3x3 grid as 4x4.
+    padded = {state: (4, 4)}
+    y0 = np.zeros(4 * 4)
+    layout = {state: slice(0, 16)}
+    _seed_expression_initial_conditions(y0, flat, layout, padded, [state])
+    seeded = y0.reshape(4, 4)
+
+    # psi(x, y) = x + 10*y over the 3-node grid x, y in {0, 0.5, 1.0}.
+    xs = np.array([0.0, 0.5, 1.0])
+    field = xs[:, None] + 10.0 * xs[None, :]
+    assert np.allclose(seeded[:3, :3], field)  # leading grid block seeded
+    assert np.allclose(seeded[3, :], 0.0)      # ghost row untouched
+    assert np.allclose(seeded[:, 3], 0.0)      # ghost column untouched
+
+
+def test_expression_ic_rejects_storage_smaller_than_grid() -> None:
+    """A state axis SHORTER than the grid is a genuine mismatch, not a ghost
+    pad, so it still raises — storage may exceed the grid, never fall short."""
+    import earthsci_toolkit as et
+    from earthsci_toolkit.numpy_interpreter import NumpyInterpreterError
+    from earthsci_toolkit.simulation import _seed_expression_initial_conditions
+
+    flat = et.flatten(load(_two_d_field_fixture()))
+    state = next(iter(flat.state_variables.keys()))
+    shapes = {state: (2, 3)}  # x-axis shorter than the 3-node grid
+    y0 = np.zeros(2 * 3)
+    layout = {state: slice(0, 6)}
+    with pytest.raises(NumpyInterpreterError):
+        _seed_expression_initial_conditions(y0, flat, layout, shapes, [state])
+
+
 def test_explicit_initial_conditions_override_expression() -> None:
     """An explicit per-element initial_conditions value wins over the domain
     expression IC; untouched elements still come from the expression."""

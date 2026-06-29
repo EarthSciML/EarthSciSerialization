@@ -928,22 +928,34 @@ def _seed_expression_initial_conditions(
             )
 
         shape = tuple(shapes.get(resolved, ()))
-        # Map the variable's array axes to spatial dimensions positionally,
-        # verifying each axis size matches the grid. Unambiguous for the
-        # supported case: a field declared over the leading spatial dims in
-        # domain order (the camp_fire ignition front and the conformance
-        # golden). Mismatches surface loudly rather than silently miscompute.
-        if len(shape) > len(dim_names) or list(shape) != dim_sizes[: len(shape)]:
+        grid_sizes = dim_sizes[: len(shape)]
+        # Map the variable's array axes to spatial dimensions positionally. Each
+        # axis must hold AT LEAST the grid's node count; it may hold MORE when
+        # the state is a discretized makearray (B2): such a state is allocated
+        # 1-based with a ghost-cell pad per stencil-reached axis (the Godunov
+        # level-set reads psi[i+1]/psi[i-1], so a 19x21 grid is stored 20x22).
+        # Physical nodes occupy the LEADING grid-sized block per axis (the
+        # makearray write region 1..n); the trailing ghost slots are filled by
+        # the boundary condition on every RHS eval, so the IC is evaluated on
+        # the grid and written into that leading block rather than broadcast
+        # across the padded storage. An axis SHORTER than the grid, or a rank
+        # above the domain's, is a genuine mismatch and still surfaces loudly.
+        if len(shape) > len(dim_names) or any(
+            s < g for s, g in zip(shape, grid_sizes)
+        ):
             raise NumpyInterpreterError(
                 f"expression initial condition for {var!r}: variable shape "
                 f"{shape} is not consistent with the spatial grid "
                 f"{dict(zip(dim_names, dim_sizes))} (axes map positionally to "
-                f"spatial dimensions {dim_names})"
+                f"spatial dimensions {dim_names}; storage may exceed the grid "
+                f"only by a discretization ghost pad, never fall short of it)"
             )
 
         used_dims = list(dim_names[: len(shape)]) if shape else dim_names[:1]
         used_coords = [coords[d] for d in used_dims]
         if shape:
+            # Mesh over the GRID nodes (not the padded storage) so the field is
+            # evaluated only where physical nodes live.
             meshes = np.meshgrid(*used_coords, indexing="ij")
         else:
             # 0-D variable (meaningless per spec): evaluate at the first node.
@@ -960,10 +972,19 @@ def _seed_expression_initial_conditions(
             locals=locals_env,
         )
         field = np.asarray(eval_expr(expr, ctx), dtype=float)
-        # A constant expression (no free spatial symbol) evaluates to a scalar;
-        # broadcast it across the whole field.
-        target = np.broadcast_to(field, shape) if shape else field
-        y0[state_layout[resolved]] = np.asarray(target, dtype=float).reshape(-1, order="C")
+        if shape:
+            # Write the grid-shaped field (a constant expression broadcasts) into
+            # the leading grid block of the variable's storage, preserving any
+            # existing ghost-slot values (zero at seed time; the BC overwrites
+            # them each RHS eval). Identity when storage == grid (non-discretized
+            # states: the conformance golden and the camp_fire ignition front).
+            sl = state_layout[resolved]
+            full = np.array(y0[sl], dtype=float).reshape(shape)
+            grid_block = tuple(slice(0, g) for g in grid_sizes)
+            full[grid_block] = field
+            y0[sl] = full.reshape(-1, order="C")
+        else:
+            y0[state_layout[resolved]] = np.asarray(field, dtype=float).reshape(-1, order="C")
 
 
 def _apply_initial_conditions(
