@@ -160,6 +160,286 @@ function _materialize_geometry_rings(equations, const_arrays_kw::AbstractDict,
     return rings, extents
 end
 
+# ============================================================
+# M4+ : intersect_polygon RANGED over a candidate-pair set (declarative A_ij).
+# ============================================================
+# The single-clip M4 kernel above materializes ONE intersect_polygon ring from
+# whole-array const operands. A conservative-regrid `A_ij` instead needs the clip
+# RANGED over a candidate-pair set: `clip[p,w,c] = intersect_polygon(src[p],
+# tgt[p])[w,c]`, then `area[p] = polygon_area(clip[p])` (an aggregate), then the
+# matrix scatter. These geometry-derived ARRAY observeds are pure functions of the
+# const polygon inputs (no state, no time), so — exactly like the single clip
+# (RFC §8.1) and the value-invention skolems (§6.1) — they are evaluated ONCE at
+# setup into const_arrays and dropped from the ODE. `_geometry_setup_vars` finds
+# them; `_materialize_geometry_setup` evaluates them.
+
+# Extent of an IndexSetRef range against the model's index sets + derived extents.
+function _geo_index_extent(ref, index_sets, derived_extents)
+    name = ref isa IndexSetRef ? ref.from : String(ref)
+    haskey(derived_extents, name) && return derived_extents[name]
+    s = index_sets === nothing ? nothing : get(index_sets, name, nothing)
+    sz = s === nothing ? nothing :
+         hasproperty(s, :size) ? getproperty(s, :size) :
+         (s isa AbstractDict ? get(s, "size", get(s, :size, nothing)) : nothing)
+    sz === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+        "cannot resolve extent of index set '$(name)' for setup-time geometry"))
+    return Int(sz)
+end
+
+# Apply a scalar op at setup time (the polygon-area / overlap FAQ vocabulary).
+function _geo_apply_scalar(op::AbstractString, a::Vector{Float64})
+    op == "+"     && return sum(a)
+    op == "*"     && return prod(a)
+    op == "-"     && return length(a) == 1 ? -a[1] : a[1] - sum(@view a[2:end])
+    op == "/"     && return a[1] / a[2]
+    op == "^"     && return a[1] ^ a[2]
+    op == "max"   && return maximum(a)
+    op == "min"   && return minimum(a)
+    op == "sqrt"  && return sqrt(a[1])
+    op == "abs"   && return abs(a[1])
+    op == "cos"   && return cos(a[1])
+    op == "sin"   && return sin(a[1])
+    op == "atan2" && return atan(a[1], a[2])
+    op == "ifelse" && return a[1] != 0.0 ? a[2] : a[3]
+    throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+        "unsupported op '$(op)' in setup-time geometry"))
+end
+
+# Setup-time evaluator for the geometry chain. Walks an expression to a Float64
+# (or, for `index` of a multi-dim array with FEWER indices, a slice array) against
+# `env` (name → Julia value: const arrays + scalar params + materialized geometry)
+# and `idx_env` (loop var → Int). Covers exactly the ops the polygon-area /
+# overlap-join FAQ uses; anything else is an explicit setup-geometry error.
+function _geo_eval(expr, env, idx_env, index_sets, derived_extents)
+    if expr isa NumExpr
+        return expr.value
+    elseif expr isa IntExpr
+        return Float64(expr.value)
+    elseif expr isa VarExpr
+        haskey(idx_env, expr.name) && return Float64(idx_env[expr.name])
+        haskey(env, expr.name) && return env[expr.name]
+        throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+            "unbound name '$(expr.name)' in setup-time geometry"))
+    elseif expr isa OpExpr
+        op = expr.op
+        if op == "index"
+            arr = _geo_eval(expr.args[1], env, idx_env, index_sets, derived_extents)
+            arr isa AbstractArray || throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+                "index of a non-array in setup-time geometry"))
+            idxs = Int[Int(round(_geo_eval(a, env, idx_env, index_sets, derived_extents)))
+                       for a in expr.args[2:end]]
+            if length(idxs) == ndims(arr)
+                return arr[idxs...]
+            else
+                colons = ntuple(_ -> Colon(), ndims(arr) - length(idxs))
+                return Array(arr[idxs..., colons...])   # partial index → slice
+            end
+        elseif op == "intersect_polygon"
+            a = _geo_eval(expr.args[1], env, idx_env, index_sets, derived_extents)
+            b = _geo_eval(expr.args[2], env, idx_env, index_sets, derived_extents)
+            expr.manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
+                "intersect_polygon requires a manifold"))
+            return close_ring(intersect_polygon(a, b, expr.manifold))
+        elseif op == "aggregate" || (op == "arrayop" && isempty(expr.output_idx))
+            # Scalar reduction over the declared ranges (sum_product / "+" both sum
+            # the body term — the only semirings the area / overlap FAQ uses here).
+            loopvars = collect(keys(expr.ranges))
+            exts = Int[_geo_index_extent(expr.ranges[v], index_sets, derived_extents)
+                       for v in loopvars]
+            acc = 0.0
+            for tup in Iterators.product((1:e for e in exts)...)
+                ie = copy(idx_env)
+                for (lv, iv) in zip(loopvars, tup); ie[lv] = iv; end
+                acc += _geo_eval(expr.expr_body, env, ie, index_sets, derived_extents)
+            end
+            return acc
+        else
+            vals = Float64[_geo_eval(x, env, idx_env, index_sets, derived_extents)
+                           for x in expr.args]
+            return _geo_apply_scalar(op, vals)
+        end
+    else
+        throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+            "unsupported expression $(typeof(expr)) in setup-time geometry"))
+    end
+end
+
+# A clip ranged over an outer index set: an `arrayop` whose body is
+# `index(intersect_polygon(src[outer], tgt[outer]), ring, coord)`.
+_is_ranged_clip(rhs) =
+    rhs isa OpExpr && rhs.op == "arrayop" && rhs.expr_body isa OpExpr &&
+    (rhs.expr_body::OpExpr).op == "index" &&
+    length((rhs.expr_body::OpExpr).args) >= 1 &&
+    (rhs.expr_body::OpExpr).args[1] isa OpExpr &&
+    ((rhs.expr_body::OpExpr).args[1]::OpExpr).op == "intersect_polygon"
+
+# Materialize a per-outer-cell family of clip rings, padded to the max distinct-
+# vertex count (the pad repeats the closing vertex so the shoelace pad-edges add
+# zero area), into one dense const array `[outer…, maxn+1, coord]`; record the
+# clip_ring extent so the polygon_area FAQ ranges `[1, maxn]` over it.
+function _materialize_ranged_clip(arrayop, env, index_sets, derived_extents)
+    body  = arrayop.expr_body::OpExpr          # index(intersect_polygon(...), w, c)
+    ipoly = body.args[1]::OpExpr
+    ringvar  = (body.args[2]::VarExpr).name
+    coordvar = (body.args[3]::VarExpr).name
+    outer = String[v for v in arrayop.output_idx if v != ringvar && v != coordvar]
+    outer_ext = Int[_geo_index_extent(arrayop.ranges[v], index_sets, derived_extents)
+                    for v in outer]
+    coord_ext = _geo_index_extent(arrayop.ranges[coordvar], index_sets, derived_extents)
+    manifold = ipoly.manifold
+    manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
+        "ranged intersect_polygon requires a manifold"))
+    rings = Dict{Tuple,Matrix{Float64}}()
+    maxn = 0
+    for tup in Iterators.product((1:e for e in outer_ext)...)
+        ie = Dict{String,Any}(zip(outer, tup))
+        A = _geo_eval(ipoly.args[1], env, ie, index_sets, derived_extents)
+        B = _geo_eval(ipoly.args[2], env, ie, index_sets, derived_extents)
+        # A non-overlapping pair yields a degenerate (< 3 vertex) clip → a zero-area
+        # cell; the matrix is sparse over non-candidate pairs and that is normal,
+        # not an error (RFC §5.8: unmatched rows add the additive identity).
+        ring = try
+            r = intersect_polygon(A, B, manifold)
+            size(r, 1) >= 3 ? close_ring(r) : zeros(Float64, 0, coord_ext)
+        catch err
+            err isa GeometryError ? zeros(Float64, 0, coord_ext) : rethrow()
+        end
+        rings[Tuple(tup)] = ring
+        maxn = max(maxn, size(ring, 1) - 1)
+    end
+    maxn = max(maxn, 0)
+    clip = zeros(Float64, (outer_ext..., maxn + 1, coord_ext)...)
+    for (tup, ring) in rings
+        nrows = size(ring, 1)
+        nrows == 0 && continue          # empty overlap → cell stays zero (area 0)
+        for w in 1:(maxn + 1)
+            sr = w <= nrows ? w : 1     # pad rows repeat the closing vertex (row 1)
+            for c in 1:coord_ext
+                clip[tup..., w, c] = ring[sr, c]
+            end
+        end
+    end
+    ringset = arrayop.ranges[ringvar] isa IndexSetRef ?
+              (arrayop.ranges[ringvar]::IndexSetRef).from : ringvar
+    derived_extents[ringset] = maxn
+    ipoly.id === nothing || (derived_extents[ipoly.id] = maxn)
+    return clip
+end
+
+# Materialize a geometry-derived array observed (e.g. `area[p]`, `A_ij[i,j]`) by
+# evaluating its `arrayop` body once per output cell against the (already
+# materialized) geometry in `env`.
+function _materialize_geom_array(arrayop, env, index_sets, derived_extents)
+    out  = String[v for v in arrayop.output_idx]
+    exts = Int[_geo_index_extent(arrayop.ranges[v], index_sets, derived_extents) for v in out]
+    arr  = zeros(Float64, exts...)
+    for tup in Iterators.product((1:e for e in exts)...)
+        ie = Dict{String,Any}(zip(out, tup))
+        arr[tup...] = _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents)
+    end
+    return arr
+end
+
+# Geometry-derived ARRAY observeds to materialize at setup: those whose defining
+# RHS contains an intersect_polygon (ranged clips), plus the closure of array
+# observeds that depend on them WITHOUT touching a state variable. Single direct
+# clips (in `geom_ring_vars`) keep the existing 2-D ring path. Returns the set and
+# the name → RHS map.
+# Every VarExpr name appearing anywhere in `expr` (args / arrayop-aggregate body /
+# bounds / makearray values). Unlike `free_variables`, this does NOT treat an
+# arrayop/aggregate as binding its references away — we need the array vars an
+# expression READS (intersected with declared variable names by the caller, which
+# drops bound loop indices). Used for the setup-geometry dependency closure.
+function _referenced_var_names(expr, acc::Set{String}=Set{String}())
+    if expr isa VarExpr
+        push!(acc, expr.name)
+    elseif expr isa OpExpr
+        for a in expr.args
+            _referenced_var_names(a, acc)
+        end
+        expr.expr_body !== nothing && _referenced_var_names(expr.expr_body, acc)
+        expr.lower !== nothing && _referenced_var_names(expr.lower, acc)
+        expr.upper !== nothing && _referenced_var_names(expr.upper, acc)
+        if expr.values !== nothing
+            for v in expr.values
+                _referenced_var_names(v, acc)
+            end
+        end
+    end
+    return acc
+end
+
+function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names)
+    defs = Dict{String,Expr}()
+    for eq in equations
+        eq.lhs isa VarExpr || continue
+        defs[(eq.lhs::VarExpr).name] = eq.rhs
+    end
+    is_arr_obs(n) = haskey(model.variables, n) &&
+        model.variables[n].type == ObservedVariable &&
+        _is_array_shape(model.variables[n].shape)
+    setup = Set{String}()
+    for (n, _) in defs
+        (is_arr_obs(n) && !(n in geom_ring_vars) && haskey(defs, n)) || continue
+        _expr_has_intersect_polygon(defs[n]) && push!(setup, n)
+    end
+    mvars = Set{String}(keys(model.variables))
+    changed = true
+    while changed
+        changed = false
+        for (n, rhs) in defs
+            (is_arr_obs(n) && !(n in setup) && !(n in geom_ring_vars)) || continue
+            refs = intersect(_referenced_var_names(rhs), mvars)
+            if any(f -> (f in setup) || (f in geom_ring_vars), refs) &&
+               !any(f -> f in state_var_names, refs)
+                push!(setup, n); changed = true
+            end
+        end
+    end
+    return setup, defs
+end
+
+# Dependency order over the setup vars (clip before area before A_ij).
+function _geom_setup_order(setup, defs)
+    order = String[]; done = Set{String}()
+    while length(order) < length(setup)
+        progressed = false
+        for n in setup
+            n in done && continue
+            if all(d -> d in done, intersect(_referenced_var_names(defs[n]), setup))
+                push!(order, n); push!(done, n); progressed = true
+            end
+        end
+        progressed || throw(TreeWalkError("E_TREEWALK_GEOMETRY_SETUP",
+            "cyclic setup-time geometry dependency"))
+    end
+    return order
+end
+
+# Evaluate the geometry-setup vars in dependency order into const arrays.
+function _materialize_geometry_setup(setup, defs, model, const_arrays_kw,
+                                     index_sets, derived_extents)
+    out = Dict{String,AbstractArray{Float64}}()
+    isempty(setup) && return out
+    env = Dict{String,Any}()
+    for (k, v) in const_arrays_kw
+        env[String(k)] = v isa AbstractArray ? Array{Float64}(v) : v
+    end
+    for (n, v) in model.variables
+        v.type == ParameterVariable && !_is_array_shape(v.shape) && v.default !== nothing &&
+            (env[n] = Float64(v.default))
+    end
+    for n in _geom_setup_order(setup, defs)
+        rhs = defs[n]
+        arr = _is_ranged_clip(rhs) ?
+              _materialize_ranged_clip(rhs, env, index_sets, derived_extents) :
+              _materialize_geom_array(rhs, env, index_sets, derived_extents)
+        env[n] = arr
+        out[n] = arr
+    end
+    return out
+end
+
 const _EMPTY_DERIVED_EXTENTS = Dict{String,Int}()
 
 # An explicit empty shape (`[]`, a rank-0 declaration) is scalar, not an array;
@@ -303,6 +583,17 @@ function _build_evaluator_impl(model::Model;
             end
         end
     end
+    # Geometry-derived ARRAY observeds (ranged clips, per-pair areas, A_ij) are
+    # materialized at setup (below) and excluded from the ODE partition / observed
+    # substitution — they are build-once functions of the const polygon inputs.
+    _geom_setup_vars = Set{String}()
+    _geom_defs = Dict{String,Expr}()
+    if _has_geometry
+        _pre_state_names = Set{String}(n for (n, v) in model.variables
+                                       if v.type == StateVariable && !(n in _vi_vars))
+        _geom_setup_vars, _geom_defs =
+            _geometry_setup_vars(model, _model_equations, _geom_ring_vars, _pre_state_names)
+    end
 
     # ---- Partition variables ----
     scalar_state_names = String[]
@@ -314,6 +605,8 @@ function _build_evaluator_impl(model::Model;
         # setup (RFC §6.1) and never enter the ODE — drop them from every
         # partition, exactly as a geometry clip-ring observed is not a scalar.
         name in _vi_vars && continue
+        # Geometry-setup vars are materialized at setup; not an ODE partition member.
+        name in _geom_setup_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
@@ -360,6 +653,14 @@ function _build_evaluator_impl(model::Model;
         _geom_rings, geom_extents =
             _materialize_geometry_rings(_model_equations, const_arrays, _geom_ring_vars)
         merge!(_derived_extents, geom_extents)
+    end
+    # M4+: materialize the ranged-clip / per-pair-area / A_ij geometry into const
+    # arrays (and record the per-pair clip_ring extent) BEFORE index-set ranges are
+    # resolved, so the polygon_area FAQ's `clip_ring` range lowers to `[1, maxn]`.
+    _geom_setup_arrays = Dict{String,AbstractArray{Float64}}()
+    if !isempty(_geom_setup_vars)
+        _geom_setup_arrays = _materialize_geometry_setup(_geom_setup_vars, _geom_defs,
+            model, const_arrays, model.index_sets, _derived_extents)
     end
     # Value-invention derived index sets (skolem/distinct/rank) materialized via
     # the relational engine in the AbstractDict front-door (RFC §6.1 / §5.5):
@@ -507,9 +808,11 @@ function _build_evaluator_impl(model::Model;
     observed_exprs = Dict{String,Expr}()
     derivative_eqs = Equation[]
     for eq in equations
-        if eq.lhs isa VarExpr && (eq.lhs::VarExpr).name in _geom_ring_vars
-            # intersect_polygon clip ring — materialized into a const_array at
-            # setup (RFC §8.1); it is not a scalar observed and produces no ODE.
+        if eq.lhs isa VarExpr && ((eq.lhs::VarExpr).name in _geom_ring_vars ||
+                                  (eq.lhs::VarExpr).name in _geom_setup_vars)
+            # intersect_polygon clip ring / ranged-clip / per-pair area / A_ij —
+            # materialized into a const_array at setup (RFC §8.1, §6.1); not a
+            # scalar observed and produces no ODE.
             continue
         elseif _is_scalar_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
@@ -550,6 +853,11 @@ function _build_evaluator_impl(model::Model;
     # path. The CLOSED ring (n+1 rows) makes the wrap edge an ordinary `v+1` lookup.
     for (k, ring) in _geom_rings
         _const_arrays[k] = ring
+    end
+    # M4+: register each setup-materialized geometry array (per-pair area, A_ij, …)
+    # so the ODE body reads it via `index(area, p)` / `index(A_ij, i, j)`.
+    for (k, arr) in _geom_setup_arrays
+        _const_arrays[k] = arr
     end
 
     # ---- Live forcing buffers (ess-14f.3, JL-J0 — the one engine touch) ----
