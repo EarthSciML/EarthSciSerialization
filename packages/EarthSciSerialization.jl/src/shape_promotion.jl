@@ -162,6 +162,70 @@ function algebraic_states_to_observeds(flat::FlattenedSystem)::FlattenedSystem
 end
 
 """
+    inline_elementwise_array_observeds(flat::FlattenedSystem) -> FlattenedSystem
+
+Substitute away every ARRAY-shaped observed that is defined by a BARE *elementwise*
+equation (`v = expr` where `expr` is not an `arrayop`/`aggregate`/`makearray`), folding
+it into the equations that read it and dropping it from the system.
+
+The tree-walk evaluator inlines an array observed only when it is defined by an
+`arrayop` (per-cell index beta-reduction) or is a geometry clip ring; an array observed
+authored as a plain elementwise expression over the spatial field (a level-set's
+`grad_mag = sqrt(psi_x^2 + psi_y^2)`, `U_n = …`, `S_n = R_0·(1+phi_W+phi_S)`, …) has no
+such per-cell form and is otherwise rejected. Rather than require every such component
+to be re-authored as `arrayop`s, this pass performs the feed-forward topological
+substitution a driver would otherwise do by hand (the level-set fold), in dependency
+order, so the spatial state equation `D(psi,t) = …` carries the fully-inlined RHS and
+`discretize` then lowers its `grad`s. Genuine reductions/gathers (`arrayop`, `aggregate`,
+`makearray`) are left intact — they ARE inlinable and define their own indexing. A no-op
+when no elementwise array observed exists. Returns a new system; the input is untouched.
+"""
+function inline_elementwise_array_observeds(flat::FlattenedSystem)::FlattenedSystem
+    is_array_obs(nm) = haskey(flat.observed_variables, nm) &&
+        (v = flat.observed_variables[nm]; v.shape !== nothing && !isempty(v.shape))
+    is_elementwise(rhs) = !(rhs isa OpExpr &&
+        ((rhs::OpExpr).op == "arrayop" || (rhs::OpExpr).op == "aggregate" ||
+         (rhs::OpExpr).op == "makearray"))
+    targets = Dict{String,EarthSciSerialization.Expr}()
+    for eq in flat.equations
+        eq.lhs isa VarExpr || continue
+        nm = (eq.lhs::VarExpr).name
+        (is_array_obs(nm) && is_elementwise(eq.rhs)) && (targets[nm] = eq.rhs)
+    end
+    isempty(targets) && return flat
+
+    # Dependency order (the chain is feed-forward; a cycle is a real authoring error).
+    order = String[]; done = Set{String}()
+    while length(order) < length(targets)
+        progressed = false
+        for (nm, rhs) in targets
+            nm in done && continue
+            if all(d -> d in done, intersect(free_variables(rhs), keys(targets)))
+                push!(order, nm); push!(done, nm); progressed = true
+            end
+        end
+        progressed || throw(ArgumentError(
+            "inline_elementwise_array_observeds: cyclic elementwise array-observed dependency"))
+    end
+    resolved = Dict{String,EarthSciSerialization.Expr}()
+    for nm in order
+        resolved[nm] = substitute(targets[nm], resolved)
+    end
+
+    new_obs = OrderedDict{String,ModelVariable}(
+        k => v for (k, v) in flat.observed_variables if !haskey(targets, k))
+    new_eqs = Equation[]
+    for eq in flat.equations
+        (eq.lhs isa VarExpr && haskey(targets, (eq.lhs::VarExpr).name)) && continue  # drop the def
+        push!(new_eqs, Equation(eq.lhs, substitute(eq.rhs, resolved);
+                                _comment=eq._comment, region=eq.region))
+    end
+    return FlattenedSystem(flat.independent_variables, flat.state_variables, flat.parameters,
+                           new_obs, new_eqs, flat.continuous_events, flat.discrete_events,
+                           flat.domain, flat.metadata, flat.index_sets, flat.function_tables)
+end
+
+"""
     promote_downstream_shapes(flat::FlattenedSystem) -> FlattenedSystem
 
 Promote every variable whose defining algebraic equation has an inferred ARRAY

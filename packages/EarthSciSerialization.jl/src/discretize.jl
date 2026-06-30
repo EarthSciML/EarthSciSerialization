@@ -121,7 +121,8 @@ function discretize(esm::AbstractDict;
 end
 
 """
-    discretize(flat::FlattenedSystem; grids=nothing, rules=nothing, kwargs...)
+    discretize(flat::FlattenedSystem; grids=nothing, rules=nothing,
+               promote=false, spatial_loops=["i","j"], kwargs...)
 
 Discretize a `FlattenedSystem` directly: reconstitute it into a single-model
 native document (`flattened_to_esm`), splice in any caller-supplied `grids` and
@@ -130,11 +131,38 @@ stencil rules the flattened IR does not itself carry), then run the dict
 discretizer. The returned document is ready for `build_evaluator`. A mixed
 system — spatial PDE + 0-D scalar physics + array regrid — passes its
 non-spatial equations through unchanged while the spatial ones are lowered.
+
+With `promote=true` the whole monolithic lowering is applied for you, so a coupled
+system authored scalar/per-component (a spatial level-set fed by a scalar physics
+chain fed by array forcing) runs in ONE evaluator with no caller-side staging:
+
+  1. `inline_elementwise_array_observeds` — fold the spatial component's elementwise
+     array observeds (`grad_mag`, `U_n`, `S_n`, …) into the state equation,
+  2. `algebraic_states_to_observeds` — reclassify DAE algebraic-state physics,
+  3. `promote_downstream_shapes` — lift the scalar physics chain to the grid shape,
+  4. the dict discretizer (grad stencils, etc.),
+  5. `index_promoted_refs!` — index the now-array forcing/physics per cell in the
+     lowered state equation, using `spatial_loops` (the grad-rule grid loops).
+
+`promote=false` (default) preserves the original passthrough behavior exactly.
 """
 function discretize(flat::FlattenedSystem;
                     grids::Union{AbstractDict,Nothing}=nothing,
                     rules::Union{AbstractVector,Nothing}=nothing,
+                    promote::Bool=false,
+                    spatial_loops::Vector{String}=["i", "j"],
                     kwargs...)
+    arrnames = Set{String}()
+    if promote
+        flat = inline_elementwise_array_observeds(flat)
+        flat = algebraic_states_to_observeds(flat)
+        flat = promote_downstream_shapes(flat)
+        for part in (flat.parameters, flat.observed_variables)
+            for (k, v) in part
+                v.shape === nothing || isempty(v.shape) || push!(arrnames, k)
+            end
+        end
+    end
     doc = flattened_to_esm(flat)
     if grids !== nothing
         doc["grids"] = Dict{String,Any}(String(k) => v for (k, v) in grids)
@@ -150,7 +178,9 @@ function discretize(flat::FlattenedSystem;
     if rules !== nothing
         doc["rules"] = collect(Any, rules)
     end
-    return discretize(doc; kwargs...)
+    disc = discretize(doc; kwargs...)
+    promote && index_promoted_refs!(disc, arrnames; spatial_loops=spatial_loops)
+    return disc
 end
 
 # Default `dae_support` honors the `ESM_DAE_SUPPORT` env var (RFC §12 says
