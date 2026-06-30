@@ -251,6 +251,49 @@ pub fn compute_stoichiometric_matrix(reaction_system_str: &str) -> Result<JsValu
     }
 }
 
+/// Introspect the **flattened** simulation inputs of an `.esm` file (gt-5ws).
+///
+/// Runs the same `flatten` pass [`simulate`] uses, then reports the exact
+/// parameter and state names it will accept — already namespaced — together
+/// with their defaults and units, plus the system's independent variables. Use
+/// this to build a Run UI without guessing the flattened names: the keys
+/// returned here are exactly the keys to pass back in `params` / `ic`.
+///
+/// Returns `{ parameters: Var[], states: Var[], independentVariables: string[] }`
+/// where `Var = { name: string, default: number | null, units: string | null }`.
+/// A system whose `independentVariables` is not `["t"]` is spatial/PDE and runs
+/// on the native backend, not in the browser.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn simulate_inputs(json_str: &str) -> Result<JsValue, JsValue> {
+    use crate::types::ModelVariable;
+    use indexmap::IndexMap;
+
+    let esm_file =
+        rust_load(json_str).map_err(|e| JsValue::from_str(&format!("Parse error: {e}")))?;
+    let flat =
+        crate::flatten(&esm_file).map_err(|e| JsValue::from_str(&format!("Flatten error: {e}")))?;
+
+    let to_vars = |vars: &IndexMap<String, ModelVariable>| -> Vec<serde_json::Value> {
+        vars.iter()
+            .map(|(name, mv)| {
+                serde_json::json!({ "name": name, "default": mv.default, "units": mv.units })
+            })
+            .collect()
+    };
+
+    let out = serde_json::json!({
+        "parameters": to_vars(&flat.parameters),
+        "states": to_vars(&flat.state_variables),
+        "independentVariables": flat.independent_variables,
+    });
+
+    use serde::Serialize;
+    let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+    out.serialize(&serializer)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {e}")))
+}
+
 /// Run an ODE simulation in the browser (WASM version, gt-5ws / spike S1).
 ///
 /// Flattens and solves the `.esm` file through diffsol's Faer backend, entirely
