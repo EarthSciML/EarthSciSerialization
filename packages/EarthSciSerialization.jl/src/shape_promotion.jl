@@ -88,14 +88,36 @@ end
 
 # Wrap a (formerly scalar) defining expression in an arrayop producing `shape`.
 # Loop vars are fresh simple names (`_p0`, `_p1`, …) — NOT the index-set names,
-# which may be dotted/namespaced — each ranging over the corresponding set.
+# which may be dotted/namespaced. A shape axis that names a declared index set
+# ranges over it (`{from: …}`); one that names a grid/domain dimension ranges over
+# a dense `[1, size]` (grid dims are global, not index sets).
 function _lift_to_arrayop(expr::EarthSciSerialization.Expr, shape::Vector{String},
-                          arrayvars::Set{String})::OpExpr
+                          arrayvars::Set{String}, index_sets, dim_sizes::Dict{String,Int})::OpExpr
     loops = String["_p$(i-1)" for i in 1:length(shape)]
-    ranges = Dict{String,Any}(loops[i] => IndexSetRef(shape[i]) for i in eachindex(shape))
+    ranges = Dict{String,Any}()
+    for i in eachindex(shape)
+        s = shape[i]
+        ranges[loops[i]] = haskey(index_sets, s) ? IndexSetRef(s) :
+            (haskey(dim_sizes, s) ? Any[1, dim_sizes[s]] : IndexSetRef(s))
+    end
     body = _index_array_leaves(expr, arrayvars, loops)
     return OpExpr("arrayop", EarthSciSerialization.Expr[];
                   output_idx=Any[l for l in loops], ranges=ranges, expr_body=body)
+end
+
+# Grid/domain dimension → cell count, from the flattened domain's spatial spec.
+function _domain_dim_sizes(flat::FlattenedSystem)::Dict{String,Int}
+    sizes = Dict{String,Int}()
+    flat.domain === nothing && return sizes
+    flat.domain.spatial === nothing && return sizes
+    for (dim, spec) in flat.domain.spatial
+        spec isa AbstractDict || continue
+        (haskey(spec, "min") && haskey(spec, "max") && haskey(spec, "grid_spacing")) || continue
+        n = Int(round((Float64(spec["max"]) - Float64(spec["min"])) /
+                      Float64(spec["grid_spacing"]))) + 1
+        sizes[string(dim)] = n
+    end
+    return sizes
 end
 
 """
@@ -148,6 +170,7 @@ function promote_downstream_shapes(flat::FlattenedSystem)::FlattenedSystem
 
     # The set of variables that are now array-shaped (for leaf indexing).
     arrayvars = Set{String}(k for (k, s) in shapes if !isempty(s))
+    dim_sizes = _domain_dim_sizes(flat)
 
     # Rebuild variable partitions with promoted shapes.
     function promote_partition(part)
@@ -175,8 +198,9 @@ function promote_downstream_shapes(flat::FlattenedSystem)::FlattenedSystem
            haskey(defs, (eq.lhs::VarExpr).name) &&
            (flat_was_scalar(flat, (eq.lhs::VarExpr).name))
             name = (eq.lhs::VarExpr).name
-            push!(new_eqs, Equation(eq.lhs, _lift_to_arrayop(eq.rhs, shapes[name], arrayvars);
-                                    _comment=eq._comment, region=eq.region))
+            push!(new_eqs, Equation(eq.lhs,
+                _lift_to_arrayop(eq.rhs, shapes[name], arrayvars, flat.index_sets, dim_sizes);
+                _comment=eq._comment, region=eq.region))
         else
             push!(new_eqs, eq)
         end
@@ -186,6 +210,91 @@ function promote_downstream_shapes(flat::FlattenedSystem)::FlattenedSystem
                            new_observeds, new_eqs, flat.continuous_events,
                            flat.discrete_events, flat.domain, flat.metadata,
                            flat.index_sets, flat.function_tables)
+end
+
+"""
+    promoted_array_names(flat, promoted) -> Set{String}
+
+The names of variables that `promote_downstream_shapes` turned from scalar into an
+array shape — i.e. those whose shape grew. Useful to drive `index_promoted_refs!`
+on a discretized document. `flat` is the ORIGINAL system, `promoted` the result.
+"""
+function promoted_array_names(flat::FlattenedSystem, promoted::FlattenedSystem)::Set{String}
+    out = Set{String}()
+    for part in (:state_variables, :parameters, :observed_variables)
+        before = getfield(flat, part); after = getfield(promoted, part)
+        for (k, v) in after
+            (v.shape === nothing || isempty(v.shape)) && continue
+            b = get(before, k, nothing)
+            (b !== nothing && (b.shape === nothing || isempty(b.shape))) && push!(out, k)
+        end
+    end
+    return out
+end
+
+"""
+    index_promoted_refs!(doc, arrayvars; spatial_loops=["i","j"]) -> doc
+
+Post-discretize pass: replace a BARE reference to a promoted array variable with
+`index(var, <loops>)`, so the evaluator's index beta-reduction collapses it to the
+var's per-cell value. Inside a nested `arrayop` the loops are its own `output_idx`;
+in the spatial state equation (`D(psi,t) = expr(i,j)`, which `discretize` lowers
+with the grad-rule grid loops — only AFTER `promote_downstream_shapes`) the loops
+are `spatial_loops`. Mutates and returns the native `doc`. This generalizes the
+driver's hand `couple_fields` bare→index rewrite.
+"""
+function index_promoted_refs!(doc::AbstractDict, arrayvars;
+                              spatial_loops::Vector{String}=["i","j"])::AbstractDict
+    av = Set{String}(String(x) for x in arrayvars)
+    isempty(av) && return doc
+    models = get(doc, "models", nothing)
+    models isa AbstractDict || return doc
+    for (_, m) in models
+        eqs = get(m, "equations", nothing)
+        eqs isa AbstractVector || continue
+        for eq in eqs
+            haskey(eq, "rhs") && (eq["rhs"] = _index_bare(eq["rhs"], av, spatial_loops))
+        end
+    end
+    return doc
+end
+
+# Single loop-tracking walk: `loops` is the iteration context for bare promoted
+# refs. An `arrayop` switches the context to its own output_idx for its body; an
+# `index` node keeps its array operand (arg 1) and recurses only the index exprs.
+function _index_bare(node, av::Set{String}, loops::Vector{String})
+    if node isa AbstractString
+        return node in av ? Dict{String,Any}("op"=>"index", "args"=>Any[node, loops...]) : node
+    elseif node isa AbstractVector
+        return Any[_index_bare(x, av, loops) for x in node]
+    elseif node isa AbstractDict
+        op = get(node, "op", "")
+        nm = get(node, "name", nothing)
+        if op == "" && nm isa AbstractString && String(nm) in av
+            return Dict{String,Any}("op"=>"index", "args"=>Any[node, loops...])
+        elseif op == "arrayop"
+            inner = String[String(x) for x in get(node, "output_idx", Any[])]
+            out = Dict{String,Any}()
+            for (k, v) in node
+                out[String(k)] = (k == "expr" && !isempty(inner)) ?
+                    _index_bare(v, av, inner) : _index_bare(v, av, loops)
+            end
+            return out
+        elseif op == "index"
+            a = get(node, "args", nothing)
+            a isa AbstractVector || return node
+            out = copy(node)
+            out["args"] = Any[i == 1 ? a[1] : _index_bare(a[i], av, loops) for i in eachindex(a)]
+            return out
+        else
+            out = Dict{String,Any}()
+            for (k, v) in node
+                out[String(k)] = _index_bare(v, av, loops)
+            end
+            return out
+        end
+    end
+    return node
 end
 
 # True iff `name` was authored scalar (no declared shape) in the original system.

@@ -138,6 +138,14 @@ function discretize(flat::FlattenedSystem;
     doc = flattened_to_esm(flat)
     if grids !== nothing
         doc["grids"] = Dict{String,Any}(String(k) => v for (k, v) in grids)
+        # Associate the single grid with the model so its spatial-array states are
+        # sized and its grad stencils lowered (the rule context keys off model.grid).
+        if length(grids) == 1
+            gname = String(first(keys(grids)))
+            for (_, m) in doc["models"]
+                m isa AbstractDict && (m["grid"] = gname)
+            end
+        end
     end
     if rules !== nothing
         doc["rules"] = collect(Any, rules)
