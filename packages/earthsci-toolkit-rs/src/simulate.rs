@@ -11,8 +11,10 @@
 //!   Hybrid PDE / spatial systems return [`CompileError::UnsupportedDimensionalityError`].
 //! - **No event handling.** Models with non-empty `continuous_events` /
 //!   `discrete_events` return [`CompileError::UnsupportedFeatureError`].
-//! - **Native only.** The module is gated behind `#[cfg(not(target_arch = "wasm32"))]`
-//!   so the WASM build does not pull in diffsol. WASM exposure is a follow-up bead.
+//! - **Both targets.** diffsol's Faer backend is pure Rust and cross-compiles to
+//!   wasm32 (spike S1), so this module is compiled for the browser too. The one
+//!   native-only seam is the dispatch into [`crate::simulate_array`] for
+//!   array-op / spatial files, which is `cfg`-gated off wasm.
 //!
 //! ## Usage
 //!
@@ -26,8 +28,6 @@
 //! let opts = SimulateOptions::default();
 //! let _ = simulate(&file, (0.0, 1.0), &params, &ic, &opts);
 //! ```
-
-#![cfg(not(target_arch = "wasm32"))]
 
 use crate::flatten::{FlattenedSystem, flatten, flatten_model};
 use crate::types::{EsmFile, Expr, Model};
@@ -912,6 +912,13 @@ pub fn simulate(
     initial_conditions: &HashMap<String, f64>,
     opts: &SimulateOptions,
 ) -> Result<Solution, SimulateError> {
+    // Array-op / spatial files route to the native `simulate_array` backend,
+    // which depends on the s2bindings geometry kernel and is `cfg`-gated off
+    // wasm. On wasm this branch is removed entirely: such files fall through to
+    // the scalar path below, where `Compiled::from_file` rejects them with an
+    // `UnsupportedDimensionalityError` (the browser tier handles 0-D ODEs only;
+    // gridded/spatial runs go to the native cloud workers per the tier model).
+    #[cfg(not(target_arch = "wasm32"))]
     if crate::simulate_array::file_has_array_ops(file)
         || crate::simulate_array::file_has_spatial_model(file)
     {

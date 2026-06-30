@@ -79,7 +79,10 @@ pub mod performance;
 // `aggregate` / `join` passes, so it cannot live inside the gated `simulate`.
 pub mod compile_error;
 
-#[cfg(not(target_arch = "wasm32"))]
+// Scalar ODE simulation (gt-5ws). Compiled for wasm too: its diffsol/Faer path
+// is pure Rust (spike S1). The `simulate_array` (spatial) backend it dispatches
+// into stays native-only, so the wasm build runs pure-ODE / 0-D box models and
+// the array/spatial dispatch branch in `simulate::simulate` is `cfg`-gated off.
 pub mod simulate;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -207,7 +210,6 @@ pub use compile_error::CompileError;
 pub use performance::{CompactExpr, PerformanceError};
 #[cfg(feature = "parallel")]
 pub use reactions::stoichiometric_matrix_parallel;
-#[cfg(not(target_arch = "wasm32"))]
 pub use simulate::{
     Compiled, ResolvedExpr, SimulateError, SimulateOptions, Solution, SolutionMetadata,
     SolverChoice, fold_constant_expr, interpret, simulate,
