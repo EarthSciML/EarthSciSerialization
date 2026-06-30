@@ -519,6 +519,18 @@ end
 # parent that is itself a component-local index identifier; namespace the
 # `values`/`offsets` factor-array references that name component-local variables.
 # `kind`/`size`/`members` carry data, not names, and pass through unchanged.
+# Namespace a variable's `shape` index-set references (gated on idx_names). Returns
+# the same variable unchanged when its shape touches no local index identifier.
+function _namespace_var_shape(var::ModelVariable, prefix::String, idx_names::Set{String})::ModelVariable
+    var.shape === nothing && return var
+    any(s -> s in idx_names, var.shape) || return var
+    new_shape = String[s in idx_names ? "$(prefix).$(s)" : s for s in var.shape]
+    return ModelVariable(var.type; default=var.default, units=var.units,
+        default_units=var.default_units, description=var.description,
+        expression=var.expression, shape=new_shape, location=var.location,
+        noise_kind=var.noise_kind, correlation_group=var.correlation_group)
+end
+
 function _namespace_index_set(is::IndexSet, prefix::String,
                               local_names::Set{String}, idx_names::Set{String})::IndexSet
     pfx(n) = "$(prefix).$(n)"
@@ -590,12 +602,17 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
 
     for (name, var) in model.variables
         namespaced = "$(prefix).$(name)"
-        if var.type == StateVariable
-            states[namespaced] = var
-        elseif var.type == ParameterVariable
-            params[namespaced] = var
-        elseif var.type == ObservedVariable
-            observeds[namespaced] = var
+        # An array variable's `shape` names index sets; namespace any entry that
+        # is a component-local index identifier so the shape stays consistent with
+        # the per-component namespaced `index_sets` registry (domain dims like
+        # x/y are global and pass through). No-op for scalar / domain-only shapes.
+        v = _namespace_var_shape(var, prefix, idx_names)
+        if v.type == StateVariable
+            states[namespaced] = v
+        elseif v.type == ParameterVariable
+            params[namespaced] = v
+        elseif v.type == ObservedVariable
+            observeds[namespaced] = v
         end
     end
 

@@ -732,6 +732,27 @@ function _build_evaluator_impl(model::Model;
         end
     end
 
+    # Promoted array observeds (shape-promotion): an array-shaped observed defined
+    # by an `arrayop` is inlined into its readers via the same index beta-reduction
+    # as a live-field geometry observed (`index(obs, i…)` collapses to the arrayop
+    # body) — it carries no ODE partition slot. This generalizes `_geom_inline_vars`
+    # to the non-geometry case, so a `promote_downstream_shapes`-lifted physics
+    # chain (scalar authored, array after promotion) runs with no per-cell runner
+    # logic. Excludes anything the geometry path already owns. Empty (byte-identical)
+    # for a system with no array observeds.
+    _array_inline_vars = Set{String}()
+    for eq in _model_equations
+        eq.lhs isa VarExpr || continue
+        name = (eq.lhs::VarExpr).name
+        (name in _geom_setup_vars || name in _geom_ring_vars ||
+         name in _geom_inline_vars) && continue
+        haskey(model.variables, name) || continue
+        v = model.variables[name]
+        (v.type == ObservedVariable && _is_array_shape(v.shape)) || continue
+        (eq.rhs isa OpExpr && (eq.rhs::OpExpr).op == "arrayop") || continue
+        push!(_array_inline_vars, name)
+    end
+
     # ---- Partition variables ----
     scalar_state_names = String[]
     param_names = String[]
@@ -744,9 +765,10 @@ function _build_evaluator_impl(model::Model;
         name in _vi_vars && continue
         # Geometry-setup vars are materialized at setup; not an ODE partition member.
         name in _geom_setup_vars && continue
-        # Live-field geometry observeds (F_tgt …) are inlined into their readers
-        # (ess-14f.4); they carry no partition slot of their own.
+        # Live-field geometry observeds (F_tgt …) and promoted array observeds are
+        # inlined into their readers (ess-14f.4 / shape-promotion); no partition slot.
         name in _geom_inline_vars && continue
+        name in _array_inline_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
@@ -759,8 +781,9 @@ function _build_evaluator_impl(model::Model;
                 # buffer, ess-14f.3). Either way it is array-backed, not a scalar
                 # parameter, so it is NOT added to param_names (the scalar `p`
                 # NamedTuple stays homogeneous Float64 — see the JL-J0 note).
-                ((_has_geometry || _has_value_invention) && haskey(const_arrays, name)) ||
-                    haskey(param_arrays, name) ||
+                # Array-backed: a const operand (geometry polygons, VI factors, or a
+                # promoted forcing array) or a live `param_arrays` forcing buffer.
+                haskey(const_arrays, name) || haskey(param_arrays, name) ||
                     throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_SHAPE", name))
             else
                 push!(param_names, name)
@@ -968,10 +991,12 @@ function _build_evaluator_impl(model::Model;
         elseif _is_indexed_D_lhs(eq.lhs) || _is_arrayop_D_lhs(eq.lhs)
             push!(derivative_eqs, eq)
         elseif isa(eq.lhs, VarExpr) && (eq.lhs.name in observed_names ||
-                                        eq.lhs.name in _geom_inline_vars)
-            # A live-field geometry observed (F_tgt …) enters the substitution map
-            # as an arrayop value; `index(F_tgt, j)` in a reader beta-reduces to its
-            # body via `_resolve_indices` (ess-14f.4).
+                                        eq.lhs.name in _geom_inline_vars ||
+                                        eq.lhs.name in _array_inline_vars)
+            # A live-field geometry observed (F_tgt …) or a promoted array observed
+            # enters the substitution map as an arrayop value; `index(obs, j)` in a
+            # reader beta-reduces to its body via `_resolve_indices` (ess-14f.4 /
+            # shape-promotion).
             observed_exprs[eq.lhs.name] = eq.rhs
         else
             # Algebraic constraint / unsupported equation form.

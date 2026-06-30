@@ -25,6 +25,7 @@ using JSON3
     include("test_codegen.jl")
     include("flatten_test.jl")
     include("flattened_to_esm_test.jl")
+    include("shape_promotion_test.jl")
     include("subsystem_ref_test.jl")
     include("editing_test.jl")
     include("data_loader_fixtures_test.jl")
