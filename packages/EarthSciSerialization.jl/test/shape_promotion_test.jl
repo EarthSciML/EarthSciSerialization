@@ -61,4 +61,26 @@ end
         du = similar(u0); f!(du, u0, p, 0.0)
         @test du[vmap["M.z"]] ≈ 6.0           # y = x*3 = 6, unchanged
     end
+
+    @testset "algebraic_states_to_observeds reclassifies bare-eq states" begin
+        # `a` is a STATE defined by a bare algebraic eq (a = x*2); `z` is a real ODE
+        # state (D(z,t)=a). Reclassify `a` → observed; leave `z` a state.
+        d = Dict{String,Any}("esm"=>"0.5.0","metadata"=>Dict("name"=>"S"),
+            "models"=>Dict{String,Any}("M"=>Dict{String,Any}("variables"=>Dict{String,Any}(
+                "x"=>Dict{String,Any}("type"=>"parameter","default"=>3.0),
+                "a"=>Dict{String,Any}("type"=>"state"),
+                "z"=>Dict{String,Any}("type"=>"state")),
+              "equations"=>Any[
+                Dict{String,Any}("lhs"=>"a","rhs"=>op("*","x",2)),
+                Dict{String,Any}("lhs"=>Dict{String,Any}("op"=>"D","args"=>Any["z"],"wrt"=>"t"),"rhs"=>"a")])))
+        flat = E.flatten(ESS.coerce_esm_file(ESS.JSON3.read(ESS.JSON3.write(d))))
+        norm = E.algebraic_states_to_observeds(flat)
+        @test haskey(norm.observed_variables, "M.a")    # algebraic state → observed
+        @test !haskey(norm.state_variables, "M.a")
+        @test haskey(norm.state_variables, "M.z")        # ODE state preserved
+        # runs: a = x*2 = 6, D(z) = a = 6
+        f!, u0, p, _t, vmap = E.build_evaluator(E.flattened_to_esm(norm); initial_conditions=Dict("M.z"=>0.0))
+        du = similar(u0); f!(du, u0, p, 0.0)
+        @test du[vmap["M.z"]] ≈ 6.0
+    end
 end
