@@ -14,14 +14,14 @@
       "equations": [
         {
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["u", "i"] }], "wrt": "t" },
             "ranges": { "i": [1, 5] }
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": { "op": "-", "args": [{ "op": "index", "args": ["u", "i"] }] },

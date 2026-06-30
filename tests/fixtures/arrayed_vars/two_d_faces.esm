@@ -59,11 +59,6 @@
     }
   },
   "domains": {
-    "plane": {
-      "spatial": {
-        "x": { "min": 0.0, "max": 1.0, "grid_spacing": 0.01, "units": "m" },
-        "y": { "min": 0.0, "max": 1.0, "grid_spacing": 0.01, "units": "m" }
-      }
-    }
+    "plane": {}
   }
 }

@@ -1430,10 +1430,8 @@ Validation tests must use these standardized error codes:
 | `event_var_undeclared` | Structural | Event affects undeclared variable |
 | `unit_dimension_mismatch` | Units | Dimensional analysis failure |
 | `unit_parse_error` | Units | Unrecognized unit string |
-| `E_UNREWRITTEN_PDE_OP` | Discretization | `discretize()` output still contains a PDE op (`grad`, `div`, `laplacian`, `D`, `bc`) after the rule engine runs (RFC §11 Step 7). |
-| `E_RULES_NOT_CONVERGED` | Discretization | Rule engine hit `max_passes` without reaching a fixed point (RFC §5.2.5). |
-| `E_NO_DAE_SUPPORT` | Discretization | `discretize()` output contains algebraic equations alongside differential ones, and DAE support is disabled in the binding (RFC §12). The error message must name at least one algebraic-equation path and the enabling knob. |
-| `E_NONTRIVIAL_DAE` | Discretization | Binding with trivial-DAE-only strategy (Go, Rust) found algebraic equations that could not be factored symbolically — cyclic observed equations, implicit residuals, or genuine algebraic constraints remain after observed-style `y ~ f(...)` substitution (RFC §12, `docs/rfcs/dae-binding-strategies.md`). The error message must name each residual equation path and point the user at a full-DAE-capable binding (Julia). |
+| `E_NO_DAE_SUPPORT` | DAE | A model's equations contain algebraic equations alongside differential ones, and DAE support is disabled in the binding (RFC §12). The error message must name at least one algebraic-equation path and the enabling knob. |
+| `E_NONTRIVIAL_DAE` | DAE | Binding with trivial-DAE-only strategy (Go, Rust) found algebraic equations that could not be factored symbolically — cyclic observed equations, implicit residuals, or genuine algebraic constraints remain after observed-style `y ~ f(...)` substitution (RFC §12, `docs/rfcs/dae-binding-strategies.md`). The error message must name each residual equation path and point the user at a full-DAE-capable binding (Julia). |
 
 ### 7.2 Error Message Format
 

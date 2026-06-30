@@ -1,8 +1,8 @@
 """Runtime data loaders for the STAC-like DataLoader schema.
 
 Dispatches on DataLoader.kind (grid/points/static) and implements URL template
-expansion, mirror fallback, time->file resolution, variable remapping with
-unit conversion, and regridding onto target grids.
+expansion, mirror fallback, time->file resolution, and variable remapping with
+unit conversion.
 """
 
 from .url_template import (
@@ -33,36 +33,6 @@ from .variables import (
     UnitConversionError,
     apply_variable_mapping,
     apply_unit_conversion,
-)
-from .regrid import (
-    RegriddingError,
-    regrid_latlon_to_target,
-)
-from .reproject import (
-    ReprojectionError,
-    parse_proj_string,
-    lcc_forward,
-    lcc_inverse,
-    reproject_xy_to_lonlat,
-)
-from .regrid_kernels import (
-    RegridKernelError,
-    locate_1d,
-    bspline_regrid_linear_1d,
-    bspline_regrid_cubic_1d,
-    bspline_regrid_bilinear_2d,
-    overlap_area_matrix,
-    conservative_regrid,
-    cell_average_regrid,
-)
-from .regrid_driver import (
-    RegridDriverError,
-    TargetGrid,
-    build_target_grid,
-    lev_min_reduce,
-    regrid_field,
-    regrid_loader_field,
-    extract_source_coords,
 )
 from .grid import (
     GridLoaderError,
@@ -105,28 +75,6 @@ __all__ = [
     "UnitConversionError",
     "apply_variable_mapping",
     "apply_unit_conversion",
-    "RegriddingError",
-    "regrid_latlon_to_target",
-    "ReprojectionError",
-    "parse_proj_string",
-    "lcc_forward",
-    "lcc_inverse",
-    "reproject_xy_to_lonlat",
-    "RegridKernelError",
-    "locate_1d",
-    "bspline_regrid_linear_1d",
-    "bspline_regrid_cubic_1d",
-    "bspline_regrid_bilinear_2d",
-    "overlap_area_matrix",
-    "conservative_regrid",
-    "cell_average_regrid",
-    "RegridDriverError",
-    "TargetGrid",
-    "build_target_grid",
-    "lev_min_reduce",
-    "regrid_field",
-    "regrid_loader_field",
-    "extract_source_coords",
     "GridLoaderError",
     "GridLoader",
     "load_grid",

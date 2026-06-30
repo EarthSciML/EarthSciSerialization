@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// opNode builds an operator ExprNode from an op name and args.
+func opNode(op string, args ...interface{}) ExprNode {
+	return ExprNode{Op: op, Args: args}
+}
+
 // dEq builds a differential equation D(name, wrt=indep) ~ rhs.
 func dEq(name, indep string, rhs Expression) Equation {
 	w := indep
@@ -291,9 +296,7 @@ func TestApplyDAEContract_ObservedExpressionSubstituted(t *testing.T) {
 // D(x, wrt="time") equation classified as differential.
 func TestApplyDAEContract_DomainIndepVar(t *testing.T) {
 	iv := "time"
-	domName := "d1"
 	m := Model{
-		Domain: &domName,
 		Variables: map[string]ModelVariable{
 			"x": {Type: "state"},
 		},
@@ -305,7 +308,7 @@ func TestApplyDAEContract_DomainIndepVar(t *testing.T) {
 		Esm:      "0.2.0",
 		Metadata: Metadata{Name: "t"},
 		Models:   map[string]Model{"M": m},
-		Domains:  map[string]Domain{domName: {IndependentVariable: &iv}},
+		Domain:   &Domain{IndependentVariable: &iv},
 	}
 	info, err := ApplyDAEContract(file)
 	if err != nil {

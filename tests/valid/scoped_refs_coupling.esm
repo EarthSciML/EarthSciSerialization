@@ -573,12 +573,6 @@
         "start": "2024-06-01T00:00:00Z",
         "end": "2024-06-02T00:00:00Z"
       },
-      "spatial": {
-        "grid": {
-          "min": 0.0,
-          "max": 1.0
-        }
-      },
       "initial_conditions": {
         "type": "per_variable",
         "values": {}

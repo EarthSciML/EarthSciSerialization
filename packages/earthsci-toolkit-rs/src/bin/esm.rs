@@ -2071,11 +2071,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 operators: None,
                 enums: None,
                 coupling: None,
-                domains: esm_file.domains.clone(),
-                interfaces: esm_file.interfaces.clone(),
-                grids: esm_file.grids.clone(),
-                staggering_rules: esm_file.staggering_rules.clone(),
-                discretizations: None,
+                domain: esm_file.domain.clone(),
                 function_tables: esm_file.function_tables.clone(),
             };
 

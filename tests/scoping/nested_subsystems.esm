@@ -275,19 +275,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "sea_surface_temp_zero_gradient_zmin": {
-          "variable": "sea_surface_temp",
-          "side": "zmin",
-          "kind": "zero_gradient"
-        },
-        "sea_surface_temp_zero_gradient_zmax": {
-          "variable": "sea_surface_temp",
-          "side": "zmax",
-          "kind": "zero_gradient"
-        }
-      }
+      ]
     }
   },
   "data_loaders": {
@@ -295,36 +283,6 @@
       "kind": "grid",
       "source": {
         "url_template": "file:///data/EDGAR/{date:%Y%m%d_%H%M}.nc"
-      },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat"
-        ],
-        "extents": {
-          "lon": {
-            "n": "n_lon",
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": "n_lat",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_lon": {
-            "description": "lon cell count, resolved from the source dataset at load time"
-          },
-          "n_lat": {
-            "description": "lat cell count, resolved from the source dataset at load time"
-          }
-        }
       },
       "variables": {
         "NO_flux": {
@@ -414,14 +372,6 @@
       "temporal": {
         "start": "2024-07-15T00:00:00Z",
         "end": "2024-07-15T06:00:00Z"
-      },
-      "spatial": {
-        "z": {
-          "min": 0.0,
-          "max": 10000.0,
-          "grid_spacing": 100.0,
-          "units": "m"
-        }
       },
       "initial_conditions": {
         "type": "per_variable",

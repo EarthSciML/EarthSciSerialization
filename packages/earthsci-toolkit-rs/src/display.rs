@@ -1984,7 +1984,6 @@ impl fmt::Display for EsmFile {
                     crate::DataLoaderKind::Grid => "grid",
                     crate::DataLoaderKind::Points => "points",
                     crate::DataLoaderKind::Static => "static",
-                    crate::DataLoaderKind::Mesh => "mesh",
                 };
                 writeln!(
                     f,
@@ -2028,24 +2027,19 @@ impl fmt::Display for EsmFile {
             writeln!(f)?;
         }
 
-        // Display domain information (EsmFile.domains is now a named map of Domain specs)
-        if let Some(ref domains) = self.domains {
-            for (domain_name, domain) in domains {
-                write!(f, "  Domain {domain_name}: ")?;
+        // Display domain information (EsmFile.domain is the single shared domain)
+        if let Some(ref domain) = self.domain {
+            write!(f, "  Domain: ")?;
 
-                let mut domain_parts = Vec::new();
-                if domain.spatial.is_some() {
-                    domain_parts.push("spatial".to_string());
-                }
-                if domain.temporal.is_some() {
-                    domain_parts.push("temporal".to_string());
-                }
+            let mut domain_parts = Vec::new();
+            if domain.temporal.is_some() {
+                domain_parts.push("temporal".to_string());
+            }
 
-                if domain_parts.is_empty() {
-                    writeln!(f, "[Domain information]")?;
-                } else {
-                    writeln!(f, "{}", domain_parts.join(", "))?;
-                }
+            if domain_parts.is_empty() {
+                writeln!(f, "[Domain information]")?;
+            } else {
+                writeln!(f, "{}", domain_parts.join(", "))?;
             }
         }
 
@@ -2259,9 +2253,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 

@@ -458,13 +458,12 @@ fn scatter_col_major_offset(arr: ArrayViewD<f64>, dy: &mut [f64], vs: &VarShape,
 // Detection: does the file contain array-op expressions anywhere?
 // ============================================================================
 
-/// Names of the array-op sidecar operators introduced in gt-t5c. `arrayop`
+/// Names of the array-op sidecar operators introduced in gt-t5c. `aggregate`
 /// and `makearray` are the composition primitives; the rest are shape /
 /// extraction helpers that are only meaningful when operating on array
 /// intermediates.
 const ARRAY_OP_NAMES: &[&str] = &[
-    "arrayop",
-    "aggregate", // canonical alias of `arrayop` (RFC semiring-faq-unified-ir §5.6)
+    "aggregate", // unified Functional Aggregate Query op (RFC semiring-faq-unified-ir §5.6)
     "makearray",
     "reshape",
     "transpose",
@@ -485,17 +484,14 @@ pub fn file_has_array_ops(file: &EsmFile) -> bool {
     false
 }
 
-/// Return true if the file has spatial structure: top-level grid declarations
-/// or any model with array-shaped state variables (`shape` field non-empty).
+/// Return true if the file has spatial structure: any model with array-shaped
+/// state variables (`shape` field non-empty).
 ///
 /// Used by [`crate::simulate::simulate`] to route discretized-PDE files to the
 /// ArrayOp runtime even when the equations do not yet contain explicit
-/// `arrayop`/`index` nodes (e.g. a spatial model whose equations were rewritten
-/// using indexed-scalar D(u[i])=... form rather than the `arrayop` wrapper).
+/// `aggregate`/`index` nodes (e.g. a spatial model whose equations were rewritten
+/// using indexed-scalar D(u[i])=... form rather than the `aggregate` wrapper).
 pub fn file_has_spatial_model(file: &EsmFile) -> bool {
-    if file.grids.is_some() {
-        return true;
-    }
     let Some(models) = &file.models else {
         return false;
     };
@@ -690,7 +686,6 @@ impl ArrayCompiled {
         // registry and work here.
         let model = Model {
             name: None,
-            domain: None,
             index_sets: None,
             coupletype: None,
             reference: None,
@@ -702,11 +697,9 @@ impl ArrayCompiled {
             description: None,
             tolerance: None,
             tests: None,
-            boundary_conditions: None,
             initialization_equations: None,
             guesses: None,
             system_kind: None,
-            regrid: None,
         };
         Self::from_model(&model)
     }
@@ -3140,7 +3133,7 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
 
         // Array ops.
         "index" => eval_index(node, ctx),
-        "arrayop" | "aggregate" => eval_arrayop(node, ctx),
+        "aggregate" => eval_arrayop(node, ctx),
         // Conservative-regridding geometry kernel (RFC §8.1): clip two lon/lat
         // polygon rings on the node's `manifold`, producing the overlap ring as
         // an `[N, 2]` array. `polygon_area` over it is an ordinary `aggregate`.

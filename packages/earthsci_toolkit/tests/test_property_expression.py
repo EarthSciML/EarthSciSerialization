@@ -12,7 +12,7 @@ Invariants asserted (per gt-72z):
 
 Scope notes:
   - Expressions generated here cover the scalar operators plus the array-op
-    extensions (``arrayop``, ``makearray``, ``reshape``, ``transpose``,
+    extensions (``aggregate``, ``makearray``, ``reshape``, ``transpose``,
     ``concat``, ``index``, ``broadcast``). The array ops were added once the
     serializer was fixed (gt-4009) to emit their auxiliary fields.
 """
@@ -160,7 +160,7 @@ def _op_index(child: st.SearchStrategy):
     )
 
 
-def _op_arrayop(child: st.SearchStrategy):
+def _op_aggregate(child: st.SearchStrategy):
     output_idx_strategy = st.lists(
         st.one_of(_index_names, st.just(1)), min_size=1, max_size=3
     )
@@ -179,7 +179,7 @@ def _op_arrayop(child: st.SearchStrategy):
         include_reduce = draw(st.booleans())
         include_ranges = draw(st.booleans())
         return ExprNode(
-            op="arrayop",
+            op="aggregate",
             args=args,
             output_idx=output_idx,
             expr=body,
@@ -251,7 +251,7 @@ def _node_strategy(child: st.SearchStrategy) -> st.SearchStrategy:
         _op_concat(child),
         _op_broadcast(child),
         _op_index(child),
-        _op_arrayop(child),
+        _op_aggregate(child),
         _op_makearray(child),
     )
 

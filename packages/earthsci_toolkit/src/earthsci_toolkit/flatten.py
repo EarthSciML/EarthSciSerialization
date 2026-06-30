@@ -30,7 +30,6 @@ from .esm_types import (
     OperatorApplyCoupling,
     OperatorComposeCoupling,
     ReactionSystem,
-    RegridSpec,
     VariableMapCoupling,
 )
 from .reactions import derive_odes
@@ -139,9 +138,8 @@ class LoaderField:
     owner: str                           # "ERA5" — the owning model's namespaced prefix
     subkey: str                          # "pl" — the subsystem key the loader mounts under
     var: str                             # "u" — the loader variable name
-    loader: DataLoader                   # the source loader (carries source/temporal/grid)
+    loader: DataLoader                   # the source loader (carries source/temporal)
     cadence: str                         # "const" | "discrete"
-    regrid: Optional[RegridSpec] = None  # owning model's per-variable regrid config, if any
 
 
 @dataclass
@@ -247,7 +245,7 @@ class FlattenedSystem:
 
 _SPATIAL_OPS = {"grad", "div", "laplacian", "curl"}
 _ARRAY_OPS = {
-    "aggregate", "arrayop", "makearray", "index", "broadcast",
+    "aggregate", "makearray", "index", "broadcast",
     "reshape", "transpose", "concat",
     # The conservative-regridding geometry kernel leaf (RFC §8.1): its clipped
     # overlap ring is array-valued, so a model carrying only an intersect_polygon
@@ -282,7 +280,7 @@ def _expr_to_string(expr: Expr) -> str:
             dim = expr.dim or ""
             return f"{op}({inner}, {dim})" if dim else f"{op}({inner})"
 
-        if op in ("aggregate", "arrayop"):
+        if op == "aggregate":
             body = _expr_to_string(expr.expr) if expr.expr is not None else ""
             idxs = ",".join(str(i) for i in (expr.output_idx or []))
             ranges = expr.ranges or {}
@@ -347,7 +345,7 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
         # For aggregate / arrayop, index symbols (output_idx and ranges keys) are
         # local to the expression body and must not be namespaced.
         local_leave = set(leave_alone)
-        if expr.op in ("aggregate", "arrayop"):
+        if expr.op == "aggregate":
             if expr.output_idx:
                 for sym in expr.output_idx:
                     if isinstance(sym, str):
@@ -399,7 +397,7 @@ def _lhs_dependent_var(lhs: Expr) -> Optional[str]:
                     if isinstance(head, str):
                         return head
             return None
-        if lhs.op in ("aggregate", "arrayop") and lhs.expr is not None:
+        if lhs.op == "aggregate" and lhs.expr is not None:
             return _lhs_dependent_var(lhs.expr)
         # Algebraic equation: LHS is a complex expression — not a single var.
         return None
@@ -600,7 +598,6 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
                     var=var_name,
                     loader=sub_model,
                     cadence=cadence,
-                    regrid=model.regrid.get(var_name),
                 ))
             continue
         sub_prefix = f"{full_prefix}.{sub_name}"
@@ -1077,9 +1074,9 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
     # Step 5: domain pass-through. The Python tier does not currently apply
     # dimension-promotion rules from §4.7.6 — only the spatial-rejection check
     # in simulate() distinguishes ODE-only flattened systems from PDE inputs.
-    if esm_file.domains:
-        # Use the first domain (the spec doesn't yet say how to merge multiple).
-        flat.domain = next(iter(esm_file.domains.values()))
+    if esm_file.domain is not None:
+        # Single shared domain (v0.8.0): pass it through unchanged.
+        flat.domain = esm_file.domain
 
     # Step 6: derive independent variables from the equation set. Time is
     # always present; spatial dimensions are added when grad/div/laplacian
@@ -1240,7 +1237,7 @@ def _collect_index_uses(
                 _collect_index_uses(a, state_vars, out, bound_indices)
             return
 
-        if expr.op in ("aggregate", "arrayop"):
+        if expr.op == "aggregate":
             # Iterate the output box (via `ranges` if provided, else via the
             # output_idx symbols we cannot resolve). For each concrete point
             # inherit bound_indices and walk the body.

@@ -52,7 +52,7 @@
         {
           "_comment": "Interior cells via generalized einsum: LHS output_idx=[i], RHS contracts over k in [-1,0,1]. Weight ifelse(k==0,-2,1) encodes the standard second-difference stencil. For i=1: 25*(u[1]-2*u[2]+u[3]); for i=2: 25*(u[2]-2*u[3]+u[4]).",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {
@@ -63,7 +63,7 @@
             "ranges": {"i": [1, 2]}
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {

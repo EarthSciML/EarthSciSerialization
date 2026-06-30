@@ -1,19 +1,17 @@
 """Runtime loader for ``kind=grid`` DataLoaders.
 
 Opens a gridded source file via xarray (falling back to netCDF4 for raw
-netCDF), applies variable name remapping + unit conversion, and optionally
-regrids onto a target lat/lon grid.
+netCDF) and applies variable name remapping + unit conversion.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from ..esm_types import DataLoader, DataLoaderKind
 from .mirror import open_with_fallback
-from .regrid import regrid_latlon_to_target
 from .time_resolution import file_anchor_for_time
 from .url_template import expand_with_mirrors
 from .variables import apply_variable_mapping
@@ -79,7 +77,6 @@ class GridLoader:
         self,
         *,
         time: Optional[Union[_dt.datetime, _dt.date, str]] = None,
-        target_grid: Optional[Mapping[str, Sequence[float]]] = None,
         opener: Optional[Any] = None,
         **substitutions: Any,
     ) -> GridLoadResult:
@@ -90,10 +87,6 @@ class GridLoader:
         time:
             Target timestamp used to expand ``{date:...}`` placeholders. Snapped
             to the file_period anchor when ``temporal`` is set.
-        target_grid:
-            Optional ``{"lon": [...], "lat": [...]}`` destination grid. Only
-            valid when the loader declares a geographic native ``grid`` whose
-            ``crs.projection == "longlat"``.
         opener:
             Callable ``(url) -> xarray.Dataset``. Defaults to
             ``xarray.open_dataset``.
@@ -108,61 +101,19 @@ class GridLoader:
         remapped = apply_variable_mapping(
             raw_vars, self.dl.variables, strict=True
         )
-        if target_grid is not None:
-            remapped = self._regrid_all(remapped, ds, target_grid)
         return GridLoadResult(urls_tried=urls, dataset=ds, variables=remapped)
-
-    def _regrid_all(
-        self,
-        variables: Dict[str, Any],
-        ds: Any,
-        target_grid: Mapping[str, Sequence[float]],
-    ) -> Dict[str, Any]:
-        grid = self.dl.grid
-        if grid is None or grid.crs is None or grid.crs.projection != "longlat":
-            raise GridLoaderError(
-                "target_grid regridding is only supported for geographic "
-                "(crs.projection='longlat') native grids"
-            )
-        src_lon = _lookup_coord(ds, ("lon", "longitude", "x"))
-        src_lat = _lookup_coord(ds, ("lat", "latitude", "y"))
-        tgt_lon = target_grid.get("lon")
-        tgt_lat = target_grid.get("lat")
-        if tgt_lon is None or tgt_lat is None:
-            raise GridLoaderError(
-                "target_grid must contain 'lon' and 'lat' arrays"
-            )
-        # Regridding parameters are a per-variable model concern, not a loader
-        # field (RFC pure-io-data-loaders §4.1); use bilinear defaults here.
-        extrap = None
-        fill = None
-        out: Dict[str, Any] = {}
-        for name, values in variables.items():
-            arr = _as_array(values)
-            out[name] = regrid_latlon_to_target(
-                arr,
-                source_lon=src_lon,
-                source_lat=src_lat,
-                target_lon=tgt_lon,
-                target_lat=tgt_lat,
-                extrapolation=extrap,
-                fill_value=fill,
-            )
-        return out
 
 
 def load_grid(
     data_loader: DataLoader,
     *,
     time: Optional[Union[_dt.datetime, _dt.date, str]] = None,
-    target_grid: Optional[Mapping[str, Sequence[float]]] = None,
     opener: Optional[Any] = None,
     **substitutions: Any,
 ) -> GridLoadResult:
     """Convenience wrapper: instantiate a GridLoader and call ``load``."""
     return GridLoader(data_loader).load(
         time=time,
-        target_grid=target_grid,
         opener=opener,
         **substitutions,
     )
@@ -191,23 +142,3 @@ def _ds_to_mapping(ds: Any) -> Mapping[str, Any]:
     raise GridLoaderError(
         f"opener must return an xarray.Dataset or mapping; got {type(ds).__name__}"
     )
-
-
-def _lookup_coord(ds: Any, candidates: Iterable[str]):
-    if hasattr(ds, "coords"):
-        for name in candidates:
-            if name in ds.coords:
-                return _as_array(ds.coords[name])
-    if isinstance(ds, Mapping):
-        for name in candidates:
-            if name in ds:
-                return _as_array(ds[name])
-    raise GridLoaderError(
-        f"source does not expose any of the expected coord names: {list(candidates)}"
-    )
-
-
-def _as_array(values: Any):
-    if hasattr(values, "values"):
-        return values.values
-    return values

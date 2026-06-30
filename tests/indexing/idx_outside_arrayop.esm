@@ -17,12 +17,12 @@
         {
           "_comment": "Array ODE: D(u[i]) = -u[i] for i in 1..5 (analytical u_i(t) = u_i(0) * exp(-t)).",
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["u", "i"] }], "wrt": "t" },
             "ranges": { "i": [1, 5] }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": { "op": "-", "args": [{ "op": "index", "args": ["u", "i"] }] },
             "ranges": { "i": [1, 5] }
           }

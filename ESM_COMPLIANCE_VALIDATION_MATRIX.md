@@ -408,10 +408,10 @@ agreement for v0.4.0 features:
 | Directory | Feature | Notes |
 |---|---|---|
 | `tests/conformance/canonical/` | Canonical AST equality | Drives `parse → canonical-AST` agreement across bindings |
-| `tests/conformance/discretize/` + `discretization/` | `discretize` AST transforms | Owned by EarthSciDiscretizations rule application |
+| `tests/conformance/geometry/` | Conservative-regridding geometry (`intersect_polygon` + `polygon_area` aggregate) | CONFORMANCE_SPEC §5.8 |
 | `tests/conformance/expression_templates/` | `expression_templates` + `apply_expression_template` (esm-spec §9.6) | Indexed by EXPR-09-D above |
 | `tests/conformance/function_tables/` | `function_tables` + `table_lookup` (esm-spec §9.5) | `linear/`, `bilinear/`, `roundtrip/` |
-| `tests/conformance/grids/` | Grid descriptors | |
+| `tests/conformance/determinism/` | Build-time relational engine determinism (distinct/skolem/rank/join) | CONFORMANCE_SPEC §5.5 |
 | `tests/conformance/migration/` | Schema-version migration | Pairs with VERSION-08-A above |
 | `tests/conformance/round_trip/` | Round-trip equality (esm-spec §9.6.4 Option A) | Pairs with SERIAL-07-A above |
 | `tests/conformance/simulate_cycles/` | End-to-end simulation cycles via official ESS runners | Per CLAUDE.md "Simulation Pathway" rule |

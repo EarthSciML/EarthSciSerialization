@@ -29,7 +29,7 @@ tests/conformance/determinism/
 ```
 
 The runner is `scripts/run-determinism-conformance.py` (a self-contained
-sibling of `scripts/run-grid-conformance.py`). It embeds the **reference
+runner). It embeds the **reference
 implementation** of the primitives — the contract as code — and the committed
 golden in `manifest.json` is hand-derived and checked against it.
 
@@ -152,5 +152,3 @@ or this document.
 - `CONFORMANCE_SPEC.md` §5.5 — the normative contract.
 - `docs/content/rfcs/semiring-faq-unified-ir.md` §5.7 + Appendix A.5 — the
   contract's home and per-language rationale / hash-randomization footguns.
-- `tests/conformance/grids/README.md` — the sibling grid-conformance harness
-  this one mirrors.

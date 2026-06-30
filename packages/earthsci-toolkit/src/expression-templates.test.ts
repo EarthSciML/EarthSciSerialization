@@ -208,3 +208,196 @@ describe('expression_templates / apply_expression_template (esm-giy)', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Auto-applied `match` rewrite rules (esm-spec §9.6, §9.6.8).
+// ---------------------------------------------------------------------------
+
+function gradModel(templates: Record<string, unknown>, rhs: unknown) {
+  return {
+    esm: '0.4.0',
+    metadata: { name: 'rewrite_rules', authors: ['t'] },
+    models: {
+      M: {
+        expression_templates: templates,
+        equations: [{ lhs: 'q', rhs }],
+      },
+    },
+  }
+}
+
+describe('match rewrite rules (esm-spec §9.6 auto-applied lowering)', () => {
+  it('auto-applies an operator-lowering rule: binds operand, passes through unbound params', () => {
+    const file = gradModel(
+      {
+        central_grad_x: {
+          params: ['f', 'dx'],
+          match: { op: 'grad', args: ['f'], dim: 'x' },
+          body: { op: '/', args: [{ op: '-', args: ['f', 'f'] }, 'dx'] },
+        },
+      },
+      { op: 'grad', args: ['c'], dim: 'x' },
+    )
+    const out = lowerExpressionTemplates(file) as any
+    expect('expression_templates' in out.models.M).toBe(false)
+    // f → "c" (operand); dx unbound by `match`, so it stays a bare ref.
+    expect(out.models.M.equations[0].rhs).toEqual({
+      op: '/',
+      args: [{ op: '-', args: ['c', 'c'] }, 'dx'],
+    })
+  })
+
+  it('binds an operand metavariable to a full sub-AST (repeated occurrences)', () => {
+    const file = gradModel(
+      {
+        dup: {
+          params: ['f'],
+          match: { op: 'grad', args: ['f'], dim: 'x' },
+          body: { op: 'makearray', args: ['f', 'f'] },
+        },
+      },
+      { op: 'grad', args: [{ op: '+', args: ['a', 'b'] }], dim: 'x' },
+    )
+    const out = lowerExpressionTemplates(file) as any
+    expect(out.models.M.equations[0].rhs).toEqual({
+      op: 'makearray',
+      args: [
+        { op: '+', args: ['a', 'b'] },
+        { op: '+', args: ['a', 'b'] },
+      ],
+    })
+  })
+
+  it('binds a scalar-field metavariable (dim) to the matched literal', () => {
+    const file = gradModel(
+      {
+        grad_any: {
+          params: ['f', 'd'],
+          match: { op: 'grad', args: ['f'], dim: 'd' },
+          body: { op: 'index', args: ['f'], along: 'd' },
+        },
+      },
+      { op: 'grad', args: ['c'], dim: 'y' },
+    )
+    const out = lowerExpressionTemplates(file) as any
+    // d → "y" (scalar field literal), substituted into the body's `along` field.
+    expect(out.models.M.equations[0].rhs).toEqual({ op: 'index', args: ['c'], along: 'y' })
+  })
+
+  it('applies match rules in declaration order (first match wins)', () => {
+    const file = gradModel(
+      {
+        rule_a: { params: ['f'], match: { op: 'grad', args: ['f'], dim: 'x' }, body: { op: 'sin', args: ['f'] } },
+        rule_b: { params: ['g'], match: { op: 'grad', args: ['g'], dim: 'x' }, body: { op: 'cos', args: ['g'] } },
+      },
+      { op: 'grad', args: ['c'], dim: 'x' },
+    )
+    const out = lowerExpressionTemplates(file) as any
+    expect(out.models.M.equations[0].rhs).toEqual({ op: 'sin', args: ['c'] })
+  })
+
+  it('does not re-scan a replacement body (single pass, no recursion)', () => {
+    const file = gradModel(
+      {
+        g2d: { params: ['f'], match: { op: 'grad', args: ['f'], dim: 'x' }, body: { op: 'div', args: ['f'], dim: 'x' } },
+        d2z: { params: ['f'], match: { op: 'div', args: ['f'], dim: 'x' }, body: { op: 'abs', args: ['f'] } },
+      },
+      { op: 'grad', args: ['c'], dim: 'x' },
+    )
+    const out = lowerExpressionTemplates(file) as any
+    // grad → div fires; the freshly produced div is NOT re-scanned, so d2z never runs.
+    expect(out.models.M.equations[0].rhs).toEqual({ op: 'div', args: ['c'], dim: 'x' })
+  })
+
+  it('rejects a match rule whose body re-introduces its own pattern (rewrite_rule_nonterminating)', () => {
+    const file = gradModel(
+      {
+        bad: {
+          params: ['f'],
+          match: { op: 'grad', args: ['f'], dim: 'x' },
+          body: { op: '+', args: [{ op: 'grad', args: ['f'], dim: 'x' }, 'f'] },
+        },
+      },
+      { op: 'grad', args: ['c'], dim: 'x' },
+    )
+    expect(() => lowerExpressionTemplates(file)).toThrow(/rewrite_rule_nonterminating/)
+    try {
+      lowerExpressionTemplates(gradModel(
+        {
+          bad: {
+            params: ['f'],
+            match: { op: 'grad', args: ['f'], dim: 'x' },
+            body: { op: 'grad', args: ['f'], dim: 'x' },
+          },
+        },
+        'c',
+      ))
+      throw new Error('expected error')
+    } catch (e) {
+      expect((e as ExpressionTemplateError).code).toBe('rewrite_rule_nonterminating')
+    }
+  })
+
+  it('ignores node fields the pattern omits; leaves non-matching nodes untouched', () => {
+    const file = {
+      esm: '0.4.0',
+      metadata: { name: 'partial_match', authors: ['t'] },
+      models: {
+        M: {
+          expression_templates: {
+            grad_x: {
+              params: ['f'],
+              match: { op: 'grad', args: ['f'], dim: 'x' },
+              body: { op: 'makearray', args: ['f'] },
+            },
+          },
+          equations: [
+            // Matches despite carrying an extra field absent from the pattern.
+            { lhs: 'p', rhs: { op: 'grad', args: ['c'], dim: 'x', note: 'keep' } },
+            // Does not match (dim differs) — left untouched.
+            { lhs: 'q', rhs: { op: 'grad', args: ['c'], dim: 'y' } },
+          ],
+        },
+      },
+    }
+    const out = lowerExpressionTemplates(file) as any
+    expect(out.models.M.equations[0].rhs).toEqual({ op: 'makearray', args: ['c'] })
+    expect(out.models.M.equations[1].rhs).toEqual({ op: 'grad', args: ['c'], dim: 'y' })
+  })
+
+  it('accepts the `match` field through load() and auto-applies the rule', () => {
+    const fixture = {
+      esm: '0.4.0',
+      metadata: { name: 'match_load', authors: ['t'] },
+      reaction_systems: {
+        chem: {
+          species: { A: { default: 1.0 }, B: { default: 0.0 } },
+          parameters: { T: { default: 298.15 }, num_density: { default: 2.5e19 } },
+          expression_templates: {
+            max_to_sum: {
+              params: ['a', 'b'],
+              match: { op: 'max', args: ['a', 'b'] },
+              body: { op: '+', args: ['a', 'b'] },
+            },
+          },
+          reactions: [
+            {
+              id: 'R1',
+              substrates: [{ species: 'A', stoichiometry: 1 }],
+              products: [{ species: 'B', stoichiometry: 1 }],
+              rate: { op: 'max', args: ['T', 'num_density'] },
+            },
+          ],
+        },
+      },
+    }
+    const file = load(fixture)
+    expect(file.reaction_systems!.chem.reactions[0].rate).toEqual({
+      op: '+',
+      args: ['T', 'num_density'],
+    })
+    expect('expression_templates' in (file.reaction_systems!.chem as Record<string, unknown>)).toBe(
+      false,
+    )
+  })
+})

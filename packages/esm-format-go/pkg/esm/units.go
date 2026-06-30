@@ -712,45 +712,14 @@ func validateModelUnits(modelName string, model *Model, basePath string, file *E
 			Message: fmt.Sprintf("could not parse unit: %v", err),
 		})
 	}
-	coordEnv := modelCoordinateUnitEnv(file, model)
 	for i, eq := range model.Equations {
 		eqPath := fmt.Sprintf("%s.equations[%d]", basePath, i)
-		if w := validateEquationDimensionsCoords(&eq, env, coordEnv, eqPath); w != nil {
+		if w := validateEquationDimensionsCoords(&eq, env, nil, eqPath); w != nil {
 			result.UnitWarnings = append(result.UnitWarnings, *w)
 		}
 	}
 	checkConversionFactorConsistency(modelName, model, result)
 	checkPhysicalConstantUnits(modelName, model, result)
-	checkSpatialOperatorCoordinateUnits(modelName, model, file, result)
-}
-
-// modelCoordinateUnitEnv resolves the model's domain.spatial block into a map
-// of coordinate name → *Unit. A nil map means the model has no domain
-// reference or the domain/spatial block is missing. An entry whose value is
-// nil means the coordinate is declared without a `units` field.
-func modelCoordinateUnitEnv(file *EsmFile, model *Model) map[string]*Unit {
-	if file == nil || model == nil || model.Domain == nil || *model.Domain == "" {
-		return nil
-	}
-	domain, ok := file.Domains[*model.Domain]
-	if !ok || len(domain.Spatial) == 0 {
-		return nil
-	}
-	out := make(map[string]*Unit, len(domain.Spatial))
-	for dimName, sd := range domain.Spatial {
-		if strings.TrimSpace(sd.Units) == "" {
-			out[dimName] = nil
-			continue
-		}
-		u, err := ParseUnit(sd.Units)
-		if err != nil {
-			out[dimName] = nil
-			continue
-		}
-		uc := u
-		out[dimName] = &uc
-	}
-	return out
 }
 
 // validateEquationDimensionsCoords mirrors ValidateEquationDimensions but uses
@@ -788,151 +757,6 @@ func validateEquationDimensionsCoords(eq *Equation, env map[string]Unit, coordEn
 		}
 	}
 	return nil
-}
-
-// checkSpatialOperatorCoordinateUnits walks every equation and observed
-// variable expression in a model looking for grad/div/laplacian operators
-// whose referenced coordinate (node.Dim) is either absent from the model's
-// domain or declared without units. Either condition leaves the operator's
-// result dimensionally unresolvable, so we emit a unit_inconsistency
-// structural error. Mirrors the TypeScript validator (units.ts 'grad' case)
-// and Python's _walk_expression_for_spatial_operator_checks.
-func checkSpatialOperatorCoordinateUnits(modelName string, model *Model, file *EsmFile, result *StructuralValidationResult) {
-	coordUnitStrs := modelCoordinateUnitStrings(file, model)
-	varUnits := map[string]string{}
-	for name, v := range model.Variables {
-		if v.Units != nil {
-			varUnits[name] = *v.Units
-		}
-	}
-	for i, eq := range model.Equations {
-		path := fmt.Sprintf("/models/%s/equations/%d", modelName, i)
-		walkSpatialOps(eq.LHS, modelName, path, i, coordUnitStrs, varUnits, result)
-		walkSpatialOps(eq.RHS, modelName, path, i, coordUnitStrs, varUnits, result)
-	}
-	for vname, v := range model.Variables {
-		if v.Type != "observed" || v.Expression == nil {
-			continue
-		}
-		path := fmt.Sprintf("/models/%s/variables/%s", modelName, vname)
-		walkSpatialOps(v.Expression, modelName, path, -1, coordUnitStrs, varUnits, result)
-	}
-}
-
-// modelCoordinateUnitStrings returns a {dim_name: unit_string} map for the
-// model's domain. Returns nil when no domain is wired up. An entry whose
-// value is the empty string means the coordinate is declared without units.
-// The second return slot is true if the model had a resolvable domain.spatial
-// block so callers can distinguish "no domain" from "coord not listed".
-func modelCoordinateUnitStrings(file *EsmFile, model *Model) map[string]string {
-	if file == nil || model == nil || model.Domain == nil || *model.Domain == "" {
-		return nil
-	}
-	domain, ok := file.Domains[*model.Domain]
-	if !ok {
-		return nil
-	}
-	if len(domain.Spatial) == 0 {
-		// Non-nil but empty — lets the walker distinguish "domain has no
-		// spatial block" from "no domain at all". We return nil here so
-		// the walker skips silently; there is nothing to check.
-		return nil
-	}
-	out := make(map[string]string, len(domain.Spatial))
-	for dimName, sd := range domain.Spatial {
-		out[dimName] = strings.TrimSpace(sd.Units)
-	}
-	return out
-}
-
-// walkSpatialOps recurses over an expression tree looking for grad/div/
-// laplacian nodes. Emits a structural unit_inconsistency error when the
-// coordinate (node.Dim) is not declared in coordUnits or is declared without
-// units. equationIndex < 0 means the expression is an observed variable
-// expression rather than an equation side.
-func walkSpatialOps(
-	expr Expression,
-	modelName, path string,
-	equationIndex int,
-	coordUnits map[string]string,
-	varUnits map[string]string,
-	result *StructuralValidationResult,
-) {
-	node, ok := exprAsNode(expr)
-	if !ok {
-		return
-	}
-	if node.Op == "grad" || node.Op == "div" || node.Op == "laplacian" {
-		if node.Dim != nil && coordUnits != nil {
-			dimName := *node.Dim
-			coordU, present := coordUnits[dimName]
-			if !present || coordU == "" || isDimensionlessUnitString(coordU) {
-				details := map[string]interface{}{
-					"operator": node.Op,
-					"dim":      dimName,
-				}
-				if equationIndex >= 0 {
-					details["equation_index"] = equationIndex
-				}
-				if len(node.Args) >= 1 {
-					if varName, ok := node.Args[0].(string); ok {
-						details["variable"] = varName
-						if u, hasUnits := varUnits[varName]; hasUnits {
-							details["variable_units"] = u
-						}
-					}
-				}
-				if !present {
-					details["coordinate_units"] = nil
-					details["reason"] = "coordinate not declared in model's domain"
-				} else if coordU == "" {
-					details["coordinate_units"] = nil
-				} else {
-					details["coordinate_units"] = coordU
-				}
-				message := opLabel(node.Op) + " operator applied to variable with incompatible spatial units"
-				result.StructuralErrors = append(result.StructuralErrors, StructuralError{
-					Path:    path,
-					Code:    ErrorUnitInconsistency,
-					Message: message,
-					Details: details,
-				})
-			}
-		}
-	}
-	for _, arg := range node.Args {
-		walkSpatialOps(arg, modelName, path, equationIndex, coordUnits, varUnits, result)
-	}
-}
-
-// opLabel renders the spatial-operator name for error messages.
-func opLabel(op string) string {
-	switch op {
-	case "grad":
-		return "Gradient"
-	case "div":
-		return "Divergence"
-	case "laplacian":
-		return "Laplacian"
-	}
-	return op
-}
-
-// isDimensionlessUnitString reports whether a unit string denotes a
-// dimensionless quantity. A missing / empty string is treated as
-// dimensionless (the coordinate was declared without units).
-func isDimensionlessUnitString(s string) bool {
-	s = strings.TrimSpace(s)
-	if s == "" || s == "1" || s == "dimensionless" {
-		return true
-	}
-	u, err := ParseUnit(s)
-	if err != nil {
-		// Unparseable — treat conservatively as non-dimensionless so we
-		// don't double-flag unit-registry gaps as coordinate errors.
-		return false
-	}
-	return u.Dim.IsDimensionless()
 }
 
 // knownPhysicalConstant pairs a canonical unit string with a human description.

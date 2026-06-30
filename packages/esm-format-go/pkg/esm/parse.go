@@ -16,13 +16,6 @@ import (
 // DeprecationWarningCode identifies a specific deprecation warning emitted at load time.
 type DeprecationWarningCode string
 
-const (
-	// DeprecatedDomainBC is emitted when a file declares
-	// domains.<d>.boundary_conditions. The field moved to
-	// models.<M>.boundary_conditions in v0.2.0 (RFC §9 / §10.1).
-	DeprecatedDomainBC DeprecationWarningCode = "E_DEPRECATED_DOMAIN_BC"
-)
-
 // DeprecationWarningLogger is invoked once per deprecation the loader detects.
 // Default is to log via the standard `log` package; set to nil to silence.
 var DeprecationWarningLogger = func(code DeprecationWarningCode, message string) {
@@ -70,12 +63,6 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 			if err := RejectExpressionTemplatesPreV04(preCheck); err != nil {
 				return nil, err
 			}
-			// v0.7.0 pure-I/O hard break: reject pre-0.7.0 loader files
-			// still carrying the removed DataLoader.regridding / .spatial
-			// blocks (RFC pure-io-data-loaders §4.1, bead ess-v9a.7).
-			if err := RejectLegacyDataLoaderShapes(preCheck); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -120,21 +107,6 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 	// otherwise it is an integer.
 	normalizeNumericLiterals(&esmFile)
 
-	// Emit deprecation warnings for any domain-level boundary_conditions
-	// encountered. v0.2.0 supersedes this field with Model.BoundaryConditions
-	// (RFC §9 / §10.1); a follow-up bead will turn this into a hard error.
-	if DeprecationWarningLogger != nil {
-		for domainName, domain := range esmFile.Domains {
-			if len(domain.BoundaryConditions) > 0 {
-				DeprecationWarningLogger(DeprecatedDomainBC, fmt.Sprintf(
-					"domains.%s.boundary_conditions is deprecated; "+
-						"migrate to models.<M>.boundary_conditions (RFC §9).",
-					domainName,
-				))
-			}
-		}
-	}
-
 	// v0.3.0 closes the function registry (closed-function-registry RFC).
 	// Reject any v0.2.x file that still carries the removed top-level
 	// `operators` / `registered_functions` blocks or an explicit `call`
@@ -154,82 +126,12 @@ func LoadString(jsonStr string) (*EsmFile, error) {
 		return nil, err
 	}
 
-	// Validate grid cross-references (§6). Schema already handles shape, but we
-	// check that loader-kind generators/connectivity point at a real data_loaders
-	// entry and that builtin names are in the closed set §6.4.1 defines.
-	if err := validateGrids(&esmFile); err != nil {
-		return nil, err
-	}
-
 	// According to spec Section 2.1a: load() should succeed for valid JSON that
 	// passes schema validation but fails structural validation. Structural issues
 	// should only be reported by the separate validate() function.
 	// Therefore, we skip the structural validation here.
 
 	return &esmFile, nil
-}
-
-// knownGridBuiltins is the closed set of grid builtin generator names per
-// docs/rfcs/discretization.md §6.4.1. The set is currently empty; adding a
-// new name is a minor version bump.
-var knownGridBuiltins = map[string]struct{}{}
-
-// validateGrids checks grid cross-references against top-level data_loaders
-// and the closed builtin set (RFC §6.4 / §6.5).
-func validateGrids(esmFile *EsmFile) error {
-	for gridName, grid := range esmFile.Grids {
-		// Metric arrays
-		for arrName, arr := range grid.MetricArrays {
-			if err := validateGridGenerator(
-				fmt.Sprintf("grids.%s.metric_arrays.%s.generator", gridName, arrName),
-				&arr.Generator, esmFile); err != nil {
-				return err
-			}
-		}
-		// Unstructured connectivity
-		for cName, c := range grid.Connectivity {
-			if err := validateGridConnectivity(
-				fmt.Sprintf("grids.%s.connectivity.%s", gridName, cName),
-				&c, esmFile); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func validateGridGenerator(path string, g *GridMetricGenerator, esmFile *EsmFile) error {
-	switch g.Kind {
-	case "loader":
-		if g.Loader == nil || *g.Loader == "" {
-			return fmt.Errorf("%s: kind=loader requires a loader name", path)
-		}
-		if _, ok := esmFile.DataLoaders[*g.Loader]; !ok {
-			return fmt.Errorf("%s: loader %q not found in top-level data_loaders", path, *g.Loader)
-		}
-	case "builtin":
-		if g.Name == nil || *g.Name == "" {
-			return fmt.Errorf("%s: kind=builtin requires a name", path)
-		}
-		if _, ok := knownGridBuiltins[*g.Name]; !ok {
-			return fmt.Errorf("%s: E_UNKNOWN_BUILTIN: unknown grid builtin %q (no builtins are currently defined)", path, *g.Name)
-		}
-	}
-	return nil
-}
-
-func validateGridConnectivity(path string, c *GridConnectivity, esmFile *EsmFile) error {
-	if c.Loader != nil && *c.Loader != "" {
-		if _, ok := esmFile.DataLoaders[*c.Loader]; !ok {
-			return fmt.Errorf("%s: loader %q not found in top-level data_loaders", path, *c.Loader)
-		}
-	}
-	if c.Generator != nil {
-		if err := validateGridGenerator(path+".generator", c.Generator, esmFile); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // normalizeJSONNumber converts a json.Number to int64 (no '.', no 'e'/'E') or

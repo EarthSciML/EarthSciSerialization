@@ -99,9 +99,30 @@ def _validate_templates(templates: dict, scope: str) -> None:
                 f"{scope}.expression_templates.{name}: 'body' is required",
             )
         _assert_no_nested_apply(decl["body"], name, "/body")
+        # ``match`` (optional) turns the entry into an auto-applied rewrite rule.
+        # It must be a pattern Expression (a bare-metavar string or an op node);
+        # a body re-introducing this pattern is rejected later as
+        # ``rewrite_rule_nonterminating`` (see _build_match_rules).
+        if "match" in decl:
+            match = decl["match"]
+            if not (isinstance(match, str) or _is_object(match)):
+                raise ExpressionTemplateError(
+                    "apply_expression_template_invalid_declaration",
+                    f"{scope}.expression_templates.{name}: 'match' must be a "
+                    "pattern Expression (a metavariable string or an op node)",
+                )
+            _assert_no_nested_apply(match, name, "/match")
 
 
 def _substitute(body: Any, bindings: dict[str, Any]) -> Any:
+    """Pure structural substitution: every bare-string occurrence of a bound
+    metavariable in ``body`` is replaced by a deep copy of its bound AST/literal.
+
+    This is the single substitution primitive of the rewrite engine — it
+    instantiates both explicit ``apply_expression_template`` bodies (metavars
+    bound from ``bindings``) and auto-applied ``match``-rule bodies (metavars
+    bound by structural matching).
+    """
     if isinstance(body, str):
         if body in bindings:
             return copy.deepcopy(bindings[body])
@@ -113,7 +134,111 @@ def _substitute(body: Any, bindings: dict[str, Any]) -> Any:
     return body
 
 
-def _expand_apply(node: dict, templates: dict, scope: str) -> Any:
+# --- match-rule machinery (auto-applied rewrite rules, esm-spec §9.6) ---------
+#
+# A MatchRule pairs a pattern Expression with a replacement body. ``params`` are
+# the metavariables: a param appearing in an operand/``args`` position binds to
+# the matched sub-AST; a param in a scalar field (``dim``, ``side``, ...) binds
+# to the matched literal. The same ``_match`` recursion handles both positions.
+
+class MatchRule:
+    __slots__ = ("name", "pattern", "params", "body")
+
+    def __init__(self, name: str, pattern: Any, params: set, body: Any) -> None:
+        self.name = name
+        self.pattern = pattern
+        self.params = params
+        self.body = body
+
+
+def _merge_bindings(acc: dict, new: dict) -> bool:
+    """Merge ``new`` into ``acc``; a repeated metavariable must bind structurally
+    equal sub-ASTs. Returns False on a conflicting re-bind."""
+    for k, v in new.items():
+        if k in acc:
+            if acc[k] != v:
+                return False
+        else:
+            acc[k] = v
+    return True
+
+
+def _match(pattern: Any, node: Any, params: set):
+    """Structurally match ``pattern`` against ``node``. Returns a dict of
+    metavariable bindings on success, or ``None`` on failure. A bare-string
+    pattern that is a param is a wildcard binding to whatever ``node`` is;
+    otherwise literals must compare equal and dict/list shapes must agree."""
+    if isinstance(pattern, str):
+        if pattern in params:
+            return {pattern: node}
+        return {} if (isinstance(node, str) and node == pattern) else None
+    if isinstance(pattern, bool):
+        return {} if (isinstance(node, bool) and node == pattern) else None
+    if isinstance(pattern, (int, float)):
+        # bool is a subclass of int; keep True/1 distinct from a numeric literal.
+        if isinstance(node, bool):
+            return None
+        return {} if (isinstance(node, (int, float)) and node == pattern) else None
+    if _is_array(pattern):
+        if not _is_array(node) or len(node) != len(pattern):
+            return None
+        acc: dict = {}
+        for p, n in zip(pattern, node):
+            b = _match(p, n, params)
+            if b is None or not _merge_bindings(acc, b):
+                return None
+        return acc
+    if _is_object(pattern):
+        if not _is_object(node):
+            return None
+        acc = {}
+        for k, pv in pattern.items():
+            if k not in node:
+                return None
+            b = _match(pv, node[k], params)
+            if b is None or not _merge_bindings(acc, b):
+                return None
+        return acc
+    # None or any other scalar: exact equality.
+    return {} if node == pattern else None
+
+
+def _pattern_occurs(tree: Any, pattern: Any, params: set) -> bool:
+    """True if ``pattern`` structurally matches any node within ``tree`` (the
+    node itself or any descendant) — the non-termination test for a rule whose
+    ``body`` re-introduces its own ``match`` pattern."""
+    if _match(pattern, tree, params) is not None:
+        return True
+    if _is_array(tree):
+        return any(_pattern_occurs(c, pattern, params) for c in tree)
+    if _is_object(tree):
+        return any(_pattern_occurs(v, pattern, params) for v in tree.values())
+    return False
+
+
+def _build_match_rules(templates: dict, scope: str) -> list:
+    """Collect the ``match``-carrying templates as auto-applied rewrite rules,
+    in declaration order. Rejects a rule whose ``body`` re-introduces its own
+    pattern with ``rewrite_rule_nonterminating`` (esm-spec §9.6.3)."""
+    rules: list = []
+    for name, decl in templates.items():
+        if "match" not in decl:
+            continue
+        pattern = decl["match"]
+        params = set(decl["params"])
+        body = decl["body"]
+        if _pattern_occurs(body, pattern, params):
+            raise ExpressionTemplateError(
+                "rewrite_rule_nonterminating",
+                f"{scope}.expression_templates.{name}: the rewrite rule's body "
+                "re-introduces its own match pattern; single-pass rewriting "
+                "(no re-scan) would not terminate",
+            )
+        rules.append(MatchRule(name, pattern, params, body))
+    return rules
+
+
+def _expand_apply(node: dict, templates: dict, match_rules: list, scope: str) -> Any:
     name = node.get("name")
     if not isinstance(name, str) or not name:
         raise ExpressionTemplateError(
@@ -150,17 +275,38 @@ def _expand_apply(node: dict, templates: dict, scope: str) -> Any:
                 f"{scope}: apply_expression_template '{name}' supplies unknown "
                 f"param '{p}'",
             )
-    resolved = {k: _walk(v, templates, scope) for k, v in bindings.items()}
+    # Bottom-up: rewrite each binding (which may itself contain apply nodes or
+    # match-triggering ops) before substituting into the body. The substituted
+    # body is NOT re-scanned (single-pass, §9.6.3).
+    resolved = {
+        k: _rewrite_node(v, templates, match_rules, scope)
+        for k, v in bindings.items()
+    }
     return _substitute(decl["body"], resolved)
 
 
-def _walk(node: Any, templates: dict, scope: str) -> Any:
+def _rewrite_node(node: Any, templates: dict, match_rules: list, scope: str) -> Any:
+    """The single bottom-up rewrite pass (esm-spec §9.6).
+
+    Children are rewritten first; then, at the current node, explicit
+    ``apply_expression_template`` ops are expanded and auto-applied ``match``
+    rules are tried in declaration order — the first rule that matches fires and
+    its instantiated body replaces the node WITHOUT being re-scanned.
+    """
     if _is_array(node):
-        return [_walk(c, templates, scope) for c in node]
+        return [_rewrite_node(c, templates, match_rules, scope) for c in node]
     if _is_object(node):
         if node.get("op") == APPLY_OP:
-            return _expand_apply(node, templates, scope)
-        return {k: _walk(v, templates, scope) for k, v in node.items()}
+            return _expand_apply(node, templates, match_rules, scope)
+        rewritten = {
+            k: _rewrite_node(v, templates, match_rules, scope)
+            for k, v in node.items()
+        }
+        for rule in match_rules:
+            binds = _match(rule.pattern, rewritten, rule.params)
+            if binds is not None:
+                return _substitute(rule.body, binds)
+        return rewritten
     return node
 
 
@@ -218,9 +364,31 @@ def reject_expression_templates_pre_v04(view: Any) -> None:
         )
 
 
+def _has_match_rules(file: dict) -> bool:
+    """True if any component declares an ``expression_templates`` entry carrying
+    a ``match`` (i.e. an auto-applied rewrite rule that fires without an explicit
+    ``apply_expression_template`` invocation)."""
+    for compkind in ("models", "reaction_systems"):
+        comps = file.get(compkind)
+        if not _is_object(comps):
+            continue
+        for comp in comps.values():
+            tplraw = _is_object(comp) and comp.get("expression_templates")
+            if _is_object(tplraw) and any(
+                _is_object(d) and "match" in d for d in tplraw.values()
+            ):
+                return True
+    return False
+
+
 def lower_expression_templates(file: dict) -> dict:
-    """Expand all apply_expression_template ops in `file` and strip the
-    expression_templates blocks. Returns a new dict (does not mutate input).
+    """Run the single load-time rewrite pass (esm-spec §9.6) over `file`.
+
+    One bottom-up pass per component expands explicit
+    ``apply_expression_template`` ops and auto-applies the component's
+    ``match`` rewrite rules in template declaration order (replacements are not
+    re-scanned); the ``expression_templates`` blocks are then stripped. Returns
+    a new dict (does not mutate input).
 
     Pre-condition: the input has been schema-validated.
     """
@@ -229,9 +397,10 @@ def lower_expression_templates(file: dict) -> dict:
     if not _is_object(file):
         return file
 
-    apply_paths = _find_apply_paths(file)
     out = copy.deepcopy(file)
-    if not apply_paths:
+    # Nothing to do unless something triggers the engine: an explicit apply op
+    # somewhere, or a component declaring a ``match`` rewrite rule.
+    if not _find_apply_paths(out) and not _has_match_rules(out):
         return _strip_expression_templates(out)
 
     for compkind in ("models", "reaction_systems"):
@@ -243,14 +412,18 @@ def lower_expression_templates(file: dict) -> dict:
                 continue
             tplraw = comp.get("expression_templates")
             templates: dict[str, Any] = {}
+            match_rules: list = []
             if _is_object(tplraw):
                 for tname, tdecl in tplraw.items():
                     templates[tname] = tdecl
                 _validate_templates(templates, f"{compkind}.{cname}")
+                match_rules = _build_match_rules(templates, f"{compkind}.{cname}")
             for k in list(comp.keys()):
                 if k == "expression_templates":
                     continue
-                comp[k] = _walk(comp[k], templates, f"{compkind}.{cname}.{k}")
+                comp[k] = _rewrite_node(
+                    comp[k], templates, match_rules, f"{compkind}.{cname}.{k}"
+                )
             comp.pop("expression_templates", None)
 
     leftover = _find_apply_paths(out)

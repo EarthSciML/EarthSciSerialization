@@ -256,23 +256,19 @@ end
 # ========================================
 
 """
-    Equation(lhs::Expr, rhs::Expr; _comment=nothing, region=nothing)
+    Equation(lhs::Expr, rhs::Expr; _comment=nothing)
 
 Mathematical equation with left-hand side and right-hand side expressions.
 Used for differential equations and algebraic constraints.
 Optional `_comment` provides a human-readable description.
-Optional `region` (RuleRegion) scopes the equation to a spatial region;
-the discretization engine dispatches region-scoped equations via a synthetic
-`bc(...)` wrapper rather than the interior rule pass.
 """
 struct Equation
     lhs::Expr
     rhs::Expr
     _comment::Union{String,Nothing}
-    region::Union{Dict{String,Any},String,Nothing}
 
-    Equation(lhs::Expr, rhs::Expr; _comment=nothing, region=nothing) =
-        new(lhs, rhs, _comment, region)
+    Equation(lhs::Expr, rhs::Expr; _comment=nothing) =
+        new(lhs, rhs, _comment)
 end
 
 """
@@ -520,17 +516,11 @@ struct Assertion
 end
 
 """
-    Test(id, time_span, assertions; description, initial_conditions, parameter_overrides, tolerance, grid_refs)
+    Test(id, time_span, assertions; description, initial_conditions, parameter_overrides, tolerance)
 
 Inline validation test for a Model (schema gt-cc1). Defines the run
 configuration — initial conditions, parameter overrides, simulation time
 span — and a list of scalar assertions that must hold.
-
-`grid_refs` carries the resolved `ref` strings from the test's `grid_refs`
-array (esm-spec.md §6.6.2). Each string is a URL or path to a
-GridDiscretization Descriptor file (§4.7.1). When non-empty, the test should
-be run once per entry with the GDD's grid and discretizations applied; use
-`resolve_grid_refs` to produce the corresponding discretized ESM dicts.
 """
 struct Test
     id::String
@@ -540,18 +530,16 @@ struct Test
     time_span::TimeSpan
     tolerance::Union{Tolerance,Nothing}
     assertions::Vector{Assertion}
-    grid_refs::Vector{String}
 
     function Test(id::AbstractString, time_span::TimeSpan, assertions::Vector{Assertion};
                   description=nothing,
                   initial_conditions=Dict{String,Float64}(),
                   parameter_overrides=Dict{String,Float64}(),
-                  tolerance=nothing,
-                  grid_refs=String[])
+                  tolerance=nothing)
         return new(String(id), description,
                    Dict{String,Float64}(string(k) => Float64(v) for (k, v) in initial_conditions),
                    Dict{String,Float64}(string(k) => Float64(v) for (k, v) in parameter_overrides),
-                   time_span, tolerance, assertions, Vector{String}(grid_refs))
+                   time_span, tolerance, assertions)
     end
 end
 
@@ -589,25 +577,6 @@ struct IndexSet
     IndexSet(kind::AbstractString; size=nothing, members=nothing, of=nothing,
              offsets=nothing, values=nothing, from_faq=nothing, members_raw=nothing) =
         new(String(kind), size, members, of, offsets, values, from_faq, members_raw)
-end
-
-"""
-    RegridSpec
-
-Per-variable regridding configuration declared on a model that owns a data
-loader as a subsystem (RFC pure-io-data-loaders §5.2, §6). All fields are
-optional. `method` overrides the staggering-derived default kernel
-(`"conservative"`, `"bspline"`, or `"cell_average"`); `missing_value` is the
-no-data fill consumed only by `cell_average` (scattered-point) regridding —
-the value placed in a target cell with no contributing source station.
-"""
-struct RegridSpec
-    method::Union{String,Nothing}
-    missing_value::Union{Float64,Nothing}
-    description::Union{String,Nothing}
-
-    RegridSpec(; method=nothing, missing_value=nothing, description=nothing) =
-        new(method, missing_value, description)
 end
 
 """
@@ -655,7 +624,6 @@ struct Model
     discrete_events::Vector{DiscreteEvent}
     continuous_events::Vector{ContinuousEvent}
     subsystems::Dict{String,Any}
-    domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
     initialization_equations::Vector{Equation}
@@ -665,27 +633,21 @@ struct Model
     # Maps a name to its IndexSet declaration; `ranges[*]` `{from: <name>}`
     # references resolve against it. Empty when the model declares none.
     index_sets::Dict{String,IndexSet}
-    # Per-variable regridding configuration for fields consumed from data-loader
-    # subsystems (RFC pure-io-data-loaders §5.2, §6), keyed by variable name.
-    # Empty when the model declares none.
-    regrid::Dict{String,RegridSpec}
 
     # Primary constructor with separate event arrays
     Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
           discrete_events::Vector{DiscreteEvent}, continuous_events::Vector{ContinuousEvent},
           subsystems::AbstractDict{String};
-          domain=nothing, tolerance=nothing, tests=Test[],
+          tolerance=nothing, tests=Test[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
           system_kind=nothing,
-          index_sets=Dict{String,IndexSet}(),
-          regrid=Dict{String,RegridSpec}()) =
+          index_sets=Dict{String,IndexSet}()) =
         new(Dict{String,ModelVariable}(variables), equations,
             discrete_events, continuous_events, Dict{String,Any}(subsystems),
-            domain, tolerance, tests,
+            tolerance, tests,
             initialization_equations, guesses, system_kind,
-            Dict{String,IndexSet}(index_sets),
-            Dict{String,RegridSpec}(regrid))
+            Dict{String,IndexSet}(index_sets))
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -696,14 +658,12 @@ struct Model
                    continuous_events=ContinuousEvent[],
                    events=nothing,
                    subsystems=Dict{String,Any}(),
-                   domain=nothing,
                    tolerance=nothing,
                    tests=Test[],
                    initialization_equations=Equation[],
                    guesses=Dict{String,Union{Float64,Expr}}(),
                    system_kind=nothing,
-                   index_sets=Dict{String,IndexSet}(),
-                   regrid=Dict{String,RegridSpec}())
+                   index_sets=Dict{String,IndexSet}())
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -719,10 +679,9 @@ struct Model
         end
         return new(Dict{String,ModelVariable}(variables), equations,
                    discrete_events, continuous_events, Dict{String,Any}(subsystems),
-                   domain, tolerance, tests,
+                   tolerance, tests,
                    initialization_equations, guesses, system_kind,
-                   Dict{String,IndexSet}(index_sets),
-                   Dict{String,RegridSpec}(regrid))
+                   Dict{String,IndexSet}(index_sets))
     end
 end
 
@@ -825,11 +784,10 @@ struct CouplingOperatorCompose <: CouplingEntry
     systems::Vector{String}
     translate::Union{Dict{String,Any},Nothing}
     description::Union{String,Nothing}
-    interface::Union{String,Nothing}
     lifting::Union{String,Nothing}
 
-    CouplingOperatorCompose(systems::Vector{String}; translate=nothing, description=nothing, interface=nothing, lifting=nothing) =
-        new(systems, translate, description, interface, lifting)
+    CouplingOperatorCompose(systems::Vector{String}; translate=nothing, description=nothing, lifting=nothing) =
+        new(systems, translate, description, lifting)
 end
 
 """
@@ -841,11 +799,10 @@ struct CouplingCouple <: CouplingEntry
     systems::Vector{String}
     connector::Dict{String,Any}
     description::Union{String,Nothing}
-    interface::Union{String,Nothing}
     lifting::Union{String,Nothing}
 
-    CouplingCouple(systems::Vector{String}, connector::Dict{String,Any}; description=nothing, interface=nothing, lifting=nothing) =
-        new(systems, connector, description, interface, lifting)
+    CouplingCouple(systems::Vector{String}, connector::Dict{String,Any}; description=nothing, lifting=nothing) =
+        new(systems, connector, description, lifting)
 end
 
 """
@@ -859,11 +816,10 @@ struct CouplingVariableMap <: CouplingEntry
     transform::String
     factor::Union{Float64,Nothing}
     description::Union{String,Nothing}
-    interface::Union{String,Nothing}
     lifting::Union{String,Nothing}
 
-    CouplingVariableMap(from::String, to::String, transform::String; factor=nothing, description=nothing, interface=nothing, lifting=nothing) =
-        new(from, to, transform, factor, description, interface, lifting)
+    CouplingVariableMap(from::String, to::String, transform::String; factor=nothing, description=nothing, lifting=nothing) =
+        new(from, to, transform, factor, description, lifting)
 end
 
 """
@@ -971,33 +927,6 @@ struct DataLoaderVariable
 end
 
 """
-    DataLoaderMesh
-
-Mesh descriptor attached to a [`DataLoader`](@ref) with `kind = "mesh"`
-(esm-spec §8.9, discretization RFC §8.A). Declares which loader fields are
-integer-typed connectivity tables vs float-typed metric arrays, alongside the
-topology family the loader serves.
-
-Fields:
-- `topology`: closed enum — "mpas_voronoi" (MVP), "fesom_triangular", "icon_triangular"
-- `connectivity_fields`: integer-typed fields exposed to `grids.<g>.connectivity.<name>.field`
-- `metric_fields`: float-typed fields exposed to `grids.<g>.metric_arrays.<name>.generator.field`
-- `dimension_sizes`: optional map of dim → Int or the sentinel String `"from_file"`
-"""
-struct DataLoaderMesh
-    topology::String
-    connectivity_fields::Vector{String}
-    metric_fields::Vector{String}
-    dimension_sizes::Union{Dict{String,Any},Nothing}
-
-    DataLoaderMesh(topology::String,
-                   connectivity_fields::Vector{String},
-                   metric_fields::Vector{String};
-                   dimension_sizes=nothing) =
-        new(topology, connectivity_fields, metric_fields, dimension_sizes)
-end
-
-"""
     DataLoaderDeterminism
 
 Reproducibility contract a loader advertises to bindings (esm-spec §8.9.2).
@@ -1019,26 +948,6 @@ struct DataLoaderDeterminism
 end
 
 """
-    Grid
-
-Top-level grid definition (RFC §6). Minimal typed wrapper: the full grid
-tree is preserved as an opaque `Dict{String,Any}` so round-trips are
-lossless, while the schema (already loaded by `validate_schema`) enforces
-structural constraints (family, metric_arrays, connectivity, generators,
-etc.). Post-parse validation in `coerce_grids` enforces the semantic
-constraints not expressible in pure JSON Schema: loader-refs must point
-at existing `data_loaders` entries, and `kind: "builtin"` names must be
-from the closed set of canonical builtin generators (RFC §6.4.1; the set
-is currently empty). Also used as the optional `grid` field of a
-[`DataLoader`](@ref) describing that loader's native grid.
-"""
-struct Grid
-    data::Dict{String,Any}
-
-    Grid(data::Dict{String,Any}) = new(data)
-end
-
-"""
     DataLoader
 
 Generic, runtime-agnostic description of an external data source. Pure I/O:
@@ -1049,11 +958,9 @@ Authentication and algorithm-specific tuning are runtime-only and not part
 of the schema.
 
 Fields:
-- `kind`: "grid" | "points" | "static" | "mesh" (structural kind; scientific role goes in `metadata.tags`)
+- `kind`: "grid" | "points" | "static" (structural kind; scientific role goes in `metadata.tags`)
 - `source`: `DataLoaderSource` with url_template + optional mirrors
 - `temporal`: optional `DataLoaderTemporal`
-- `grid`: optional `Grid` describing the data's native grid
-- `mesh`: optional `DataLoaderMesh` (required when `kind == "mesh"`, esm-spec §8.9)
 - `determinism`: optional `DataLoaderDeterminism` (esm-spec §8.9.2)
 - `variables`: schema-level variable name → `DataLoaderVariable` (minimum one)
 - `reference`: optional academic/data-source citation
@@ -1063,8 +970,6 @@ struct DataLoader
     kind::String
     source::DataLoaderSource
     temporal::Union{DataLoaderTemporal,Nothing}
-    grid::Union{Grid,Nothing}
-    mesh::Union{DataLoaderMesh,Nothing}
     determinism::Union{DataLoaderDeterminism,Nothing}
     variables::Dict{String,DataLoaderVariable}
     reference::Union{Reference,Nothing}
@@ -1073,12 +978,10 @@ struct DataLoader
     DataLoader(kind::String, source::DataLoaderSource,
                variables::Dict{String,DataLoaderVariable};
                temporal=nothing,
-               grid=nothing,
-               mesh=nothing,
                determinism=nothing,
                reference=nothing,
                metadata=nothing) =
-        new(kind, source, temporal, grid, mesh, determinism,
+        new(kind, source, temporal, determinism,
             variables, reference, metadata)
 end
 
@@ -1157,47 +1060,10 @@ end
 Spatial and temporal domain specification.
 """
 struct Domain
-    spatial::Union{Dict{String,Any},Nothing}
     temporal::Union{Dict{String,Any},Nothing}
 
     # Constructor with optional parameters
-    Domain(; spatial=nothing, temporal=nothing) = new(spatial, temporal)
-end
-
-"""
-    StaggeringRule
-
-Top-level staggering-rule declaration (RFC §7.4). Declares where quantities
-live on a grid; the `kind` field discriminates the staggering family
-(v0.2.0 ships `"unstructured_c_grid"`). The full rule tree is preserved as
-an opaque `Dict{String,Any}` so round-trips are lossless. Post-parse
-validation in `coerce_staggering_rules` enforces the semantic constraint
-that a `kind="unstructured_c_grid"` rule must reference a grid whose family
-is `"unstructured"`.
-"""
-struct StaggeringRule
-    data::Dict{String,Any}
-
-    StaggeringRule(data::Dict{String,Any}) = new(data)
-end
-
-"""
-    Interface
-
-Defines the geometric relationship between two domains of potentially different
-dimensionality. Specifies shared dimensions, constraints on non-shared dimensions,
-and regridding strategy.
-"""
-struct Interface
-    description::Union{String,Nothing}
-    domains::Vector{String}
-    dimension_mapping::Dict{String,Any}
-    regridding::Union{Dict{String,Any},Nothing}
-
-    # Constructor with optional parameters
-    Interface(domains::Vector{String}, dimension_mapping::Dict{String,Any};
-              description=nothing, regridding=nothing) =
-        new(description, domains, dimension_mapping, regridding)
+    Domain(; temporal=nothing) = new(temporal)
 end
 
 """
@@ -1254,15 +1120,14 @@ struct ReactionSystem
     reactions::Vector{Reaction}
     parameters::Vector{Parameter}
     subsystems::Dict{String,ReactionSystem}
-    domain::Union{String,Nothing}
     tolerance::Union{Tolerance,Nothing}
     tests::Vector{Test}
 
     # Constructor with optional parameters and subsystems
     ReactionSystem(species::Vector{Species}, reactions::Vector{Reaction};
                    parameters=Parameter[], subsystems=Dict{String,ReactionSystem}(),
-                   domain=nothing, tolerance=nothing, tests=Test[]) =
-        new(species, reactions, parameters, subsystems, domain, tolerance, tests)
+                   tolerance=nothing, tests=Test[]) =
+        new(species, reactions, parameters, subsystems, tolerance, tests)
 end
 
 """
@@ -1350,16 +1215,11 @@ struct EsmFile
     operators::Union{Dict{String,Operator},Nothing}
     registered_functions::Union{Dict{String,RegisteredFunction},Nothing}
     coupling::Vector{CouplingEntry}
-    domains::Union{Dict{String,Domain},Nothing}
-    interfaces::Union{Dict{String,Interface},Nothing}
-    grids::Union{Dict{String,Grid},Nothing}
-    staggering_rules::Union{Dict{String,StaggeringRule},Nothing}
-    # Named discretization schemes (RFC §7). Held opaquely as Dict{String,Any}
-    # because stencil coefficients and applies_to patterns carry pattern-
-    # variable strings (\$u, \$x, \$target) that don't map onto the Expression
-    # coercion pipeline. Standard Discretization (§7.1) entries pass through
-    # unchanged.
-    discretizations::Union{Dict{String,Any},Nothing}
+    # The single temporal domain shared by every component in the document
+    # (esm-spec v0.8.0: top-level `domain`, not a map of named domains). A
+    # document has at most one Domain; 0-D models simply have scalar-shaped
+    # variables and spatial models are shaped over index sets.
+    domain::Union{Domain,Nothing}
     # File-local enum mappings used by the `enum` AST op (esm-spec §9.3).
     # Keys are enum names; each value maps a symbol → positive integer.
     # `enum`-op nodes are lowered to `const`-int nodes at load time, so the
@@ -1378,17 +1238,12 @@ struct EsmFile
             operators=nothing,
             registered_functions=nothing,
             coupling=CouplingEntry[],
-            domains=nothing,
-            interfaces=nothing,
-            grids=nothing,
-            staggering_rules=nothing,
-            discretizations=nothing,
+            domain=nothing,
             enums=nothing,
             function_tables=nothing) =
         new(esm, metadata, models, reaction_systems, data_loaders,
             operators, registered_functions,
-            coupling, domains, interfaces, grids,
-            staggering_rules, discretizations, enums, function_tables)
+            coupling, domain, enums, function_tables)
 end
 
 # ========================================

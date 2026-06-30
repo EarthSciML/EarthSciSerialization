@@ -49,20 +49,6 @@ function serialize_index_set(is::IndexSet)::Dict{String,Any}
 end
 
 """
-    serialize_regrid_spec(rs::RegridSpec) -> Dict{String,Any}
-
-Serialize one `regrid` entry (RFC §5.2, §6). Mirrors `coerce_regrid_spec`;
-emits only the fields that are set.
-"""
-function serialize_regrid_spec(rs::RegridSpec)::Dict{String,Any}
-    d = Dict{String,Any}()
-    rs.method !== nothing && (d["method"] = rs.method)
-    rs.missing_value !== nothing && (d["missing_value"] = rs.missing_value)
-    rs.description !== nothing && (d["description"] = rs.description)
-    return d
-end
-
-"""
     serialize_expression(expr::Expr) -> Any
 
 Serialize an Expression to JSON-compatible format.
@@ -358,9 +344,6 @@ function serialize_equation(eq::Equation)::Dict{String,Any}
     if eq._comment !== nothing
         result["_comment"] = eq._comment
     end
-    if eq.region !== nothing
-        result["region"] = eq.region
-    end
     return result
 end
 
@@ -408,19 +391,9 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["subsystems"] = Dict(k => _serialize_subsystem(v) for (k, v) in model.subsystems)
     end
 
-    if model.domain !== nothing
-        result["domain"] = model.domain
-    end
-
     if !isempty(model.index_sets)
         result["index_sets"] = Dict{String,Any}(
             k => serialize_index_set(v) for (k, v) in model.index_sets
-        )
-    end
-
-    if !isempty(model.regrid)
-        result["regrid"] = Dict{String,Any}(
-            k => serialize_regrid_spec(v) for (k, v) in model.regrid
         )
     end
 
@@ -642,10 +615,6 @@ function serialize_reaction_system(rs::ReactionSystem)::Dict{String,Any}
         "reactions" => [serialize_reaction(r) for r in rs.reactions]
     )
 
-    if rs.domain !== nothing
-        result["domain"] = rs.domain
-    end
-
     if rs.tolerance !== nothing
         result["tolerance"] = serialize_tolerance(rs.tolerance)
     end
@@ -700,21 +669,6 @@ function serialize_data_loader_variable(v::DataLoaderVariable)::Dict{String,Any}
 end
 
 """
-    serialize_data_loader_mesh(m::DataLoaderMesh) -> Dict{String,Any}
-"""
-function serialize_data_loader_mesh(m::DataLoaderMesh)::Dict{String,Any}
-    result = Dict{String,Any}(
-        "topology" => m.topology,
-        "connectivity_fields" => m.connectivity_fields,
-        "metric_fields" => m.metric_fields,
-    )
-    if m.dimension_sizes !== nothing
-        result["dimension_sizes"] = m.dimension_sizes
-    end
-    return result
-end
-
-"""
     serialize_data_loader_determinism(d::DataLoaderDeterminism) -> Dict{String,Any}
 """
 function serialize_data_loader_determinism(d::DataLoaderDeterminism)::Dict{String,Any}
@@ -740,12 +694,6 @@ function serialize_data_loader(loader::DataLoader)::Dict{String,Any}
     )
     if loader.temporal !== nothing
         result["temporal"] = serialize_data_loader_temporal(loader.temporal)
-    end
-    if loader.grid !== nothing
-        result["grid"] = serialize_grid(loader.grid)
-    end
-    if loader.mesh !== nothing
-        result["mesh"] = serialize_data_loader_mesh(loader.mesh)
     end
     if loader.determinism !== nothing
         det_dict = serialize_data_loader_determinism(loader.determinism)
@@ -858,9 +806,6 @@ function serialize_operator_compose(entry::CouplingOperatorCompose)::Dict{String
     if entry.description !== nothing
         result["description"] = entry.description
     end
-    if entry.interface !== nothing
-        result["interface"] = entry.interface
-    end
     if entry.lifting !== nothing
         result["lifting"] = entry.lifting
     end
@@ -882,9 +827,6 @@ function serialize_couple(entry::CouplingCouple)::Dict{String,Any}
 
     if entry.description !== nothing
         result["description"] = entry.description
-    end
-    if entry.interface !== nothing
-        result["interface"] = entry.interface
     end
     if entry.lifting !== nothing
         result["lifting"] = entry.lifting
@@ -911,9 +853,6 @@ function serialize_variable_map(entry::CouplingVariableMap)::Dict{String,Any}
     end
     if entry.description !== nothing
         result["description"] = entry.description
-    end
-    if entry.interface !== nothing
-        result["interface"] = entry.interface
     end
     if entry.lifting !== nothing
         result["lifting"] = entry.lifting
@@ -1054,30 +993,8 @@ Serialize Domain to JSON-compatible format.
 """
 function serialize_domain(domain::Domain)::Dict{String,Any}
     result = Dict{String,Any}()
-    if domain.spatial !== nothing
-        result["spatial"] = domain.spatial
-    end
     if domain.temporal !== nothing
         result["temporal"] = domain.temporal
-    end
-    return result
-end
-
-"""
-    serialize_interface(iface::Interface) -> Dict{String,Any}
-
-Serialize Interface to JSON-compatible format.
-"""
-function serialize_interface(iface::Interface)::Dict{String,Any}
-    result = Dict{String,Any}(
-        "domains" => iface.domains,
-        "dimension_mapping" => iface.dimension_mapping
-    )
-    if iface.description !== nothing
-        result["description"] = iface.description
-    end
-    if iface.regridding !== nothing
-        result["regridding"] = iface.regridding
     end
     return result
 end
@@ -1124,37 +1041,11 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     if !isempty(file.coupling)
         result["coupling"] = [serialize_coupling_entry(c) for c in file.coupling]
     end
-    if file.domains !== nothing
-        result["domains"] = Dict(k => serialize_domain(v) for (k, v) in file.domains)
-    end
-    if file.interfaces !== nothing
-        result["interfaces"] = Dict(k => serialize_interface(v) for (k, v) in file.interfaces)
-    end
-    if file.grids !== nothing
-        result["grids"] = Dict(k => serialize_grid(v) for (k, v) in file.grids)
-    end
-    if file.staggering_rules !== nothing
-        result["staggering_rules"] = Dict(k => serialize_staggering_rule(v)
-                                          for (k, v) in file.staggering_rules)
-    end
-    # Discretization schemes (RFC §7 / §7.5). Held opaquely as
-    # Dict{String,Any}, so serialization is a direct handoff — the parse-time
-    # deep conversion to native Dict is lossless at the JSON level.
-    if file.discretizations !== nothing
-        result["discretizations"] = file.discretizations
+    if file.domain !== nothing
+        result["domain"] = serialize_domain(file.domain)
     end
 
     return result
-end
-
-"""
-    serialize_staggering_rule(rule::StaggeringRule) -> Dict{String,Any}
-
-Serialize a StaggeringRule back to its JSON-compatible dict. Opaque
-dictionary pass-through (round-trip lossless), mirroring `serialize_grid`.
-"""
-function serialize_staggering_rule(rule::StaggeringRule)::Dict{String,Any}
-    return rule.data
 end
 
 """
@@ -1199,17 +1090,6 @@ function serialize_function_table_axis(ax::FunctionTableAxis)::Dict{String,Any}
         result["units"] = ax.units
     end
     return result
-end
-
-"""
-    serialize_grid(grid::Grid) -> Dict{String,Any}
-
-Serialize a Grid back to its JSON-compatible dict. The Grid wraps an opaque
-`Dict{String,Any}` populated by `coerce_grids`, so serialization is a direct
-handoff (round-trip lossless).
-"""
-function serialize_grid(grid::Grid)::Dict{String,Any}
-    return grid.data
 end
 
 """

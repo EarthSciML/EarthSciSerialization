@@ -223,10 +223,10 @@ func TestToLatexBasic(t *testing.T) {
 
 func TestOperatorPrecedence(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    interface{}
-		unicode  string
-		latex    string
+		name    string
+		input   interface{}
+		unicode string
+		latex   string
 	}{
 		{
 			name: "addition with multiplication (no parens needed)",
@@ -479,20 +479,10 @@ func TestModelSummary(t *testing.T) {
 				Transform: "param_to_var",
 			},
 		},
-		Domains: map[string]Domain{
-			"default": {
-				Temporal: &TemporalDomain{
-					Start: "2024-05-01T00:00:00Z",
-					End:   "2024-05-03T00:00:00Z",
-				},
-				Spatial: map[string]SpatialDimension{
-					"lon": {
-						Min:         -130.0,
-						Max:         -100.0,
-						GridSpacing: 0.3125,
-						Units:       "degrees",
-					},
-				},
+		Domain: &Domain{
+			Temporal: &TemporalDomain{
+				Start: "2024-05-01T00:00:00Z",
+				End:   "2024-05-03T00:00:00Z",
 			},
 		},
 	}
@@ -514,6 +504,5 @@ func TestModelSummary(t *testing.T) {
 	assert.Contains(t, result, "GEOSFP: T, u, v (grid)")
 	assert.Contains(t, result, "operator_compose: SimpleOzone + Advection")
 	assert.Contains(t, result, "variable_map: GEOSFP.T → SimpleOzone.T")
-	assert.Contains(t, result, "lon [−130, −100] (Δ0.3125°)")
 	assert.Contains(t, result, "2024-05-01 to 2024-05-03")
 }

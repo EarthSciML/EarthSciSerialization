@@ -110,12 +110,6 @@ pub fn load(json_str: &str) -> Result<EsmFile, EsmError> {
     crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
-    // Pre-0.7.0 loader files that still carry the removed DataLoader.regridding
-    // / DataLoader.spatial blocks are rejected at load with named, version-keyed
-    // diagnostics (esm-spec §8 / RFC pure-io-data-loaders §4.1, ess-v9a.7).
-    crate::reject_legacy_loaders::reject_legacy_data_loader_shapes(&json_value)
-        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
-
     // Validate against schema
     validate_schema(&json_value)?;
 
@@ -191,12 +185,6 @@ pub fn load_path<P: AsRef<std::path::Path>>(path: P) -> Result<EsmFile, EsmError
     crate::lower_expression_templates::reject_expression_templates_pre_v04(&json_value)
         .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
 
-    // Pre-0.7.0 loader files that still carry the removed DataLoader.regridding
-    // / DataLoader.spatial blocks are rejected at load with named, version-keyed
-    // diagnostics (esm-spec §8 / RFC pure-io-data-loaders §4.1, ess-v9a.7).
-    crate::reject_legacy_loaders::reject_legacy_data_loader_shapes(&json_value)
-        .map_err(|e| EsmError::SchemaValidation(e.to_string()))?;
-
     validate_schema(&json_value)?;
     validate_structural_json(&json_value)?;
 
@@ -260,7 +248,6 @@ fn validate_structural_json(json_value: &Value) -> Result<(), EsmError> {
         check_circular_model_dependencies(obj, &mut errors);
         check_event_variable_references(obj, &mut errors);
         check_event_discrete_parameters(obj, &mut errors);
-        check_grid_references(obj, &mut errors);
         check_reaction_stoichiometries(obj, &mut errors);
     }
 
@@ -786,100 +773,6 @@ fn check_event_discrete_parameters(obj: &serde_json::Map<String, Value>, errors:
                 }
             }
         }
-    }
-}
-
-/// Closed set of builtin generator names recognized by §6.4. The set is
-/// currently empty; adding a new builtin is a minor version bump.
-const GRID_BUILTIN_NAMES: &[&str] = &[];
-
-/// Validate that every grid metric/connectivity generator that references a
-/// `data_loaders` entry resolves to a known loader, and that every
-/// `kind = "builtin"` generator names one of the canonical builtins
-/// (E_UNKNOWN_BUILTIN otherwise). See docs/rfcs/discretization.md §6.
-fn check_grid_references(obj: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
-    let Some(grids) = obj.get("grids").and_then(|v| v.as_object()) else {
-        return;
-    };
-    let loader_names: std::collections::HashSet<&str> = obj
-        .get("data_loaders")
-        .and_then(|v| v.as_object())
-        .map(|m| m.keys().map(String::as_str).collect())
-        .unwrap_or_default();
-
-    for (gname, gv) in grids {
-        let Some(g) = gv.as_object() else { continue };
-
-        // metric_arrays.<name>.generator
-        if let Some(metrics) = g.get("metric_arrays").and_then(|v| v.as_object()) {
-            for (mname, mv) in metrics {
-                let Some(generator) = mv.get("generator") else {
-                    continue;
-                };
-                check_generator(
-                    generator,
-                    &loader_names,
-                    &format!("grids/{gname}/metric_arrays/{mname}/generator"),
-                    errors,
-                );
-            }
-        }
-
-        // connectivity: loader+field at the table level, or an embedded
-        // generator.
-        if let Some(tables) = g.get("connectivity").and_then(|v| v.as_object()) {
-            for (tname, tv) in tables {
-                let path = format!("grids/{gname}/connectivity/{tname}");
-                if let Some(loader) = tv.get("loader").and_then(|v| v.as_str())
-                    && !loader_names.contains(loader)
-                {
-                    errors.push(format!(
-                        "{path}/loader: references unknown data_loader '{loader}'"
-                    ));
-                }
-                if let Some(generator) = tv.get("generator") {
-                    check_generator(
-                        generator,
-                        &loader_names,
-                        &format!("{path}/generator"),
-                        errors,
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn check_generator(
-    generator: &Value,
-    loader_names: &std::collections::HashSet<&str>,
-    path: &str,
-    errors: &mut Vec<String>,
-) {
-    let Some(gen_obj) = generator.as_object() else {
-        return;
-    };
-    let kind = gen_obj.get("kind").and_then(|v| v.as_str()).unwrap_or("");
-    match kind {
-        "loader" => {
-            if let Some(loader) = gen_obj.get("loader").and_then(|v| v.as_str())
-                && !loader_names.contains(loader)
-            {
-                errors.push(format!(
-                    "{path}/loader: references unknown data_loader '{loader}'"
-                ));
-            }
-        }
-        "builtin" => {
-            if let Some(name) = gen_obj.get("name").and_then(|v| v.as_str())
-                && !GRID_BUILTIN_NAMES.contains(&name)
-            {
-                errors.push(format!(
-                    "E_UNKNOWN_BUILTIN at {path}/name: '{name}' is not a recognized grid builtin"
-                ));
-            }
-        }
-        _ => {}
     }
 }
 

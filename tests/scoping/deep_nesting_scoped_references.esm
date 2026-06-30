@@ -358,26 +358,6 @@
         "start": "2024-09-01T00:00:00Z",
         "end": "2024-09-01T06:00:00Z"
       },
-      "spatial": {
-        "x": {
-          "min": -180.0,
-          "max": 180.0,
-          "units": "degrees",
-          "grid_spacing": 1.0
-        },
-        "y": {
-          "min": -90.0,
-          "max": 90.0,
-          "units": "degrees",
-          "grid_spacing": 1.0
-        },
-        "z": {
-          "min": 0.0,
-          "max": 15000.0,
-          "units": "m",
-          "grid_spacing": 100.0
-        }
-      },
       "initial_conditions": {
         "type": "per_variable",
         "values": {

@@ -81,49 +81,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "O3_zero_gradient_xmin": {
-          "variable": "O3",
-          "side": "xmin",
-          "kind": "zero_gradient"
-        },
-        "NO_zero_gradient_xmin": {
-          "variable": "NO",
-          "side": "xmin",
-          "kind": "zero_gradient"
-        },
-        "O3_zero_gradient_xmax": {
-          "variable": "O3",
-          "side": "xmax",
-          "kind": "zero_gradient"
-        },
-        "NO_zero_gradient_xmax": {
-          "variable": "NO",
-          "side": "xmax",
-          "kind": "zero_gradient"
-        },
-        "O3_zero_gradient_ymin": {
-          "variable": "O3",
-          "side": "ymin",
-          "kind": "zero_gradient"
-        },
-        "NO_zero_gradient_ymin": {
-          "variable": "NO",
-          "side": "ymin",
-          "kind": "zero_gradient"
-        },
-        "O3_zero_gradient_ymax": {
-          "variable": "O3",
-          "side": "ymax",
-          "kind": "zero_gradient"
-        },
-        "NO_zero_gradient_ymax": {
-          "variable": "NO",
-          "side": "ymax",
-          "kind": "zero_gradient"
-        }
-      }
+      ]
     },
     "Surface": {
       "coupletype": "SurfaceCoupler",
@@ -228,36 +186,6 @@
         "frequency": "PT1H",
         "file_period": "PT1H",
         "records_per_file": 1
-      },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat"
-        ],
-        "extents": {
-          "lon": {
-            "n": "n_lon",
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": "n_lat",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_lon": {
-            "description": "lon cell count, resolved from the source dataset at load time"
-          },
-          "n_lat": {
-            "description": "lat cell count, resolved from the source dataset at load time"
-          }
-        }
       },
       "variables": {
         "temperature": {
@@ -379,20 +307,6 @@
       "temporal": {
         "start": "2024-06-01T00:00:00Z",
         "end": "2024-06-01T12:00:00Z"
-      },
-      "spatial": {
-        "x": {
-          "min": 0.0,
-          "max": 100.0,
-          "grid_spacing": 1.0,
-          "units": "km"
-        },
-        "y": {
-          "min": 0.0,
-          "max": 100.0,
-          "grid_spacing": 1.0,
-          "units": "km"
-        }
       },
       "initial_conditions": {
         "type": "constant",

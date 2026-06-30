@@ -28,7 +28,6 @@ include("shape_promotion.jl")
 include("mock_systems.jl")
 include("registered_functions.jl")
 include("lower_expression_templates.jl")
-include("reject_legacy_loaders.jl")
 include("parse.jl")
 include("serialize.jl")
 include("expression.jl")
@@ -39,26 +38,15 @@ include("edit.jl")
 include("codegen.jl")
 include("canonicalize.jl")
 include("relational.jl")
-include("scheme_types.jl")
-include("rule_engine.jl")
-include("scheme_expansion.jl")
-include("discretize.jl")
-include("grid_accessor.jl")
-include("abstract_grid.jl")
-include("ghost_cells.jl")
 include("mtk_export.jl")
 include("geometry.jl")
 include("area_faq.jl")
 include("tree_walk.jl")
 include("data_refresh.jl")
 include("simulate.jl")
-include("reproject.jl")
-include("regrid_kernels.jl")
-include("regrid_driver.jl")
 include("reference_graph.jl")
 include("cadence.jl")
 include("value_invention.jl")
-include("gdd.jl")
 include("run_tests.jl")
 
 export
@@ -83,7 +71,7 @@ export
     ConditionTrigger, PeriodicTrigger, PresetTimesTrigger,
     # Data and operator types
     DataLoader, DataLoaderSource, DataLoaderTemporal,
-    DataLoaderVariable, DataLoaderMesh, DataLoaderDeterminism,
+    DataLoaderVariable, DataLoaderDeterminism,
     Operator, RegisteredFunction, RegisteredFunctionSignature, CouplingEntry,
     # Concrete coupling types
     CouplingOperatorCompose, CouplingCouple, CouplingVariableMap,
@@ -96,7 +84,7 @@ export
     UnsupportedMappingError, DomainUnitMismatchError,
     DomainExtentMismatchError, SliceOutOfDomainError, CyclicPromotionError,
     # System types
-    Domain, Interface, Grid, StaggeringRule, Reference, Metadata, EsmFile,
+    Domain, Reference, Metadata, EsmFile,
     FunctionTable, FunctionTableAxis,
     # JSON functionality
     load, save, ParseError, SchemaValidationError, SchemaError, validate_schema,
@@ -140,24 +128,6 @@ export
     to_ascii, format_expression_ascii,
     # Canonical AST form (RFC §5.4)
     canonicalize, canonical_json, format_canonical_float, CanonicalizeError,
-    # Rule engine (RFC §5.2, §5.2.7, §5.2.8)
-    Rule, Guard, RuleContext, RuleEngineError, RuleBinding,
-    BoundaryPolicy, BoundaryPolicySpec, GhostWidth,
-    RuleRegion, RegionBoundary,
-    RegionMaskField, RegionIndexRange,
-    match_pattern, apply_bindings, rewrite,
-    check_guards, check_guard, check_scope,
-    with_query_point,
-    parse_rule, parse_rules, check_unrewritten_pde_ops,
-    # Scheme expansion (RFC §7 / §7.9, esm-j1u / ess-494)
-    AbstractScheme, Scheme, MultiOutputStencilScheme,
-    StencilEntry, Selector, CartesianSelector,
-    parse_scheme, parse_schemes, parse_multi_output_stencil_scheme,
-    materialize, expand_scheme,
-    # Discretization pipeline (RFC §11, gt-gbs2)
-    discretize,
-    # GDD loading and grid_refs resolution (esm-spec §4.7.1, §6.6.2, §6.7.2)
-    resolve_grid_refs, gdd_to_rules,
     # MTK → ESM export (gt-dod2; Phase 1 migration tooling)
     mtk2esm, mtk2esm_gaps, GapReport,
     # Tree-walk evaluator (gt-e8yw; MTK-free RHS path)
@@ -171,8 +141,6 @@ export
     # One-call run entry (load → discretize → build_evaluator → seed → refresh →
     # solve); the solve lives in the SciMLBase extension (JL-J3, Phase 5).
     simulate, SimulationResult, seed_expression_ic!,
-    # C4 regrid driver — reproject + per-method regrid + lev=min (ess-14f.5, JL-J2).
-    ESDRegrid,
     # Inline-test runner (esm-ol5qa; spec §6.6)
     AssertionStatus, AssertionResult, PASS, FAIL, ERROR, SKIP,
     esm_root, esm_path,
@@ -182,22 +150,6 @@ export
     lower_enums!,
     # Expression-template expansion (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md)
     lower_expression_templates, reject_expression_templates_pre_v04,
-    ExpressionTemplateError,
-    # Legacy pure-I/O data-loader rejection (esm-spec §8 / RFC pure-io-data-loaders §4.1)
-    reject_legacy_data_loader_shapes, LegacyDataLoaderError,
-    # GridAccessor interface (gt-hvl4; concrete impls live in ESD)
-    GridAccessor, GridAccessorError,
-    cell_centers, neighbors, metric_eval,
-    register_grid_accessor!, unregister_grid_accessor!,
-    grid_accessor_factory, registered_grid_families, make_grid_accessor,
-    # AbstractGrid trait (esm-a3z; concrete impls live in ESD)
-    AbstractGrid, AbstractCurvilinearGrid, AbstractStaggeredGrid,
-    AbstractVerticalGrid, AbstractUnstructuredGrid, GridTraitError,
-    cell_volume, cell_widths, neighbor_indices, boundary_mask,
-    n_cells, n_dims, axis_names,
-    metric_g, metric_ginv, metric_jacobian, metric_dgij_dxk,
-    coord_jacobian, coord_jacobian_second,
-    # Trait-generic ghost-cell gathering (esm-dlz; ported from ESD src/ghost_cells.jl)
-    extend_with_ghosts, fill_ghost_cells!, extend_with_ghosts_vector
+    ExpressionTemplateError
 
 end # module EarthSciSerialization

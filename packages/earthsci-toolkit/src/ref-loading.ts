@@ -9,7 +9,7 @@
  * environments.
  */
 
-import type { DataLoader, EsmFile, Model, ReactionSystem } from './types.js'
+import type { DataLoader, EsmFile, Model, ReactionSystem, SubsystemRef } from './types.js'
 
 /**
  * Error thrown when a circular reference is detected during subsystem resolution.
@@ -85,13 +85,16 @@ export async function resolveSubsystemRefs(
  * Recursively resolve refs in a Model's subsystems.
  */
 async function resolveModelRefs(
-  model: Model,
+  model: Model | SubsystemRef,
   basePath: string,
   visited: Set<string>,
   resolving: Set<string>,
   refChain: string[]
 ): Promise<void> {
-  if (!model.subsystems) return
+  // A bare `{ ref }` stub (SubsystemRef) has no subsystems to walk; the
+  // top-level model union admits it under v0.8.0, but only a full Model
+  // carries `subsystems`.
+  if (!('subsystems' in model) || !model.subsystems) return
 
   for (const [subName, subsystem] of Object.entries(model.subsystems)) {
     const sub = subsystem as Model & { ref?: string }

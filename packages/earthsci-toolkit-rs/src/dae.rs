@@ -104,13 +104,12 @@ pub fn default_dae_support() -> bool {
 /// The input `esm` is mutated: factored algebraic equations are removed
 /// and their substitutions applied to the remaining equations.
 pub fn apply_dae_contract(esm: &mut EsmFile, dae_support: bool) -> Result<DaeInfo, DaeError> {
-    let indep_by_domain = domain_indep_map(esm);
+    let indep = document_indep(esm);
 
     let mut pre_factor_count = 0usize;
     let mut first_path: Option<String> = None;
     if let Some(models) = esm.models.as_ref() {
         for (mname, model) in models.iter() {
-            let indep = model_indep(model, &indep_by_domain);
             for (i, eq) in model.equations.iter().enumerate() {
                 if is_algebraic(eq, &indep) {
                     pre_factor_count += 1;
@@ -156,10 +155,6 @@ pub fn apply_dae_contract(esm: &mut EsmFile, dae_support: bool) -> Result<DaeInf
         // Collect keys first to avoid borrow conflicts while we mutate.
         let mnames: Vec<String> = models.keys().cloned().collect();
         for mname in mnames {
-            let indep = {
-                let model = models.get(&mname).expect("model key just listed");
-                model_indep(model, &indep_by_domain)
-            };
             let model = models.get_mut(&mname).expect("model key just listed");
             let (factored, residual) = factor_model(model, &indep);
             factored_total += factored;
@@ -216,25 +211,18 @@ pub fn discretize(esm: &EsmFile, options: DiscretizeOptions) -> Result<EsmFile, 
 
 // ----- helpers --------------------------------------------------------------
 
-fn domain_indep_map(esm: &EsmFile) -> HashMap<String, String> {
-    let mut out = HashMap::new();
-    if let Some(domains) = esm.domains.as_ref() {
-        for (name, d) in domains.iter() {
-            out.insert(name.clone(), domain_indep(d));
-        }
-    }
-    out
+/// The document's single shared independent (time) variable (v0.8.0). Every
+/// component shares the one `domain`; absent a domain the convention default is
+/// `"t"`.
+fn document_indep(esm: &EsmFile) -> String {
+    esm.domain
+        .as_ref()
+        .map(domain_indep)
+        .unwrap_or_else(|| "t".into())
 }
 
 fn domain_indep(d: &Domain) -> String {
     d.independent_variable.clone().unwrap_or_else(|| "t".into())
-}
-
-fn model_indep(model: &Model, map: &HashMap<String, String>) -> String {
-    match model.domain.as_deref() {
-        Some(name) => map.get(name).cloned().unwrap_or_else(|| "t".into()),
-        None => "t".into(),
-    }
 }
 
 fn is_differential(eq: &Equation, indep: &str) -> bool {
@@ -411,9 +399,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         }
     }
@@ -462,7 +447,6 @@ mod tests {
 
     fn empty_model() -> Model {
         Model {
-            regrid: None,
             name: None,
             domain: None,
             index_sets: None,
@@ -476,7 +460,6 @@ mod tests {
             description: None,
             tolerance: None,
             tests: None,
-            boundary_conditions: None,
             initialization_equations: None,
             guesses: None,
             system_kind: None,
@@ -735,11 +718,7 @@ mod tests {
             Domain {
                 independent_variable: Some("s".into()),
                 temporal: None,
-                spatial: None,
-                coordinate_transforms: None,
-                spatial_ref: None,
                 initial_conditions: None,
-                boundary_conditions: None,
                 element_type: None,
                 array_type: None,
             },

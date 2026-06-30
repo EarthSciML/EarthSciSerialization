@@ -16,12 +16,12 @@
         {
           "_comment": "flux[i] = u[i] - 5u[i+1] + 10u[i+2] - 10u[i+3] + 5u[i+4] - u[i+5], 1-based i in 1..15",
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": { "op": "index", "args": ["flux", "i"] },
             "ranges": { "i": [1, 15] }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": {
               "op": "+",
               "args": [
@@ -39,12 +39,12 @@
         {
           "_comment": "D(u[i+3]) = -(flux[i+1] - flux[i]), 1-based i in 1..14",
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["u", { "op": "+", "args": ["i", 3] }] }], "wrt": "t" },
             "ranges": { "i": [1, 14] }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": {
               "op": "-",
               "args": [

@@ -356,33 +356,13 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
   // (`validateReactionRateUnits`) so it can emit a structured
   // `unit_inconsistency` error with typed details instead of a prose warning.
 
-  const coordinateBindingsFor = (domainName: string | null | undefined): Map<string, ParsedUnit> | undefined => {
-    if (!domainName || !file.domains) return undefined
-    const domain = file.domains[domainName]
-    if (!domain || !domain.spatial) return undefined
-    const coords = new Map<string, ParsedUnit>()
-    for (const [dimName, dim] of Object.entries(domain.spatial)) {
-      if (dim && typeof dim === 'object' && 'units' in dim && dim.units) {
-        coords.set(dimName, parseUnit(dim.units as string))
-      } else {
-        // Coordinate declared but without units — record as dimensionless
-        // so the gradient handler can emit a unit_inconsistency warning.
-        coords.set(dimName, dimensionless())
-      }
-    }
-    return coords
-  }
-
   if (file.models) {
     for (const [modelName, model] of Object.entries(file.models)) {
-      const coordinateBindings = coordinateBindingsFor(
-        'domain' in model ? (model.domain as string | null | undefined) : undefined,
-      )
       if ('equations' in model && model.equations) {
         for (const equation of model.equations) {
           try {
-            const lhsResult = checkDimensions(equation.lhs, unitBindings, coordinateBindings)
-            const rhsResult = checkDimensions(equation.rhs, unitBindings, coordinateBindings)
+            const lhsResult = checkDimensions(equation.lhs, unitBindings)
+            const rhsResult = checkDimensions(equation.rhs, unitBindings)
 
             const allSubWarnings = [...lhsResult.warnings, ...rhsResult.warnings]
             const hasUnknownVariable = allSubWarnings.some((w) => w.includes('Unknown variable'))
@@ -421,7 +401,7 @@ export function validateUnits(file: EsmFile): UnitWarning[] {
         for (const [varName, variable] of Object.entries(model.variables)) {
           if (variable.type === 'observed' && variable.expression) {
             try {
-              const exprResult = checkDimensions(variable.expression, unitBindings, coordinateBindings)
+              const exprResult = checkDimensions(variable.expression, unitBindings)
               const varDims: ParsedUnit = variable.units
                 ? parseUnit(variable.units)
                 : dimensionless()

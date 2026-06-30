@@ -72,10 +72,10 @@ func TestSaveEmitsTrailingDotZeroForIntegerFloat(t *testing.T) {
 					"x": {Type: "state"},
 				},
 				Equations: []Equation{
-					{LHS: "x", RHS: float64(1.0)},          // float node → "1.0"
-					{LHS: "y", RHS: int64(1)},              // integer node → "1"
-					{LHS: "z", RHS: float64(2.5)},          // non-integer float → "2.5"
-					{LHS: "w", RHS: float64(0.0)},          // integer-valued float zero → "0.0"
+					{LHS: "x", RHS: float64(1.0)}, // float node → "1.0"
+					{LHS: "y", RHS: int64(1)},     // integer node → "1"
+					{LHS: "z", RHS: float64(2.5)}, // non-integer float → "2.5"
+					{LHS: "w", RHS: float64(0.0)}, // integer-valued float zero → "0.0"
 					{LHS: "v", RHS: ExprNode{Op: "+", Args: []interface{}{float64(1.0), int64(2)}}},
 				},
 			},
@@ -166,8 +166,8 @@ func TestRoundTripPreservesIntFloatDistinction(t *testing.T) {
 }
 
 // TestSaveTypedFloatFields verifies that typed float64 fields (not just
-// interface{} slots) also emit canonical form. SpatialDimension.Min/Max and
-// *float64 pointers like VariableMapCoupling.Factor are common cases.
+// interface{} slots) also emit canonical form. *float64 pointers like
+// VariableMapCoupling.Factor are a common case.
 func TestSaveTypedFloatFields(t *testing.T) {
 	factor := 2.0
 	file := &EsmFile{
@@ -182,13 +182,6 @@ func TestSaveTypedFloatFields(t *testing.T) {
 				Equations: []Equation{{LHS: "x", RHS: int64(0)}},
 			},
 		},
-		Domains: map[string]Domain{
-			"d": {
-				Spatial: map[string]SpatialDimension{
-					"x": {Min: 0.0, Max: 10.0, Units: "m", GridSpacing: 1.0},
-				},
-			},
-		},
 		Coupling: []interface{}{
 			VariableMapCoupling{Type: "variable_map", From: "a.x", To: "b.y", Transform: "multiplicative", Factor: &factor},
 		},
@@ -196,11 +189,6 @@ func TestSaveTypedFloatFields(t *testing.T) {
 
 	jsonStr, err := Save(file)
 	require.NoError(t, err)
-
-	// SpatialDimension fields emit with trailing .0
-	assert.Contains(t, jsonStr, `"min": 0.0`)
-	assert.Contains(t, jsonStr, `"max": 10.0`)
-	assert.Contains(t, jsonStr, `"grid_spacing": 1.0`)
 
 	// *float64 factor emits with trailing .0
 	assert.Contains(t, jsonStr, `"factor": 2.0`)

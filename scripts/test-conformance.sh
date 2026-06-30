@@ -293,22 +293,6 @@ generate_report() {
 # re-serializes each expression, and the runner diffs the outputs. Writes
 # a per-fixture divergence report alongside the per-language conformance
 # outputs so reviewers can see which expression shapes cause divergence.
-# Sanity-check the family-agnostic grid conformance runner (gt-usme).
-# The runner consumes ESD-side family suites; here we only verify that
-# the runner's own plumbing — manifest loading, adapter dispatch,
-# diff classification, exit codes — is intact. Real family suites are
-# exercised by ESD's CI when its per-family generators land.
-run_grid_conformance_self_test() {
-    log "Running grid-conformance runner self-test..."
-    if python3 "$SCRIPT_DIR/run-grid-conformance.py" --self-test; then
-        success "Grid-conformance runner self-test passed"
-        return 0
-    else
-        error "Grid-conformance runner self-test failed"
-        return 1
-    fi
-}
-
 # Sanity-check the cross-binding determinism harness (ess-my4.5). Until the M2
 # join impls and M3 relational engine land per-binding producers, the harness
 # asserts the §5.5 determinism contract against an embedded reference
@@ -640,13 +624,6 @@ main() {
             success "Property-corpus round-trip completed"
         else
             error "Property-corpus round-trip failed"
-            exit 1
-        fi
-
-        if run_grid_conformance_self_test; then
-            success "Grid-conformance runner self-test completed"
-        else
-            error "Grid-conformance runner self-test failed"
             exit 1
         fi
 

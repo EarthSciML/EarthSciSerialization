@@ -73,14 +73,6 @@
   },
   "domains": {
     "line": {
-      "spatial": {
-        "x": {
-          "min": 0.0,
-          "max": 1.0,
-          "grid_spacing": 0.25,
-          "units": "m"
-        }
-      },
       "initial_conditions": {
         "type": "expression",
         "values": {

@@ -576,7 +576,7 @@ function _lower_model_enums!(model::Model, enums::Dict{String,Dict{String,Int}})
     for eq in model.equations
         push!(new_eqs, Equation(_lower_expr_enums(eq.lhs, enums),
                                 _lower_expr_enums(eq.rhs, enums);
-                                _comment=eq._comment, region=eq.region))
+                                _comment=eq._comment))
     end
     empty!(model.equations)
     append!(model.equations, new_eqs)
@@ -585,7 +585,7 @@ function _lower_model_enums!(model::Model, enums::Dict{String,Dict{String,Int}})
     for eq in model.initialization_equations
         push!(new_init_eqs, Equation(_lower_expr_enums(eq.lhs, enums),
                                      _lower_expr_enums(eq.rhs, enums);
-                                     _comment=eq._comment, region=eq.region))
+                                     _comment=eq._comment))
     end
     empty!(model.initialization_equations)
     append!(model.initialization_equations, new_init_eqs)

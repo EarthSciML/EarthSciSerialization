@@ -30,19 +30,16 @@ from .esm_types import (
     EsmFile, Metadata, Model, ReactionSystem, ModelVariable, Equation,
     Species, Parameter, Reaction, ExprNode, Expr, AffectEquation,
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
-    DataLoader, DataLoaderKind, DataLoaderMesh, DataLoaderMeshTopology,
+    DataLoader, DataLoaderKind,
     DataLoaderDeterminism, DataLoaderSource, DataLoaderTemporal,
     DataLoaderVariable, Operator,
     CouplingEntry, CouplingType, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
-    Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
-    InitialCondition, BoundaryCondition, RegridSpec,
+    Reference, TemporalDomain,
     Tolerance, TimeSpan, Assertion, Test,
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
-    Grid, GridCRS, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
-    StaggeringRule,
 )
 
 
@@ -118,8 +115,6 @@ def _serialize_equation(equation: Equation) -> Dict[str, Any]:
     }
     if equation._comment is not None:
         result["_comment"] = equation._comment
-    if equation.region is not None:
-        result["region"] = equation.region
     return result
 
 
@@ -318,35 +313,13 @@ def _serialize_parameter_sweep(ps: ParameterSweep) -> Dict[str, Any]:
     }
 
 
-def _serialize_example_initial_state(ic: InitialCondition) -> Dict[str, Any]:
-    """Serialize an Example.initial_state block (mirrors top-level InitialConditions)."""
-    # Map enum back to wire-format string. Domain's serializer uses ic.type.value
-    # directly, but InitialConditionType.DATA's value is "data" while the schema
-    # wants "from_file" — handle that here.
-    value = ic.type.value
-    if value == "data":
-        value = "from_file"
-    result: Dict[str, Any] = {"type": value}
-    if ic.value is not None:
-        result["value"] = ic.value
-    if ic.values is not None:
-        result["values"] = dict(ic.values)
-    if ic.expression_values is not None:
-        result["values"] = {
-            var: _serialize_expression(e)
-            for var, e in ic.expression_values.items()
-        }
-    if ic.data_source is not None:
-        result["path"] = ic.data_source
-    return result
-
-
 def _serialize_example(e: Example) -> Dict[str, Any]:
     result: Dict[str, Any] = {"id": e.id}
     if e.description is not None:
         result["description"] = e.description
     if e.initial_state is not None:
-        result["initial_state"] = _serialize_example_initial_state(e.initial_state)
+        # Scalar initial-value override map {var: number} (v0.8.0).
+        result["initial_state"] = dict(e.initial_state)
     if e.parameters:
         result["parameters"] = dict(e.parameters)
     result["time_span"] = _serialize_time_span(e.time_span)
@@ -374,12 +347,9 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
     if model.equations:
         result["equations"] = [_serialize_equation(eq) for eq in model.equations]
 
-    # Serialize model-level boundary conditions (v0.2.0, RFC §9).
-    if model.boundary_conditions:
-        result["boundary_conditions"] = {
-            bc_id: _serialize_boundary_condition(bc)
-            for bc_id, bc in model.boundary_conditions.items()
-        }
+    # Boundary conditions are not a declared model concern (no `bc` op, no
+    # `boundary_conditions` field); they live in discretization rewrite rules
+    # (esm-spec §9.6.8). Nothing to serialize here.
 
     # Inline tests, examples, and model-level tolerance (esm-spec §6.6 / §6.7).
     if model.tolerance is not None:
@@ -409,12 +379,6 @@ def _serialize_model(model: Model) -> Dict[str, Any]:
     # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
     if getattr(model, "index_sets", None):
         result["index_sets"] = model.index_sets
-    # Per-variable regridding configuration (RFC pure-io-data-loaders §5.2, §6).
-    if getattr(model, "regrid", None):
-        result["regrid"] = {
-            var_name: _serialize_regrid_spec(spec)
-            for var_name, spec in model.regrid.items()
-        }
 
     return result
 
@@ -578,111 +542,9 @@ def _serialize_domain(domain: Domain) -> Dict[str, Any]:
             temporal_data["reference_time"] = domain.temporal.reference_time
         result["temporal"] = temporal_data
 
-    # Serialize spatial domain
-    if domain.spatial:
-        spatial_data = {}
-        for dim_name, dim_spec in domain.spatial.items():
-            dim_data = {
-                "min": dim_spec.min,
-                "max": dim_spec.max,
-            }
-            if dim_spec.units is not None:
-                dim_data["units"] = dim_spec.units
-            if dim_spec.grid_spacing is not None:
-                dim_data["grid_spacing"] = dim_spec.grid_spacing
-            spatial_data[dim_name] = dim_data
-        result["spatial"] = spatial_data
+    # Initial conditions are no longer a domain-level concept (v0.8.0): they are
+    # declared with `ic` op equations in the model (esm-spec §11.4).
 
-    # Serialize coordinate transforms
-    if domain.coordinate_transforms:
-        result["coordinate_transforms"] = [
-            {
-                "id": transform.id,
-                "description": transform.description,
-                "dimensions": transform.dimensions
-            }
-            for transform in domain.coordinate_transforms
-        ]
-
-    # Serialize spatial reference
-    if domain.spatial_ref:
-        result["spatial_ref"] = domain.spatial_ref
-
-    # Serialize initial conditions
-    if domain.initial_conditions:
-        ic = domain.initial_conditions
-        ic_data = {"type": ic.type.value}
-
-        if ic.value is not None:
-            ic_data["value"] = ic.value
-        if ic.values is not None:
-            ic_data["values"] = ic.values
-        if ic.expression_values is not None:
-            ic_data["values"] = {
-                var: _serialize_expression(e)
-                for var, e in ic.expression_values.items()
-            }
-        if ic.function is not None:
-            ic_data["function"] = ic.function
-        if ic.data_source is not None:
-            ic_data["path"] = ic.data_source  # Schema uses "path" for data source
-
-        result["initial_conditions"] = ic_data
-
-    # v0.2.0: model-level BCs are serialized by _serialize_model (RFC §9).
-    # Domain-level boundary_conditions is deprecated but retained in a
-    # transitional window (gt-2fvs mayor decision). If a file was loaded with
-    # domain-level BCs, they are stashed in domain.boundaries under the key
-    # '_deprecated_v01_boundary_conditions' so round-trip preserves them.
-    legacy_bc = None
-    if isinstance(domain.boundaries, dict):
-        legacy_bc = domain.boundaries.get("_deprecated_v01_boundary_conditions")
-    if legacy_bc:
-        result["boundary_conditions"] = list(legacy_bc)
-
-    return result
-
-
-def _serialize_boundary_condition(bc: BoundaryCondition) -> Dict[str, Any]:
-    """Serialize a model-level BoundaryCondition (RFC §9.2)."""
-    bc_dict: Dict[str, Any] = {
-        "variable": bc.variable,
-        "side": bc.side,
-        "kind": bc.kind.value,
-    }
-    if bc.value is not None:
-        bc_dict["value"] = bc.value
-    if bc.robin_alpha is not None:
-        bc_dict["robin_alpha"] = bc.robin_alpha
-    if bc.robin_beta is not None:
-        bc_dict["robin_beta"] = bc.robin_beta
-    if bc.robin_gamma is not None:
-        bc_dict["robin_gamma"] = bc.robin_gamma
-    if bc.coupled_variable is not None:
-        bc_dict["coupled_variable"] = bc.coupled_variable
-    if bc.flux_match:
-        bc_dict["flux_match"] = bc.flux_match
-    if bc.face_coords is not None:
-        bc_dict["face_coords"] = list(bc.face_coords)
-    if bc.contributed_by is not None:
-        cb: Dict[str, Any] = {"component": bc.contributed_by.component}
-        if bc.contributed_by.flux_sign != "+":
-            cb["flux_sign"] = bc.contributed_by.flux_sign
-        bc_dict["contributed_by"] = cb
-    if bc.description is not None:
-        bc_dict["description"] = bc.description
-    return bc_dict
-
-
-def _serialize_regrid_spec(spec: RegridSpec) -> Dict[str, Any]:
-    """Serialize a per-variable RegridSpec (schema $defs/RegridSpec)."""
-    result: Dict[str, Any] = {}
-    if spec.method is not None:
-        result["method"] = spec.method
-    if spec.missing_value is not None:
-        result["missing_value"] = spec.missing_value
-    if spec.description is not None:
-        result["description"] = spec.description
     return result
 
 
@@ -727,18 +589,6 @@ def _serialize_data_loader_variable(variable: DataLoaderVariable) -> Dict[str, A
     return result
 
 
-def _serialize_data_loader_mesh(mesh: DataLoaderMesh) -> Dict[str, Any]:
-    """Serialize a mesh descriptor (esm-spec §8.9)."""
-    result: Dict[str, Any] = {
-        "topology": mesh.topology.value,
-        "connectivity_fields": list(mesh.connectivity_fields),
-        "metric_fields": list(mesh.metric_fields),
-    }
-    if mesh.dimension_sizes:
-        result["dimension_sizes"] = dict(mesh.dimension_sizes)
-    return result
-
-
 def _serialize_data_loader_determinism(det: DataLoaderDeterminism) -> Dict[str, Any]:
     """Serialize a determinism block (esm-spec §8.9.2)."""
     result: Dict[str, Any] = {}
@@ -765,10 +615,6 @@ def _serialize_data_loader(loader: DataLoader) -> Dict[str, Any]:
         temporal_dict = _serialize_data_loader_temporal(loader.temporal)
         if temporal_dict:
             result["temporal"] = temporal_dict
-    if loader.grid is not None:
-        result["grid"] = _serialize_grid(loader.grid)
-    if loader.mesh is not None:
-        result["mesh"] = _serialize_data_loader_mesh(loader.mesh)
     if loader.determinism is not None:
         det_dict = _serialize_data_loader_determinism(loader.determinism)
         if det_dict:
@@ -910,129 +756,6 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
     return result
 
 
-def _serialize_grid_metric_generator(gen: GridMetricGenerator) -> Dict[str, Any]:
-    """Serialize a grid metric / connectivity generator (RFC §6.5)."""
-    result: Dict[str, Any] = {"kind": gen.kind}
-    if gen.kind == "expression":
-        if gen.expr is not None:
-            result["expr"] = _serialize_expression(gen.expr)
-    elif gen.kind == "loader":
-        if gen.loader is not None:
-            result["loader"] = gen.loader
-        if gen.field is not None:
-            result["field"] = gen.field
-    elif gen.kind == "builtin":
-        if gen.name is not None:
-            result["name"] = gen.name
-    return result
-
-
-def _serialize_grid_metric_array(array: GridMetricArray) -> Dict[str, Any]:
-    """Serialize a grid metric_array entry (RFC §6.5)."""
-    result: Dict[str, Any] = {"rank": array.rank}
-    if array.dim is not None:
-        result["dim"] = array.dim
-    if array.dims is not None:
-        result["dims"] = list(array.dims)
-    if array.shape is not None:
-        result["shape"] = list(array.shape)
-    result["generator"] = _serialize_grid_metric_generator(array.generator)
-    return result
-
-
-def _serialize_grid_connectivity(conn: GridConnectivity) -> Dict[str, Any]:
-    """Serialize a grid connectivity entry (RFC §6.3–§6.4)."""
-    result: Dict[str, Any] = {
-        "shape": list(conn.shape),
-        "rank": conn.rank,
-    }
-    if conn.loader is not None:
-        result["loader"] = conn.loader
-    if conn.field is not None:
-        result["field"] = conn.field
-    if conn.generator is not None:
-        result["generator"] = _serialize_grid_metric_generator(conn.generator)
-    return result
-
-
-def _serialize_grid_extent(extent: GridExtent) -> Dict[str, Any]:
-    """Serialize a cartesian grid extent entry (RFC §6.2)."""
-    result: Dict[str, Any] = {"n": extent.n}
-    if extent.spacing is not None:
-        result["spacing"] = extent.spacing
-    return result
-
-
-def _serialize_grid(grid: Grid) -> Dict[str, Any]:
-    """Serialize a top-level grid declaration (RFC §6)."""
-    result: Dict[str, Any] = {
-        "family": grid.family,
-    }
-    if grid.crs is not None:
-        result["crs"] = _serialize_grid_crs(grid.crs)
-    if grid.description is not None:
-        result["description"] = grid.description
-    result["dimensions"] = list(grid.dimensions)
-    if grid.extents:
-        result["extents"] = {
-            name: _serialize_grid_extent(e) for name, e in grid.extents.items()
-        }
-    if grid.locations is not None:
-        result["locations"] = list(grid.locations)
-    if grid.connectivity:
-        result["connectivity"] = {
-            name: _serialize_grid_connectivity(c)
-            for name, c in grid.connectivity.items()
-        }
-    if grid.metric_arrays:
-        result["metric_arrays"] = {
-            name: _serialize_grid_metric_array(a)
-            for name, a in grid.metric_arrays.items()
-        }
-    if grid.parameters:
-        result["parameters"] = {
-            name: _serialize_parameter(p) for name, p in grid.parameters.items()
-        }
-    if grid.domain is not None:
-        result["domain"] = grid.domain
-    return result
-
-
-def _serialize_grid_crs(crs: GridCRS) -> Dict[str, Any]:
-    """Serialize a grid ``crs`` descriptor (RFC pure-io-data-loaders §4.2).
-
-    Number values (``R`` and each ``parameters`` entry) are emitted verbatim
-    so the descriptor round-trips unchanged.
-    """
-    result: Dict[str, Any] = {"projection": crs.projection}
-    if crs.datum is not None:
-        result["datum"] = crs.datum
-    if crs.R is not None:
-        result["R"] = crs.R
-    if crs.parameters:
-        result["parameters"] = dict(crs.parameters)
-    return result
-
-
-def _serialize_staggering_rule(rule: "StaggeringRule") -> Dict[str, Any]:
-    """Serialize a top-level staggering-rule declaration (RFC §7.4)."""
-    result: Dict[str, Any] = {
-        "kind": rule.kind,
-        "grid": rule.grid,
-    }
-    if rule.description is not None:
-        result["description"] = rule.description
-    if rule.cell_quantity_locations:
-        result["cell_quantity_locations"] = dict(rule.cell_quantity_locations)
-    if rule.edge_normal_convention is not None:
-        result["edge_normal_convention"] = rule.edge_normal_convention
-    if rule.dual_mesh_ref is not None:
-        result["dual_mesh_ref"] = rule.dual_mesh_ref
-    if rule.reference is not None:
-        result["reference"] = rule.reference
-    return result
-
-
 def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
     """Serialize an ESM file to JSON-compatible format."""
     result = {
@@ -1066,11 +789,9 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
                 for rs in esm_file.reaction_systems
             }
 
-    # Serialize domains
-    if esm_file.domains:
-        result["domains"] = {
-            name: _serialize_domain(d) for name, d in esm_file.domains.items()
-        }
+    # Serialize the single shared domain (v0.8.0).
+    if esm_file.domain is not None:
+        result["domain"] = _serialize_domain(esm_file.domain)
 
     # Serialize data loaders
     if esm_file.data_loaders:
@@ -1139,26 +860,6 @@ def _serialize_esm_file(esm_file: EsmFile) -> Dict[str, Any]:
             _serialize_coupling_entry(coupling)
             for coupling in esm_file.coupling
         ]
-
-    # Serialize top-level grids (RFC §6).
-    if getattr(esm_file, "grids", None):
-        result["grids"] = {
-            name: _serialize_grid(g) for name, g in esm_file.grids.items()
-        }
-
-    # Serialize top-level staggering_rules (RFC §7.4).
-    if getattr(esm_file, "staggering_rules", None):
-        result["staggering_rules"] = {
-            name: _serialize_staggering_rule(r)
-            for name, r in esm_file.staggering_rules.items()
-        }
-
-    # Serialize top-level discretizations (RFC §7 / §7.5). Held opaquely as
-    # dict-of-dicts, so a deep copy is enough to preserve the structure
-    # losslessly across load -> save round-trips.
-    if getattr(esm_file, "discretizations", None):
-        import copy as _copy
-        result["discretizations"] = _copy.deepcopy(esm_file.discretizations)
 
     # Serialize events at the top level. The schema only allows events nested
     # inside models/reaction_systems, but EsmFile.events stores them flat after

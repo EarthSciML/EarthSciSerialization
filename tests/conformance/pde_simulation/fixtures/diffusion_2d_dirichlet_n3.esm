@@ -33,7 +33,7 @@
       "equations": [
         {
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": [
               "i",
@@ -65,7 +65,7 @@
             }
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": [
               "i",

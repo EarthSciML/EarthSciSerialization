@@ -48,7 +48,6 @@ pub mod expression;
 pub mod flatten;
 pub mod geometry;
 pub mod graph;
-pub mod grid_accessor;
 pub mod join;
 pub mod lower_enums;
 pub mod lower_expression_templates;
@@ -59,10 +58,7 @@ pub mod reactions;
 pub mod ref_loading;
 pub mod reference_resolution;
 pub mod registered_functions;
-pub mod reject_legacy_loaders;
 pub mod relational;
-pub mod rule_applier;
-pub mod rule_engine;
 pub mod serialize;
 pub mod structural;
 pub mod substitute;
@@ -94,17 +90,6 @@ pub mod simulate_array;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod area_faq;
 
-// C4 regrid bridge (bead ess-14f.10): reproject + horizontal regrid of the
-// provider's raw native loader arrays onto the model sim grid, via the ESD
-// reproject/regrid rules reproduced numerically. `reproject` is pure closed-form
-// math (wasm-safe); the kernels/driver evaluate the conservative overlap through
-// the native `geometry` kernel, so they are native-only like `area_faq`.
-#[cfg(not(target_arch = "wasm32"))]
-pub mod regrid_driver;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod regrid_kernels;
-pub mod reproject;
-
 // Build-time value-invention front-door — derived index-sets (skolem/distinct/
 // rank) resolved via the relational engine, ONCE at setup (RFC §6.1 / §5.5).
 pub mod value_invention;
@@ -133,10 +118,6 @@ pub use graph::{
     DependencyRelationship, ExpressionGraph, ExpressionGraphInput, VariableKind, VariableNode,
     component_exists, component_graph, expression_graph, get_component_type,
 };
-pub use grid_accessor::{
-    CellId, GridAccessor, GridAccessorError, GridAccessorFactory, build_accessor, has_factory,
-    register_factory,
-};
 pub use parse::{ParseError, SchemaValidationError, load, load_path};
 pub use reactions::{
     DeriveError, derive_odes, lower_reactions_to_equations, stoichiometric_matrix,
@@ -149,27 +130,9 @@ pub use reference_resolution::{
 pub use registered_functions::{
     ClosedArg, ClosedFunctionError, ClosedValue, closed_function_names, evaluate_closed_function,
 };
-#[cfg(not(target_arch = "wasm32"))]
-pub use regrid_driver::{
-    RegridDriverError, SpatialDim, TargetGrid, build_target_grid, build_target_grid_from_domain,
-    lev_min_reduce, regrid_field, regrid_loader_field,
-};
-#[cfg(not(target_arch = "wasm32"))]
-pub use regrid_kernels::{
-    RegridKernelError, cell_average_regrid, conservative_regrid, overlap_area_matrix,
-};
 pub use relational::{
     FloatKeyError, Key, Num, Ranking, SemiringOp, canonical_index_set_json, distinct, equijoin,
     group_aggregate, rank, rank_with_base, serialize_keys, serialize_pairs, skolem, skolem_edge,
-};
-pub use reproject::{
-    LccCone, ProjValue, ReprojectError, Reprojector, lcc_cone, lcc_forward, lcc_inverse,
-    parse_proj_string, reproject_xy_to_lonlat,
-};
-pub use rule_engine::{
-    DEFAULT_MAX_PASSES, GridMeta, Guard, Rule, RuleContext, RuleEngineError, VariableMeta,
-    apply_bindings, check_guard, check_guards, check_unrewritten_pde_ops, match_pattern,
-    parse_expr, parse_rules, rewrite,
 };
 pub use serialize::{save, save_compact};
 pub use substitute::{
@@ -179,13 +142,11 @@ pub use substitute::{
 };
 pub use types::{
     AffectEquation, AutoRecords, ContinuousEvent, CouplingEntry, DaeInfo, DataLoader,
-    DataLoaderDeterminism, DataLoaderKind, DataLoaderMesh, DataLoaderMeshDimensionSize,
-    DataLoaderMeshTopology, DataLoaderMetadata, DataLoaderSource, DataLoaderTemporal,
+    DataLoaderDeterminism, DataLoaderKind, DataLoaderMetadata, DataLoaderSource, DataLoaderTemporal,
     DataLoaderVariable, DiscreteEvent, DiscreteEventTrigger, Domain, Equation, EsmFile, Expr,
-    ExpressionNode, FunctionalAffect, Grid, GridConnectivity, GridExtent, GridMetricArray,
-    GridMetricGenerator, Metadata, Model, ModelTest, ModelTestAssertion, ModelVariable, Operator,
-    Reaction, ReactionSystem, RecordsPerFile, RegridSpec, Species, StaggeringRule,
-    StoichiometricEntry, TimeSpan, Tolerance, UnitConversion, VariableType,
+    ExpressionNode, FunctionalAffect, Metadata, Model, ModelTest, ModelTestAssertion, ModelVariable,
+    Operator, Reaction, ReactionSystem, RecordsPerFile, Species, StoichiometricEntry, TimeSpan,
+    Tolerance, UnitConversion, VariableType,
 };
 pub use validate::{
     SchemaError, StructuralError, StructuralErrorCode, ValidationResult, validate,

@@ -15,12 +15,12 @@
         {
           "_comment": "Interior stencil via arrayop, 1-based output range, offsets baked into body",
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["u", { "op": "+", "args": ["i", 1] }] }], "wrt": "t" },
             "ranges": { "i": [1, 8] }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"],
+            "op": "aggregate", "args": [], "output_idx": ["i"],
             "expr": {
               "op": "+",
               "args": [

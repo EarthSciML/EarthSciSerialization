@@ -192,23 +192,10 @@
   "domains": {
     "heat_1d": {
       "independent_variable": "t",
-      "spatial": {
-        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.02 }
-      },
-      "boundary_conditions": [
-        { "type": "dirichlet", "dimensions": ["x"], "value": 0.0 }
-      ],
       "element_type": "Float64"
     },
     "heat_2d": {
       "independent_variable": "t",
-      "spatial": {
-        "x": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 },
-        "y": { "min": 0.0, "max": 1.0, "units": "1", "grid_spacing": 0.05 }
-      },
-      "boundary_conditions": [
-        { "type": "dirichlet", "dimensions": ["x", "y"], "value": 0.0 }
-      ],
       "element_type": "Float64"
     }
   }

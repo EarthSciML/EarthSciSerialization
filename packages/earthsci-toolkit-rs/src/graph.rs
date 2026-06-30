@@ -955,9 +955,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -972,7 +969,6 @@ mod tests {
         models.insert(
             "model1".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -986,7 +982,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -995,7 +990,6 @@ mod tests {
         models.insert(
             "model2".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -1009,7 +1003,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1040,9 +1033,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -1064,7 +1054,6 @@ mod tests {
         models.insert(
             "test_model".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -1078,7 +1067,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1109,9 +1097,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -1125,7 +1110,6 @@ mod tests {
         models.insert(
             "test_model".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -1139,7 +1123,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1187,9 +1170,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -1285,7 +1265,6 @@ mod tests {
         models.insert(
             "source".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -1299,7 +1278,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1308,7 +1286,6 @@ mod tests {
         models.insert(
             "target".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -1322,7 +1299,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1361,9 +1337,6 @@ mod tests {
             coupling: Some(coupling_entries),
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 

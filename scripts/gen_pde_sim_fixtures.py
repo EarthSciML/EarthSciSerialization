@@ -66,7 +66,7 @@ def iadd(a, b):  # index arithmetic  a + b
 
 def arrayop_lhs(out_idx, var, ranges):
     return {
-        "op": "arrayop",
+        "op": "aggregate",
         "args": [],
         "output_idx": list(out_idx),
         "expr": {"op": "D", "args": [idx(var, *out_idx)], "wrt": "t"},
@@ -76,7 +76,7 @@ def arrayop_lhs(out_idx, var, ranges):
 
 def arrayop_rhs(out_idx, makearray, ranges):
     return {
-        "op": "arrayop",
+        "op": "aggregate",
         "args": [],
         "output_idx": list(out_idx),
         "expr": {"op": "index", "args": [makearray, *out_idx]},
@@ -327,7 +327,7 @@ def build_2d_diffusion(fid, n, h, t_end=0.03):
         "variables": {"u": {"type": "state", "shape": ["i", "j"]}},
         "equations": [{
             "lhs": arrayop_lhs(["i", "j"], "u", rng),
-            "rhs": {"op": "arrayop", "args": [], "output_idx": ["i", "j"],
+            "rhs": {"op": "aggregate", "args": [], "output_idx": ["i", "j"],
                     "expr": body, "ranges": rng},
         }],
     }

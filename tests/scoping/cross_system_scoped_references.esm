@@ -546,20 +546,6 @@
         "start": "2024-08-01T00:00:00Z",
         "end": "2024-08-01T24:00:00Z"
       },
-      "spatial": {
-        "x": {
-          "min": 0.0,
-          "max": 1000.0,
-          "units": "km",
-          "grid_spacing": 50.0
-        },
-        "y": {
-          "min": 0.0,
-          "max": 1000.0,
-          "units": "km",
-          "grid_spacing": 50.0
-        }
-      },
       "initial_conditions": {
         "type": "per_variable",
         "values": {

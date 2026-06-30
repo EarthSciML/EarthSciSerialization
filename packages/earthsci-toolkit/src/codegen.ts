@@ -616,27 +616,12 @@ function generateDomainCode(domain: Domain): string[] {
   lines.push(`# Time domain setup`)
   lines.push(`@variables ${timeVar}`)
 
-  // Spatial coordinates
-  if (domain.spatial_coordinates && domain.spatial_coordinates.length > 0) {
-    lines.push(`# Spatial coordinates`)
-    const spatialVars = domain.spatial_coordinates.join(' ')
-    lines.push(`@variables ${spatialVars}`)
-  }
-
   // Temporal domain
   if (domain.temporal) {
     lines.push(`# Temporal domain`)
     const start = domain.temporal.start || '0.0'
     const end = domain.temporal.end || '1.0'
     lines.push(`tspan = (${start}, ${end})`)
-  }
-
-  // Discretization for spatial domain
-  if (domain.discretization) {
-    lines.push(`# Domain discretization`)
-    for (const [dim, disc] of Object.entries(domain.discretization)) {
-      lines.push(`${dim}_discretization = Discretization(${JSON.stringify(disc)})`)
-    }
   }
 
   return lines
@@ -677,11 +662,6 @@ function generateDataLoaderCode(name: string, dataLoader: DataLoader): string[] 
     if (dataLoader.temporal.time_variable) {
       lines.push(`  time_variable = "${dataLoader.temporal.time_variable}",`)
     }
-  }
-  if (dataLoader.grid) {
-    // Native grid description (GDD Grid). The loader merely describes the grid it
-    // reads; reprojection/regridding are model concerns (RFC pure-io-data-loaders §4.1).
-    lines.push(`  grid = ${JSON.stringify(dataLoader.grid)},`)
   }
   lines.push(`)`)
 
@@ -1090,14 +1070,6 @@ function generatePythonDomainCode(domain: Domain): string[] {
   const timeVar = domain.independent_variable || 't'
   lines.push(`${timeVar} = sp.Symbol('${timeVar}')`)
 
-  // Spatial coordinates
-  if (domain.spatial_coordinates && domain.spatial_coordinates.length > 0) {
-    lines.push(`# Spatial coordinates`)
-    for (const coord of domain.spatial_coordinates) {
-      lines.push(`${coord} = sp.Symbol('${coord}')`)
-    }
-  }
-
   // Temporal domain
   if (domain.temporal) {
     lines.push(`# Temporal domain`)
@@ -1112,7 +1084,6 @@ function generatePythonDomainCode(domain: Domain): string[] {
 
   // Domain setup
   lines.push(`domain = esm.Domain(`)
-  lines.push(`    spatial_coordinates=[${domain.spatial_coordinates?.map(c => `"${c}"`).join(', ') || ''}],`)
   if (domain.temporal) {
     lines.push(`    temporal=esm.TemporalDomain(`)
     lines.push(`        start=${domain.temporal.start || '0.0'},`)
@@ -1159,11 +1130,6 @@ function generatePythonDataLoaderCode(name: string, dataLoader: DataLoader): str
     if (dataLoader.temporal.time_variable) {
       lines.push(`    time_variable="${dataLoader.temporal.time_variable}",`)
     }
-  }
-  if (dataLoader.grid) {
-    // Native grid description (GDD Grid). The loader merely describes the grid it
-    // reads; reprojection/regridding are model concerns (RFC pure-io-data-loaders §4.1).
-    lines.push(`    grid=${JSON.stringify(dataLoader.grid)},`)
   }
   lines.push(`)`)
 

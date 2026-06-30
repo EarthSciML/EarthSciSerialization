@@ -27,7 +27,7 @@
           "_comment": "D(z)/dt = sum_{j=1}^{3} j^2 = 1+4+9 = 14. Scalar arrayop (empty output_idx) with '+' reducer, embedded as RHS.",
           "lhs": { "op": "D", "args": ["z"], "wrt": "t" },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": [],
             "reduce": "+",
@@ -39,7 +39,7 @@
           "_comment": "D(w)/dt = max_{j=1}^{4} j = 4. Scalar arrayop with 'max' reducer.",
           "lhs": { "op": "D", "args": ["w"], "wrt": "t" },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": [],
             "reduce": "max",
@@ -54,7 +54,7 @@
             "op": "index",
             "args": [
               {
-                "op": "arrayop",
+                "op": "aggregate",
                 "args": [],
                 "output_idx": ["i"],
                 "reduce": "+",

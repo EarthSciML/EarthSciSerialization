@@ -28,7 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "packages" / "earthsci_toolkit" / "tests")
 from hypothesis import given, settings, strategies as st  # noqa: E402
 from test_property_expression import (  # noqa: E402
     _expr_strategy,
-    _op_arrayop,
+    _op_aggregate,
     _op_broadcast,
     _op_concat,
     _op_makearray,
@@ -76,7 +76,7 @@ def generate(count: int) -> list:
     # non-trivial subtrees drawn from the full expression strategy. Each
     # array-op strategy then becomes root of a fixture.
     arrayop_root = st.one_of(
-        _op_arrayop(_expr_strategy),
+        _op_aggregate(_expr_strategy),
         _op_makearray(_expr_strategy),
         _op_reshape(_expr_strategy),
         _op_transpose(_expr_strategy),

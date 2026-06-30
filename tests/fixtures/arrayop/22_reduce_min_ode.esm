@@ -32,7 +32,7 @@
         {
           "_comment": "D(v[i]) = min_j(i + 2*j - 2 - v[i]) for j in [1,2]. Since v[i] does not depend on j, this equals min_j(i+2j-2) - v[i] = i - v[i]. Steady state: v[1]=1, v[2]=2. Solution: v[i](t) = i*(1-exp(-t)).",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {
@@ -43,7 +43,7 @@
             "ranges": {"i": [1, 2]}
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {

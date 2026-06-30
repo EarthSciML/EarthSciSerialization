@@ -65,12 +65,11 @@ function to_julia_code(file::EsmFile)
         push!(lines, "")
     end
 
-    # Generate domain placeholders (codegen not yet implemented)
-    if !isnothing(file.domains) && !isempty(file.domains)
-        push!(lines, "# Domains")
-        for (name, domain) in file.domains
-            append!(lines, generate_domain_placeholder(name, domain))
-        end
+    # Generate domain placeholder (codegen not yet implemented). v0.8.0: a
+    # single shared top-level `domain`, not a map of named domains.
+    if !isnothing(file.domain)
+        push!(lines, "# Domain")
+        append!(lines, generate_domain_placeholder("domain", file.domain))
         push!(lines, "")
     end
 
@@ -150,12 +149,11 @@ function to_python_code(file::EsmFile)
         push!(lines, "")
     end
 
-    # Generate domain placeholders (codegen not yet implemented)
-    if !isnothing(file.domains) && !isempty(file.domains)
-        push!(lines, "# Domains")
-        for (name, domain) in file.domains
-            append!(lines, generate_python_domain_placeholder(name, domain))
-        end
+    # Generate domain placeholder (codegen not yet implemented). v0.8.0: a
+    # single shared top-level `domain`, not a map of named domains.
+    if !isnothing(file.domain)
+        push!(lines, "# Domain")
+        append!(lines, generate_python_domain_placeholder("domain", file.domain))
         push!(lines, "")
     end
 
@@ -313,10 +311,6 @@ end
 function generate_domain_placeholder(name::String, domain::Domain)
     lines = String[]
     push!(lines, "# Domain: $name")
-    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
-        coords = domain.spatial["coordinates"]
-        push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
-    end
     if !isnothing(domain.temporal)
         temporal = domain.temporal
         tstart = get(temporal, "start", nothing)
@@ -621,10 +615,6 @@ end
 function generate_python_domain_placeholder(name::String, domain::Domain)
     lines = String[]
     push!(lines, "# Domain: $name")
-    if !isnothing(domain.spatial) && haskey(domain.spatial, "coordinates")
-        coords = domain.spatial["coordinates"]
-        push!(lines, "#   Spatial coordinates: $(join(coords, ", "))")
-    end
     if !isnothing(domain.temporal)
         temporal = domain.temporal
         tstart = get(temporal, "start", nothing)

@@ -289,6 +289,18 @@ fn propagate_operator(
             Ok(arg_unit.divide(&wrt_unit))
         }
 
+        "ic" => {
+            // Initial-condition operator (v0.8.0): `ic(x) = <initial field>`.
+            // The initial value of a field carries the same units as the field
+            // itself, so propagate the unit of the single argument unchanged.
+            if op.args.len() != 1 {
+                return Err(UnitError::ParseError(
+                    "Initial condition 'ic' requires exactly 1 argument".to_string(),
+                ));
+            }
+            Unit::propagate_with_coords(&op.args[0], env, coords)
+        }
+
         "grad" | "div" => {
             if op.args.is_empty() {
                 return Err(UnitError::ParseError(format!(
@@ -460,8 +472,8 @@ fn propagate_operator(
         // Array operators: propagate the element dimension. Shape and
         // indexing are orthogonal to dimension (see gt-t5c / gt-vt3 — shapes
         // are a separate concern from unit checking). `aggregate` is the
-        // canonical tag for the former `arrayop` (RFC §5.6).
-        "arrayop" | "aggregate" => {
+        // unified Functional Aggregate Query op (RFC §5.6).
+        "aggregate" => {
             // The body is the scalar expression evaluated for each tuple of
             // loop-index values; its dimension is the array's element
             // dimension.

@@ -86,7 +86,6 @@ fn create_test_esm(num_models: usize, equations_per_model: usize) -> EsmFile {
             continuous_events: None,
             tolerance: None,
             tests: None,
-            boundary_conditions: None,
             initialization_equations: None,
             guesses: None,
             system_kind: None,

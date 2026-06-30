@@ -646,42 +646,20 @@ func ModelSummary(esm *EsmFile) string {
 		result.WriteString("\n")
 	}
 
-	// Domains
-	if len(esm.Domains) > 0 {
-		for domainName, domain := range esm.Domains {
-			fmt.Fprintf(&result, "  Domain %s: ", domainName)
-			parts := make([]string, 0)
+	// Domain
+	if esm.Domain != nil {
+		parts := make([]string, 0)
 
-			// Spatial dimensions
-			if len(domain.Spatial) > 0 {
-				for dimName, dim := range domain.Spatial {
-					// Use minus signs for negative numbers and degree symbol for degrees
-					minStr := formatNumber(dim.Min, "unicode")
-					maxStr := formatNumber(dim.Max, "unicode")
-					spacingStr := formatNumber(dim.GridSpacing, "unicode")
-
-					unitStr := dim.Units
-					if unitStr == "degrees" {
-						unitStr = "°"
-					}
-
-					parts = append(parts, fmt.Sprintf("%s [%s, %s] (Δ%s%s)",
-						dimName, minStr, maxStr, spacingStr, unitStr))
-				}
-			}
-
-			// Temporal domain
-			if domain.Temporal != nil {
-				temporal := domain.Temporal
-				// Extract just the date parts for brevity
-				start := strings.Split(temporal.Start, "T")[0]
-				end := strings.Split(temporal.End, "T")[0]
-				parts = append(parts, fmt.Sprintf("%s to %s", start, end))
-			}
-
-			result.WriteString(strings.Join(parts, ", "))
-			result.WriteString("\n")
+		// Temporal domain
+		if esm.Domain.Temporal != nil {
+			temporal := esm.Domain.Temporal
+			// Extract just the date parts for brevity
+			start := strings.Split(temporal.Start, "T")[0]
+			end := strings.Split(temporal.End, "T")[0]
+			parts = append(parts, fmt.Sprintf("%s to %s", start, end))
 		}
+
+		fmt.Fprintf(&result, "  Domain: %s\n", strings.Join(parts, ", "))
 	}
 
 	return strings.TrimSpace(result.String())

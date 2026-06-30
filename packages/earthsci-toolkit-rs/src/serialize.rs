@@ -42,11 +42,7 @@ use crate::{EsmFile, error::EsmError};
 ///     operators: None,
 ///     enums: None,
 ///     coupling: None,
-///     domains: None,
-///     interfaces: None,
-///     grids: None,
-///     staggering_rules: None,
-///     discretizations: None,
+///     domain: None,
 ///     function_tables: None,
 /// };
 ///
@@ -107,9 +103,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -143,7 +136,6 @@ mod tests {
         models.insert(
             "test".to_string(),
             Model {
-                regrid: None,
                 reference: None,
                 domain: None,
                 index_sets: None,
@@ -161,7 +153,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -192,9 +183,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -234,9 +222,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 

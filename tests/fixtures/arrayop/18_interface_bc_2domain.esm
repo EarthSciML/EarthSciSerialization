@@ -57,7 +57,7 @@
         {
           "_comment": "u interior cells, 1-based i in 1..2 (after offset baking: cells 2 and 3)",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {
@@ -68,7 +68,7 @@
             "ranges": {"i": [1, 2]}
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {
@@ -135,7 +135,7 @@
         {
           "_comment": "v interior cells, 1-based i in 1..2 (after offset baking: cells 2 and 3)",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {
@@ -146,7 +146,7 @@
             "ranges": {"i": [1, 2]}
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "expr": {

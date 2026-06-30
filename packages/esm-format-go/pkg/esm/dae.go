@@ -37,6 +37,21 @@ import (
 	"strings"
 )
 
+// RuleEngineError is a stable-coded error raised by the DAE contract.
+// Code is one of the RFC §12 codes (e.g. E_NONTRIVIAL_DAE).
+type RuleEngineError struct {
+	Code    string
+	Message string
+}
+
+func (e *RuleEngineError) Error() string {
+	return fmt.Sprintf("RuleEngineError(%s): %s", e.Code, e.Message)
+}
+
+func newRuleErr(code, msg string) *RuleEngineError {
+	return &RuleEngineError{Code: code, Message: msg}
+}
+
 // DAEInfo records the outcome of ApplyDAEContract on an EsmFile.
 type DAEInfo struct {
 	// SystemClass is "ode" if ApplyDAEContract succeeded with no
@@ -69,7 +84,7 @@ func ApplyDAEContract(file *EsmFile) (DAEInfo, error) {
 		return info, nil
 	}
 
-	indepByDomain := indepVarByDomain(file)
+	indep := fileIndepVar(file)
 
 	names := make([]string, 0, len(file.Models))
 	for name := range file.Models {
@@ -85,7 +100,6 @@ func ApplyDAEContract(file *EsmFile) (DAEInfo, error) {
 			info.PerModelFactored[mname] = 0
 			continue
 		}
-		indep := modelIndepVar(&m, indepByDomain)
 		factored := factorTrivialDAE(&m, indep)
 		info.TrivialFactoredCount += factored
 		info.PerModelFactored[mname] = factored
@@ -206,23 +220,12 @@ func isDAETargetSystem(model *Model) bool {
 	return *model.SystemKind == "ode"
 }
 
-func indepVarByDomain(file *EsmFile) map[string]string {
-	out := make(map[string]string, len(file.Domains))
-	for name, d := range file.Domains {
-		if d.IndependentVariable != nil {
-			out[name] = *d.IndependentVariable
-		} else {
-			out[name] = "t"
-		}
-	}
-	return out
-}
-
-func modelIndepVar(model *Model, indepByDomain map[string]string) string {
-	if model.Domain != nil {
-		if iv, ok := indepByDomain[*model.Domain]; ok {
-			return iv
-		}
+// fileIndepVar returns the independent (time) variable for the document. Every
+// component shares the single top-level domain; when it declares an explicit
+// independent_variable that name is used, otherwise it defaults to "t".
+func fileIndepVar(file *EsmFile) string {
+	if file.Domain != nil && file.Domain.IndependentVariable != nil {
+		return *file.Domain.IndependentVariable
 	}
 	return "t"
 }

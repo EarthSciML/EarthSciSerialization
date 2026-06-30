@@ -155,9 +155,141 @@ fn substitute(body: &Value, bindings: &Map<String, Value>) -> Value {
     }
 }
 
+/// An auto-applied rewrite rule: an `expression_templates` entry that carries
+/// a `match` pattern (esm-spec §9.6). Named templates *without* a `match` are
+/// expanded only by explicit `apply_expression_template`; those with a `match`
+/// fire wherever the pattern structurally matches a node.
+struct MatchRule {
+    /// Template id (for diagnostics).
+    name: String,
+    /// Metavariable names (wildcards in `pattern`, slots in `body`).
+    params: Vec<String>,
+    /// The pattern Expression a node is matched against.
+    pattern: Value,
+    /// The replacement Expression instantiated with the bound metavariables.
+    body: Value,
+}
+
+/// Bundles the per-component rewrite inputs threaded through the single pass.
+struct RewriteCtx<'a> {
+    /// All templates declared in the component (named-expansion lookup table).
+    templates: &'a Map<String, Value>,
+    /// Auto-applied `match` rules, in template **declaration order**.
+    rules: &'a [MatchRule],
+}
+
+/// Collect the auto-applied `match` rules from a component's templates, in
+/// declaration order, and reject any rule whose `body` re-introduces its own
+/// pattern (`rewrite_rule_nonterminating`, esm-spec §9.6.3).
+fn collect_match_rules(
+    templates: &Map<String, Value>,
+    scope: &str,
+) -> Result<Vec<MatchRule>, ExpressionTemplateError> {
+    let mut rules = Vec::new();
+    for (name, decl) in templates {
+        let Some(obj) = decl.as_object() else { continue };
+        let Some(pattern) = obj.get("match") else {
+            continue;
+        };
+        let params: Vec<String> = obj
+            .get("params")
+            .and_then(|p| p.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let body = obj.get("body").cloned().unwrap_or(Value::Null);
+
+        // Single-pass, no-rescan: a replacement is not re-scanned, so a rule
+        // whose body re-introduces its own pattern is a static error.
+        let param_set: std::collections::HashSet<&str> =
+            params.iter().map(String::as_str).collect();
+        if pattern_occurs_in(pattern, &param_set, &body) {
+            return Err(err(
+                "rewrite_rule_nonterminating",
+                format!(
+                    "{scope}.expression_templates.{name}: 'body' re-introduces the rule's own \
+                     'match' pattern; a replacement is never re-scanned (esm-spec §9.6.3)"
+                ),
+            ));
+        }
+        rules.push(MatchRule {
+            name: name.clone(),
+            params,
+            pattern: pattern.clone(),
+            body,
+        });
+    }
+    Ok(rules)
+}
+
+/// Structurally match `pattern` against `target`, binding metavariables (names
+/// in `params`) into `binds`. A metavariable in an operand/`args` position
+/// binds the matched sub-AST; in a scalar field it binds the matched literal.
+/// A metavariable appearing twice must bind consistently. Pattern object keys
+/// are matched as a subset: `target` MAY carry extra keys.
+fn try_match(
+    pattern: &Value,
+    target: &Value,
+    params: &std::collections::HashSet<&str>,
+    binds: &mut Map<String, Value>,
+) -> bool {
+    match pattern {
+        Value::String(s) => {
+            if params.contains(s.as_str()) {
+                match binds.get(s) {
+                    Some(prev) => prev == target,
+                    None => {
+                        binds.insert(s.clone(), target.clone());
+                        true
+                    }
+                }
+            } else {
+                pattern == target
+            }
+        }
+        Value::Array(parr) => match target {
+            Value::Array(tarr) if parr.len() == tarr.len() => parr
+                .iter()
+                .zip(tarr.iter())
+                .all(|(p, t)| try_match(p, t, params, binds)),
+            _ => false,
+        },
+        Value::Object(pobj) => match target {
+            Value::Object(tobj) => pobj.iter().all(|(k, pv)| match tobj.get(k) {
+                Some(tv) => try_match(pv, tv, params, binds),
+                None => false,
+            }),
+            _ => false,
+        },
+        // numbers / bools / null: exact equality.
+        _ => pattern == target,
+    }
+}
+
+/// True if `pattern` matches `node` or any descendant of `node`. Used for the
+/// static `rewrite_rule_nonterminating` check.
+fn pattern_occurs_in(
+    pattern: &Value,
+    params: &std::collections::HashSet<&str>,
+    node: &Value,
+) -> bool {
+    let mut binds = Map::new();
+    if try_match(pattern, node, params, &mut binds) {
+        return true;
+    }
+    match node {
+        Value::Array(arr) => arr.iter().any(|c| pattern_occurs_in(pattern, params, c)),
+        Value::Object(obj) => obj.values().any(|c| pattern_occurs_in(pattern, params, c)),
+        _ => false,
+    }
+}
+
 fn expand_apply(
     node: &Map<String, Value>,
-    templates: &Map<String, Value>,
+    ctx: &RewriteCtx,
     scope: &str,
 ) -> Result<Value, ExpressionTemplateError> {
     let name = node.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
@@ -172,7 +304,7 @@ fn expand_apply(
             format!("{scope}: apply_expression_template 'name' must be non-empty"),
         ));
     }
-    let decl = templates.get(name).ok_or_else(|| {
+    let decl = ctx.templates.get(name).ok_or_else(|| {
         err(
             "apply_expression_template_unknown_template",
             format!("{scope}: apply_expression_template references undeclared template '{name}'"),
@@ -220,42 +352,59 @@ fn expand_apply(
         }
     }
 
-    // Recursively expand bindings (template bodies cannot contain
-    // apply_expression_template, but the *bindings* may).
+    // Recursively rewrite bindings (template bodies cannot contain
+    // apply_expression_template, but the *bindings* may, and may themselves
+    // match auto-applied rules).
     let mut resolved = Map::new();
     for (k, v) in bindings {
-        resolved.insert(k.clone(), walk(v, templates, scope)?);
+        resolved.insert(k.clone(), rewrite(v, ctx, scope)?);
     }
     let body = decl_obj.get("body").cloned().unwrap_or(Value::Null);
+    // The substituted body is a replacement and is NOT re-scanned (§9.6.3).
     Ok(substitute(&body, &resolved))
 }
 
-fn walk(
-    node: &Value,
-    templates: &Map<String, Value>,
-    scope: &str,
-) -> Result<Value, ExpressionTemplateError> {
-    match node {
+/// The single bottom-up load-time rewrite pass (esm-spec §9.6.3). For each
+/// node: rewrite children first; expand an `apply_expression_template` node
+/// into its substituted body; otherwise try the auto-applied `match` rules in
+/// declaration order against the (children-rewritten) node and instantiate the
+/// first rule that fires. A replacement is returned as-is — never re-scanned.
+fn rewrite(node: &Value, ctx: &RewriteCtx, scope: &str) -> Result<Value, ExpressionTemplateError> {
+    let processed = match node {
         Value::Array(arr) => {
             let mut out = Vec::with_capacity(arr.len());
             for c in arr {
-                out.push(walk(c, templates, scope)?);
+                out.push(rewrite(c, ctx, scope)?);
             }
-            Ok(Value::Array(out))
+            Value::Array(out)
         }
         Value::Object(obj) => {
             if obj.get("op").and_then(|v| v.as_str()) == Some(APPLY_OP) {
-                expand_apply(obj, templates, scope)
-            } else {
-                let mut out = Map::new();
-                for (k, v) in obj {
-                    out.insert(k.clone(), walk(v, templates, scope)?);
-                }
-                Ok(Value::Object(out))
+                // Named-template expansion is itself a replacement: return it
+                // without offering it to the auto-applied `match` rules.
+                return expand_apply(obj, ctx, scope);
             }
+            let mut out = Map::new();
+            for (k, v) in obj {
+                out.insert(k.clone(), rewrite(v, ctx, scope)?);
+            }
+            Value::Object(out)
         }
-        _ => Ok(node.clone()),
+        _ => node.clone(),
+    };
+
+    for rule in ctx.rules {
+        let param_set: std::collections::HashSet<&str> =
+            rule.params.iter().map(String::as_str).collect();
+        let mut binds = Map::new();
+        if try_match(&rule.pattern, &processed, &param_set, &mut binds) {
+            let _ = &rule.name; // retained for diagnostics / future tracing
+            // Instantiate the body; first rule wins, result is not re-scanned.
+            return Ok(substitute(&rule.body, &binds));
+        }
     }
+
+    Ok(processed)
 }
 
 fn find_apply_paths(view: &Value, path: &str, hits: &mut Vec<String>) {
@@ -330,26 +479,21 @@ pub fn reject_expression_templates_pre_v04(view: &Value) -> Result<(), Expressio
     Ok(())
 }
 
-/// Expand all `apply_expression_template` ops in `value` and strip
-/// `expression_templates` blocks. Mutates `value` in place.
+/// Run the single load-time rewrite pass (esm-spec §9.6): expand every
+/// `apply_expression_template` op, auto-apply each component's `match` rules in
+/// declaration order, and strip the `expression_templates` blocks. Mutates
+/// `value` in place. This is the format's one structural-substitution engine —
+/// variable substitution, named-template expansion, and PDE-operator / `bc`
+/// lowering all flow through [`rewrite`].
 ///
 /// Pre-condition: the input has been schema-validated.
 pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTemplateError> {
     reject_expression_templates_pre_v04(value)?;
 
-    let Some(_root) = value.as_object_mut() else {
+    let Some(root) = value.as_object_mut() else {
         return Ok(());
     };
 
-    let mut apply_paths: Vec<String> = Vec::new();
-    find_apply_paths(value, "", &mut apply_paths);
-
-    if apply_paths.is_empty() {
-        strip_expression_templates(value);
-        return Ok(());
-    }
-
-    let root = value.as_object_mut().unwrap();
     for compkind in ["models", "reaction_systems"] {
         let Some(Value::Object(comps)) = root.get_mut(compkind) else {
             continue;
@@ -358,24 +502,30 @@ pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTem
             let Value::Object(comp) = comp_value else {
                 continue;
             };
+            let scope_base = format!("{compkind}.{cname}");
             // Take the templates block (if any) so we can borrow comp mutably.
-            let templates_value = comp.remove("expression_templates");
-            let templates: Map<String, Value> = match templates_value {
+            let templates: Map<String, Value> = match comp.remove("expression_templates") {
                 Some(Value::Object(t)) => t,
                 _ => Map::new(),
             };
-            if !templates.is_empty() {
-                validate_templates(&templates, &format!("{compkind}.{cname}"))?;
+            // A template-less component has nothing to expand or auto-apply.
+            // Stray `apply_expression_template` nodes (if any) are caught by
+            // the post-pass leftover scan below as `unknown_template`.
+            if templates.is_empty() {
+                continue;
             }
+            validate_templates(&templates, &scope_base)?;
+            let rules = collect_match_rules(&templates, &scope_base)?;
+            let ctx = RewriteCtx {
+                templates: &templates,
+                rules: &rules,
+            };
             let keys: Vec<String> = comp.keys().cloned().collect();
             for k in keys {
-                if k == "expression_templates" {
-                    continue;
-                }
-                let scope = format!("{compkind}.{cname}.{k}");
+                let scope = format!("{scope_base}.{k}");
                 if let Some(child) = comp.get(&k).cloned() {
-                    let walked = walk(&child, &templates, &scope)?;
-                    comp.insert(k, walked);
+                    let rewritten = rewrite(&child, &ctx, &scope)?;
+                    comp.insert(k, rewritten);
                 }
             }
         }
@@ -394,22 +544,6 @@ pub fn lower_expression_templates(value: &mut Value) -> Result<(), ExpressionTem
         ));
     }
     Ok(())
-}
-
-fn strip_expression_templates(value: &mut Value) {
-    let Some(root) = value.as_object_mut() else {
-        return;
-    };
-    for compkind in ["models", "reaction_systems"] {
-        let Some(Value::Object(comps)) = root.get_mut(compkind) else {
-            continue;
-        };
-        for (_, comp_value) in comps.iter_mut() {
-            if let Value::Object(comp) = comp_value {
-                comp.remove("expression_templates");
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -576,5 +710,142 @@ mod tests {
             v["reaction_systems"]["chem"]["reactions"][0]["rate"],
             json!("k")
         );
+    }
+
+    /// A `match` rule (esm-spec §9.6) auto-applies wherever its operator pattern
+    /// matches — no `apply_expression_template` node required — binding an
+    /// operand metavariable to the matched sub-AST. Non-matching siblings (the
+    /// equation LHS) are left untouched.
+    #[test]
+    fn match_rule_lowers_grad_operator() {
+        let mut v = json!({
+          "esm": "0.4.0",
+          "metadata": {"name": "grad_lowering", "authors": ["t"]},
+          "models": {
+            "Diff": {
+              "variables": {"u": {"type": "state"}},
+              "expression_templates": {
+                "central_grad_x": {
+                  "params": ["f"],
+                  "match": {"op": "grad", "args": ["f"], "dim": "x"},
+                  "body": {
+                    "op": "-",
+                    "args": [
+                      {"op": "index", "args": ["f", {"op": "+", "args": ["i", 1]}]},
+                      {"op": "index", "args": ["f", {"op": "-", "args": ["i", 1]}]}
+                    ]
+                  }
+                }
+              },
+              "equations": [
+                {"lhs": {"op": "D", "args": ["u"], "wrt": "t"},
+                 "rhs": {"op": "grad", "args": ["u"], "dim": "x"}}
+              ]
+            }
+          }
+        });
+        lower_expression_templates(&mut v).expect("rewrite");
+        let model = &v["models"]["Diff"];
+        assert!(model.get("expression_templates").is_none());
+        let rhs = &model["equations"][0]["rhs"];
+        // grad(u, dim=x) lowered to the finite-difference body, f -> "u".
+        assert_eq!(rhs["op"], json!("-"));
+        assert_eq!(rhs["args"][0]["op"], json!("index"));
+        assert_eq!(rhs["args"][0]["args"][0], json!("u"));
+        assert_eq!(rhs["args"][1]["args"][0], json!("u"));
+        // The non-matching LHS is left untouched.
+        assert_eq!(model["equations"][0]["lhs"]["op"], json!("D"));
+    }
+
+    /// A metavariable appearing in a scalar field (`dim`) binds the matched
+    /// literal, while one in `args` binds the matched sub-AST.
+    #[test]
+    fn match_rule_binds_scalar_field_metavariable() {
+        let mut v = json!({
+          "esm": "0.4.0",
+          "metadata": {"name": "scalar_meta", "authors": ["t"]},
+          "models": {
+            "M": {
+              "variables": {"u": {"type": "state"}},
+              "expression_templates": {
+                "grad_to_deriv": {
+                  "params": ["f", "d"],
+                  "match": {"op": "grad", "args": ["f"], "dim": "d"},
+                  "body": {"op": "deriv", "args": ["f"], "wrt": "d"}
+                }
+              },
+              "equations": [
+                {"lhs": "u", "rhs": {"op": "grad", "args": ["u"], "dim": "y"}}
+              ]
+            }
+          }
+        });
+        lower_expression_templates(&mut v).expect("rewrite");
+        let rhs = &v["models"]["M"]["equations"][0]["rhs"];
+        assert_eq!(rhs["op"], json!("deriv"));
+        assert_eq!(rhs["args"][0], json!("u")); // operand metavar f -> "u"
+        assert_eq!(rhs["wrt"], json!("y")); // scalar metavar d -> literal "y"
+    }
+
+    /// A `match` rule whose `body` re-introduces its own pattern is rejected;
+    /// replacements are never re-scanned (esm-spec §9.6.3).
+    #[test]
+    fn rejects_nonterminating_match_rule() {
+        let mut v = json!({
+          "esm": "0.4.0",
+          "metadata": {"name": "nonterm", "authors": ["t"]},
+          "models": {
+            "M": {
+              "variables": {"u": {"type": "state"}},
+              "expression_templates": {
+                "loop_rule": {
+                  "params": ["f"],
+                  "match": {"op": "grad", "args": ["f"], "dim": "x"},
+                  "body": {"op": "+", "args": [
+                    {"op": "grad", "args": ["f"], "dim": "x"}, 1]}
+                }
+              },
+              "equations": [
+                {"lhs": "u", "rhs": {"op": "grad", "args": ["u"], "dim": "x"}}
+              ]
+            }
+          }
+        });
+        let e = lower_expression_templates(&mut v).expect_err("should fail");
+        assert_eq!(e.code, "rewrite_rule_nonterminating");
+    }
+
+    /// Rules are applied in template *declaration order* (not the alphabetical
+    /// key order of an unordered map): the first declared rule whose pattern
+    /// matches wins. `z_rule` is declared before `a_rule`, so it must fire.
+    #[test]
+    fn match_rules_apply_in_declaration_order() {
+        let mut v = json!({
+          "esm": "0.4.0",
+          "metadata": {"name": "order", "authors": ["t"]},
+          "models": {
+            "M": {
+              "variables": {"u": {"type": "state"}},
+              "expression_templates": {
+                "z_rule": {
+                  "params": ["f"],
+                  "match": {"op": "grad", "args": ["f"], "dim": "x"},
+                  "body": {"op": "winner", "args": ["f"]}
+                },
+                "a_rule": {
+                  "params": ["f"],
+                  "match": {"op": "grad", "args": ["f"], "dim": "x"},
+                  "body": {"op": "loser", "args": ["f"]}
+                }
+              },
+              "equations": [
+                {"lhs": "u", "rhs": {"op": "grad", "args": ["u"], "dim": "x"}}
+              ]
+            }
+          }
+        });
+        lower_expression_templates(&mut v).expect("rewrite");
+        let rhs = &v["models"]["M"]["equations"][0]["rhs"];
+        assert_eq!(rhs["op"], json!("winner"));
     }
 }

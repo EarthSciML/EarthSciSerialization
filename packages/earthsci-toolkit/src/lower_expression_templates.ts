@@ -1,13 +1,30 @@
 /**
- * Load-time expansion pass for `apply_expression_template` ops
- * (esm-spec §9.6 / docs/rfcs/ast-expression-templates.md).
+ * Load-time rewrite pass for `expression_templates` (esm-spec §9.6 /
+ * docs/rfcs/ast-expression-templates.md).
  *
- * Walks each `models.<m>` and `reaction_systems.<rs>` block; if an
- * `expression_templates` entry is present, every `apply_expression_template`
- * node anywhere in that component's expressions is replaced by the
- * substituted template body. After the pass, the component carries no
- * `expression_templates` block and no `apply_expression_template` ops —
- * downstream consumers see only normal Expression ASTs.
+ * An `expression_templates` entry is a **rewrite rule** with `params`
+ * (metavariables), a `body` (the replacement Expression), and an optional
+ * `match` pattern. This single engine covers both application modes:
+ *
+ *   - **No `match`** — the entry is applied only by an explicit
+ *     `apply_expression_template` node that names it and supplies
+ *     per-parameter `bindings` (the original template-expansion path).
+ *   - **With `match`** — the entry is an *auto-applied* rewrite rule.
+ *     `match` is a pattern Expression in which the params are wildcards:
+ *     a param in an operand/`args` position binds to the matched sub-AST;
+ *     a param in a scalar field (e.g. `dim`, `side`) binds to the matched
+ *     literal. The rule fires wherever the pattern structurally matches.
+ *
+ * Rewriting is a **single bottom-up pass** per expression tree, applying
+ * `match` rules in template **declaration order**; a replacement `body` is
+ * **not** re-scanned for further matches. A `match` rule whose `body`
+ * re-introduces its own pattern is rejected with diagnostic
+ * `rewrite_rule_nonterminating`.
+ *
+ * Walks each `models.<m>` and `reaction_systems.<rs>` block, rewriting
+ * every expression position in the component. After the pass the component
+ * carries no `expression_templates` block and no `apply_expression_template`
+ * ops — downstream consumers see only normal Expression ASTs.
  *
  * Operates on the pre-coercion JSON view (plain objects) — runs in
  * `load()` after schema validation but before typed coercion.
@@ -17,9 +34,11 @@
  *   - apply_expression_template_bindings_mismatch
  *   - apply_expression_template_recursive_body
  *   - apply_expression_template_version_too_old
+ *   - apply_expression_template_invalid_declaration
+ *   - rewrite_rule_nonterminating
  */
 
-import { isNumericLiteral } from './numeric-literal.js'
+import { isNumericLiteral, numericValue } from './numeric-literal.js'
 
 const APPLY_OP = 'apply_expression_template'
 
@@ -31,12 +50,123 @@ export class ExpressionTemplateError extends Error {
 }
 
 type Json = unknown
-type Templates = Record<string, { params: string[]; body: Json }>
+type TemplateDecl = { params: string[]; body: Json; match?: Json }
+/** Named templates invoked explicitly via `apply_expression_template` (no `match`). */
+type Templates = Record<string, TemplateDecl>
+
+/** An auto-applied rewrite rule (a template carrying a `match` pattern). */
+interface MatchRule {
+  name: string
+  params: Set<string>
+  match: Json
+  body: Json
+}
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return (
     typeof v === 'object' && v !== null && !Array.isArray(v) && !isNumericLiteral(v)
   )
+}
+
+/**
+ * Structural deep equality over the JSON AST, treating plain `number`
+ * and tagged `NumericLiteral` leaves as equal when their numeric values
+ * agree. Used for match-binding consistency and pattern literal checks.
+ */
+function deepEqual(a: Json, b: Json): boolean {
+  if (a === b) return true
+  const av = numericValue(a)
+  const bv = numericValue(b)
+  if (av !== undefined || bv !== undefined) return av !== undefined && av === bv
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false
+    return true
+  }
+  if (isObject(a) && isObject(b)) {
+    const ak = Object.keys(a)
+    const bk = Object.keys(b)
+    if (ak.length !== bk.length) return false
+    for (const k of ak) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) return false
+      if (!deepEqual(a[k], b[k])) return false
+    }
+    return true
+  }
+  return false
+}
+
+/**
+ * Attempt to structurally match `pattern` against `node`, treating any
+ * bare string in `params` as a wildcard metavariable. On success the
+ * `bindings` map is populated (param → bound sub-AST for operand/`args`
+ * positions, param → matched literal for scalar fields) and `true` is
+ * returned. Repeated occurrences of a metavariable must bind consistently.
+ *
+ * Pattern object fields are matched by key; node keys absent from the
+ * pattern are ignored (so a partial operator pattern listing only
+ * `op`/`args`/`dim` still matches a node that carries extra fields).
+ */
+function matchPattern(
+  pattern: Json,
+  node: Json,
+  params: Set<string>,
+  bindings: Record<string, Json>,
+): boolean {
+  // Metavariable: binds to whatever node occupies this position (sub-AST
+  // in an operand/`args` slot, literal in a scalar field).
+  if (typeof pattern === 'string' && params.has(pattern)) {
+    if (Object.prototype.hasOwnProperty.call(bindings, pattern)) {
+      return deepEqual(bindings[pattern], node)
+    }
+    bindings[pattern] = node
+    return true
+  }
+  // Literal string (a concrete op name / variable reference): exact match.
+  if (typeof pattern === 'string') return pattern === node
+  // Numeric literal (plain or tagged): match by value.
+  if (typeof pattern === 'number' || isNumericLiteral(pattern)) {
+    const pv = numericValue(pattern)
+    const nv = numericValue(node)
+    return pv !== undefined && pv === nv
+  }
+  // Array (an `args`/operand list): element-wise, equal length.
+  if (Array.isArray(pattern)) {
+    if (!Array.isArray(node) || node.length !== pattern.length) return false
+    for (let i = 0; i < pattern.length; i++) {
+      if (!matchPattern(pattern[i], node[i], params, bindings)) return false
+    }
+    return true
+  }
+  // Object (an operator node): node must be an object that carries every
+  // key the pattern specifies (extra node keys are allowed).
+  if (isObject(pattern)) {
+    if (!isObject(node)) return false
+    for (const k of Object.keys(pattern)) {
+      if (!Object.prototype.hasOwnProperty.call(node, k)) return false
+      if (!matchPattern(pattern[k], node[k], params, bindings)) return false
+    }
+    return true
+  }
+  // null / boolean.
+  return deepEqual(pattern, node)
+}
+
+/**
+ * Try each auto-applied `match` rule (in declaration order) against
+ * `node`. The first rule whose pattern matches fires: its `body` is
+ * instantiated by substituting the bound metavariables and returned.
+ * Returns `undefined` when no rule matches. The instantiated body is NOT
+ * re-scanned by the caller (single-pass, no recursion — esm-spec §9.6.3).
+ */
+function applyMatchRules(node: Json, matchRules: MatchRule[]): Json | undefined {
+  for (const rule of matchRules) {
+    const bindings: Record<string, Json> = {}
+    if (matchPattern(rule.match, node, rule.params, bindings)) {
+      return substitute(rule.body, bindings)
+    }
+  }
+  return undefined
 }
 
 function deepClone<T>(v: T): T {
@@ -93,6 +223,36 @@ function assertNoNestedApply(body: Json, templateName: string, path: string): vo
   }
 }
 
+/**
+ * Reject a `match` rule whose `body` re-introduces its own pattern.
+ * Because replacements are not re-scanned this never loops at runtime,
+ * but the spec (§9.6.3) rejects such rules statically so authors do not
+ * silently rely on multi-pass fixpoint rewriting. Only operator (object)
+ * patterns are scanned — a bare-metavariable pattern matches everything
+ * and has no structural form to re-introduce.
+ */
+function assertTerminating(
+  match: Json,
+  body: Json,
+  params: Set<string>,
+  name: string,
+  scope: string,
+): void {
+  if (!isObject(match)) return
+  const reintroduces = (subtree: Json): boolean => {
+    if (matchPattern(match, subtree, params, {})) return true
+    if (Array.isArray(subtree)) return subtree.some(reintroduces)
+    if (isObject(subtree)) return Object.keys(subtree).some((k) => reintroduces(subtree[k]))
+    return false
+  }
+  if (reintroduces(body)) {
+    throw new ExpressionTemplateError(
+      'rewrite_rule_nonterminating',
+      `${scope}.expression_templates.${name}: match rule 'body' re-introduces its own 'match' pattern; single-pass rewriting forbids this (esm-spec §9.6.3)`,
+    )
+  }
+}
+
 function validateTemplates(templates: Templates, scope: string): void {
   for (const [name, decl] of Object.entries(templates)) {
     if (!decl || typeof decl !== 'object') {
@@ -130,11 +290,21 @@ function validateTemplates(templates: Templates, scope: string): void {
         `${scope}.expression_templates.${name}: 'body' is required`,
       )
     }
-    assertNoNestedApply((decl as { body: Json }).body, name, '/body')
+    const body = (decl as { body: Json }).body
+    assertNoNestedApply(body, name, '/body')
+    const match = (decl as { match?: Json }).match
+    if (match !== undefined) {
+      assertTerminating(match, body, seen, name, scope)
+    }
   }
 }
 
-function expandApply(node: Record<string, unknown>, templates: Templates, scope: string): Json {
+function expandApply(
+  node: Record<string, unknown>,
+  templates: Templates,
+  matchRules: MatchRule[],
+  scope: string,
+): Json {
   const name = node.name
   if (typeof name !== 'string' || name.length === 0) {
     throw new ExpressionTemplateError(
@@ -176,25 +346,41 @@ function expandApply(node: Record<string, unknown>, templates: Templates, scope:
   }
   // Recursively expand any apply_expression_template nodes inside the
   // bindings (templates can take other-template results as args even if
-  // they cannot themselves call templates internally).
+  // they cannot themselves call templates internally). Auto-applied
+  // `match` rules also fire inside binding arguments.
   const resolvedBindings: Record<string, Json> = {}
   for (const [k, v] of Object.entries(bindings)) {
-    resolvedBindings[k] = walk(v, templates, scope)
+    resolvedBindings[k] = walk(v, templates, matchRules, scope)
   }
   return substitute(decl.body, resolvedBindings)
 }
 
-function walk(node: Json, templates: Templates, scope: string): Json {
+/**
+ * Single bottom-up rewrite pass: expand `apply_expression_template` nodes
+ * and auto-apply `match` rules. Children are rewritten first; the node
+ * itself is then offered to the `match` rules (declaration order, first
+ * match wins). A rule's instantiated body is returned as-is — it is never
+ * re-scanned (esm-spec §9.6.3).
+ */
+function walk(node: Json, templates: Templates, matchRules: MatchRule[], scope: string): Json {
   if (Array.isArray(node)) {
-    return node.map((c) => walk(c, templates, scope))
+    return node.map((c) => walk(c, templates, matchRules, scope))
   }
   if (isObject(node)) {
+    // Explicit template invocation is expanded in place; its substituted
+    // body is not re-walked (the bindings were already walked).
     if (node.op === APPLY_OP) {
-      return expandApply(node, templates, scope)
+      return expandApply(node, templates, matchRules, scope)
     }
+    // Bottom-up: rewrite the children first.
     const out: Record<string, unknown> = {}
     for (const k of Object.keys(node)) {
-      out[k] = walk(node[k], templates, scope)
+      out[k] = walk(node[k], templates, matchRules, scope)
+    }
+    // Then offer this (rewritten) node to the auto-applied match rules.
+    if (matchRules.length > 0) {
+      const rewritten = applyMatchRules(out, matchRules)
+      if (rewritten !== undefined) return rewritten
     }
     return out
   }
@@ -264,10 +450,24 @@ interface Component {
   [k: string]: unknown
 }
 
+/** True if any model / reaction_system declares an expression_templates block. */
+function hasExpressionTemplatesBlock(root: Record<string, unknown>): boolean {
+  for (const compKind of ['models', 'reaction_systems'] as const) {
+    const comps = root[compKind]
+    if (!isObject(comps)) continue
+    for (const comp of Object.values(comps)) {
+      if (isObject(comp) && isObject(comp.expression_templates)) return true
+    }
+  }
+  return false
+}
+
 /**
- * Expand all apply_expression_template nodes in the given file (in place
- * is OK — we mutate a clone). Returns a new file object with templates
- * expanded and `expression_templates` blocks removed.
+ * Rewrite all `expression_templates` in the given file: expand explicit
+ * `apply_expression_template` nodes AND auto-apply `match` rules in a
+ * single bottom-up pass per component (in place is OK — we mutate a
+ * clone). Returns a new file object with templates applied and
+ * `expression_templates` blocks removed.
  *
  * Pre-condition: the input has been schema-validated.
  */
@@ -277,12 +477,13 @@ export function lowerExpressionTemplates<T extends object>(file: T): T {
   if (!isObject(file)) return file
   const root = file as Record<string, unknown>
 
-  // First, scan globally for any apply_expression_template — used to
-  // detect orphan ops in components that have no templates block.
+  // Scan globally for apply ops (orphan-op detection) and for any
+  // expression_templates block (a component may carry `match` rules that
+  // must run even when there are no apply ops).
   const globalOps = findStrayApplyOps(file)
-  if (globalOps.length === 0) {
-    // No apply ops anywhere; just strip empty expression_templates blocks
-    // for canonical-form invariance and return.
+  if (globalOps.length === 0 && !hasExpressionTemplatesBlock(root)) {
+    // Nothing to expand and no rules to apply; strip empty
+    // expression_templates blocks for canonical-form invariance and return.
     return stripExpressionTemplates(file)
   }
 
@@ -295,18 +496,35 @@ export function lowerExpressionTemplates<T extends object>(file: T): T {
       if (!isObject(compRaw)) continue
       const comp = compRaw as Component
       const tplRaw = comp.expression_templates
+      // Templates without `match` are invoked explicitly via
+      // apply_expression_template; templates with `match` are auto-applied
+      // rewrite rules collected in declaration order.
       const templates: Templates = {}
+      const matchRules: MatchRule[] = []
       if (isObject(tplRaw)) {
+        const all: Templates = {}
         for (const [tname, tdecl] of Object.entries(tplRaw)) {
-          templates[tname] = tdecl as Templates[string]
+          all[tname] = tdecl as TemplateDecl
         }
-        validateTemplates(templates, `${compKind}.${compName}`)
+        validateTemplates(all, `${compKind}.${compName}`)
+        for (const [tname, decl] of Object.entries(all)) {
+          if (decl.match !== undefined) {
+            matchRules.push({
+              name: tname,
+              params: new Set(decl.params),
+              match: decl.match,
+              body: decl.body,
+            })
+          } else {
+            templates[tname] = decl
+          }
+        }
       }
       // Walk every property except expression_templates (we don't
       // expand inside template bodies — those are validated above).
       for (const k of Object.keys(comp)) {
         if (k === 'expression_templates') continue
-        comp[k] = walk(comp[k], templates, `${compKind}.${compName}.${k}`)
+        comp[k] = walk(comp[k], templates, matchRules, `${compKind}.${compName}.${k}`)
       }
       delete comp.expression_templates
     }

@@ -34,7 +34,6 @@ from .esm_types import (
     ReactionSystem,
     ContinuousEvent, DiscreteEvent, Expr, ExprNode, EsmFile,
     AffectEquation, FunctionalAffect, is_aggregate_op,
-    InitialConditionType,
 )
 from .flatten import (
     FlattenedEquation,
@@ -878,113 +877,15 @@ def _seed_expression_initial_conditions(
     shapes: Dict[str, Tuple[int, ...]],
     state_names: List[str],
 ) -> None:
-    """Seed ``y0`` from a domain-level ``expression`` initial condition.
+    """No-op retained for call-site stability.
 
-    The IC expression for each variable is the EXISTING expression AST
-    evaluated over the domain's spatial grid at t=0 — reusing the NumPy
-    interpreter (:func:`eval_expr`), not a new primitive. Free symbols in the
-    expression are the spatial dimension names (e.g. ``"x"``, ``"y"``); the
-    expression is evaluated at every grid node to produce the variable's
-    initial field ``u(x, 0)``, written into the flat state vector in C order
-    (matching the interpreter's read layout in ``_view_state_array``).
-
-    Runs before :func:`_apply_initial_conditions` so explicit per-element
-    ``initial_conditions`` passed to :func:`simulate` still override the field.
-    Only domain-level expression ICs are consumed here — PDE components route
-    through the NumPy backend, which is the one path with a grid. Non-spatial
-    systems never carry one, so this is a no-op for them.
+    Domain-level ``expression`` initial conditions were removed in v0.8.0: a
+    component's initial fields are now declared with ``ic`` op equations in the
+    model (esm-spec §11.4), and the shared ``domain`` no longer carries an
+    ``initial_conditions`` block. Field-valued ICs are lowered elsewhere; this
+    seeding hook has nothing left to consume.
     """
-    domain = getattr(flat, "domain", None)
-    if domain is None:
-        return
-    ic = getattr(domain, "initial_conditions", None)
-    if ic is None or ic.type != InitialConditionType.EXPRESSION:
-        return
-    if not ic.expression_values:
-        return
-    spatial = getattr(domain, "spatial", None)
-    if not spatial:
-        raise NumpyInterpreterError(
-            "expression initial condition requires the domain to declare "
-            "spatial dimensions (domains.<d>.spatial) so grid coordinates can "
-            "be built"
-        )
-
-    coords = _grid_coords_from_spatial(spatial)
-    dim_names = list(coords.keys())
-    dim_sizes = [int(c.shape[0]) for c in coords.values()]
-
-    for var, expr in ic.expression_values.items():
-        # Resolve the (possibly dot-namespaced) flat state name.
-        resolved = None
-        for n in state_names:
-            if n == var or n.endswith("." + var):
-                resolved = n
-                break
-        if resolved is None:
-            raise NumpyInterpreterError(
-                f"expression initial condition names unknown variable {var!r}; "
-                f"known state variables: {state_names}"
-            )
-
-        shape = tuple(shapes.get(resolved, ()))
-        grid_sizes = dim_sizes[: len(shape)]
-        # Map the variable's array axes to spatial dimensions positionally. Each
-        # axis must hold AT LEAST the grid's node count; it may hold MORE when
-        # the state is a discretized makearray (B2): such a state is allocated
-        # 1-based with a ghost-cell pad per stencil-reached axis (the Godunov
-        # level-set reads psi[i+1]/psi[i-1], so a 19x21 grid is stored 20x22).
-        # Physical nodes occupy the LEADING grid-sized block per axis (the
-        # makearray write region 1..n); the trailing ghost slots are filled by
-        # the boundary condition on every RHS eval, so the IC is evaluated on
-        # the grid and written into that leading block rather than broadcast
-        # across the padded storage. An axis SHORTER than the grid, or a rank
-        # above the domain's, is a genuine mismatch and still surfaces loudly.
-        if len(shape) > len(dim_names) or any(
-            s < g for s, g in zip(shape, grid_sizes)
-        ):
-            raise NumpyInterpreterError(
-                f"expression initial condition for {var!r}: variable shape "
-                f"{shape} is not consistent with the spatial grid "
-                f"{dict(zip(dim_names, dim_sizes))} (axes map positionally to "
-                f"spatial dimensions {dim_names}; storage may exceed the grid "
-                f"only by a discretization ghost pad, never fall short of it)"
-            )
-
-        used_dims = list(dim_names[: len(shape)]) if shape else dim_names[:1]
-        used_coords = [coords[d] for d in used_dims]
-        if shape:
-            # Mesh over the GRID nodes (not the padded storage) so the field is
-            # evaluated only where physical nodes live.
-            meshes = np.meshgrid(*used_coords, indexing="ij")
-        else:
-            # 0-D variable (meaningless per spec): evaluate at the first node.
-            meshes = [c[0] for c in used_coords]
-        locals_env = {d: m for d, m in zip(used_dims, meshes)}
-
-        ctx = EvalContext(
-            state_layout=state_layout,
-            state_shapes=shapes,
-            param_values={},
-            observed_values={},
-            y=y0,
-            t=0.0,
-            locals=locals_env,
-        )
-        field = np.asarray(eval_expr(expr, ctx), dtype=float)
-        if shape:
-            # Write the grid-shaped field (a constant expression broadcasts) into
-            # the leading grid block of the variable's storage, preserving any
-            # existing ghost-slot values (zero at seed time; the BC overwrites
-            # them each RHS eval). Identity when storage == grid (non-discretized
-            # states: the conformance golden and the camp_fire ignition front).
-            sl = state_layout[resolved]
-            full = np.array(y0[sl], dtype=float).reshape(shape)
-            grid_block = tuple(slice(0, g) for g in grid_sizes)
-            full[grid_block] = field
-            y0[sl] = full.reshape(-1, order="C")
-        else:
-            y0[state_layout[resolved]] = np.asarray(field, dtype=float).reshape(-1, order="C")
+    return
 
 
 def _apply_initial_conditions(
@@ -1922,142 +1823,25 @@ def _extract_loader_var(native: Any, var: str, file_var: Optional[str] = None) -
     return _coerce_field_values(native)
 
 
-def _regrid_native_field(
-    field: LoaderField, native: Any, target: Any
-) -> Optional[np.ndarray]:
-    """Apply the C4 regrid driver to an EarthSciIO ``NativeDataset`` field.
-
-    A ``NativeDataset`` carries its grid in a ``.coords`` mapping of
-    ``NativeField``s (lat/lon/lev). Returns ``None`` (keep the raw array) when no
-    regrid method is configured or the horizontal coords are absent; the
-    GridLoadResult shape is handled by :func:`_regrid_loaded_field`.
-    """
-    spec = getattr(field, "regrid", None)
-    method = getattr(spec, "method", None) if spec is not None else None
-    if not method:
-        return None
-    coords = getattr(native, "coords", None)
-    if not isinstance(coords, dict):
-        return None
-    from .data_loaders.regrid_driver import (
-        _LAT_NAMES,
-        _LEV_NAMES,
-        _LON_NAMES,
-        regrid_loader_field,
-    )
-
-    values = _extract_loader_var(native, field.var, _loader_file_variable(field))
-
-    def _pick(names) -> Optional[np.ndarray]:
-        for n in names:
-            if n in coords:
-                return _coerce_field_values(coords[n])
-        return None
-
-    src_lon = _pick(_LON_NAMES)
-    src_lat = _pick(_LAT_NAMES)
-    lev_coord = _pick(_LEV_NAMES) if values.ndim >= 3 else None
-    if src_lon is None or src_lat is None:
-        return None
-    if values.ndim >= 3 and lev_coord is None:
-        return None
-    missing = (
-        float(spec.missing_value)
-        if getattr(spec, "missing_value", None) is not None
-        else float("nan")
-    )
-    return regrid_loader_field(
-        values, src_lon, src_lat, target, method,
-        lev_coord=lev_coord, missing_value=missing,
-    )
-
-
 def _provider_array(field: LoaderField, native: Any, target: Any) -> np.ndarray:
     """Lower a provider's native field to the flat sim-grid array the RHS reads.
 
-    Runs the C4 regrid (reproject + per-variable regrid + ``lev=min``) when a
-    ``target`` grid and a regrid method apply — dispatching to
-    :func:`_regrid_loaded_field` for an in-tree ``GridLoadResult`` or
-    :func:`_regrid_native_field` for an EarthSciIO ``NativeDataset``. Otherwise
-    the raw ``field.var`` array is flattened unchanged (identity for a
-    native==sim-grid fixture or a stub provider).
+    The raw ``field.var`` array is flattened unchanged (identity for a
+    native==sim-grid fixture or a stub provider). ``target`` is accepted for
+    signature compatibility but unused.
     """
-    if target is not None:
-        if getattr(native, "dataset", None) is not None:
-            regridded = _regrid_loaded_field(field, native, target)
-        else:
-            regridded = _regrid_native_field(field, native, target)
-        if regridded is not None:
-            return np.asarray(regridded, dtype=float).reshape(-1)
     return _extract_loader_var(native, field.var, _loader_file_variable(field)).reshape(-1)
 
 
-def _regrid_loaded_field(
-    field: LoaderField, result: Any, target: Any
-) -> Optional[np.ndarray]:
-    """Apply the C4 regrid driver to a loaded field, or ``None`` to skip it.
-
-    Returns ``None`` (so the caller keeps the raw array) when no regrid method is
-    configured or the source exposes no horizontal coordinates — a genuine
-    regrid error (bad method, shape mismatch) propagates to the simulation-level
-    handler rather than being silently swallowed.
-    """
-    from .data_loaders.regrid_driver import (
-        extract_source_coords,
-        regrid_loader_field,
-    )
-
-    spec = getattr(field, "regrid", None)
-    method = getattr(spec, "method", None) if spec is not None else None
-    if not method:
-        return None
-    fvar = _loader_file_variable(field)
-    rvars = result.variables
-    arr = rvars[fvar] if (fvar is not None and fvar in rvars) else rvars[field.var]
-    values = np.asarray(getattr(arr, "values", arr), dtype=float)
-    ds = getattr(result, "dataset", None)
-    src_lon, src_lat, lev_coord = extract_source_coords(ds, values.ndim)
-    if src_lon is None or src_lat is None:
-        return None
-    if values.ndim >= 3 and lev_coord is None:
-        return None
-    missing = (
-        float(spec.missing_value)
-        if getattr(spec, "missing_value", None) is not None
-        else float("nan")
-    )
-    return regrid_loader_field(
-        values, src_lon, src_lat, target, method,
-        lev_coord=lev_coord, missing_value=missing,
-    )
-
-
 def _build_loader_target(flat: FlattenedSystem) -> Optional[Any]:
-    """Build the cached lon/lat target grid for loader regridding / URL bbox, or ``None``.
+    """Loader target grids are no longer built — always returns ``None``.
 
-    Built whenever the system has a projected/spatial domain. Two consumers need
-    it: a loader that declares a regrid method (to land its field on the model
-    grid), AND a *static* loader (LANDFIRE/USGS) that needs the projected lon/lat
-    envelope to fill its ArcGIS ``{bbox…}`` URL placeholders (G1) — the latter
-    has no regrid method, so gating target construction on "a loader wants
-    regrid" left those URLs unfillable in the default-provider path. Building is
-    cheap and harmless when unused: the regrid step stays gated on a per-field
-    method (no method ⇒ raw injection), and the URL bbox substitution stays gated
-    on a ``{bbox}`` placeholder. A domain that cannot be turned into a grid
-    (missing spacing, unsupported projection) yields ``None``.
+    The bespoke spatial-grid / regrid machinery was removed in v0.8.0 (loader
+    fields are injected raw; any landing onto a model grid is an ``aggregate``
+    FAQ concern downstream), so there is no target grid to construct. Retained
+    as a no-op for signature compatibility with its call sites.
     """
-    domain = getattr(flat, "domain", None)
-    if domain is None:
-        return None
-    if not getattr(domain, "spatial", None):
-        return None
-    from .data_loaders.regrid_driver import RegridDriverError, build_target_grid
-    from .data_loaders.reproject import ReprojectionError
-
-    try:
-        return build_target_grid(domain)
-    except (RegridDriverError, ReprojectionError):
-        return None
+    return None
 
 
 def _factory_accepts_target(factory: Callable) -> bool:

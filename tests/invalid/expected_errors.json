@@ -1148,13 +1148,13 @@
     "schema_errors": [
       {
         "path": "",
-        "message": "Must satisfy at least one of: required property 'models', required property 'reaction_systems', required property 'data_loaders', or kind 'grid_discretization_descriptor'",
+        "message": "Must satisfy at least one of: required property 'models', required property 'reaction_systems', required property 'data_loaders'",
         "keyword": "anyOf"
       }
     ],
     "structural_errors": [],
     "is_valid": false,
-    "notes": "Genuine no-subsystem negative (RFC pure-io-data-loaders 4.4, bead ess-v9a.8): a document declaring none of models / reaction_systems / data_loaders (and no grid_discretization_descriptor) fails the top-level anyOf. Refreshed for ess-v9a.8 -- the prior fixture was a loader-only document kept invalid only incidentally by a stray top-level 'domain' key, and this entry listed pre-pure-IO 'type: netcdf' / 'path' / 'provides_vars' loader errors (from before the 4.1 pure-IO migration) that no longer apply."
+    "notes": "Genuine no-subsystem negative (RFC pure-io-data-loaders 4.4, bead ess-v9a.8): a document declaring none of models / reaction_systems / data_loaders fails the top-level anyOf. Refreshed for ess-v9a.8 -- the prior fixture was a loader-only document kept invalid only incidentally by a stray top-level 'domain' key, and this entry listed pre-pure-IO 'type: netcdf' / 'path' / 'provides_vars' loader errors (from before the 4.1 pure-IO migration) that no longer apply."
   },
 
   "invalid_trigger_type.esm": {

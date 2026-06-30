@@ -620,7 +620,7 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
     for eq in model.equations
         lhs = namespace_expr(eq.lhs, prefix, local_names, idx_names)
         rhs = namespace_expr(eq.rhs, prefix, local_names, idx_names)
-        push!(equations, Equation(lhs, rhs; _comment=eq._comment, region=eq.region))
+        push!(equations, Equation(lhs, rhs; _comment=eq._comment))
         if lhs isa VarExpr
             push!(explicit_lhs_names, lhs.name)
         end
@@ -692,7 +692,7 @@ function _collect_reaction_system!(states::OrderedDict{String, ModelVariable},
                                    params::OrderedDict{String, ModelVariable},
                                    equations::Vector{Equation},
                                    rsys::ReactionSystem, prefix::String,
-                                   file_domains::Union{Dict{String, Domain}, Nothing})
+                                   file_domain::Union{Domain, Nothing})
     local_names = Set{String}()
     for sp in rsys.species
         push!(local_names, sp.name)
@@ -715,14 +715,9 @@ function _collect_reaction_system!(states::OrderedDict{String, ModelVariable},
             default=p.default, description=p.description, units=p.units)
     end
 
-    sys_domain = if rsys.domain !== nothing && file_domains !== nothing &&
-                    haskey(file_domains, rsys.domain)
-        file_domains[rsys.domain]
-    else
-        nothing
-    end
-
-    raw_eqs = lower_reactions_to_equations(rsys.reactions, rsys.species, sys_domain)
+    # v0.8.0: every component shares the document's single `domain`; a system
+    # is spatial iff its variables are shaped over index sets, 0-D otherwise.
+    raw_eqs = lower_reactions_to_equations(rsys.reactions, rsys.species, file_domain)
     for eq in raw_eqs
         lhs = namespace_expr(eq.lhs, prefix, local_names)
         rhs = namespace_expr(eq.rhs, prefix, local_names)
@@ -731,7 +726,7 @@ function _collect_reaction_system!(states::OrderedDict{String, ModelVariable},
 
     for (sub_name, sub_rsys) in rsys.subsystems
         _collect_reaction_system!(states, params, equations,
-                                  sub_rsys, "$(prefix).$(sub_name)", file_domains)
+                                  sub_rsys, "$(prefix).$(sub_name)", file_domain)
     end
 end
 
@@ -808,120 +803,6 @@ end
 # ========================================
 # Hybrid-flattening preflight checks (§4.7.6)
 # ========================================
-
-const _SUPPORTED_REGRIDDING_METHODS = Set{String}(["identity"])
-
-"""
-Validate that every declared `Interface` names a dimension mapping and
-regridding strategy that the Julia flatten pipeline actually implements.
-
-§4.7.6 defines five canonical mapping types: `broadcast`, `identity`, `slice`,
-`project`, `regrid`. The Julia library's flatten pipeline currently wires only
-`broadcast` and `identity` (the Core-tier minimum). Interfaces that declare
-`slice` or `project` raise `DimensionPromotionError`; interfaces that declare
-a regridding method outside the supported set raise `UnsupportedMappingError`.
-"""
-function _check_interfaces!(file::EsmFile)
-    file.interfaces === nothing && return
-    for (iface_name, iface) in file.interfaces
-        dm = iface.dimension_mapping
-        dm_type = get(dm, "type", nothing)
-        if dm_type !== nothing
-            t = String(dm_type)
-            if t == "regrid"
-                method = iface.regridding === nothing ? "unspecified" :
-                         String(get(iface.regridding, "method", "unspecified"))
-                throw(UnsupportedMappingError(method))
-            elseif t in ("slice", "project")
-                throw(DimensionPromotionError(
-                    "interface '$(iface_name)': dimension_mapping type '$(t)' " *
-                    "is Analysis-tier and not yet implemented by the Julia flatten pipeline"))
-            end
-        end
-
-        if iface.regridding !== nothing
-            method_val = get(iface.regridding, "method", nothing)
-            if method_val !== nothing
-                method = String(method_val)
-                if !(method in _SUPPORTED_REGRIDDING_METHODS)
-                    throw(UnsupportedMappingError(method))
-                end
-            end
-        end
-    end
-    return
-end
-
-"""
-Build a mapping `system_name => domain_name` from a file's models and
-reaction systems. Systems without a declared domain are omitted.
-"""
-function _collect_system_domains(file::EsmFile)::Dict{String, String}
-    sysdom = Dict{String, String}()
-    if file.models !== nothing
-        for (name, model) in file.models
-            if model.domain !== nothing
-                sysdom[name] = model.domain
-            end
-        end
-    end
-    if file.reaction_systems !== nothing
-        for (name, rsys) in file.reaction_systems
-            if rsys.domain !== nothing
-                sysdom[name] = rsys.domain
-            end
-        end
-    end
-    return sysdom
-end
-
-"""
-True if `file.interfaces` contains an Interface whose `domains` vector covers
-both `d_a` and `d_b` (order-insensitive).
-"""
-function _interface_covers(file::EsmFile, d_a::String, d_b::String)::Bool
-    file.interfaces === nothing && return false
-    for (_, iface) in file.interfaces
-        if d_a in iface.domains && d_b in iface.domains
-            return true
-        end
-    end
-    return false
-end
-
-"""
-For every coupling entry that references two or more systems (`operator_compose`,
-`couple`), raise `UnmappedDomainError` if any pair of referenced systems lives
-on distinct, non-null domains and no declared `Interface` covers both domains.
-
-§4.7.6: "Any other hybrid coupling (N-D ↔ M-D with N ≠ M, or different grids
-of the same dimensionality) requires an explicit Interface in the file's
-interfaces section; its absence raises `UnmappedDomainError`."
-"""
-function _check_coupling_domain_coverage!(file::EsmFile)
-    isempty(file.coupling) && return
-    sysdom = _collect_system_domains(file)
-    isempty(sysdom) && return
-
-    for entry in file.coupling
-        systems = if entry isa CouplingOperatorCompose || entry isa CouplingCouple
-            entry.systems
-        else
-            continue
-        end
-        length(systems) < 2 && continue
-        for i in 1:length(systems), j in (i+1):length(systems)
-            a, b = systems[i], systems[j]
-            (haskey(sysdom, a) && haskey(sysdom, b)) || continue
-            da, db = sysdom[a], sysdom[b]
-            da == db && continue
-            if !_interface_covers(file, da, db)
-                throw(UnmappedDomainError(da, db))
-            end
-        end
-    end
-    return
-end
 
 """
 Walk every `variable_map` coupling entry with `transform == "identity"` and
@@ -1237,7 +1118,7 @@ end
 # ========================================
 
 function _compute_independent_variables(equations::Vector{Equation},
-                                        file_domains::Union{Dict{String, Domain}, Nothing})::Vector{Symbol}
+                                        file_domain::Union{Domain, Nothing})::Vector{Symbol}
     ivs = Symbol[:t]
     seen = Set{Symbol}([:t])
 
@@ -1247,22 +1128,6 @@ function _compute_independent_variables(equations::Vector{Equation},
                 if !(sym in seen)
                     push!(ivs, sym)
                     push!(seen, sym)
-                end
-            end
-        end
-    end
-
-    # Also inspect the file's top-level domains for spatial axes, so that even
-    # an all-ODE reaction system on a 2D domain is reported as living on [t,x,y].
-    if file_domains !== nothing
-        for (_, dom) in file_domains
-            if dom.spatial !== nothing
-                for dim_name in keys(dom.spatial)
-                    sym = Symbol(dim_name)
-                    if !(sym in seen)
-                        push!(ivs, sym)
-                        push!(seen, sym)
-                    end
                 end
             end
         end
@@ -1292,9 +1157,10 @@ function flatten(file::EsmFile)::FlattenedSystem
         throw(ConflictingDerivativeError(conflicting))
     end
 
-    # Step 0b: Hybrid-flattening preflight checks (§4.7.6 error taxonomy).
-    _check_interfaces!(file)
-    _check_coupling_domain_coverage!(file)
+    # Step 0b: coupling preflight checks. v0.8.0 retired the interface /
+    # cross-domain-coverage checks (a document has one shared domain and
+    # cross-grid coupling is an ordinary regridding `transform`); the
+    # variable-map unit check remains.
     _check_variable_map_units!(file)
 
     states = OrderedDict{String, ModelVariable}()
@@ -1306,7 +1172,7 @@ function flatten(file::EsmFile)::FlattenedSystem
     index_sets = OrderedDict{String, IndexSet}()
     source_systems = String[]
 
-    file_domains = file.domains
+    file_domain = file.domain
 
     # Step 1+2: Collect models.
     if file.models !== nothing
@@ -1323,7 +1189,7 @@ function flatten(file::EsmFile)::FlattenedSystem
         for (name, rsys) in file.reaction_systems
             push!(source_systems, name)
             _collect_reaction_system!(states, params, equations,
-                                      rsys, name, file_domains)
+                                      rsys, name, file_domain)
         end
     end
 
@@ -1350,15 +1216,11 @@ function flatten(file::EsmFile)::FlattenedSystem
     end
 
     # Step 4: Compute independent variables.
-    ivs = _compute_independent_variables(equations, file_domains)
+    ivs = _compute_independent_variables(equations, file_domain)
 
-    # Step 5: Assemble FlattenedSystem.
-    # Pick a representative domain if the file has exactly one; else nothing.
-    target_domain = if file_domains !== nothing && length(file_domains) == 1
-        first(values(file_domains))
-    else
-        nothing
-    end
+    # Step 5: Assemble FlattenedSystem. v0.8.0: the document carries at most one
+    # shared domain, used directly as the target.
+    target_domain = file_domain
 
     metadata = FlattenMetadata(
         sort!(collect(source_systems)),
@@ -1467,8 +1329,9 @@ function flattened_to_esm(flat::FlattenedSystem;
             k => serialize_function_table(v) for (k, v) in flat.function_tables)
     end
     if flat.domain !== nothing
-        model["domain"] = "domain"
-        doc["domains"] = Dict{String,Any}("domain" => serialize_domain(flat.domain))
+        # v0.8.0: single top-level `domain` object shared by the document; a
+        # model is spatial via its variable shapes, not a `domain` reference.
+        doc["domain"] = serialize_domain(flat.domain)
     end
     return doc
 end

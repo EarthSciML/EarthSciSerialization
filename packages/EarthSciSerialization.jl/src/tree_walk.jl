@@ -1689,6 +1689,12 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
     elseif op_sym === :D
         throw(TreeWalkError("E_TREEWALK_D_IN_RHS",
                             "D(...) only allowed in equation LHS"))
+    elseif op_sym === :ic
+        # `ic` (esm-spec v0.8.0) is an equation-LHS-only marker, like `D`:
+        # `ic(var) = <initial field>` declares an initial condition. It must
+        # never appear in an RHS / general expression position.
+        throw(TreeWalkError("E_TREEWALK_IC_IN_RHS",
+                            "ic(...) only allowed in equation LHS"))
     elseif op_sym === :grad || op_sym === :div || op_sym === :laplacian
         # esm-i7b: spatial differential operators MUST be rewritten by ESD
         # discretization rules into `arrayop` AST before reaching the
@@ -1717,7 +1723,7 @@ function _compile(expr::OpExpr, var_map, param_syms, reg_funcs)
            op_sym === :transpose || op_sym === :concat
         throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_OP",
                             "$(expr.op) (not yet supported in tree-walk path)"))
-    elseif op_sym === :index || op_sym === :bc
+    elseif op_sym === :index
         # A forcing gather over a live `param_arrays` buffer (ess-14f.3): the
         # `index` branch of `_resolve_indices` already bounds-checked and
         # linearized it, stashing `(flat::Vector{Float64}, lin::Int)` in `value`
@@ -1812,9 +1818,9 @@ end
 # transcendental family that `_compile` lowers to a plain `_NK_OP`, which is
 # exactly what `_compile_cse` reconstructs, so hoisting those is sound.
 const _CSE_OPAQUE_OPS = Set{String}([
-    "fn", "const", "enum", "call", "D", "grad", "div", "laplacian",
+    "fn", "const", "enum", "call", "D", "ic", "grad", "div", "laplacian",
     "arrayop", "aggregate", "makearray", "broadcast", "reshape",
-    "transpose", "concat", "index", "bc",
+    "transpose", "concat", "index",
 ])
 
 # A node is a CSE hoist/recurse candidate iff it is an OpExpr whose op is not
@@ -3495,7 +3501,7 @@ _resolve_join_in_expr(expr::Expr, ::AbstractDict, vi_maps=_EMPTY_VI_MAPS) = expr
 _resolve_join_in_eq(eq::Equation, index_sets::AbstractDict, vi_maps=_EMPTY_VI_MAPS) =
     Equation(_resolve_join_in_expr(eq.lhs, index_sets, vi_maps),
              _resolve_join_in_expr(eq.rhs, index_sets, vi_maps);
-             _comment=eq._comment, region=eq.region)
+             _comment=eq._comment)
 
 # Resolve join gates across a vector of equations. Returns the input unchanged
 # when no equation uses a `join` clause (byte-identical for join-free files).
@@ -3625,7 +3631,7 @@ _resolve_isr(eq::Equation, index_sets::AbstractDict,
              derived_extents::AbstractDict=_EMPTY_DERIVED_EXTENTS) =
     Equation(_resolve_isr(eq.lhs, index_sets, derived_extents),
              _resolve_isr(eq.rhs, index_sets, derived_extents);
-             _comment=eq._comment, region=eq.region)
+             _comment=eq._comment)
 
 # Resolve all index-set references across a vector of equations. Returns the
 # input unchanged when no equation uses a `{from}` reference — preserving

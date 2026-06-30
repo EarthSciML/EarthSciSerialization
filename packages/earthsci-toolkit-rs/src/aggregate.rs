@@ -23,7 +23,7 @@
 //!   not the per-timestep evaluator (mirroring the Julia reference), so they
 //!   still produce a clear error here.
 //! - **§5.6 Op tag.** [`is_aggregate_op`] accepts the canonical `"aggregate"`
-//!   tag and the deprecated `"arrayop"` alias identically.
+//!   tag. (The legacy `"arrayop"` alias was removed in ESM v0.8.0.)
 
 use std::collections::HashMap;
 
@@ -166,11 +166,10 @@ pub fn effective_reduce_kind(semiring: Option<&str>, reduce: Option<&str>) -> Re
     }
 }
 
-/// Whether `op` is the aggregate/arrayop node tag. `"aggregate"` is the
-/// canonical tag (RFC §5.6); `"arrayop"` is retained as a deprecated alias so
-/// existing files keep evaluating unchanged.
+/// Whether `op` is the aggregate node tag. `"aggregate"` is the canonical tag
+/// (RFC §5.6). The legacy `"arrayop"` alias was removed in ESM v0.8.0.
 pub fn is_aggregate_op(op: &str) -> bool {
-    op == "arrayop" || op == "aggregate"
+    op == "aggregate"
 }
 
 /// Rewrite every `{ "from": <name> }` range reference in `model` against the
@@ -523,7 +522,7 @@ mod tests {
     #[test]
     fn aggregate_op_alias() {
         assert!(is_aggregate_op("aggregate"));
-        assert!(is_aggregate_op("arrayop"));
+        assert!(!is_aggregate_op("arrayop"));
         assert!(!is_aggregate_op("makearray"));
         assert!(!is_aggregate_op("+"));
     }

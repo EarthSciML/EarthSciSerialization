@@ -251,7 +251,7 @@ class ReferenceGraph:
 
 # --- the resolution pass ----------------------------------------------------
 
-_AGGREGATE_OPS = ("aggregate", "arrayop")
+_AGGREGATE_OPS = ("aggregate",)
 
 
 def _node_key(addr: str) -> str:

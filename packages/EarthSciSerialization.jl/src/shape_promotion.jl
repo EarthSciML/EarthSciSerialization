@@ -105,19 +105,11 @@ function _lift_to_arrayop(expr::EarthSciSerialization.Expr, shape::Vector{String
                   output_idx=Any[l for l in loops], ranges=ranges, expr_body=body)
 end
 
-# Grid/domain dimension → cell count, from the flattened domain's spatial spec.
+# Grid/domain dimension → cell count. Spatial dimension sizes used to come from
+# the removed Domain.spatial spec; they are now declared via `index_sets`, so
+# the domain itself contributes no array dim sizes here.
 function _domain_dim_sizes(flat::FlattenedSystem)::Dict{String,Int}
-    sizes = Dict{String,Int}()
-    flat.domain === nothing && return sizes
-    flat.domain.spatial === nothing && return sizes
-    for (dim, spec) in flat.domain.spatial
-        spec isa AbstractDict || continue
-        (haskey(spec, "min") && haskey(spec, "max") && haskey(spec, "grid_spacing")) || continue
-        n = Int(round((Float64(spec["max"]) - Float64(spec["min"])) /
-                      Float64(spec["grid_spacing"]))) + 1
-        sizes[string(dim)] = n
-    end
-    return sizes
+    return Dict{String,Int}()
 end
 
 """
@@ -218,7 +210,7 @@ function inline_elementwise_array_observeds(flat::FlattenedSystem)::FlattenedSys
     for eq in flat.equations
         (eq.lhs isa VarExpr && haskey(targets, (eq.lhs::VarExpr).name)) && continue  # drop the def
         push!(new_eqs, Equation(eq.lhs, substitute(eq.rhs, resolved);
-                                _comment=eq._comment, region=eq.region))
+                                _comment=eq._comment))
     end
     return FlattenedSystem(flat.independent_variables, flat.state_variables, flat.parameters,
                            new_obs, new_eqs, flat.continuous_events, flat.discrete_events,
@@ -305,7 +297,7 @@ function promote_downstream_shapes(flat::FlattenedSystem)::FlattenedSystem
             name = (eq.lhs::VarExpr).name
             push!(new_eqs, Equation(eq.lhs,
                 _lift_to_arrayop(eq.rhs, shapes[name], arrayvars, flat.index_sets, dim_sizes);
-                _comment=eq._comment, region=eq.region))
+                _comment=eq._comment))
         else
             push!(new_eqs, eq)
         end

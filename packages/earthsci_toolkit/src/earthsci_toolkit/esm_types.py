@@ -22,9 +22,8 @@ class ExprNode:
     lower: Optional['Expr'] = None  # lower integration bound (for integral operator)
     upper: Optional['Expr'] = None  # upper integration bound (for integral operator)
 
-    # Array-op extensions (schema §ExpressionNode). None unless the op uses them.
-    # arrayop / aggregate ("aggregate" is the canonical op tag; "arrayop" is a
-    # deprecated alias — RFC semiring-faq-unified-ir §5.6):
+    # Aggregate extensions (schema §ExpressionNode). None unless the op uses them.
+    # The canonical Functional Aggregate Query op tag is "aggregate".
     output_idx: Optional[List[Union[str, int]]] = None
     expr: Optional['Expr'] = None
     reduce: Optional[str] = None  # default "+"; names only the semiring ⊕ operator
@@ -104,25 +103,13 @@ class ExprNode:
 Expr = Union[int, float, str, ExprNode]
 
 
-# The canonical aggregate op tag and its deprecated alias (RFC
-# semiring-faq-unified-ir §5.6). Every dispatch site MUST treat the two
-# identically. ``aggregate`` is canonical; ``arrayop`` continues to parse and
-# evaluate as an exact synonym so existing files are unaffected.
-AGGREGATE_OPS: Tuple[str, str] = ("aggregate", "arrayop")
+# The canonical Functional Aggregate Query op tag.
+AGGREGATE_OPS: Tuple[str, ...] = ("aggregate",)
 
 
 def is_aggregate_op(op: Any) -> bool:
-    """True if ``op`` is the aggregate node tag or its deprecated ``arrayop`` alias."""
+    """True if ``op`` is the ``aggregate`` node tag."""
     return op in AGGREGATE_OPS
-
-
-RuleRegion = Union[str, Dict[str, Any]]
-"""
-Spatial scope of a rule or equation (discretization RFC §7.2).
-A string is a legacy advisory tag with no runtime effect.
-A dict with 'kind' is a normative scoping predicate: boundary,
-mask_field, or index_range.
-"""
 
 
 @dataclass
@@ -131,7 +118,6 @@ class Equation:
     lhs: Expr
     rhs: Expr
     _comment: Optional[str] = None
-    region: Optional[RuleRegion] = None
 
 
 @dataclass
@@ -183,8 +169,9 @@ class Model:
     # pure-io-data-loaders §4.3); ref subsystems are raw {"ref": ...} dicts
     # until resolve_subsystem_refs replaces them in place.
     subsystems: Dict[str, Union['Model', 'DataLoader']] = field(default_factory=dict)
-    # v0.2.0: model-level boundary conditions keyed by user-supplied id (RFC §9).
-    boundary_conditions: Dict[str, 'BoundaryCondition'] = field(default_factory=dict)
+    # Boundary conditions are not a declared model concern: there is no `bc` op
+    # and no `boundary_conditions` field. BCs are baked into the discretization
+    # rewrite rules' `makearray` bodies (esm-spec §9.6.8); nothing to store here.
     # Model-level default numerical tolerance for inline tests (esm-spec §6.6).
     tolerance: Optional['Tolerance'] = None
     # Inline validation tests (esm-spec §6.6).
@@ -201,25 +188,6 @@ class Model:
     # / derived / ragged. Referenced from arrayop / aggregate range specs of the
     # form {"from": <name>}. Empty ⇒ resolution falls back to domain.spatial.
     index_sets: Dict[str, Any] = field(default_factory=dict)
-    # Per-variable regridding configuration for fields consumed from data-loader
-    # subsystems (RFC pure-io-data-loaders §5.2, §6), keyed by variable name.
-    # Empty ⇒ no regridding configured.
-    regrid: Dict[str, 'RegridSpec'] = field(default_factory=dict)
-
-
-@dataclass
-class RegridSpec:
-    """Per-variable regridding configuration entry (schema $defs/RegridSpec).
-
-    Declared on a model that owns a data loader as a subsystem (RFC
-    pure-io-data-loaders §5.2, §6). All fields optional. ``method`` overrides
-    the staggering-derived kernel ("conservative" | "bspline" | "cell_average");
-    ``missing_value`` is the no-data fill consumed only by "cell_average"
-    (scattered-point) regridding.
-    """
-    method: Optional[str] = None
-    missing_value: Optional[float] = None
-    description: Optional[str] = None
 
 
 @dataclass
@@ -382,7 +350,10 @@ class Example:
     id: str
     time_span: TimeSpan
     description: Optional[str] = None
-    initial_state: Optional['InitialCondition'] = None
+    # Scalar initial-value overrides for this example run, keyed by state-variable
+    # name. A component's initial fields are declared with `ic` op equations in the
+    # model (esm-spec §11.4); this map overrides their scalar values for this run.
+    initial_state: Optional[Dict[str, float]] = None
     parameters: Dict[str, float] = field(default_factory=dict)
     parameter_sweep: Optional[ParameterSweep] = None
     plots: List[Plot] = field(default_factory=list)
@@ -440,23 +411,6 @@ class DataLoaderKind(Enum):
     GRID = "grid"
     POINTS = "points"
     STATIC = "static"
-    MESH = "mesh"
-
-
-class DataLoaderMeshTopology(Enum):
-    """Closed topology enum for mesh loaders (esm-spec §8.9, discretization RFC §8.A)."""
-    MPAS_VORONOI = "mpas_voronoi"
-    FESOM_TRIANGULAR = "fesom_triangular"
-    ICON_TRIANGULAR = "icon_triangular"
-
-
-@dataclass
-class DataLoaderMesh:
-    """Mesh descriptor for a DataLoader with kind='mesh' (esm-spec §8.9)."""
-    topology: DataLoaderMeshTopology
-    connectivity_fields: List[str]
-    metric_fields: List[str]
-    dimension_sizes: Dict[str, Union[int, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -511,8 +465,6 @@ class DataLoader:
     source: DataLoaderSource
     variables: Dict[str, DataLoaderVariable] = field(default_factory=dict)
     temporal: Optional[DataLoaderTemporal] = None
-    grid: Optional['Grid'] = None
-    mesh: Optional[DataLoaderMesh] = None
     determinism: Optional[DataLoaderDeterminism] = None
     reference: Optional['Reference'] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -660,104 +612,30 @@ class TemporalDomain:
     reference_time: Optional[str] = None  # ISO datetime string
 
 
-@dataclass
-class SpatialDimension:
-    """Spatial dimension specification."""
-    min: float
-    max: float
-    units: str
-    grid_spacing: Optional[float] = None
+# Initial conditions are no longer a domain-level concept. As of v0.8.0 a
+# component's initial fields are declared with `ic` op equations in the model
+# (LHS ``{op: "ic", args: [<var>]}``, RHS = the initial field; esm-spec §11.4).
+# The former ``InitialConditionType`` enum and ``InitialCondition`` dataclass,
+# along with ``Domain.initial_conditions``, have been removed.
 
 
-@dataclass
-class CoordinateTransform:
-    """Coordinate transformation specification."""
-    id: str
-    description: str
-    dimensions: List[str]
-
-
-class InitialConditionType(Enum):
-    """Types of initial conditions."""
-    CONSTANT = "constant"
-    PER_VARIABLE = "per_variable"
-    FUNCTION = "function"
-    DATA = "data"
-    EXPRESSION = "expression"
-
-
-@dataclass
-class InitialCondition:
-    """Initial condition specification."""
-    type: InitialConditionType
-    value: Optional[Union[float, Expr]] = None
-    values: Optional[Dict[str, float]] = None  # For per_variable type
-    function: Optional[str] = None
-    data_source: Optional[str] = None
-    # For the ``expression`` type: a map from variable name to an Expression
-    # AST whose free symbols are the component domain's spatial dimensions
-    # (e.g. "x", "y"). The runtime evaluates each expression at every grid
-    # point at t=0 to produce u(x, 0). Only meaningful on PDE (>=1-D spatial)
-    # components. See esm-schema.json $defs/InitialConditions and esm-spec.md
-    # §11.4.
-    expression_values: Optional[Dict[str, Expr]] = None
-
-
-class BoundaryConditionKind(Enum):
-    """BC kind enum (RFC §9.2)."""
-    CONSTANT = "constant"
-    DIRICHLET = "dirichlet"
-    NEUMANN = "neumann"
-    ROBIN = "robin"
-    ZERO_GRADIENT = "zero_gradient"
-    PERIODIC = "periodic"
-    FLUX_CONTRIB = "flux_contrib"
-    INTERFACE = "interface"
-
-
-@dataclass
-class BCContributedBy:
-    """Component-contribution marker for flux_contrib BC entries (RFC §9.3)."""
-    component: str
-    flux_sign: str = "+"  # "+" or "-"
-
-
-@dataclass
-class BoundaryCondition:
-    """Model-level boundary condition entry (v0.2.0). See docs/rfcs/discretization.md §9.2.
-
-    This replaces the v0.1.0 domain-level BoundaryCondition; files that declare
-    ``domains.<d>.boundary_conditions`` must be migrated via
-    ``spec.migrate_0_1_to_0_2`` (RFC §16.1) before loading.
-    """
-    variable: str
-    side: str
-    kind: BoundaryConditionKind
-    value: Optional[Union[float, Expr]] = None
-    robin_alpha: Optional[Union[float, Expr]] = None
-    robin_beta: Optional[Union[float, Expr]] = None
-    robin_gamma: Optional[Union[float, Expr]] = None
-    coupled_variable: Optional[str] = None
-    flux_match: bool = False
-    face_coords: Optional[List[str]] = None
-    contributed_by: Optional[BCContributedBy] = None
-    description: Optional[str] = None
+# Boundary conditions are not a declared concept in the format: there is no
+# `bc` op and no `boundary_conditions` field. BCs are baked into the
+# discretization rewrite rules' `makearray` bodies (esm-spec §9.6.8). The former
+# ``BoundaryCondition`` / ``BoundaryConditionKind`` / ``BCContributedBy`` types
+# and the ``Model.boundary_conditions`` field have been removed.
 
 
 @dataclass
 class Domain:
     """Comprehensive computational domain specification.
 
-    v0.2.0 breaking change: ``boundary_conditions`` is no longer a Domain field;
-    it moved to ``Model.boundary_conditions`` per docs/rfcs/discretization.md §9.
+    A domain carries no boundary-condition data: BCs are not a declared concept
+    in the format (they are baked into discretization rewrite rules, §9.6.8).
     """
     name: Optional[str] = None
     independent_variable: Optional[str] = None
     temporal: Optional[TemporalDomain] = None
-    spatial: Optional[Dict[str, SpatialDimension]] = None
-    coordinate_transforms: List[CoordinateTransform] = field(default_factory=list)
-    spatial_ref: Optional[str] = None
-    initial_conditions: Optional[InitialCondition] = None
 
     # Legacy support for backwards compatibility
     dimensions: Optional[Dict[str, Any]] = None
@@ -797,106 +675,6 @@ class Metadata:
     def name(self) -> str:
         """Alias for title field (matches JSON 'name' key)."""
         return self.title
-
-
-@dataclass
-class GridMetricGenerator:
-    """Generator for a grid metric array or connectivity table (RFC §6.5).
-
-    ``kind`` discriminates how values are produced:
-    - ``"expression"``: field ``expr`` holds an Expr tree / literal.
-    - ``"loader"``: fields ``loader`` (data_loader name) and ``field`` (variable).
-    - ``"builtin"``: field ``name`` names a builtin generator. The set of
-      recognized builtin names is currently empty.
-    """
-    kind: str
-    expr: Optional[Any] = None  # Expr for kind == "expression"
-    loader: Optional[str] = None  # data_loader name for kind == "loader"
-    field: Optional[str] = None  # field variable for kind == "loader"
-    name: Optional[str] = None  # builtin name for kind == "builtin"
-
-
-@dataclass
-class GridMetricArray:
-    """A grid metric array (e.g. dx, areaCell), RFC §6.5."""
-    rank: int
-    generator: GridMetricGenerator
-    dim: Optional[str] = None
-    dims: Optional[List[str]] = None
-    shape: Optional[List[Union[int, str]]] = None
-
-
-@dataclass
-class GridConnectivity:
-    """Grid connectivity table (RFC §6.3–§6.4)."""
-    shape: List[Union[int, str]]
-    rank: int
-    loader: Optional[str] = None
-    field: Optional[str] = None
-    generator: Optional[GridMetricGenerator] = None
-
-
-@dataclass
-class GridExtent:
-    """Cartesian grid extent per dimension (RFC §6.2)."""
-    n: Union[int, str]
-    spacing: Optional[str] = None
-
-
-@dataclass
-class GridCRS:
-    """Optional coordinate reference system for a grid (RFC
-    pure-io-data-loaders §4.2).
-
-    Orthogonal to the topological ``family``: a ``cartesian`` grid may be
-    geographic (``longlat``) or projected (``lambert_conformal``, ...), and a
-    point dataset may be ``unstructured`` + ``longlat``. Names the projection
-    and the parameters a downstream reprojection rule consumes; the grid
-    itself performs no reprojection.
-    """
-    projection: str  # longlat | lambert_conformal | mercator | polar_stereographic | rotated_pole
-    datum: Optional[str] = None  # "sphere" (radius R) | "WGS84"
-    R: Optional[float] = None  # sphere radius in metres, used when datum="sphere"
-    parameters: Dict[str, float] = field(default_factory=dict)
-
-
-@dataclass
-class Grid:
-    """Top-level grid declaration (RFC §6).
-
-    ``family`` discriminates structure: ``cartesian`` uses ``extents``;
-    ``unstructured`` uses ``connectivity``. ``crs`` is an optional coordinate
-    reference system orthogonal to ``family`` (RFC pure-io-data-loaders §4.2).
-    """
-    family: str
-    dimensions: List[str]
-    name: str = ""
-    crs: Optional[GridCRS] = None
-    description: Optional[str] = None
-    locations: Optional[List[str]] = None
-    metric_arrays: Dict[str, GridMetricArray] = field(default_factory=dict)
-    parameters: Dict[str, Parameter] = field(default_factory=dict)
-    domain: Optional[str] = None
-    extents: Dict[str, GridExtent] = field(default_factory=dict)
-    connectivity: Dict[str, GridConnectivity] = field(default_factory=dict)
-
-
-@dataclass
-class StaggeringRule:
-    """Top-level staggering-rule declaration (RFC §7.4).
-
-    ``kind`` discriminates the staggering family; v0.2.0 ships
-    ``unstructured_c_grid`` (MPAS Voronoi C-grid). The referenced ``grid``
-    must be a ``grids.<g>`` entry of family ``unstructured``.
-    """
-    kind: str
-    grid: str
-    name: str = ""
-    description: Optional[str] = None
-    cell_quantity_locations: Dict[str, str] = field(default_factory=dict)
-    edge_normal_convention: Optional[str] = None
-    dual_mesh_ref: Optional[str] = None
-    reference: Optional[Any] = None
 
 
 @dataclass
@@ -954,15 +732,10 @@ class EsmFile:
     # by table id; each value is a FunctionTable referenced by table_lookup
     # AST nodes.
     function_tables: Dict[str, FunctionTable] = field(default_factory=dict)
-    domains: Dict[str, Domain] = field(default_factory=dict)
-    grids: Dict[str, Grid] = field(default_factory=dict)
-    staggering_rules: Dict[str, StaggeringRule] = field(default_factory=dict)
-    # Named discretization schemes (RFC §7). Held as opaque dicts because
-    # stencil coefficients and applies_to patterns carry pattern-variable
-    # strings ($u, $x, $target, ...) that don't map onto the Expression
-    # coercion pipeline. This preserves round-trip fidelity for standard
-    # Discretization (§7.1) entries.
-    discretizations: Dict[str, Any] = field(default_factory=dict)
+    # A single shared spatiotemporal domain (v0.8.0). Spatiality of individual
+    # variables is expressed via their ``shape``; there is one domain per file,
+    # not a map of named domains.
+    domain: Optional[Domain] = None
 
     @property
     def esm(self) -> str:

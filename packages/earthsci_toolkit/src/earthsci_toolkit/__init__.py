@@ -26,25 +26,14 @@ from .esm_types import (
     DataLoaderSource,
     DataLoaderTemporal,
     DataLoaderVariable,
-    DataLoaderMesh,
-    DataLoaderMeshTopology,
     DataLoaderDeterminism,
     Operator,
     CouplingEntry,
     Domain,
     TemporalDomain,
-    SpatialDimension,
-    CoordinateTransform,
-    InitialCondition,
-    InitialConditionType,
-    BoundaryCondition,
-    BoundaryConditionKind,
-    BCContributedBy,
-    RegridSpec,
     Reference,
     Metadata,
     EsmFile,
-    StaggeringRule,
     FunctionTable,
     FunctionTableAxis,
 )
@@ -83,27 +72,6 @@ from .flatten import (
 
 # Validation (Core tier requirement)
 from .validation import validate, ValidationResult, ValidationError
-
-# Discretization pipeline / RFC §12 DAE binding contract
-from .discretize import discretize, DiscretizationError
-
-# Generic GDD-driven spatial (method-of-lines) discretization — the PDE-op
-# scan that lowers spatial operators to ArrayOp stencils for simulate().
-from .spatial_discretize import spatial_discretize, SpatialDiscretizeError, flattened_to_esm
-
-# Grid accessor ABC + registry (ESD registers concrete family impls)
-from .grid_accessor import (
-    GridAccessor,
-    GridAccessorError,
-    UnknownGridFamilyError,
-    GridAccessorRegistrationError,
-    GridAccessorFactory,
-    register_grid_accessor,
-    unregister_grid_accessor,
-    has_grid_accessor,
-    registered_grid_families,
-    get_grid_accessor,
-)
 
 # Expression engine (Core tier requirement)
 from .expression import (
@@ -316,8 +284,6 @@ from .data_loaders import (
     UnitConversionError,
     apply_variable_mapping,
     apply_unit_conversion,
-    RegriddingError,
-    regrid_latlon_to_target,
     GridLoaderError,
     GridLoader,
     load_grid,
@@ -380,21 +346,11 @@ __all__ = [
     "DataLoaderSource",
     "DataLoaderTemporal",
     "DataLoaderVariable",
-    "DataLoaderMesh",
-    "DataLoaderMeshTopology",
     "DataLoaderDeterminism",
     "Operator",
     "CouplingEntry",
     "Domain",
     "TemporalDomain",
-    "SpatialDimension",
-    "CoordinateTransform",
-    "InitialCondition",
-    "InitialConditionType",
-    "BoundaryCondition",
-    "BoundaryConditionKind",
-    "BCContributedBy",
-    "RegridSpec",
     "Reference",
     "Metadata",
     "EsmFile",
@@ -415,22 +371,6 @@ __all__ = [
     "UnsupportedVersionError",
     "CircularReferenceError",
     "SubsystemRefError",
-
-    # Discretization / DAE binding contract (RFC §12)
-    "discretize",
-    "DiscretizationError",
-
-    # Grid accessor ABC + registry (gt-6trd)
-    "GridAccessor",
-    "GridAccessorError",
-    "UnknownGridFamilyError",
-    "GridAccessorRegistrationError",
-    "GridAccessorFactory",
-    "register_grid_accessor",
-    "unregister_grid_accessor",
-    "has_grid_accessor",
-    "registered_grid_families",
-    "get_grid_accessor",
 
     # Coupled system flattening (spec §4.7.5 + §4.7.6)
     "flatten",
@@ -614,8 +554,6 @@ __all__ = [
     "UnitConversionError",
     "apply_variable_mapping",
     "apply_unit_conversion",
-    "RegriddingError",
-    "regrid_latlon_to_target",
     "GridLoaderError",
     "GridLoader",
     "load_grid",

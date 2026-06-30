@@ -399,5 +399,5 @@ def process_operator_compose_placeholders(esm_file: EsmFile) -> EsmFile:
         data_loaders=esm_file.data_loaders,
         operators=esm_file.operators,
         events=esm_file.events,
-        domains=esm_file.domains,
+        domain=esm_file.domain,
     )

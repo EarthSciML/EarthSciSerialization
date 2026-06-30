@@ -144,28 +144,6 @@ function _parse_op_dict(data, kop, kargs, kwrt, kdim,
     axis_int = axis_val === nothing ? nothing : Int(axis_val)
     fn_val = get(data, kfn, nothing)
     fn_str = fn_val === nothing ? nothing : string(fn_val)
-    # Synthetic `bc` nodes (esm-spec §9.2) carry the boundary-condition kind and
-    # side under the authored keys `kind`/`side` — the natural BC vocabulary used
-    # by discretization rule patterns (e.g. ESD dirichlet_bc.json:
-    # {op:bc, kind:"dirichlet", side:"$side", …}). Expose them on the parsed
-    # OpExpr as the generic `fn`/`dim` match fields so the rule engine's
-    # kind/side pattern matching (`_match_sibling_name`) discriminates dirichlet
-    # vs neumann, xmin vs ymax — without these the BC pattern matched ANY bc node
-    # regardless of kind/side. Explicit `fn`/`dim` (the production `_discretize_bc!`
-    # wrapper and the rule_engine conformance fixtures) take precedence; `kind`/
-    # `side` are the fallback so both spellings match identically (ess-tox / G8).
-    if op == "bc"
-        kkind = kop isa Symbol ? :kind : "kind"
-        kside = kop isa Symbol ? :side : "side"
-        if fn_str === nothing
-            kind_val = get(data, kkind, nothing)
-            kind_val === nothing || (fn_str = string(kind_val))
-        end
-        if dim === nothing
-            side_val = get(data, kside, nothing)
-            side_val === nothing || (dim = side_val)
-        end
-    end
     name_val = get(data, kname, nothing)
     name_str = name_val === nothing ? nothing : string(name_val)
     value_raw = get(data, kvalue, nothing)
@@ -483,36 +461,12 @@ function coerce_esm_file(data::Any)::EsmFile
         CouplingEntry[]
     end
 
-    domains = if haskey(data, :domains) && data.domains !== nothing
-        Dict{String,Domain}(string(k) => coerce_domain(v) for (k, v) in pairs(data.domains))
-    else
-        nothing
-    end
-
-    interfaces = if haskey(data, :interfaces) && data.interfaces !== nothing
-        Dict{String,Interface}(string(k) => coerce_interface(v) for (k, v) in pairs(data.interfaces))
-    else
-        nothing
-    end
-
-    grids = if haskey(data, :grids) && data.grids !== nothing
-        coerce_grids(data.grids, data_loaders)
-    else
-        nothing
-    end
-
-    staggering_rules = if haskey(data, :staggering_rules) && data.staggering_rules !== nothing
-        coerce_staggering_rules(data.staggering_rules, grids)
-    else
-        nothing
-    end
-
-    # Discretization schemes (RFC §7). Held opaquely as Dict{String,Any} —
-    # standard stencil templates pass through unchanged. Schema-level
-    # validation already ran above.
-    discretizations = if haskey(data, :discretizations) && data.discretizations !== nothing
-        d = _to_native_json(data.discretizations)::Dict{String,Any}
-        d
+    # esm-spec v0.8.0: a single top-level `domain` object (the one temporal
+    # domain shared by every component), not the old `domains` map of named
+    # domains. Cross-grid coupling is now an ordinary regridding `transform`
+    # expression, so there is no `interfaces` block either.
+    domain = if haskey(data, :domain) && data.domain !== nothing
+        coerce_domain(data.domain)
     else
         nothing
     end
@@ -543,11 +497,7 @@ function coerce_esm_file(data::Any)::EsmFile
                   operators=operators,
                   registered_functions=registered_functions,
                   coupling=coupling,
-                  domains=domains,
-                  interfaces=interfaces,
-                  grids=grids,
-                  staggering_rules=staggering_rules,
-                  discretizations=discretizations,
+                  domain=domain,
                   enums=enums,
                   function_tables=function_tables)
     # Lower every `enum` op to a `const` integer using the file-local map.
@@ -672,147 +622,6 @@ function coerce_function_tables(data)::Dict{String,FunctionTable}
     return out
 end
 
-# Closed set of allowed builtin generator names (RFC §6.4.1).
-# Adding to this set is a minor version bump. Currently empty; no builtin
-# generators are defined.
-const _GRID_BUILTIN_NAMES = Set{String}()
-
-"""
-    coerce_grids(data, data_loaders) -> Dict{String,Grid}
-
-Coerce the top-level `grids` section (RFC §6) into `Dict{String,Grid}`.
-Each grid is preserved opaquely as a `Dict{String,Any}` (lossless round-trip).
-After coercion, this function walks each grid and enforces the semantic
-constraints not captured by JSON Schema:
-
-* `metric_arrays[*].generator.kind == "loader"` — the referenced `loader`
-  name must be present in the top-level `data_loaders` section
-  (E_UNKNOWN_LOADER).
-* `metric_arrays[*].generator.kind == "builtin"` — the `name` must be one
-  of the canonical builtins in `_GRID_BUILTIN_NAMES` (E_UNKNOWN_BUILTIN).
-* `connectivity[*]` generators get the same treatment (loader → must
-  exist; builtin → must be canonical). Flat connectivity entries that use
-  top-level `loader`/`field` keys (the unstructured pattern) are also
-  validated.
-
-`data_loaders` is the already-coerced `Dict{String,DataLoader}` (or `nothing`).
-"""
-function coerce_grids(data, data_loaders)::Dict{String,Grid}
-    loader_names = data_loaders === nothing ? Set{String}() : Set(keys(data_loaders))
-    grids = Dict{String,Grid}()
-    for (gname, gdata) in pairs(data)
-        grid_dict = _to_native_json(gdata)::Dict{String,Any}
-        _validate_grid_refs(string(gname), grid_dict, loader_names)
-        grids[string(gname)] = Grid(grid_dict)
-    end
-    return grids
-end
-
-# Walk a single grid's opaque dict and enforce semantic constraints.
-function _validate_grid_refs(gname::String, grid::Dict{String,Any}, loader_names::Set{String})
-    # metric_arrays: generator has kind + (loader|name|expr)
-    if haskey(grid, "metric_arrays")
-        for (maname, ma) in grid["metric_arrays"]
-            ma isa AbstractDict || continue
-            if haskey(ma, "generator") && ma["generator"] isa AbstractDict
-                _validate_grid_generator(
-                    "grids.$(gname).metric_arrays.$(maname).generator",
-                    ma["generator"], loader_names)
-            end
-        end
-    end
-
-    # connectivity: either flat loader/field form, or a generator subdict.
-    for cfield in ("connectivity",)
-        if haskey(grid, cfield) && grid[cfield] isa AbstractDict
-            for (cname, centry) in grid[cfield]
-                centry isa AbstractDict || continue
-                if haskey(centry, "generator") && centry["generator"] isa AbstractDict
-                    _validate_grid_generator(
-                        "grids.$(gname).$(cfield).$(cname).generator",
-                        centry["generator"], loader_names)
-                elseif haskey(centry, "loader")
-                    lname = string(centry["loader"])
-                    if !(lname in loader_names)
-                        throw(ParseError(
-                            "[E_UNKNOWN_LOADER] grids.$(gname).$(cfield).$(cname).loader " *
-                            "refers to unknown data_loaders entry '$lname'"))
-                    end
-                end
-            end
-        end
-    end
-    return
-end
-
-"""
-    coerce_staggering_rules(data, grids) -> Dict{String,StaggeringRule}
-
-Coerce the top-level `staggering_rules` section (RFC §7.4) into
-`Dict{String,StaggeringRule}`. Each rule is preserved opaquely as a
-`Dict{String,Any}` for lossless round-trip. After coercion, this function
-enforces the single semantic constraint the JSON Schema cannot express:
-for `kind == "unstructured_c_grid"`, the referenced `grid` must exist in
-the top-level `grids` map and have family `"unstructured"`.
-"""
-function coerce_staggering_rules(data, grids)::Dict{String,StaggeringRule}
-    rules = Dict{String,StaggeringRule}()
-    for (rname, rdata) in pairs(data)
-        rule_dict = _to_native_json(rdata)::Dict{String,Any}
-        _validate_staggering_rule(string(rname), rule_dict, grids)
-        rules[string(rname)] = StaggeringRule(rule_dict)
-    end
-    return rules
-end
-
-function _validate_staggering_rule(rname::String, rule::Dict{String,Any}, grids)
-    kind = get(rule, "kind", nothing)
-    kind === nothing && return
-    if kind == "unstructured_c_grid"
-        grid_ref = get(rule, "grid", nothing)
-        if grid_ref === nothing
-            throw(ParseError(
-                "staggering_rules.$(rname): kind='unstructured_c_grid' requires 'grid'"))
-        end
-        grid_name = string(grid_ref)
-        if grids === nothing || !haskey(grids, grid_name)
-            throw(ParseError(
-                "[E_UNKNOWN_GRID] staggering_rules.$(rname).grid references unknown " *
-                "grids entry '$grid_name' (RFC §7.4)"))
-        end
-        referenced = grids[grid_name].data
-        family = string(get(referenced, "family", ""))
-        if family != "unstructured"
-            throw(ParseError(
-                "staggering_rules.$(rname): kind='unstructured_c_grid' requires grid " *
-                "family 'unstructured', but grids.$(grid_name) has family '$family' (RFC §7.4)"))
-        end
-    end
-    return
-end
-
-function _validate_grid_generator(path::String, gen::AbstractDict, loader_names::Set{String})
-    kind = get(gen, "kind", nothing)
-    kind === nothing && return
-    if kind == "loader"
-        lname = string(get(gen, "loader", ""))
-        if isempty(lname) || !(lname in loader_names)
-            throw(ParseError(
-                "[E_UNKNOWN_LOADER] $(path).loader refers to unknown " *
-                "data_loaders entry '$lname'"))
-        end
-    elseif kind == "builtin"
-        bname = string(get(gen, "name", ""))
-        if !(bname in _GRID_BUILTIN_NAMES)
-            allowed = isempty(_GRID_BUILTIN_NAMES) ? "(none defined)" :
-                      join(sort!(collect(_GRID_BUILTIN_NAMES)), ", ")
-            throw(ParseError(
-                "[E_UNKNOWN_BUILTIN] $(path).name is '$bname'; must be one of " *
-                allowed))
-        end
-    end
-    return
-end
 
 """
     coerce_metadata(data::Any) -> Metadata
@@ -906,15 +715,6 @@ function coerce_model(data::Any)::Model
         end
     end
 
-    # Per-variable regridding configuration for loader-subsystem fields
-    # (RFC pure-io-data-loaders §5.2, §6). Empty when absent.
-    regrid = Dict{String,RegridSpec}()
-    if haskey(data, :regrid) && data.regrid !== nothing
-        for (k, v) in pairs(data.regrid)
-            regrid[string(k)] = coerce_regrid_spec(v)
-        end
-    end
-
     # Backwards compatibility: handle old 'events' field
     if haskey(data, :events)
         mixed_events = [coerce_event(ev) for ev in data.events]
@@ -923,17 +723,13 @@ function coerce_model(data::Any)::Model
         return Model(base.variables, base.equations,
                      base.discrete_events, base.continuous_events,
                      base.subsystems;
-                     domain=base.domain,
                      tolerance=base.tolerance,
                      tests=base.tests,
                      index_sets=index_sets,
-                     regrid=regrid,
                      initialization_equations=initialization_equations,
                      guesses=guesses,
                      system_kind=system_kind)
     end
-
-    domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
 
     # Inline tests / tolerance (schema gt-cc1).
     tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
@@ -967,14 +763,12 @@ function coerce_model(data::Any)::Model
                  discrete_events=discrete_events,
                  continuous_events=continuous_events,
                  subsystems=subsystems,
-                 domain=domain,
                  tolerance=tolerance,
                  tests=tests,
                  initialization_equations=initialization_equations,
                  guesses=guesses,
                  system_kind=system_kind,
-                 index_sets=index_sets,
-                 regrid=regrid)
+                 index_sets=index_sets)
 end
 
 """
@@ -1066,17 +860,11 @@ function coerce_test(data::Any)::EarthSciSerialization.Test
     end
     tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
         coerce_tolerance(data.tolerance) : nothing
-    grid_refs = if haskey(data, :grid_refs) && data.grid_refs !== nothing
-        String[string(entry.ref) for entry in data.grid_refs]
-    else
-        String[]
-    end
     return EarthSciSerialization.Test(id, time_span, assertions;
         description=description,
         initial_conditions=ic,
         parameter_overrides=po,
-        tolerance=tolerance,
-        grid_refs=grid_refs)
+        tolerance=tolerance)
 end
 
 """
@@ -1121,9 +909,7 @@ function coerce_equation(data::Any)::Equation
     lhs = parse_expression(data.lhs)
     rhs = parse_expression(data.rhs)
     comment = haskey(data, :_comment) && data._comment !== nothing ? string(data._comment) : nothing
-    region = _has_field(data, :region) && data.region !== nothing ?
-        _deep_native(data.region) : nothing
-    return Equation(lhs, rhs; _comment=comment, region=region)
+    return Equation(lhs, rhs; _comment=comment)
 end
 
 """
@@ -1251,8 +1037,6 @@ function coerce_reaction_system(data::Any)::ReactionSystem
     # Convert parameters dict to vector - parameters are now keyed by name
     parameters = haskey(data, :parameters) ? [coerce_parameter(string(k), v) for (k, v) in pairs(data.parameters)] : Parameter[]
 
-    domain = haskey(data, :domain) && data.domain !== nothing ? string(data.domain) : nothing
-
     # Inline tests / tolerance (schema gt-cc1) — same shape as on Model.
     tolerance = haskey(data, :tolerance) && data.tolerance !== nothing ?
         coerce_tolerance(data.tolerance) : nothing
@@ -1260,7 +1044,7 @@ function coerce_reaction_system(data::Any)::ReactionSystem
         EarthSciSerialization.Test[coerce_test(t) for t in data.tests] :
         EarthSciSerialization.Test[]
 
-    return ReactionSystem(species, reactions; parameters=parameters, domain=domain,
+    return ReactionSystem(species, reactions; parameters=parameters,
                           tolerance=tolerance, tests=tests)
 end
 
@@ -1381,19 +1165,6 @@ function coerce_data_loader_variable(data::Any)::DataLoaderVariable
 end
 
 """
-    coerce_data_loader_mesh(data::Any) -> DataLoaderMesh
-"""
-function coerce_data_loader_mesh(data::Any)::DataLoaderMesh
-    topology = string(data.topology)
-    connectivity_fields = [string(x) for x in data.connectivity_fields]
-    metric_fields = [string(x) for x in data.metric_fields]
-    dimension_sizes = haskey(data, :dimension_sizes) && data.dimension_sizes !== nothing ?
-                      Dict{String,Any}(string(k) => v for (k, v) in pairs(data.dimension_sizes)) : nothing
-    return DataLoaderMesh(topology, connectivity_fields, metric_fields;
-                          dimension_sizes=dimension_sizes)
-end
-
-"""
     coerce_data_loader_determinism(data::Any) -> DataLoaderDeterminism
 """
 function coerce_data_loader_determinism(data::Any)::DataLoaderDeterminism
@@ -1414,10 +1185,6 @@ function coerce_data_loader(data::Any)::DataLoader
 
     temporal = haskey(data, :temporal) && data.temporal !== nothing ?
                coerce_data_loader_temporal(data.temporal) : nothing
-    grid = haskey(data, :grid) && data.grid !== nothing ?
-           Grid(_to_native_json(data.grid)::Dict{String,Any}) : nothing
-    mesh = haskey(data, :mesh) && data.mesh !== nothing ?
-           coerce_data_loader_mesh(data.mesh) : nothing
     determinism = haskey(data, :determinism) && data.determinism !== nothing ?
                   coerce_data_loader_determinism(data.determinism) : nothing
 
@@ -1432,8 +1199,6 @@ function coerce_data_loader(data::Any)::DataLoader
 
     return DataLoader(kind, source, variables;
                       temporal=temporal,
-                      grid=grid,
-                      mesh=mesh,
                       determinism=determinism,
                       reference=reference,
                       metadata=metadata)
@@ -1485,16 +1250,12 @@ function coerce_operator_compose(data::AbstractDict)::CouplingOperatorCompose
     translate = translate_raw === nothing ? nothing :
                 Dict{String,Any}(string(k) => v for (k, v) in pairs(translate_raw))
     description = get(data, "description", nothing)
-    interface = get(data, "interface", nothing)
-    if interface !== nothing
-        interface = String(interface)
-    end
     lifting = get(data, "lifting", nothing)
     if lifting !== nothing
         lifting = String(lifting)
     end
 
-    return CouplingOperatorCompose(systems; translate=translate, description=description, interface=interface, lifting=lifting)
+    return CouplingOperatorCompose(systems; translate=translate, description=description, lifting=lifting)
 end
 
 """
@@ -1516,16 +1277,12 @@ function coerce_couple(data::AbstractDict)::CouplingCouple
     connector_raw = data["connector"]
     connector = Dict{String,Any}(string(k) => v for (k, v) in pairs(connector_raw))
     description = get(data, "description", nothing)
-    interface = get(data, "interface", nothing)
-    if interface !== nothing
-        interface = String(interface)
-    end
     lifting = get(data, "lifting", nothing)
     if lifting !== nothing
         lifting = String(lifting)
     end
 
-    return CouplingCouple(systems, connector; description=description, interface=interface, lifting=lifting)
+    return CouplingCouple(systems, connector; description=description, lifting=lifting)
 end
 
 """
@@ -1549,16 +1306,12 @@ function coerce_variable_map(data::AbstractDict)::CouplingVariableMap
         factor = Float64(factor)
     end
     description = get(data, "description", nothing)
-    interface = get(data, "interface", nothing)
-    if interface !== nothing
-        interface = String(interface)
-    end
     lifting = get(data, "lifting", nothing)
     if lifting !== nothing
         lifting = String(lifting)
     end
 
-    return CouplingVariableMap(from, to, transform; factor=factor, description=description, interface=interface, lifting=lifting)
+    return CouplingVariableMap(from, to, transform; factor=factor, description=description, lifting=lifting)
 end
 
 """
@@ -1694,47 +1447,14 @@ function coerce_index_set(data::Any)::IndexSet
 end
 
 """
-    coerce_regrid_spec(data::Any) -> RegridSpec
-
-Coerce one `regrid` entry (RFC pure-io-data-loaders §5.2, §6). All fields are
-optional; the closed `method` value set is enforced by JSON-schema validation,
-not here.
-"""
-function coerce_regrid_spec(data::Any)::RegridSpec
-    method_raw = _json_get(data, "method")
-    method = method_raw === nothing ? nothing : string(method_raw)
-    mv_raw = _json_get(data, "missing_value")
-    missing_value = mv_raw === nothing ? nothing : Float64(mv_raw)
-    desc_raw = _json_get(data, "description")
-    description = desc_raw === nothing ? nothing : string(desc_raw)
-    return RegridSpec(; method=method, missing_value=missing_value,
-                      description=description)
-end
-
-"""
     coerce_domain(data::Any) -> Domain
 
 Coerce JSON data into Domain type.
 """
 function coerce_domain(data::Any)::Domain
-    spatial = haskey(data, :spatial) && data.spatial !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.spatial)) : nothing
     temporal = haskey(data, :temporal) && data.temporal !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.temporal)) : nothing
 
-    return Domain(spatial=spatial, temporal=temporal)
-end
-
-"""
-    coerce_interface(data::Any) -> Interface
-
-Coerce JSON data into Interface type.
-"""
-function coerce_interface(data::Any)::Interface
-    domains = [string(d) for d in data.domains]
-    dimension_mapping = Dict{String,Any}(string(k) => v for (k, v) in pairs(data.dimension_mapping))
-    description = haskey(data, :description) && data.description !== nothing ? string(data.description) : nothing
-    regridding = haskey(data, :regridding) && data.regridding !== nothing ? Dict{String,Any}(string(k) => v for (k, v) in pairs(data.regridding)) : nothing
-
-    return Interface(domains, dimension_mapping; description=description, regridding=regridding)
+    return Domain(temporal=temporal)
 end
 
 """
@@ -1775,13 +1495,6 @@ function load(io::IO)::EsmFile
         # gate). Surfaced before schema validation so the user sees the
         # version hint instead of a generic "extra property" error.
         reject_expression_templates_pre_v04(raw_data)
-
-        # v0.7.0 pure-I/O hard break: a pre-0.7.0 loader still carrying the
-        # removed `regridding` / `spatial` blocks is rejected with a named,
-        # version-keyed diagnostic before schema validation, so the user sees
-        # the migration hint instead of a generic "extra property" error
-        # (esm-spec §8 / RFC pure-io-data-loaders §4.1).
-        reject_legacy_data_loader_shapes(raw_data)
 
         # Validate schema
         schema_errors = validate_schema(raw_data)
@@ -2024,12 +1737,6 @@ function _resolve_refs_in_file!(file::EsmFile, base_path::String, visited::Set{S
             _resolve_reaction_system_refs!(file.reaction_systems, name, rsys, base_path, visited)
         end
     end
-
-    # Resolve {ref} entries in discretizations (§4.7.1). Share the visited set
-    # so cycles through loaded rule files are detected.
-    if file.discretizations !== nothing
-        _resolve_discretization_refs!(file.discretizations, base_path, visited)
-    end
 end
 
 """
@@ -2086,42 +1793,6 @@ function _resolve_reaction_system_refs!(rsys_dict::Dict{String,ReactionSystem}, 
         # Recursively resolve nested subsystem refs
         _resolve_reaction_system_refs!(rsys.subsystems, sub_name, sub_rsys, base_path, visited)
     end
-end
-
-"""
-    _resolve_discretization_refs!(disc, base_path, visited)
-
-For every `{"ref": "..."}` entry in the raw `discretizations` dict, load the
-referenced ESD rule file and merge ALL of its scheme entries into `disc`
-(using the file's own scheme names).  The `{"ref": "..."}` placeholder entry
-is deleted.  Cycles are detected via the shared `visited` set that is also
-used by the subsystem-ref resolver.
-"""
-function _resolve_discretization_refs!(disc::Dict{String,Any}, base_path::String,
-                                       visited::Set{String})
-    placeholder_keys = String[]
-    to_merge = Dict{String,Any}()
-
-    for k in collect(keys(disc))
-        v = disc[k]
-        if v isa AbstractDict && haskey(v, "ref") && length(v) == 1
-            ref_str = String(v["ref"])
-            ref_file = _load_ref(ref_str, base_path, visited)
-            loaded = ref_file.discretizations
-            if loaded === nothing || isempty(loaded)
-                throw(SubsystemRefError(
-                    "ESD rule file '$(ref_str)' has no discretizations block; " *
-                    "expected at least one scheme definition"))
-            end
-            push!(placeholder_keys, k)
-            merge!(to_merge, loaded)
-        end
-    end
-
-    for k in placeholder_keys
-        delete!(disc, k)
-    end
-    merge!(disc, to_merge)
 end
 
 """
@@ -2216,7 +1887,6 @@ function _load_remote_ref(ref::String)::EsmFile
     raw_data = JSON3.read(content)
 
     reject_expression_templates_pre_v04(raw_data)
-    reject_legacy_data_loader_shapes(raw_data)
 
     schema_errors = validate_schema(raw_data)
     if !isempty(schema_errors)

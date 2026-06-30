@@ -65,69 +65,7 @@
           },
           "rhs": 0.0
         }
-      ],
-      "boundary_conditions": {
-        "SST_zero_gradient_lon_min": {
-          "variable": "SST",
-          "side": "lon_min",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_lon_min": {
-          "variable": "salinity",
-          "side": "lon_min",
-          "kind": "zero_gradient"
-        },
-        "SST_zero_gradient_lon_max": {
-          "variable": "SST",
-          "side": "lon_max",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_lon_max": {
-          "variable": "salinity",
-          "side": "lon_max",
-          "kind": "zero_gradient"
-        },
-        "SST_zero_gradient_lat_min": {
-          "variable": "SST",
-          "side": "lat_min",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_lat_min": {
-          "variable": "salinity",
-          "side": "lat_min",
-          "kind": "zero_gradient"
-        },
-        "SST_zero_gradient_lat_max": {
-          "variable": "SST",
-          "side": "lat_max",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_lat_max": {
-          "variable": "salinity",
-          "side": "lat_max",
-          "kind": "zero_gradient"
-        },
-        "SST_zero_gradient_depth_min": {
-          "variable": "SST",
-          "side": "depth_min",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_depth_min": {
-          "variable": "salinity",
-          "side": "depth_min",
-          "kind": "zero_gradient"
-        },
-        "SST_zero_gradient_depth_max": {
-          "variable": "SST",
-          "side": "depth_max",
-          "kind": "zero_gradient"
-        },
-        "salinity_zero_gradient_depth_max": {
-          "variable": "salinity",
-          "side": "depth_max",
-          "kind": "zero_gradient"
-        }
-      }
+      ]
     },
     "Atmosphere2D": {
       "domain": "atmos_surface",
@@ -172,49 +110,7 @@
           },
           "rhs": 0.0
         }
-      ],
-      "boundary_conditions": {
-        "T_air_zero_gradient_lon_min": {
-          "variable": "T_air",
-          "side": "lon_min",
-          "kind": "zero_gradient"
-        },
-        "wind_speed_zero_gradient_lon_min": {
-          "variable": "wind_speed",
-          "side": "lon_min",
-          "kind": "zero_gradient"
-        },
-        "T_air_zero_gradient_lon_max": {
-          "variable": "T_air",
-          "side": "lon_max",
-          "kind": "zero_gradient"
-        },
-        "wind_speed_zero_gradient_lon_max": {
-          "variable": "wind_speed",
-          "side": "lon_max",
-          "kind": "zero_gradient"
-        },
-        "T_air_zero_gradient_lat_min": {
-          "variable": "T_air",
-          "side": "lat_min",
-          "kind": "zero_gradient"
-        },
-        "wind_speed_zero_gradient_lat_min": {
-          "variable": "wind_speed",
-          "side": "lat_min",
-          "kind": "zero_gradient"
-        },
-        "T_air_zero_gradient_lat_max": {
-          "variable": "T_air",
-          "side": "lat_max",
-          "kind": "zero_gradient"
-        },
-        "wind_speed_zero_gradient_lat_max": {
-          "variable": "wind_speed",
-          "side": "lat_max",
-          "kind": "zero_gradient"
-        }
-      }
+      ]
     },
     "BulkFluxCalculator": {
       "domain": null,
@@ -296,27 +192,6 @@
         "start": "2024-01-01T00:00:00Z",
         "end": "2024-01-02T00:00:00Z"
       },
-      "spatial": {
-        "lon": {
-          "min": -80.0,
-          "max": -60.0,
-          "units": "degrees",
-          "grid_spacing": 0.5
-        },
-        "lat": {
-          "min": 20.0,
-          "max": 40.0,
-          "units": "degrees",
-          "grid_spacing": 0.5
-        },
-        "depth": {
-          "min": 0.0,
-          "max": 1000.0,
-          "units": "m",
-          "grid_spacing": 10.0
-        }
-      },
-      "spatial_ref": "WGS84",
       "initial_conditions": {
         "type": "constant",
         "value": 290.0
@@ -328,21 +203,6 @@
         "start": "2024-01-01T00:00:00Z",
         "end": "2024-01-02T00:00:00Z"
       },
-      "spatial": {
-        "lon": {
-          "min": -80.0,
-          "max": -60.0,
-          "units": "degrees",
-          "grid_spacing": 1.0
-        },
-        "lat": {
-          "min": 20.0,
-          "max": 40.0,
-          "units": "degrees",
-          "grid_spacing": 1.0
-        }
-      },
-      "spatial_ref": "WGS84",
       "initial_conditions": {
         "type": "constant",
         "value": 288.0
@@ -367,9 +227,6 @@
             "value": "min"
           }
         }
-      },
-      "regridding": {
-        "method": "conservative"
       }
     }
   },

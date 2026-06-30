@@ -193,14 +193,11 @@ pub fn substitute_in_model(
         .map(|eq| Equation {
             lhs: substitute(&eq.lhs, substitutions),
             rhs: substitute(&eq.rhs, substitutions),
-            region: eq.region.clone(),
         })
         .collect();
 
     Model {
-        regrid: None,
         name: model.name.clone(),
-        domain: model.domain.clone(),
         index_sets: model.index_sets.clone(),
         coupletype: model.coupletype.clone(),
         reference: model.reference.clone(),
@@ -222,7 +219,6 @@ pub fn substitute_in_model(
         description: model.description.clone(),
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
-        boundary_conditions: model.boundary_conditions.clone(),
         initialization_equations: model.initialization_equations.clone(),
         guesses: model.guesses.clone(),
         system_kind: model.system_kind.clone(),
@@ -257,7 +253,6 @@ pub fn substitute_in_reaction_system(
         .collect();
 
     ReactionSystem {
-        domain: reaction_system.domain.clone(),
         coupletype: reaction_system.coupletype.clone(),
         reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
@@ -493,14 +488,11 @@ pub fn substitute_in_model_with_context(
         .map(|eq| Equation {
             lhs: substitute_with_context(&eq.lhs, substitutions, context),
             rhs: substitute_with_context(&eq.rhs, substitutions, context),
-            region: eq.region.clone(),
         })
         .collect();
 
     Model {
-        regrid: None,
         name: model.name.clone(),
-        domain: model.domain.clone(),
         index_sets: model.index_sets.clone(),
         coupletype: model.coupletype.clone(),
         reference: model.reference.clone(),
@@ -526,7 +518,6 @@ pub fn substitute_in_model_with_context(
         description: model.description.clone(),
         tolerance: model.tolerance.clone(),
         tests: model.tests.clone(),
-        boundary_conditions: model.boundary_conditions.clone(),
         initialization_equations: model.initialization_equations.clone(),
         guesses: model.guesses.clone(),
         system_kind: model.system_kind.clone(),
@@ -708,7 +699,6 @@ pub fn substitute_in_reaction_system_with_context(
         .collect();
 
     ReactionSystem {
-        domain: reaction_system.domain.clone(),
         coupletype: reaction_system.coupletype.clone(),
         reference: reaction_system.reference.clone(),
         species: reaction_system.species.clone(),
@@ -813,7 +803,6 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
-                regrid: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 index_sets: None,
@@ -827,7 +816,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -858,9 +846,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -900,7 +885,6 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
-                regrid: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 index_sets: None,
@@ -914,7 +898,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -945,9 +928,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -990,7 +970,6 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
-                regrid: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 index_sets: None,
@@ -1004,7 +983,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1035,9 +1013,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -1094,7 +1069,6 @@ mod tests {
         models.insert(
             "Atmosphere".to_string(),
             Model {
-                regrid: None,
                 name: Some("Atmosphere".to_string()),
                 domain: None,
                 index_sets: None,
@@ -1108,7 +1082,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,
@@ -1139,9 +1112,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         };
 
@@ -1283,7 +1253,6 @@ mod tests {
 
         // Create a model with discrete and continuous events
         let model = Model {
-            regrid: None,
             name: Some("TestModel".to_string()),
             domain: None,
             index_sets: None,
@@ -1340,7 +1309,6 @@ mod tests {
             description: None,
             tolerance: None,
             tests: None,
-            boundary_conditions: None,
             initialization_equations: None,
             guesses: None,
             system_kind: None,

@@ -173,8 +173,8 @@ pub struct FlattenedSystem {
     pub continuous_events: Vec<ContinuousEvent>,
     /// Discrete events from every component, LHS rewritten to namespaced form.
     pub discrete_events: Vec<DiscreteEvent>,
-    /// The file's named domain sections, passed through.
-    pub domains: Option<std::collections::HashMap<String, Domain>>,
+    /// The file's single shared domain, passed through (v0.8.0).
+    pub domain: Option<Domain>,
     /// Provenance metadata.
     pub metadata: FlattenMetadata,
 }
@@ -347,7 +347,7 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         equations,
         continuous_events,
         discrete_events,
-        domains: file.domains.clone(),
+        domain: file.domain.clone(),
         metadata: FlattenMetadata {
             source_systems,
             coupling_rules_applied,
@@ -393,11 +393,7 @@ pub fn flatten_model(model: &Model) -> Result<FlattenedSystem, FlattenError> {
         operators: None,
         enums: None,
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
+        domain: None,
         function_tables: None,
     };
 
@@ -460,7 +456,6 @@ fn build_model_block(system_name: &str, model: &Model) -> Result<SystemBlock, Fl
         .map(|eq| Equation {
             lhs: namespace_expr(&eq.lhs, system_name),
             rhs: namespace_expr(&eq.rhs, system_name),
-            region: eq.region.clone(),
         })
         .collect();
 
@@ -546,7 +541,6 @@ fn build_reaction_block(
         .map(|eq| Equation {
             lhs: namespace_expr(&eq.lhs, system_name),
             rhs: namespace_expr(&eq.rhs, system_name),
-            region: eq.region.clone(),
         })
         .collect();
 
@@ -963,7 +957,6 @@ fn apply_couple(
             new_equations.push(Equation {
                 lhs,
                 rhs,
-                region: None,
             });
         }
     }
@@ -1067,9 +1060,6 @@ mod tests {
             coupling: None,
             domains: None,
             interfaces: None,
-            grids: None,
-            staggering_rules: None,
-            discretizations: None,
             function_tables: None,
         }
     }
@@ -1116,7 +1106,6 @@ mod tests {
         models.insert(
             "sys".to_string(),
             Model {
-                regrid: None,
                 name: Some("System".to_string()),
                 domain: None,
                 index_sets: None,
@@ -1140,7 +1129,6 @@ mod tests {
                 description: None,
                 tolerance: None,
                 tests: None,
-                boundary_conditions: None,
                 initialization_equations: None,
                 guesses: None,
                 system_kind: None,

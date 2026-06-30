@@ -15,7 +15,6 @@ import {
   lowerExpressionTemplates,
   rejectExpressionTemplatesPreV04,
 } from './lower_expression_templates.js'
-import { rejectLegacyDataLoaderShapes } from './reject_legacy_loaders.js'
 import { schema } from './embedded-schema.js'
 
 /**
@@ -49,25 +48,6 @@ export class SchemaValidationError extends Error {
     this.name = 'SchemaValidationError'
   }
 }
-
-/**
- * Grid-generator validation error — thrown for the post-schema checks in
- * RFC §6.5 (loader references must resolve; 'builtin' names must be from
- * the canonical closed set). Uses `code` to identify the specific failure
- * class (E_UNKNOWN_LOADER, E_UNKNOWN_BUILTIN).
- */
-export class GridValidationError extends Error {
-  constructor(message: string, public code: 'E_UNKNOWN_LOADER' | 'E_UNKNOWN_BUILTIN') {
-    super(message)
-    this.name = 'GridValidationError'
-  }
-}
-
-/**
- * Closed set of canonical grid builtins (RFC §6.4.1). Adding a new name
- * here is a minor version bump.
- */
-const KNOWN_GRID_BUILTINS = new Set<string>([])
 
 // The ESM schema is embedded via a GENERATED module so it cannot hand-drift
 // from the canonical esm-schema.json. See scripts/generate-embedded-schema.mjs
@@ -464,87 +444,6 @@ function cleanReactionSystems(reactionSystems: any): any {
 }
 
 /**
- * Post-schema validation for grid metric/connectivity generators (RFC §6.5).
- *
- * For every `GridMetricGenerator` found under `grids.<name>.metric_arrays`
- * or `grids.<name>.connectivity`:
- *   - kind='loader' requires the loader name to exist in top-level
- *     `data_loaders`. Otherwise throws `E_UNKNOWN_LOADER`.
- *   - kind='builtin' requires the `name` to be in the closed
- *     `KNOWN_GRID_BUILTINS` set. Otherwise throws `E_UNKNOWN_BUILTIN`.
- */
-function validateGridGenerators(data: any): void {
-  if (!data || typeof data !== 'object') return
-  const grids = data.grids
-  if (!grids || typeof grids !== 'object') return
-
-  const dataLoaders = (data.data_loaders && typeof data.data_loaders === 'object')
-    ? data.data_loaders
-    : {}
-
-  const checkGenerator = (gen: any, where: string): void => {
-    if (!gen || typeof gen !== 'object') return
-    if (gen.kind === 'loader') {
-      const name = gen.loader
-      if (typeof name !== 'string' || !(name in dataLoaders)) {
-        throw new GridValidationError(
-          `[E_UNKNOWN_LOADER] ${where}: generator references data_loaders.${name} which is not defined.`,
-          'E_UNKNOWN_LOADER'
-        )
-      }
-    } else if (gen.kind === 'builtin') {
-      const name = gen.name
-      if (typeof name !== 'string' || !KNOWN_GRID_BUILTINS.has(name)) {
-        throw new GridValidationError(
-          `[E_UNKNOWN_BUILTIN] ${where}: '${name}' is not a recognized grid builtin. ` +
-            `Known builtins: ${Array.from(KNOWN_GRID_BUILTINS).join(', ')}.`,
-          'E_UNKNOWN_BUILTIN'
-        )
-      }
-    }
-  }
-
-  for (const [gridName, grid] of Object.entries(grids)) {
-    if (!grid || typeof grid !== 'object') continue
-    const g = grid as Record<string, any>
-
-    if (g.metric_arrays && typeof g.metric_arrays === 'object') {
-      for (const [arrName, arr] of Object.entries(g.metric_arrays)) {
-        if (arr && typeof arr === 'object' && 'generator' in (arr as object)) {
-          checkGenerator(
-            (arr as any).generator,
-            `grids.${gridName}.metric_arrays.${arrName}.generator`
-          )
-        }
-      }
-    }
-
-    for (const bucket of ['connectivity'] as const) {
-      if (g[bucket] && typeof g[bucket] === 'object') {
-        for (const [tblName, tbl] of Object.entries(g[bucket])) {
-          if (!tbl || typeof tbl !== 'object') continue
-          const t = tbl as Record<string, any>
-          // Connectivity tables may have either a generator or a
-          // loader/field pair (unstructured).
-          if ('generator' in t) {
-            checkGenerator(t.generator, `grids.${gridName}.${bucket}.${tblName}.generator`)
-          } else if ('loader' in t) {
-            const name = t.loader
-            if (typeof name !== 'string' || !(name in dataLoaders)) {
-              throw new GridValidationError(
-                `[E_UNKNOWN_LOADER] grids.${gridName}.${bucket}.${tblName}: ` +
-                  `loader '${name}' is not defined in top-level data_loaders.`,
-                'E_UNKNOWN_LOADER'
-              )
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
  * Options controlling how `load()` parses and represents an ESM file.
  */
 export interface LoadOptions {
@@ -609,13 +508,6 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   // sees the version hint instead of a generic "extra property" error.
   rejectExpressionTemplatesPreV04(validationView)
 
-  // Step 2c: v0.7.0 pure-I/O hard break — reject pre-0.7.0 loader files that
-  // still carry the removed DataLoader.regridding / DataLoader.spatial blocks
-  // (RFC pure-io-data-loaders §4.1). Surfaced with named, version-keyed
-  // diagnostics before schema validation so the user sees the migration hint
-  // instead of a generic "extra property" error.
-  rejectLegacyDataLoaderShapes(validationView)
-
   // Step 3: Schema validation with version compatibility
   const schemaErrors = validateSchemaWithVersionCompatibility(validationView)
   if (schemaErrors.length > 0) {
@@ -636,40 +528,11 @@ export function load(input: string | object, options?: LoadOptions): EsmFile {
   const cleanedData = removeUnknownFields(data)
   const typedData = coerceTypes(cleanedData) as EsmFile
 
-  // Step 4a: Emit E_DEPRECATED_DOMAIN_BC for any v0.1.0-style domain-level
-  // boundary_conditions (v0.2.0 transitional shim per RFC §10.1 +
-  // gt-2fvs mayor decision). A follow-up bead flips this to a hard error.
-  if (typedData && typeof typedData === 'object' && 'domains' in typedData) {
-    const domains = (typedData as Record<string, unknown>).domains
-    if (domains && typeof domains === 'object') {
-      for (const [domainName, domain] of Object.entries(domains)) {
-        if (
-          domain &&
-          typeof domain === 'object' &&
-          'boundary_conditions' in (domain as Record<string, unknown>)
-        ) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[E_DEPRECATED_DOMAIN_BC] domains.${domainName}.boundary_conditions ` +
-              `is deprecated in ESM v0.2.0; migrate to ` +
-              `models.<M>.boundary_conditions (docs/rfcs/discretization.md §9).`
-          )
-        }
-      }
-    }
-  }
-
   // Step 4b: Lower `enum` ops to `const` integer nodes against the
   // file-local `enums` block (esm-spec §9.3). After this pass, the
   // codegen runner sees only `const` — `evaluateExpression()` rejects
   // any leftover `enum` op as an unlowered file.
   const loweredData = lowerEnums(typedData)
-
-  // Step 4c: Grid generator validation (RFC §6).
-  //   - For kind='loader': the referenced loader name must exist in top-level data_loaders.
-  //   - For kind='builtin': name must be one of the closed set of canonical builtins
-  //     (currently empty); unknown names are rejected with E_UNKNOWN_BUILTIN per §6.4.1.
-  validateGridGenerators(loweredData)
 
   // Step 5: Dimensional analysis — emit warnings but never fail the load.
   // Mirrors the Julia @warn behavior so TS callers get the same signal

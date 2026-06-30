@@ -54,30 +54,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "concentration_zero_gradient_xmin": {
-          "variable": "concentration",
-          "side": "xmin",
-          "kind": "zero_gradient",
-          "description": "Zero-gradient Neumann on x=0"
-        },
-        "concentration_zero_gradient_xmax": {
-          "variable": "concentration",
-          "side": "xmax",
-          "kind": "zero_gradient"
-        },
-        "concentration_zero_gradient_ymin": {
-          "variable": "concentration",
-          "side": "ymin",
-          "kind": "zero_gradient"
-        },
-        "concentration_zero_gradient_ymax": {
-          "variable": "concentration",
-          "side": "ymax",
-          "kind": "zero_gradient"
-        }
-      }
+      ]
     },
     "DirichletBoundary": {
       "reference": {
@@ -124,21 +101,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "tracer_dirichlet_xmin": {
-          "variable": "tracer",
-          "side": "xmin",
-          "kind": "dirichlet",
-          "value": "boundary_value"
-        },
-        "tracer_dirichlet_xmax": {
-          "variable": "tracer",
-          "side": "xmax",
-          "kind": "dirichlet",
-          "value": "boundary_value"
-        }
-      }
+      ]
     },
     "PeriodicBoundary": {
       "reference": {
@@ -186,15 +149,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "global_tracer_periodic_lon": {
-          "variable": "global_tracer",
-          "side": "xmin",
-          "kind": "periodic",
-          "description": "Periodic x-axis wrap (declared once on xmin per RFC \u00a79.2.1)"
-        }
-      }
+      ]
     },
     "RobinBoundary": {
       "reference": {
@@ -233,20 +188,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "temperature_robin_xmin": {
-          "variable": "temperature",
-          "side": "xmin",
-          "kind": "robin",
-          "robin_alpha": "htc",
-          "robin_beta": 1.0,
-          "robin_gamma": {
-            "op": "*",
-            "args": ["htc", "t_ambient"]
-          }
-        }
-      }
+      ]
     },
     "MixedBoundaries": {
       "reference": {
@@ -288,42 +230,7 @@
             ]
           }
         }
-      ],
-      "boundary_conditions": {
-        "pollution_neumann_zmin": {
-          "variable": "pollution",
-          "side": "zmin",
-          "kind": "neumann",
-          "value": 0.0,
-          "description": "Enclosing neumann template; flux_contrib entries aggregate into this side's flux."
-        },
-        "pollution_deposition_zmin": {
-          "variable": "pollution",
-          "side": "zmin",
-          "kind": "flux_contrib",
-          "value": {
-            "op": "*",
-            "args": [
-              {"op": "-", "args": ["deposition_velocity"]},
-              "pollution"
-            ]
-          },
-          "contributed_by": {
-            "component": "dry_deposition",
-            "flux_sign": "-"
-          }
-        },
-        "pollution_emission_zmin": {
-          "variable": "pollution",
-          "side": "zmin",
-          "kind": "flux_contrib",
-          "value": "surface_emission",
-          "contributed_by": {
-            "component": "emissions",
-            "flux_sign": "+"
-          }
-        }
-      }
+      ]
     }
   },
   "domains": {
@@ -332,26 +239,6 @@
       "temporal": {
         "start": "2024-01-01T00:00:00Z",
         "end": "2024-01-01T06:00:00Z"
-      },
-      "spatial": {
-        "x": {
-          "min": 0.0,
-          "max": 50000.0,
-          "units": "meters",
-          "grid_spacing": 1000.0
-        },
-        "y": {
-          "min": 0.0,
-          "max": 50000.0,
-          "units": "meters",
-          "grid_spacing": 1000.0
-        },
-        "lon": {
-          "min": -180.0,
-          "max": 180.0,
-          "units": "degrees",
-          "grid_spacing": 2.0
-        }
       },
       "initial_conditions": {
         "type": "per_variable",

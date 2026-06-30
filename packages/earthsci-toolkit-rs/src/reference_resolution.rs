@@ -280,7 +280,7 @@ impl ReferenceGraph {
     }
 }
 
-const AGGREGATE_OPS: [&str; 2] = ["aggregate", "arrayop"];
+const AGGREGATE_OPS: [&str; 1] = ["aggregate"];
 
 fn node_key(addr: &str) -> String {
     format!("node:{addr}")

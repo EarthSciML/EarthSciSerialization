@@ -40,33 +40,12 @@ pub struct EsmFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coupling: Option<Vec<CouplingEntry>>,
 
-    /// Named spatial/temporal domain specifications
+    /// The single temporal domain shared by every component in the document
+    /// (v0.8.0). A document has at most one domain; all spatial models live on
+    /// it, and 0-D models simply have scalar-shaped variables. Spatiality is
+    /// determined by variable shape, not by a per-component domain reference.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub domains: Option<HashMap<String, Domain>>,
-
-    /// Geometric interfaces between domains
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub interfaces: Option<HashMap<String, serde_json::Value>>,
-
-    /// Named discretization grids (v0.2.0). Each entry declares a
-    /// cartesian/unstructured topology per docs/rfcs/discretization.md §6.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub grids: Option<HashMap<String, Grid>>,
-
-    /// Named staggering-rule declarations (v0.2.0, RFC §7.4). Each entry
-    /// declares a staggering convention (e.g. MPAS unstructured C-grid)
-    /// referencing a grids.<g> entry by name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub staggering_rules: Option<HashMap<String, StaggeringRule>>,
-
-    /// Named discretization schemes (RFC §7). Held opaquely as
-    /// `HashMap<String, serde_json::Value>` because stencil coefficients and
-    /// applies_to patterns carry pattern-variable strings (`$u`, `$x`,
-    /// `$target`) that don't map onto the `Expr` coercion pipeline. Standard
-    /// `Discretization` (§7.1) entries pass through unchanged, preserving
-    /// round-trip fidelity.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub discretizations: Option<HashMap<String, serde_json::Value>>,
+    pub domain: Option<Domain>,
 
     /// Component-scoped sampled function tables (esm-spec §9.5, v0.4.0).
     /// Keys are table ids; values are `FunctionTable` entries referenced by
@@ -134,40 +113,6 @@ pub struct FunctionTable {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema_version: Option<String>,
-}
-
-/// A named staggering convention that declares where quantities live on a
-/// grid (RFC §7.4). `kind` discriminates the staggering family; v0.2.0 ships
-/// `unstructured_c_grid` for MPAS Voronoi meshes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StaggeringRule {
-    /// Staggering family discriminant.
-    pub kind: String,
-
-    /// Name of a grids.<g> entry this rule applies to; for
-    /// `unstructured_c_grid` the referenced grid's family must be
-    /// `unstructured`.
-    pub grid: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// Mapping of quantity names to their staggered locations
-    /// (cell_center, edge_midpoint, vertex).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cell_quantity_locations: Option<HashMap<String, String>>,
-
-    /// Orientation semantics for edge-normal fluxes
-    /// (outward_from_first_cell, outward_from_second_cell, right_hand_tangent).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub edge_normal_convention: Option<String>,
-
-    /// Optional name of a grids.<g> entry naming the Delaunay dual mesh.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dual_mesh_ref: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reference: Option<Reference>,
 }
 
 /// Academic citation or data source reference
@@ -407,12 +352,9 @@ pub struct ExpressionNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wrt: Option<String>,
 
-    /// Dimensional analysis hint. Also accepts the authored boundary-condition
-    /// `side` key on synthetic `bc` nodes (esm-spec §9.2) — the natural BC
-    /// vocabulary used by discretization rule patterns — so the rule engine's
-    /// kind/side matcher discriminates xmin/xmax/… ; serialized canonically as
-    /// `dim` (ess-tox / G8).
-    #[serde(alias = "side", skip_serializing_if = "Option::is_none")]
+    /// Dimensional analysis hint; also names the spatial dimension a `grad` /
+    /// `aggregate` op iterates over.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dim: Option<String>,
 
     /// Integration variable name for the `integral` op (spatial dimension being integrated over).
@@ -502,17 +444,8 @@ pub struct ExpressionNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub axis: Option<i64>,
 
-    /// Elementwise operator name for `broadcast` (serialized as `fn`). Also
-    /// carries the boundary-condition kind on synthetic `bc` nodes, accepted
-    /// under the authored `kind` key (esm-spec §9.2) so the rule engine's
-    /// kind/side matcher discriminates dirichlet/neumann/robin/… ; serialized
-    /// canonically as `fn` (ess-tox / G8).
-    #[serde(
-        default,
-        rename = "fn",
-        alias = "kind",
-        skip_serializing_if = "Option::is_none"
-    )]
+    /// Elementwise operator name for `broadcast` (serialized as `fn`).
+    #[serde(default, rename = "fn", skip_serializing_if = "Option::is_none")]
     pub broadcast_fn: Option<String>,
 
     /// For the `fn` op: dotted module path of the closed-registry function to
@@ -696,10 +629,6 @@ pub struct Model {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// Name of a domain from the `domains` section (or null for 0D models)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain: Option<String>,
-
     /// Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
     /// Unifies grid dims and categorical index sets; referenced from
     /// `aggregate`/`arrayop` `ranges` via `{ "from": <name> }`.
@@ -744,13 +673,6 @@ pub struct Model {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tests: Option<Vec<ModelTest>>,
 
-    /// Model-level boundary conditions, keyed by user-supplied id. New in ESM
-    /// v0.2.0 (breaking change per docs/rfcs/discretization.md §9 / §10.1).
-    /// Held as a raw JSON map pending downstream consumers; downstream code
-    /// may deserialize each entry into a typed BC struct as needed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boundary_conditions: Option<HashMap<String, serde_json::Value>>,
-
     /// Equations that hold only at t=0 (initialization-only, not time-stepped).
     /// Introduced for aerosol equilibrium / plume-rise style models (gt-ebuq).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -764,32 +686,6 @@ pub struct Model {
     /// MTK system-kind discriminator: "ode" (default), "nonlinear", "sde", "pde".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_kind: Option<String>,
-
-    /// Per-variable regridding configuration for fields consumed from
-    /// data-loader subsystems (RFC pure-io-data-loaders §5.2, §6), keyed by
-    /// variable name. Regridding is a model concern; an entry may override the
-    /// staggering-derived kernel and, for scattered-point (cell-averaging)
-    /// loaders, declares the no-data `missing_value` fill.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub regrid: Option<HashMap<String, RegridSpec>>,
-}
-
-/// Per-variable regridding configuration entry on a model that owns a data
-/// loader as a subsystem (RFC pure-io-data-loaders §5.2, §6). All fields are
-/// optional. `method` overrides the staggering-derived kernel
-/// ("conservative" | "bspline" | "cell_average"); `missing_value` is the
-/// no-data fill consumed only by "cell_average" (scattered-point) regridding —
-/// the value placed in a target cell with no contributing source station.
-/// The closed `method` value set is enforced by JSON-schema validation.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RegridSpec {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub method: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub missing_value: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
 }
 
 /// Variable within a model
@@ -852,10 +748,6 @@ pub enum VariableType {
     Brownian,
 }
 
-/// Spatial scope of a rule or equation (discretization RFC §7.2).
-/// A string is a legacy advisory tag; an object is a normative scoping predicate.
-pub type RuleRegion = serde_json::Value;
-
 /// Differential equation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Equation {
@@ -864,11 +756,6 @@ pub struct Equation {
 
     /// Right-hand side expression
     pub rhs: Expr,
-
-    /// Optional spatial scope (RuleRegion). When present, the discretization
-    /// engine dispatches this equation via a synthetic bc(...) wrapper.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub region: Option<RuleRegion>,
 }
 
 impl Default for Equation {
@@ -876,7 +763,6 @@ impl Default for Equation {
         Equation {
             lhs: Expr::Integer(0),
             rhs: Expr::Integer(0),
-            region: None,
         }
     }
 }
@@ -1018,10 +904,6 @@ pub enum RootFindDirection {
 /// Reaction network component
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReactionSystem {
-    /// Domain name (key in EsmFile.domains)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain: Option<String>,
-
     /// Coupling type label
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coupletype: Option<String>,
@@ -1147,10 +1029,9 @@ fn default_stoichiometry() -> f64 {
 /// A `DataLoader` is pure I/O (RFC pure-io-data-loaders §4.1): it carries
 /// enough structural information to locate files, map timestamps to files, and
 /// describe variable semantics — rather than pointing at a runtime handler.
-/// The dataset's discretization is described by an optional GDD [`Grid`];
-/// reprojection and regridding are expressed by downstream rules, not the
-/// loader. Authentication and algorithm-specific tuning are runtime-only and
-/// not part of the schema.
+/// Grid geometry, reprojection, and regridding are expressed as ordinary data
+/// and `aggregate` FAQ expressions downstream, not on the loader. Authentication
+/// and algorithm-specific tuning are runtime-only and not part of the schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataLoader {
     /// Structural kind of the dataset. Scientific role (emissions,
@@ -1164,16 +1045,6 @@ pub struct DataLoader {
     /// Temporal coverage and record layout.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporal: Option<DataLoaderTemporal>,
-
-    /// Optional discretization grid (GDD `Grid`, §6) the dataset is published
-    /// on. A loader is pure I/O; reprojection/regridding is expressed by
-    /// downstream rules, not the loader.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub grid: Option<Grid>,
-
-    /// Mesh descriptor — required when `kind = "mesh"` (esm-spec §8.9).
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub mesh: Option<DataLoaderMesh>,
 
     /// Reproducibility contract — endian / float_format / integer_width
     /// (esm-spec §8.9.2). A binding that cannot honor the declared
@@ -1203,38 +1074,6 @@ pub enum DataLoaderKind {
     Points,
     /// Static dataset (no time dimension).
     Static,
-    /// Mesh dataset — publishes connectivity tables + metric arrays for an
-    /// unstructured grid (esm-spec §8.9, discretization RFC §8.A).
-    Mesh,
-}
-
-/// Closed topology enum for mesh loaders (esm-spec §8.9).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DataLoaderMeshTopology {
-    MpasVoronoi,
-    FesomTriangular,
-    IconTriangular,
-}
-
-/// Dimension extent in a mesh descriptor's `dimension_sizes` map — an integer
-/// literal or the sentinel string `"from_file"`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum DataLoaderMeshDimensionSize {
-    Integer(u64),
-    FromFile(String),
-}
-
-/// Mesh descriptor attached to a DataLoader with `kind = "mesh"`
-/// (esm-spec §8.9).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataLoaderMesh {
-    pub topology: DataLoaderMeshTopology,
-    pub connectivity_fields: Vec<String>,
-    pub metric_fields: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub dimension_sizes: Option<HashMap<String, DataLoaderMeshDimensionSize>>,
 }
 
 /// Reproducibility contract a loader advertises to bindings
@@ -1510,29 +1349,6 @@ pub struct Domain {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporal: Option<serde_json::Value>,
 
-    /// Spatial dimensions, keyed by name
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spatial: Option<serde_json::Value>,
-
-    /// Coordinate transforms
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub coordinate_transforms: Option<serde_json::Value>,
-
-    /// Coordinate reference system
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spatial_ref: Option<String>,
-
-    /// Initial conditions specification
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_conditions: Option<serde_json::Value>,
-
-    /// DEPRECATED v0.1.0 domain-level boundary conditions. Retained as a
-    /// transitional shim (RFC §10.1 + gt-2fvs mayor decision); loaders emit
-    /// E_DEPRECATED_DOMAIN_BC when this field is present. Model-level BCs
-    /// (Model::boundary_conditions) are the canonical v0.2.0 form.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boundary_conditions: Option<serde_json::Value>,
-
     /// Floating point precision
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_type: Option<String>,
@@ -1540,164 +1356,4 @@ pub struct Domain {
     /// Array backend identifier
     #[serde(skip_serializing_if = "Option::is_none")]
     pub array_type: Option<String>,
-}
-
-/// Generator for a grid metric array (§6.5). Exactly one of the three kinds
-/// applies:
-/// * `expression`: analytic expression, with `expr` set.
-/// * `loader`: pulled from a `data_loaders` entry; `loader` + `field` set.
-/// * `builtin`: closed set selected by `name` (currently empty; adding a
-///   name is a minor version bump per §6.4.1).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GridMetricGenerator {
-    /// One of `"expression"`, `"loader"`, `"builtin"`.
-    pub kind: String,
-
-    /// For `kind = "expression"`: the expression tree / literal / variable ref.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expr: Option<Expr>,
-
-    /// For `kind = "loader"`: name of a `data_loaders` entry.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub loader: Option<String>,
-
-    /// For `kind = "loader"`: named field within the loader's output.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub field: Option<String>,
-
-    /// For `kind = "builtin"`: canonical builtin name (closed set per §6.4).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-}
-
-/// A named metric array declared on a grid (e.g., dx, dcEdge, areaCell). See §6.5.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GridMetricArray {
-    /// Tensor rank of the array: 0 = scalar, 1 = along a single dim, 2+ = multi.
-    pub rank: u32,
-
-    /// For `rank = 1`: the dimension the array is indexed by.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dim: Option<String>,
-
-    /// For `rank >= 2`: ordered list of dimensions the array is indexed by.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dims: Option<Vec<String>>,
-
-    /// Optional declared shape (parameter names or integer literals per dim).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shape: Option<Vec<serde_json::Value>>,
-
-    /// The generator that produces this array.
-    pub generator: GridMetricGenerator,
-}
-
-/// Unstructured connectivity table (§6.3). Either `loader` + `field` are
-/// set (data-loader-backed) or `generator` is set (builtin / expression).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GridConnectivity {
-    /// Ordered list of dimension sizes (parameter names or integer literals).
-    pub shape: Vec<serde_json::Value>,
-
-    /// Tensor rank (>= 1).
-    pub rank: u32,
-
-    /// Name of a `data_loaders` entry that supplies this table.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub loader: Option<String>,
-
-    /// Named field within the referenced loader's output.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub field: Option<String>,
-
-    /// Alternative to loader/field: generator-backed connectivity via
-    /// `kind = "builtin"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub generator: Option<GridMetricGenerator>,
-}
-
-/// Per-dimension extent for cartesian grids. `n` is either an integer
-/// literal or a parameter-name string; `spacing` is `"uniform"` or
-/// `"nonuniform"` for cartesian.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GridExtent {
-    /// Integer literal or parameter-name string naming the dimension count.
-    pub n: serde_json::Value,
-
-    /// Cartesian spacing: `"uniform"` or `"nonuniform"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spacing: Option<String>,
-}
-
-/// A named discretization grid (§6.1-§6.5). The `family` field selects one of
-/// two topologies: `"cartesian"` or `"unstructured"`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Grid {
-    /// One of `"cartesian"`, `"unstructured"`.
-    pub family: String,
-
-    /// Optional coordinate reference system, orthogonal to `family` (§4.2):
-    /// a `"cartesian"` grid may be geographic (`"longlat"`) or projected
-    /// (`"lambert_conformal"`, ...).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub crs: Option<GridCrs>,
-
-    /// Human-readable description.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// Ordered list of logical dimension names.
-    pub dimensions: Vec<String>,
-
-    /// Declared stagger locations used by variables on this grid (see §11).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub locations: Option<Vec<String>>,
-
-    /// Metric array declarations, keyed by array name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metric_arrays: Option<HashMap<String, GridMetricArray>>,
-
-    /// Grid-level parameters. Reuses the ordinary ESM Parameter schema.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<HashMap<String, Parameter>>,
-
-    /// Optional name of the `domains` entry this grid refines.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub domain: Option<String>,
-
-    /// Per-dimension extents (required for `"cartesian"`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extents: Option<HashMap<String, GridExtent>>,
-
-    /// Unstructured-family connectivity tables (e.g. `cellsOnEdge`).
-    /// Required for `family = "unstructured"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connectivity: Option<HashMap<String, GridConnectivity>>,
-}
-
-/// Optional coordinate reference system for a grid (RFC pure-io-data-loaders
-/// §4.2), orthogonal to the topological `family`: a `"cartesian"` grid may be
-/// geographic (`"longlat"`) or projected (`"lambert_conformal"`, ...), and a
-/// point dataset may be `"unstructured"` + `"longlat"`. The descriptor names
-/// the projection and the parameters a downstream reprojection rule consumes;
-/// the grid itself performs no reprojection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GridCrs {
-    /// Projection family: `"longlat"` (geographic identity) |
-    /// `"lambert_conformal"` | `"mercator"` | `"polar_stereographic"` |
-    /// `"rotated_pole"`.
-    pub projection: String,
-
-    /// Geodetic datum: `"sphere"` (radius `R`) or `"WGS84"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub datum: Option<String>,
-
-    /// Sphere radius in metres, used when `datum = "sphere"`.
-    #[serde(default, rename = "R", skip_serializing_if = "Option::is_none")]
-    pub r: Option<f64>,
-
-    /// Projection parameters consumed verbatim by the downstream reprojection
-    /// rule (e.g. Lambert Conformal `{lat_1, lat_2, lat_0, lon_0}`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<HashMap<String, f64>>,
 }

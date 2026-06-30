@@ -23,7 +23,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+# `preserve_order` keeps JSON object keys in source (insertion) order, so the
+# load-time rewrite pass applies `expression_templates` `match` rules in
+# template *declaration order* (esm-spec §9.6.3), matching the JS / Python
+# bindings whose native maps preserve order.
+serde_json = { version = "1.0", features = ["preserve_order"] }
 jsonschema = { version = "0.19", default-features = false }
 thiserror = "2.0"
 indexmap = { version = "2", features = ["serde"] }

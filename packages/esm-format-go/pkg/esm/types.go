@@ -14,14 +14,14 @@ import (
 
 // ExprNode represents an operator node in the expression tree
 type ExprNode struct {
-	Op   string        `json:"op"`
-	Args []interface{} `json:"args"`
-	Wrt   *string      `json:"wrt,omitempty"`   // for derivatives
-	Dim   *string      `json:"dim,omitempty"`   // for grad
-	Fn    *string      `json:"fn,omitempty"`    // for bc wrapper kind encoding
-	Var   *string      `json:"var,omitempty"`   // integration variable name (for integral)
-	Lower interface{}  `json:"lower,omitempty"` // lower integration bound (for integral)
-	Upper interface{}  `json:"upper,omitempty"` // upper integration bound (for integral)
+	Op    string        `json:"op"`
+	Args  []interface{} `json:"args"`
+	Wrt   *string       `json:"wrt,omitempty"`   // for derivatives
+	Dim   *string       `json:"dim,omitempty"`   // for grad
+	Fn    *string       `json:"fn,omitempty"`    // for bc wrapper kind encoding
+	Var   *string       `json:"var,omitempty"`   // integration variable name (for integral)
+	Lower interface{}   `json:"lower,omitempty"` // lower integration bound (for integral)
+	Upper interface{}   `json:"upper,omitempty"` // upper integration bound (for integral)
 	// Name carries the dotted module path of a closed-registry function
 	// (esm-spec §4.4 / §9.2) for `fn` op nodes — e.g. "datetime.julian_day".
 	Name *string `json:"name,omitempty"`
@@ -48,15 +48,10 @@ type ExprNode struct {
 // In Go, this is handled by using interface{} and custom unmarshaling
 type Expression interface{}
 
-// RuleRegion is a spatial scope for a rule or equation (discretization RFC §7.2).
-// It can be a string (legacy advisory tag) or an object with a "kind" field.
-type RuleRegion = interface{}
-
 // Equation represents a mathematical equation with LHS and RHS
 type Equation struct {
-	LHS    Expression  `json:"lhs"`
-	RHS    Expression  `json:"rhs"`
-	Region *RuleRegion `json:"region,omitempty"`
+	LHS Expression `json:"lhs"`
+	RHS Expression `json:"rhs"`
 }
 
 // AffectEquation represents an equation that affects a variable (for events)
@@ -99,20 +94,13 @@ type ModelVariable struct {
 
 // Model represents an ODE system
 type Model struct {
-	CoupleType         *string                       `json:"coupletype,omitempty"`
-	Reference          *Reference                    `json:"reference,omitempty"`
-	// Domain references a top-level domain (EsmFile.Domains) that declares the
-	// spatial coordinates this model discretizes over. Used by the unit checker
-	// to resolve grad/div/laplacian coordinate units.
-	Domain             *string                       `json:"domain,omitempty"`
-	Variables          map[string]ModelVariable      `json:"variables"`
-	Equations          []Equation                    `json:"equations"`
-	DiscreteEvents     []DiscreteEvent               `json:"discrete_events,omitempty"`
-	ContinuousEvents   []ContinuousEvent             `json:"continuous_events,omitempty"`
-	Subsystems         map[string]interface{}        `json:"subsystems,omitempty"`
-	// BoundaryConditions holds model-level BC entries keyed by user-supplied id.
-	// New in ESM v0.2.0; see docs/rfcs/discretization.md §9.
-	BoundaryConditions map[string]BoundaryCondition  `json:"boundary_conditions,omitempty"`
+	CoupleType       *string                  `json:"coupletype,omitempty"`
+	Reference        *Reference               `json:"reference,omitempty"`
+	Variables        map[string]ModelVariable `json:"variables"`
+	Equations        []Equation               `json:"equations"`
+	DiscreteEvents   []DiscreteEvent          `json:"discrete_events,omitempty"`
+	ContinuousEvents []ContinuousEvent        `json:"continuous_events,omitempty"`
+	Subsystems       map[string]interface{}   `json:"subsystems,omitempty"`
 	// Tolerance is the model-level default numerical tolerance applied to
 	// inline tests that do not override it (esm-spec §6.6).
 	Tolerance *Tolerance `json:"tolerance,omitempty"`
@@ -131,12 +119,6 @@ type Model struct {
 	// SystemKind discriminates the MTK system type this model maps to.
 	// One of "ode" (default), "nonlinear", "sde", "pde".
 	SystemKind *string `json:"system_kind,omitempty"`
-	// Regrid holds per-variable regridding configuration for fields consumed
-	// from data-loader subsystems, keyed by variable name (RFC
-	// pure-io-data-loaders §5.2, §6). Regridding is a model concern; an entry
-	// may override the staggering-derived kernel and, for scattered-point
-	// (cell-averaging) loaders, declares the no-data missing_value fill.
-	Regrid map[string]RegridSpec `json:"regrid,omitempty"`
 }
 
 // ========================================
@@ -155,9 +137,9 @@ type Species struct {
 
 // Parameter represents a model parameter
 type Parameter struct {
-	Units       *string `json:"units,omitempty"`
+	Units       *string     `json:"units,omitempty"`
 	Default     interface{} `json:"default,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Description *string     `json:"description,omitempty"`
 }
 
 // SubstrateProduct represents a substrate or product in a reaction.
@@ -183,15 +165,15 @@ type Reaction struct {
 
 // ReactionSystem represents a chemical reaction network
 type ReactionSystem struct {
-	CoupleType          *string                   `json:"coupletype,omitempty"`
-	Reference           *Reference                `json:"reference,omitempty"`
-	Species             map[string]Species        `json:"species"`
-	Parameters          map[string]Parameter      `json:"parameters"`
-	Reactions           []Reaction                `json:"reactions"`
-	ConstraintEquations []Equation                `json:"constraint_equations,omitempty"`
-	DiscreteEvents      []DiscreteEvent           `json:"discrete_events,omitempty"`
-	ContinuousEvents    []ContinuousEvent         `json:"continuous_events,omitempty"`
-	Subsystems          map[string]interface{}    `json:"subsystems,omitempty"`
+	CoupleType          *string                `json:"coupletype,omitempty"`
+	Reference           *Reference             `json:"reference,omitempty"`
+	Species             map[string]Species     `json:"species"`
+	Parameters          map[string]Parameter   `json:"parameters"`
+	Reactions           []Reaction             `json:"reactions"`
+	ConstraintEquations []Equation             `json:"constraint_equations,omitempty"`
+	DiscreteEvents      []DiscreteEvent        `json:"discrete_events,omitempty"`
+	ContinuousEvents    []ContinuousEvent      `json:"continuous_events,omitempty"`
+	Subsystems          map[string]interface{} `json:"subsystems,omitempty"`
 	// Tolerance is the component-level default numerical tolerance for inline
 	// tests (esm-spec §6.6).
 	Tolerance *Tolerance `json:"tolerance,omitempty"`
@@ -353,7 +335,7 @@ type ParameterSweep struct {
 type Example struct {
 	ID             string             `json:"id"`
 	Description    *string            `json:"description,omitempty"`
-	InitialState   *InitialConditions `json:"initial_state,omitempty"`
+	InitialState   map[string]float64 `json:"initial_state,omitempty"`
 	Parameters     map[string]float64 `json:"parameters,omitempty"`
 	TimeSpan       TimeSpan           `json:"time_span"`
 	ParameterSweep *ParameterSweep    `json:"parameter_sweep,omitempty"`
@@ -367,31 +349,31 @@ type Example struct {
 // FunctionalAffect represents a registered functional affect handler for
 // discrete events that require complex behavior beyond symbolic expressions
 type FunctionalAffect struct {
-	HandlerID       string                 `json:"handler_id"`
-	ReadVars        []string               `json:"read_vars"`
-	ReadParams      []string               `json:"read_params"`
-	ModifiedParams  []string               `json:"modified_params,omitempty"`
-	Config          map[string]interface{} `json:"config,omitempty"`
+	HandlerID      string                 `json:"handler_id"`
+	ReadVars       []string               `json:"read_vars"`
+	ReadParams     []string               `json:"read_params"`
+	ModifiedParams []string               `json:"modified_params,omitempty"`
+	Config         map[string]interface{} `json:"config,omitempty"`
 }
 
 // DiscreteEventTrigger represents different trigger types for discrete events
 type DiscreteEventTrigger struct {
-	Type          string      `json:"type"` // "condition", "periodic", "preset_times"
-	Expression    Expression  `json:"expression,omitempty"`    // for condition
-	Interval      *float64    `json:"interval,omitempty"`      // for periodic
-	InitialOffset *float64    `json:"initial_offset,omitempty"` // for periodic
-	Times         []float64   `json:"times,omitempty"`         // for preset_times
+	Type          string     `json:"type"`                     // "condition", "periodic", "preset_times"
+	Expression    Expression `json:"expression,omitempty"`     // for condition
+	Interval      *float64   `json:"interval,omitempty"`       // for periodic
+	InitialOffset *float64   `json:"initial_offset,omitempty"` // for periodic
+	Times         []float64  `json:"times,omitempty"`          // for preset_times
 }
 
 // DiscreteEvent represents a discrete event
 type DiscreteEvent struct {
-	Name                string                `json:"name,omitempty"`
-	Trigger             DiscreteEventTrigger  `json:"trigger"`
-	Affects             []AffectEquation      `json:"affects,omitempty"`
-	FunctionalAffect    *FunctionalAffect     `json:"functional_affect,omitempty"`
-	DiscreteParameters  []string              `json:"discrete_parameters,omitempty"`
-	Reinitialize        *bool                 `json:"reinitialize,omitempty"`
-	Description         *string               `json:"description,omitempty"`
+	Name               string               `json:"name,omitempty"`
+	Trigger            DiscreteEventTrigger `json:"trigger"`
+	Affects            []AffectEquation     `json:"affects,omitempty"`
+	FunctionalAffect   *FunctionalAffect    `json:"functional_affect,omitempty"`
+	DiscreteParameters []string             `json:"discrete_parameters,omitempty"`
+	Reinitialize       *bool                `json:"reinitialize,omitempty"`
+	Description        *string              `json:"description,omitempty"`
 }
 
 // ContinuousEvent represents a continuous event
@@ -412,30 +394,16 @@ type ContinuousEvent struct {
 // DataLoader is a runtime-agnostic description of an external data source.
 // It is pure I/O: it carries enough structural information to locate files,
 // map timestamps to files, and describe variable semantics — rather than
-// pointing at a runtime handler. The native grid of the source, when known,
-// is described by the optional Grid (a GDD Grid); reprojection and regridding
-// are the responsibility of downstream rules, not the loader.
+// pointing at a runtime handler. Reprojection and regridding are the
+// responsibility of downstream rules, not the loader.
 type DataLoader struct {
-	Kind        string                        `json:"kind"` // "grid", "points", "static", or "mesh" (esm-spec §8.9)
+	Kind        string                        `json:"kind"` // "grid", "points", or "static" (esm-spec §8.9)
 	Source      DataLoaderSource              `json:"source"`
 	Temporal    *DataLoaderTemporal           `json:"temporal,omitempty"`
-	Grid        *Grid                         `json:"grid,omitempty"`
-	Mesh        *DataLoaderMesh               `json:"mesh,omitempty"`
 	Determinism *DataLoaderDeterminism        `json:"determinism,omitempty"`
 	Variables   map[string]DataLoaderVariable `json:"variables"`
 	Reference   *Reference                    `json:"reference,omitempty"`
 	Metadata    map[string]interface{}        `json:"metadata,omitempty"`
-}
-
-// DataLoaderMesh is the mesh descriptor attached to a DataLoader with
-// Kind == "mesh" (esm-spec §8.9). Connectivity fields are integer-typed;
-// metric fields are float-typed. DimensionSizes entries are either an
-// integer extent or the literal string "from_file".
-type DataLoaderMesh struct {
-	Topology           string                 `json:"topology"`            // "mpas_voronoi" | "fesom_triangular" | "icon_triangular"
-	ConnectivityFields []string               `json:"connectivity_fields"` // e.g. cellsOnEdge
-	MetricFields       []string               `json:"metric_fields"`       // e.g. dcEdge
-	DimensionSizes     map[string]interface{} `json:"dimension_sizes,omitempty"`
 }
 
 // DataLoaderDeterminism is the reproducibility contract a loader advertises
@@ -492,12 +460,11 @@ type CouplingEntry interface {
 
 // OperatorComposeCoupling represents operator composition
 type OperatorComposeCoupling struct {
-	Type        string                       `json:"type"` // "operator_compose"
-	Systems     [2]string                    `json:"systems"`
-	Translate   map[string]interface{}       `json:"translate,omitempty"`
-	Interface   *string                      `json:"interface,omitempty"`
-	Lifting     *string                      `json:"lifting,omitempty"`
-	Description *string                      `json:"description,omitempty"`
+	Type        string                 `json:"type"` // "operator_compose"
+	Systems     [2]string              `json:"systems"`
+	Translate   map[string]interface{} `json:"translate,omitempty"`
+	Lifting     *string                `json:"lifting,omitempty"`
+	Description *string                `json:"description,omitempty"`
 }
 
 func (o OperatorComposeCoupling) GetType() string { return o.Type }
@@ -507,7 +474,6 @@ type CouplingCouple struct {
 	Type        string    `json:"type"` // "couple"
 	Systems     [2]string `json:"systems"`
 	Connector   Connector `json:"connector"`
-	Interface   *string   `json:"interface,omitempty"`
 	Lifting     *string   `json:"lifting,omitempty"`
 	Description *string   `json:"description,omitempty"`
 }
@@ -521,7 +487,6 @@ type VariableMapCoupling struct {
 	To          string   `json:"to"`
 	Transform   string   `json:"transform"`
 	Factor      *float64 `json:"factor,omitempty"`
-	Interface   *string  `json:"interface,omitempty"`
 	Lifting     *string  `json:"lifting,omitempty"`
 	Description *string  `json:"description,omitempty"`
 }
@@ -549,11 +514,11 @@ func (c CallbackCoupling) GetType() string { return c.Type }
 
 // EventCoupling represents event-based coupling
 type EventCoupling struct {
-	Type               string                `json:"type"` // "event"
+	Type               string                `json:"type"`       // "event"
 	EventType          string                `json:"event_type"` // "continuous" or "discrete"
 	Name               string                `json:"name"`
-	Conditions         []Expression          `json:"conditions,omitempty"`          // for continuous events
-	Trigger            *DiscreteEventTrigger  `json:"trigger,omitempty"`             // for discrete events
+	Conditions         []Expression          `json:"conditions,omitempty"` // for continuous events
+	Trigger            *DiscreteEventTrigger `json:"trigger,omitempty"`    // for discrete events
 	Affects            []AffectEquation      `json:"affects,omitempty"`
 	FunctionalAffect   *FunctionalAffect     `json:"functional_affect,omitempty"`
 	AffectNeg          []AffectEquation      `json:"affect_neg,omitempty"`
@@ -583,38 +548,11 @@ type ConnectorEquation struct {
 // ========================================
 
 // Domain represents the spatiotemporal domain.
-// v0.2.0: boundary conditions have moved to Model.BoundaryConditions (RFC §9).
-// Domain.BoundaryConditions (the deprecated v0.1.0 list form) is retained as a
-// transitional compatibility shim; loaders emit E_DEPRECATED_DOMAIN_BC when it
-// is present. A follow-up release will remove it entirely.
 type Domain struct {
-	IndependentVariable   *string                       `json:"independent_variable,omitempty"`
-	Temporal              *TemporalDomain               `json:"temporal,omitempty"`
-	Spatial               map[string]SpatialDimension   `json:"spatial,omitempty"`
-	CoordinateTransforms  []CoordinateTransform         `json:"coordinate_transforms,omitempty"`
-	SpatialRef            *string                       `json:"spatial_ref,omitempty"`
-	InitialConditions     InitialConditions             `json:"initial_conditions,omitempty"`
-	// Deprecated: v0.2.0 moves BCs to Model.BoundaryConditions. This field is
-	// kept for transitional round-trip; loading a file with this field emits
-	// E_DEPRECATED_DOMAIN_BC (see LoadString).
-	BoundaryConditions    []DomainBoundaryConditionDeprecated          `json:"boundary_conditions,omitempty"`
-	ElementType           *string                       `json:"element_type,omitempty"`
-	ArrayType             *string                       `json:"array_type,omitempty"`
-}
-
-// DomainBoundaryConditionDeprecated is the legacy v0.1.0 domain-level boundary-condition
-// entry. Kept in the v0.2.0 schema strictly as a transitional shim; use
-// Model.BoundaryConditions (map keyed by BC id) for new code.
-//
-// Deprecated: use BoundaryCondition on Model.BoundaryConditions instead.
-type DomainBoundaryConditionDeprecated struct {
-	Type        string      `json:"type"`
-	Dimensions  []string    `json:"dimensions"`
-	Value       interface{} `json:"value,omitempty"`
-	Function    *string     `json:"function,omitempty"`
-	RobinAlpha  *float64    `json:"robin_alpha,omitempty"`
-	RobinBeta   *float64    `json:"robin_beta,omitempty"`
-	RobinGamma  *float64    `json:"robin_gamma,omitempty"`
+	IndependentVariable *string         `json:"independent_variable,omitempty"`
+	Temporal            *TemporalDomain `json:"temporal,omitempty"`
+	ElementType         *string         `json:"element_type,omitempty"`
+	ArrayType           *string         `json:"array_type,omitempty"`
 }
 
 // TemporalDomain represents temporal bounds
@@ -622,185 +560,6 @@ type TemporalDomain struct {
 	Start         string  `json:"start"`
 	End           string  `json:"end"`
 	ReferenceTime *string `json:"reference_time,omitempty"`
-}
-
-// SpatialDimension represents a spatial dimension
-type SpatialDimension struct {
-	Min         float64 `json:"min"`
-	Max         float64 `json:"max"`
-	Units       string  `json:"units"`
-	GridSpacing float64 `json:"grid_spacing"`
-}
-
-// CoordinateTransform represents a coordinate system transformation
-type CoordinateTransform struct {
-	ID          string   `json:"id"`
-	Description *string  `json:"description,omitempty"`
-	Dimensions  []string `json:"dimensions"`
-}
-
-// InitialConditions represents initial conditions specification
-type InitialConditions struct {
-	Type   string                 `json:"type"` // "constant", "per_variable", "from_file"
-	Value  interface{}            `json:"value,omitempty"`
-	Values map[string]interface{} `json:"values,omitempty"`
-	Path   *string                `json:"path,omitempty"`
-	Format *string                `json:"format,omitempty"`
-}
-
-// BoundaryCondition is a model-level BC entry (v0.2.0, RFC §9.2).
-// It constrains one model variable on one boundary side. Replaces the v0.1.0
-// domain-level form.
-type BoundaryCondition struct {
-	// Variable is the name of the model variable the BC constrains.
-	Variable string `json:"variable"`
-	// Side identifies the boundary side (e.g. "xmin", "xmax", "mesh_boundary").
-	Side string `json:"side"`
-	// Kind is the BC kind: "constant", "dirichlet", "neumann", "robin",
-	// "zero_gradient", "periodic", "flux_contrib", or "interface".
-	Kind string `json:"kind"`
-	// Value is the BC value (numeric literal, variable reference, or Expression
-	// AST). Required for kind="constant" or "dirichlet"; see RFC §9.2.
-	Value interface{} `json:"value,omitempty"`
-	// RobinAlpha/Beta/Gamma hold coefficients for kind="robin" (αu + β∂u/∂n = γ).
-	RobinAlpha interface{} `json:"robin_alpha,omitempty"`
-	RobinBeta  interface{} `json:"robin_beta,omitempty"`
-	RobinGamma interface{} `json:"robin_gamma,omitempty"`
-	// FaceCoords declares reduced face-coordinate index names used when Value
-	// contains an index op into a loader-provided time-varying field.
-	FaceCoords []string `json:"face_coords,omitempty"`
-	// ContributedBy identifies the component providing a flux contribution
-	// (kind="flux_contrib"). See RFC §9.3.
-	ContributedBy *BCContributedBy `json:"contributed_by,omitempty"`
-	// CoupledVariable is the name of the model variable at the other side of a
-	// shared boundary point. Required when kind="interface"; ignored otherwise.
-	CoupledVariable *string `json:"coupled_variable,omitempty"`
-	// FluxMatch enforces normal-flux continuity in addition to value continuity
-	// when kind="interface". Default false. See RFC §9.2.
-	FluxMatch *bool `json:"flux_match,omitempty"`
-	// Description is a human-readable description.
-	Description *string `json:"description,omitempty"`
-}
-
-// RegridSpec is a per-variable regridding configuration entry on a model that
-// owns a data loader as a subsystem (RFC pure-io-data-loaders §5.2, §6). All
-// fields are optional.
-type RegridSpec struct {
-	// Method optionally overrides the staggering-derived regridding kernel:
-	// "conservative", "bspline", or "cell_average".
-	Method *string `json:"method,omitempty"`
-	// MissingValue is the no-data fill for "cell_average" (scattered-point)
-	// regridding: the value placed in a target cell with no contributing
-	// source station. Ignored by the conservative/bspline kernels.
-	MissingValue *float64 `json:"missing_value,omitempty"`
-	// Description is a human-readable note about this variable's regridding.
-	Description *string `json:"description,omitempty"`
-}
-
-// BCContributedBy identifies the contributing component for a flux_contrib BC.
-type BCContributedBy struct {
-	Component string  `json:"component"`
-	FluxSign  *string `json:"flux_sign,omitempty"` // "+" or "-"
-}
-
-// ========================================
-// 7a. Grids (v0.2.0, RFC §6)
-// ========================================
-
-// Grid is a named discretization grid declared at the top-level `grids` map.
-// See docs/rfcs/discretization.md §6.
-type Grid struct {
-	Family             string                         `json:"family"`        // "cartesian" | "unstructured"
-	CRS                *GridCRS                       `json:"crs,omitempty"` // optional coordinate reference system, orthogonal to Family (§4.2)
-	Description        *string                        `json:"description,omitempty"`
-	Dimensions         []string                       `json:"dimensions"`
-	Locations          []string                       `json:"locations,omitempty"`
-	MetricArrays       map[string]GridMetricArray     `json:"metric_arrays,omitempty"`
-	Parameters         map[string]Parameter           `json:"parameters,omitempty"`
-	Domain             *string                        `json:"domain,omitempty"`
-	Extents            map[string]GridExtent          `json:"extents,omitempty"`
-	Connectivity       map[string]GridConnectivity    `json:"connectivity,omitempty"`
-}
-
-// GridCRS is the optional coordinate reference system for a grid (RFC
-// pure-io-data-loaders §4.2), orthogonal to the topological Family: a
-// "cartesian" grid may be geographic ("longlat") or projected
-// ("lambert_conformal", ...), and a point dataset may be "unstructured" +
-// "longlat". It names the projection and the parameters a downstream
-// reprojection rule consumes; the grid itself performs no reprojection.
-type GridCRS struct {
-	Projection string             `json:"projection"`           // longlat | lambert_conformal | mercator | polar_stereographic | rotated_pole
-	Datum      *string            `json:"datum,omitempty"`      // "sphere" (radius R) | "WGS84"
-	R          *float64           `json:"R,omitempty"`          // sphere radius in metres, used when datum="sphere"
-	Parameters map[string]float64 `json:"parameters,omitempty"` // projection parameters, e.g. {lat_1, lat_2, lat_0, lon_0}
-}
-
-// GridExtent is a per-dimension extent (cartesian). `N` is an
-// integer literal or a parameter-reference string; `Spacing` is optional and
-// only meaningful for cartesian ('uniform' or 'nonuniform').
-type GridExtent struct {
-	N       interface{} `json:"n"`
-	Spacing *string     `json:"spacing,omitempty"`
-}
-
-// GridMetricArray is a named metric array on a grid (e.g., dx, areaCell). §6.5.
-type GridMetricArray struct {
-	Rank      int                 `json:"rank"`
-	Dim       *string             `json:"dim,omitempty"`
-	Dims      []string            `json:"dims,omitempty"`
-	Shape     []interface{}       `json:"shape,omitempty"`
-	Generator GridMetricGenerator `json:"generator"`
-}
-
-// GridMetricGenerator is the generator for a metric array — one of expression,
-// loader, or builtin per §6.5.
-type GridMetricGenerator struct {
-	Kind   string      `json:"kind"` // "expression" | "loader" | "builtin"
-	Expr   interface{} `json:"expr,omitempty"`
-	Loader *string     `json:"loader,omitempty"`
-	Field  *string     `json:"field,omitempty"`
-	Name   *string     `json:"name,omitempty"`
-}
-
-// GridConnectivity is an unstructured connectivity table (§6.3 /
-// §6.4). Entries are either loader-backed (Loader+Field) or generator-backed
-// (Generator).
-type GridConnectivity struct {
-	Shape     []interface{}        `json:"shape"`
-	Rank      int                  `json:"rank"`
-	Loader    *string              `json:"loader,omitempty"`
-	Field     *string              `json:"field,omitempty"`
-	Generator *GridMetricGenerator `json:"generator,omitempty"`
-}
-
-// ========================================
-// 7b. Interfaces
-// ========================================
-
-// Interface represents a geometric connection between two domains
-type Interface struct {
-	Description      *string          `json:"description,omitempty"`
-	Domains          [2]string        `json:"domains"`
-	DimensionMapping DimensionMapping `json:"dimension_mapping"`
-	Regridding       *Regridding      `json:"regridding,omitempty"`
-}
-
-// DimensionMapping specifies shared dimensions and constraints at an interface
-type DimensionMapping struct {
-	Shared      map[string]string              `json:"shared,omitempty"`
-	Constraints map[string]InterfaceConstraint `json:"constraints,omitempty"`
-}
-
-// InterfaceConstraint represents a constraint on a non-shared dimension at the interface
-type InterfaceConstraint struct {
-	Value       interface{} `json:"value"` // string ("min", "max", "boundary") or number
-	Description *string     `json:"description,omitempty"`
-}
-
-// Regridding represents the regridding strategy at an interface
-type Regridding struct {
-	Method      string  `json:"method"` // "bilinear", "conservative", "nearest", "patch"
-	Description *string `json:"description,omitempty"`
 }
 
 // ========================================
@@ -842,15 +601,11 @@ type EsmFile struct {
 	// `enum` AST op (esm-spec §9.3). Each entry is an enum name; its value is
 	// a map from symbolic names (strings) to positive integers. Lowering
 	// (resolution to `const`-op integers) happens at load time.
-	Enums           map[string]map[string]int `json:"enums,omitempty"`
-	Coupling        []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
-	Domains         map[string]Domain         `json:"domains,omitempty"`
-	Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
-	Discretizations map[string]Discretization `json:"discretizations,omitempty"`
-	// Grids holds top-level discretization grid declarations (v0.2.0, RFC §6).
-	Grids map[string]Grid `json:"grids,omitempty"`
-	// StaggeringRules holds top-level staggering-rule declarations (RFC §7.4).
-	StaggeringRules map[string]StaggeringRule `json:"staggering_rules,omitempty"`
+	Enums    map[string]map[string]int `json:"enums,omitempty"`
+	Coupling []interface{}             `json:"coupling,omitempty"` // Properly deserialized coupling entries
+	// Domain is the single temporal domain shared by every component in the
+	// document. A document has at most one domain. See esm-spec §11.
+	Domain *Domain `json:"domain,omitempty"`
 	// FunctionTables holds top-level sampled function tables (esm-spec §9.5,
 	// v0.4.0). Each entry is a FunctionTable referenced by `table_lookup` AST
 	// op nodes via its key.
@@ -881,263 +636,6 @@ type FunctionTable struct {
 	Data          interface{}         `json:"data"`
 	Shape         []int               `json:"shape,omitempty"`
 	SchemaVersion *string             `json:"schema_version,omitempty"`
-}
-
-// Discretization is a named discretization scheme. Four variants are
-// supported:
-//
-//   - "stencil" (the default when Kind is "") is a neighbor-combination
-//     template per RFC §7.1.
-//   - "dimensional_split" composes a 1D inner scheme along several orthogonal
-//     axes via Strang/Lie operator splitting per RFC §7.5.
-//   - "flux_form_semi_lagrangian" is a flux-form semi-Lagrangian (FFSL)
-//     advection scheme (Lin & Rood 1996) per RFC §7.7 that uses
-//     Reconstruction / Remap / Limiter / CflPolicy / Dimensions instead of
-//     Stencil.
-//
-// The AST-pattern fields (AppliesTo, Stencil[*].Coeff, NeighborSelector
-// expression slots) carry pattern variables like "$u" / "$target" that are
-// bound by the rule engine at expansion time — they are not ordinary
-// Expressions and thus are preserved as raw json.RawMessage for lossless
-// round-tripping. Reconstruction and Limiter are raw JSON because they may
-// be either a string (rule ref) or an inline object.
-type Discretization struct {
-	// Kind discriminates scheme sub-types:
-	//   "" or "stencil"             = classic neighbor-combination template (§7.1)
-	//   "dimensional_split"         = axis-sweep composite (§7.5); activates
-	//                                 InnerRule / Splitting / OrderOfSweeps
-	//   "flux_form_semi_lagrangian" = FFSL advection rule (§7.7); activates
-	//                                 Reconstruction / Remap / Limiter /
-	//                                 CflPolicy / Dimensions.
-	//   "multi_output_stencil"      = multi-output stencil rule (§7.9); activates
-	//                                 Outputs / MultiOutputStencil / Primary.
-	Kind               string            `json:"kind,omitempty"`
-	// AppliesTo is the shallow (depth-1) AST pattern identifying the operator
-	// this scheme discretizes. Preserved as raw JSON because the pattern may
-	// contain pattern variables ($u, $x, ...) that are not valid
-	// Expression ops.
-	AppliesTo          json.RawMessage   `json:"applies_to"`
-	GridFamily         string            `json:"grid_family"`
-	Combine            string            `json:"combine,omitempty"`
-	// Stencil is the per-neighbor contribution list for a standard
-	// discretization (RFC §7.1). Mutually exclusive with Terms and MultiOutputStencil.
-	Stencil            []StencilEntry    `json:"stencil,omitempty"`
-	// StencilGen is a declarative stencil-weight generator (RFC §7.1.3).
-	// Mutually exclusive with Stencil; expanded by the Julia loader at parse time.
-	StencilGen         *StencilGen       `json:"stencil_gen,omitempty"`
-
-	// Axes is the ordered coordinate-axis list for a "dimensional_split"
-	// composite (§7.5).
-	Axes               []string          `json:"axes,omitempty"`
-
-	// InnerRule, Splitting, OrderOfSweeps apply to "dimensional_split"
-	// composites (§7.5).
-	InnerRule          string            `json:"inner_rule,omitempty"`
-	Splitting          string            `json:"splitting,omitempty"`
-	OrderOfSweeps      string            `json:"order_of_sweeps,omitempty"`
-
-	// Reconstruction (FFSL §7.7): sub-cell reconstruction — string rule-ref
-	// or inline {order, parameters} object.
-	Reconstruction     json.RawMessage   `json:"reconstruction,omitempty"`
-	// Remap (FFSL §7.7): flux-form remap semantics.
-	Remap              *FfslRemap        `json:"remap,omitempty"`
-	// Limiter (FFSL §7.7, optional): slope/flux limiter — string rule-ref or
-	// inline {family, parameters} object.
-	Limiter            json.RawMessage   `json:"limiter,omitempty"`
-	// CflPolicy (FFSL §7.7): "conservative" or "non_conservative".
-	CflPolicy          string            `json:"cfl_policy,omitempty"`
-	// Dimensions (FFSL §7.7): axis names, in application order.
-	Dimensions         []string          `json:"dimensions,omitempty"`
-	Accuracy           string            `json:"accuracy,omitempty"`
-	// Order optionally selects stencil width / truncation order for
-	// families that admit a parameterized order (e.g. arbitrary-order
-	// centered uniform finite differences via Fornberg-recursion weights).
-	// Pointer-to-int so zero-vs-absent is preserved across round-trips.
-	// See discretization RFC §7.1.
-	Order              *int              `json:"order,omitempty"`
-	RequiresLocations  []string          `json:"requires_locations,omitempty"`
-	EmitsLocation      string            `json:"emits_location,omitempty"`
-	TargetBinding      string            `json:"target_binding,omitempty"`
-	GhostVars          []GhostVarDecl    `json:"ghost_vars,omitempty"`
-	FreeVariables      []string          `json:"free_variables,omitempty"`
-	Description        string            `json:"description,omitempty"`
-	Reference          *Reference        `json:"reference,omitempty"`
-	// GridDispatch (RFC §7.8) declares family-keyed body variants in lieu of an
-	// inline body. When non-empty, GridFamily and the inline body fields
-	// (Stencil / Axes / InnerRule / etc.) MUST be empty; the loader picks the
-	// variant whose GridFamily matches the active grid at expansion time.
-	GridDispatch       []DiscretizationVariant `json:"grid_dispatch,omitempty"`
-
-	// Outputs is the ordered list of named outputs for a "multi_output_stencil"
-	// scheme (RFC §7.9). Key set MUST equal the keys of MultiOutputStencil.
-	Outputs            []string                     `json:"outputs,omitempty"`
-	// MultiOutputStencil is the object-valued stencil for kind="multi_output_stencil"
-	// (RFC §7.9): keyed by output name → stencil-entry list. Mutually exclusive
-	// with the flat Stencil slice. Marshaled / unmarshaled under the JSON key
-	// "stencil" via custom JSON methods.
-	MultiOutputStencil map[string][]StencilEntry    `json:"-"`
-	// Primary is the name of the output to substitute at the matched expression
-	// site in the consumed-directly trigger path (RFC §7.9). json.RawMessage
-	// preserves the JSON null literal verbatim; a nil/empty RawMessage is omitted.
-	Primary            json.RawMessage              `json:"primary,omitempty"`
-	// Requires is the RFC §7.9 consumer demand map. Maps local names used inside
-	// this scheme's stencil coefficient expressions to outputs of sibling
-	// MultiOutputStencilRule providers in the form "<sibling-scheme>#<output-name>".
-	Requires           map[string]string            `json:"requires,omitempty"`
-}
-
-// MarshalJSON serializes Discretization, routing MultiOutputStencil to the
-// "stencil" JSON key as an object when the scheme is a multi_output_stencil.
-func (d Discretization) MarshalJSON() ([]byte, error) {
-	type DiscAlias Discretization
-	alias := DiscAlias(d)
-	raw, err := json.Marshal(alias)
-	if err != nil {
-		return nil, err
-	}
-	if len(d.MultiOutputStencil) == 0 {
-		return raw, nil
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, err
-	}
-	stencilBytes, err := json.Marshal(d.MultiOutputStencil)
-	if err != nil {
-		return nil, err
-	}
-	m["stencil"] = json.RawMessage(stencilBytes)
-	return json.Marshal(m)
-}
-
-// UnmarshalJSON deserializes Discretization, routing the "stencil" JSON key
-// to either Stencil (array form) or MultiOutputStencil (object form, §7.9).
-func (d *Discretization) UnmarshalJSON(data []byte) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	stencilRaw, hasStencil := raw["stencil"]
-	if hasStencil {
-		delete(raw, "stencil")
-	}
-	remaining, err := json.Marshal(raw)
-	if err != nil {
-		return err
-	}
-	type DiscAlias Discretization
-	alias := &DiscAlias{}
-	if err := json.Unmarshal(remaining, alias); err != nil {
-		return err
-	}
-	*d = Discretization(*alias)
-	if hasStencil {
-		trimmed := bytes.TrimSpace(stencilRaw)
-		if len(trimmed) > 0 && trimmed[0] == '{' {
-			if err := json.Unmarshal(stencilRaw, &d.MultiOutputStencil); err != nil {
-				return err
-			}
-		} else {
-			if err := json.Unmarshal(stencilRaw, &d.Stencil); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// DiscretizationVariant (RFC §7.8) is one entry of a Discretization's
-// grid_dispatch block: a per-grid-family body that replaces the parent's
-// inline body when the active grid family matches GridFamily. Body fields
-// follow the same kind-discriminated semantics as the parent Discretization;
-// shared fields (AppliesTo, Accuracy, Order, RequiresLocations, etc.) live on
-// the parent and are not duplicated.
-type DiscretizationVariant struct {
-	GridFamily     string          `json:"grid_family"`
-	Kind           string          `json:"kind,omitempty"`
-	Combine        string          `json:"combine,omitempty"`
-	Stencil        []StencilEntry  `json:"stencil,omitempty"`
-	Axes           []string        `json:"axes,omitempty"`
-	InnerRule      string          `json:"inner_rule,omitempty"`
-	Splitting      string          `json:"splitting,omitempty"`
-	OrderOfSweeps  string          `json:"order_of_sweeps,omitempty"`
-	Reconstruction json.RawMessage `json:"reconstruction,omitempty"`
-	Remap          *FfslRemap      `json:"remap,omitempty"`
-	Limiter        json.RawMessage `json:"limiter,omitempty"`
-	CflPolicy      string          `json:"cfl_policy,omitempty"`
-	Dimensions     []string        `json:"dimensions,omitempty"`
-}
-
-// IsMultiOutput reports whether this Discretization is a multi-output stencil
-// rule (RFC §7.9): kind="multi_output_stencil" or MultiOutputStencil is populated.
-func (d *Discretization) IsMultiOutput() bool {
-	return d.Kind == "multi_output_stencil" || len(d.MultiOutputStencil) > 0
-}
-
-// FfslRemap is the `remap` field of a flux-form semi-Lagrangian rule
-// (RFC §7.7). Semantics is "conservative" or "non_conservative".
-type FfslRemap struct {
-	Semantics  string                 `json:"semantics"`
-	FluxForm   string                 `json:"flux_form,omitempty"`
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
-}
-
-// StencilEntry is one neighbor contribution: a selector plus a symbolic
-// coefficient. Coeff is raw JSON so that pattern variables survive round-trip.
-type StencilEntry struct {
-	Selector NeighborSelector `json:"selector"`
-	Coeff    json.RawMessage  `json:"coeff"`
-}
-
-// StencilGen is a declarative finite-difference weight generator (RFC §7.1.3).
-// The Julia loader expands it into an equivalent StencilEntry list at parse time
-// using the Fornberg recurrence in exact rational arithmetic.
-// Go preserves StencilGen for round-trip fidelity; it does not evaluate it.
-type StencilGen struct {
-	Method        string `json:"method"`
-	DerivOrder    int    `json:"deriv_order"`
-	AccuracyOrder int    `json:"accuracy_order"`
-	Stagger       string `json:"stagger"`
-	Axis          string `json:"axis"`
-	Spacing       string `json:"spacing"`
-}
-
-// NeighborSelector selects a neighbor (or neighbor set) in a stencil entry.
-// Kind discriminates the selector family; per-kind fields are carried as raw
-// JSON because they may contain pattern variables.
-type NeighborSelector struct {
-	Kind       string          `json:"kind"`
-	Axis       json.RawMessage `json:"axis,omitempty"`
-	Offset     json.RawMessage `json:"offset,omitempty"`
-	Side       json.RawMessage `json:"side,omitempty"`
-	Di         json.RawMessage `json:"di,omitempty"`
-	Dj         json.RawMessage `json:"dj,omitempty"`
-	IndexExpr  json.RawMessage `json:"index_expr,omitempty"`
-	Table      string          `json:"table,omitempty"`
-	CountExpr  json.RawMessage `json:"count_expr,omitempty"`
-	KBound     string          `json:"k_bound,omitempty"`
-	Combine    string          `json:"combine,omitempty"`
-}
-
-// StaggeringRule is a named staggering convention declaring where quantities
-// live on a grid (RFC §7.4). Kind discriminates the staggering family; v0.2.0
-// defines "unstructured_c_grid" (MPAS Voronoi). The referenced Grid must be
-// of family "unstructured".
-type StaggeringRule struct {
-	Kind                   string            `json:"kind"`
-	Grid                   string            `json:"grid"`
-	Description            string            `json:"description,omitempty"`
-	CellQuantityLocations  map[string]string `json:"cell_quantity_locations,omitempty"`
-	EdgeNormalConvention   string            `json:"edge_normal_convention,omitempty"`
-	DualMeshRef            string            `json:"dual_mesh_ref,omitempty"`
-	Reference              *Reference        `json:"reference,omitempty"`
-}
-
-// GhostVarDecl declares a ghost-cell variable used by a discretization scheme.
-type GhostVarDecl struct {
-	Name        string  `json:"name"`
-	Source      string  `json:"source,omitempty"`
-	Description string  `json:"description,omitempty"`
 }
 
 // ========================================
@@ -1236,9 +734,8 @@ func UnmarshalExpression(data []byte) (Expression, error) {
 func (e *Equation) UnmarshalJSON(data []byte) error {
 	// Define a temporary struct with the same structure but using json.RawMessage
 	type TempEquation struct {
-		LHS    json.RawMessage `json:"lhs"`
-		RHS    json.RawMessage `json:"rhs"`
-		Region json.RawMessage `json:"region,omitempty"`
+		LHS json.RawMessage `json:"lhs"`
+		RHS json.RawMessage `json:"rhs"`
 	}
 
 	var temp TempEquation
@@ -1259,15 +756,6 @@ func (e *Equation) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal RHS: %w", err)
 	}
 	e.RHS = rhs
-
-	// Unmarshal region (optional — string or object)
-	if len(temp.Region) > 0 && string(temp.Region) != "null" {
-		var region interface{}
-		if err := json.Unmarshal(temp.Region, &region); err != nil {
-			return fmt.Errorf("failed to unmarshal region: %w", err)
-		}
-		e.Region = &region
-	}
 
 	return nil
 }
@@ -1371,14 +859,14 @@ func (mv *ModelVariable) UnmarshalJSON(data []byte) error {
 // Custom JSON unmarshaling for EventCoupling
 func (ec *EventCoupling) UnmarshalJSON(data []byte) error {
 	type TempEventCoupling struct {
-		Type               string                 `json:"type"`
-		EventType          string                 `json:"event_type"`
-		Name               string                 `json:"name"`
-		Conditions         []json.RawMessage      `json:"conditions,omitempty"`
-		Trigger            *DiscreteEventTrigger  `json:"trigger,omitempty"`
-		Affects            []AffectEquation       `json:"affects"`
-		DiscreteParameters []string               `json:"discrete_parameters,omitempty"`
-		Description        *string                `json:"description,omitempty"`
+		Type               string                `json:"type"`
+		EventType          string                `json:"event_type"`
+		Name               string                `json:"name"`
+		Conditions         []json.RawMessage     `json:"conditions,omitempty"`
+		Trigger            *DiscreteEventTrigger `json:"trigger,omitempty"`
+		Affects            []AffectEquation      `json:"affects"`
+		DiscreteParameters []string              `json:"discrete_parameters,omitempty"`
+		Description        *string               `json:"description,omitempty"`
 	}
 
 	var temp TempEventCoupling
@@ -1448,11 +936,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 		DataLoaders     map[string]DataLoader     `json:"data_loaders,omitempty"`
 		Enums           map[string]map[string]int `json:"enums,omitempty"`
 		Coupling        json.RawMessage           `json:"coupling,omitempty"`
-		Domains         map[string]Domain         `json:"domains,omitempty"`
-		Interfaces      map[string]Interface      `json:"interfaces,omitempty"`
-		Discretizations map[string]Discretization `json:"discretizations,omitempty"`
-		Grids           map[string]Grid           `json:"grids,omitempty"`
-		StaggeringRules map[string]StaggeringRule `json:"staggering_rules,omitempty"`
+		Domain          *Domain                   `json:"domain,omitempty"`
 		FunctionTables  map[string]FunctionTable  `json:"function_tables,omitempty"`
 	}
 
@@ -1468,11 +952,7 @@ func (esm *EsmFile) UnmarshalJSON(data []byte) error {
 	esm.ReactionSystems = temp.ReactionSystems
 	esm.DataLoaders = temp.DataLoaders
 	esm.Enums = temp.Enums
-	esm.Domains = temp.Domains
-	esm.Interfaces = temp.Interfaces
-	esm.Discretizations = temp.Discretizations
-	esm.Grids = temp.Grids
-	esm.StaggeringRules = temp.StaggeringRules
+	esm.Domain = temp.Domain
 	esm.FunctionTables = temp.FunctionTables
 
 	// Handle coupling array with proper type deserialization

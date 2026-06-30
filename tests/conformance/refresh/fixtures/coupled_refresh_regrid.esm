@@ -79,7 +79,7 @@
         {
           "_comment": "D(c[i]) = scale[i]*src[i]. scale is CONST (loader without temporal, materialized once); src is DISCRETE (loader with temporal, refreshed per anchor). Both are regridded from the 6-cell native grid onto i in [1,3]. Dense [1,3] ranges (not {from:<set>}) — index_sets are not yet carried through flatten (ess-14f.13).",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "ranges": { "i": [1, 3] },
@@ -90,7 +90,7 @@
             }
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "ranges": { "i": [1, 3] },
@@ -118,7 +118,7 @@
         {
           "_comment": "D(d[i]) = Box.c[i]. The coupling: Sink integrates Box's state across the component boundary.",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "ranges": { "i": [1, 3] },
@@ -129,7 +129,7 @@
             }
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i"],
             "ranges": { "i": [1, 3] },

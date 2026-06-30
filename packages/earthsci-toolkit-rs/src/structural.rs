@@ -254,32 +254,19 @@ fn build_coordinate_unit_env(
 }
 
 /// Build a map of spatial-coordinate names → declared units string for the
-/// model's referenced domain. A coordinate declared without a `units` field is
-/// mapped to `None`. Returns `None` when the model has no domain reference,
-/// the domain isn't registered, or the domain carries no `spatial` table.
+/// model's referenced domain.
 ///
-/// The raw `spatial` field is kept as a `serde_json::Value` by the loader (see
-/// `types::Domain::spatial`); this helper normalises it into a lookup table.
+/// As of ESM v0.8.0 the bespoke `Domain.spatial` coordinate table was removed
+/// (grid geometry is now ordinary data / `aggregate` FAQs), so there is no
+/// per-coordinate units table to collect. This always returns `None`, leaving
+/// grad/div/laplacian unit propagation on the legacy metre-denominator fallback
+/// in `units.rs` — matching the other bindings' behaviour when no spatial
+/// coordinate units are declared.
 fn collect_coordinate_units(
-    esm_file: &EsmFile,
-    model: &crate::Model,
+    _esm_file: &EsmFile,
+    _model: &crate::Model,
 ) -> Option<HashMap<String, Option<String>>> {
-    let domain_name = model.domain.as_deref()?;
-    let domains = esm_file.domains.as_ref()?;
-    let domain = domains.get(domain_name)?;
-    let spatial_val = domain.spatial.as_ref()?;
-    let spatial_map = spatial_val.as_object()?;
-    let mut coords = HashMap::new();
-    for (dim_name, dim_val) in spatial_map {
-        let units = dim_val
-            .as_object()
-            .and_then(|obj| obj.get("units"))
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-        coords.insert(dim_name.clone(), units);
-    }
-    Some(coords)
+    None
 }
 
 /// Walk equation expressions looking for `grad`/`div`/`laplacian` nodes whose

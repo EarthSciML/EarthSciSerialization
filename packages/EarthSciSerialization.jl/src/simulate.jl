@@ -1,17 +1,16 @@
 # ===========================================================================
-# simulate — the one-call run entry (load → discretize → build_evaluator →
-# seed ICs → cadence-refresh → solve), the Julia counterpart of the Python
+# simulate — the one-call run entry (load → build_evaluator → seed ICs →
+# cadence-refresh → solve), the Julia counterpart of the Python
 # `earthsci_toolkit.simulation.simulate`.
 #
-# It threads the pieces that already exist — `flatten`, `discretize(…; promote)`
-# (the Phase-1 monolithic lowering), `build_evaluator`, and the Phase-4
-# `build_refresh_callback` data-refresh seam — into a single call returning a
-# `SimulationResult`, so a runner is `simulate(esm, tspan; …)` rather than a
-# hand-wired build/seed/solve block.
+# It threads the pieces that already exist — `flatten`, `build_evaluator`, and
+# the Phase-4 `build_refresh_callback` data-refresh seam — into a single call
+# returning a `SimulationResult`, so a runner is `simulate(esm, tspan; …)`
+# rather than a hand-wired build/seed/solve block.
 #
 # `[[library-exposes-rhs-not-solver]]`: ESS never depends on a solver. The
-# orchestration here (coerce → discretize → build_evaluator → seed → callback)
-# is solver-free; the final `ODEProblem` + `solve` lives in a SciMLBase package
+# orchestration here (coerce → build_evaluator → seed → callback) is
+# solver-free; the final `ODEProblem` + `solve` lives in a SciMLBase package
 # EXTENSION (EarthSciSerializationSimulateExt) and is reached through the
 # `_simulate_solve` generic — exactly the `build_refresh_callback` pattern. The
 # caller picks the algorithm and passes it as `alg = Tsit5()`; without the
@@ -61,11 +60,10 @@ Base.showerror(io::IO, e::SimulateError) = print(io, "SimulateError: ", e.msg)
 
 # --------------------------------------------------------------------------- #
 # Input coercion: path | EsmFile | FlattenedSystem | native Dict → a runnable
-# ESM document for build_evaluator. Discretizes only when the caller asks for
-# it (rules / grids / promote) — an already-discretized Dict passes through.
+# ESM document for build_evaluator. A FlattenedSystem is lowered to a native
+# ESM Dict; a native Dict (e.g. a regridder-merged level-set) passes through.
 # --------------------------------------------------------------------------- #
-function _prepare_run_doc(input; rules, grids, promote, spatial_loops,
-                          strict_unrewritten, discretize_kwargs)
+function _prepare_run_doc(input)
     if input isa AbstractString
         isfile(input) || throw(SimulateError("simulate: no such file '$input'"))
         input = load(input)
@@ -74,24 +72,9 @@ function _prepare_run_doc(input; rules, grids, promote, spatial_loops,
         input = flatten(input)
     end
     if input isa FlattenedSystem
-        if promote || rules !== nothing || grids !== nothing
-            return discretize(input; rules = rules, grids = grids, promote = promote,
-                              spatial_loops = spatial_loops,
-                              strict_unrewritten = strict_unrewritten,
-                              discretize_kwargs...)
-        end
         return flattened_to_esm(input)
     end
     if input isa AbstractDict
-        # A native ESM doc. Re-discretize only if the caller spliced in rules/grids;
-        # the common case (an already-discretized doc, e.g. a regridder-merged
-        # level-set) is used verbatim.
-        if rules !== nothing || grids !== nothing
-            doc = Dict{String,Any}(String(k) => v for (k, v) in input)
-            grids === nothing || (doc["grids"] = Dict{String,Any}(String(k) => v for (k, v) in grids))
-            rules === nothing || (doc["rules"] = collect(Any, rules))
-            return discretize(doc; strict_unrewritten = strict_unrewritten, discretize_kwargs...)
-        end
         return input
     end
     throw(SimulateError("simulate: unsupported input of type $(typeof(input)); " *
@@ -176,11 +159,7 @@ tree-walk evaluator, seed initial conditions, wire any discrete-cadence data
 providers, and integrate over `tspan = (t0, t1)`.
 
 `input` may be a path to an `.esm` file, a loaded [`EsmFile`](@ref), a
-[`FlattenedSystem`](@ref), or an already-discretized native ESM `Dict`. A
-spatial PDE is lowered when the caller supplies discretization `rules` / `grids`
-or `promote = true` (the Phase-1 monolithic lowering: fold elementwise array
-observeds, reclassify algebraic-state physics, promote the scalar chain to the
-grid, discretize the `grad` stencils, index the per-cell refs).
+[`FlattenedSystem`](@ref), or a native ESM `Dict`.
 
 Keyword arguments
 * `alg` — the ODE algorithm, e.g. `Tsit5()`. REQUIRED (the solve runs in the
@@ -198,8 +177,6 @@ Keyword arguments
   [`build_refresh_callback`](@ref) is attached so DISCRETE forcing refreshes in
   place at its cadence (CONST providers ride `const_arrays`). `regrid` selects
   the [`RegridApplier`](@ref) (default [`IdentityRegrid`](@ref)).
-* `rules`, `grids`, `promote`, `spatial_loops`, `strict_unrewritten` — the
-  discretization controls (see [`discretize`](@ref)).
 * `reltol`, `abstol`, `saveat` — forwarded to the solver.
 * `model_name` — select one model when the document holds several.
 
@@ -214,20 +191,11 @@ function simulate(input, tspan;
                   param_arrays::AbstractDict = Dict{String,Any}(),
                   providers::Union{Nothing,AbstractDict} = nothing,
                   regrid::RegridApplier = IdentityRegrid(),
-                  rules = nothing,
-                  grids = nothing,
-                  promote::Bool = false,
-                  spatial_loops::Vector{String} = ["i", "j"],
-                  strict_unrewritten::Bool = true,
                   model_name::Union{Nothing,AbstractString} = nothing,
                   reltol::Float64 = 1e-4,
                   abstol::Float64 = 1e-6,
-                  saveat = nothing,
-                  discretize_kwargs = NamedTuple())
-    doc = _prepare_run_doc(input; rules = rules, grids = grids, promote = promote,
-                           spatial_loops = spatial_loops,
-                           strict_unrewritten = strict_unrewritten,
-                           discretize_kwargs = discretize_kwargs)
+                  saveat = nothing)
+    doc = _prepare_run_doc(input)
 
     overrides = Dict{String,Float64}(String(k) => Float64(v) for (k, v) in parameters)
     f!, u0, p, _tspan, var_map = build_evaluator(doc;

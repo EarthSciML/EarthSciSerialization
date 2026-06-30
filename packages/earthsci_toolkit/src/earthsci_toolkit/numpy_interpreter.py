@@ -536,9 +536,8 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
     # --- array ops ---
     if op == "index":
         return _eval_index(expr, ctx)
-    # "aggregate" is the canonical op tag; "arrayop" is its deprecated alias
-    # (RFC semiring-faq-unified-ir §5.6). Both dispatch identically.
-    if op in ("aggregate", "arrayop"):
+    # "aggregate" is the canonical Functional Aggregate Query op tag.
+    if op == "aggregate":
         return _eval_arrayop(expr, ctx)
     if op == "makearray":
         return _eval_makearray(expr, ctx)
@@ -1587,7 +1586,7 @@ def expr_contains_array_op(expr: Expr) -> bool:
         return False
     if isinstance(expr, ExprNode):
         if expr.op in {
-            "aggregate", "arrayop", "makearray", "index", "broadcast",
+            "aggregate", "makearray", "index", "broadcast",
             "reshape", "transpose", "concat", "intersect_polygon",
         }:
             return True

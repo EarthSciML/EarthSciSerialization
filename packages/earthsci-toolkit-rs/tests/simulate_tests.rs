@@ -160,7 +160,6 @@ fn make_model(
         description: None,
         tolerance: None,
         tests: None,
-        boundary_conditions: None,
         initialization_equations: None,
         guesses: None,
         system_kind: None,

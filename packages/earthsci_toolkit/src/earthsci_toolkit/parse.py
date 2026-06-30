@@ -39,26 +39,16 @@ from .esm_types import (
     ContinuousEvent, DiscreteEvent, DiscreteEventTrigger, FunctionalAffect,
     DataLoader, DataLoaderKind, DataLoaderSource, DataLoaderTemporal,
     DataLoaderVariable,
-    DataLoaderMesh, DataLoaderMeshTopology, DataLoaderDeterminism, Operator,
+    DataLoaderDeterminism, Operator,
     CouplingEntry, CouplingType, ConnectorEquation, Connector, Domain,
     OperatorComposeCoupling, CouplingCouple, VariableMapCoupling,
     OperatorApplyCoupling, CallbackCoupling, EventCoupling,
-    Reference, TemporalDomain, SpatialDimension, CoordinateTransform,
-    InitialCondition, InitialConditionType, BoundaryCondition, BoundaryConditionKind, BCContributedBy,
-    RegridSpec,
+    Reference, TemporalDomain,
     Tolerance, TimeSpan, Assertion, Test,
     PlotAxis, PlotValue, PlotSeries, Plot,
     SweepRange, SweepDimension, ParameterSweep, Example,
-    Grid, GridCRS, GridExtent, GridMetricArray, GridMetricGenerator, GridConnectivity,
-    StaggeringRule,
     FunctionTable, FunctionTableAxis,
 )
-
-
-# Valid names for the ``builtin`` grid metric/connectivity generator kind
-# (RFC §6.5, §6.4.1). Keep in sync with schema $defs/GridMetricGenerator.
-# The recognized builtin set is currently empty.
-_GRID_BUILTIN_NAMES = frozenset()
 
 
 class SchemaValidationError(Exception):
@@ -81,14 +71,13 @@ class SubsystemRefError(Exception):
     pass
 
 
-# Current library version for compatibility checking. Bumped to 0.7.0 with the
-# pure-I/O data-loaders hard break (esm-spec.md §8 / RFC pure-io-data-loaders
-# §4.1 / ess-v9a.7): `DataLoader.regridding` and `DataLoader.spatial` are
-# removed and a pre-0.7.0 loader file carrying them is rejected at load
-# (see reject_legacy_data_loader_shapes). Prior steps: 0.4.0 added the
-# sampled-function-tables block + `table_lookup`; 0.5.0 widened `plots.y`;
-# 0.6.0 added the `integral` AST op.
-_CURRENT_VERSION = (0, 7, 0)
+# Current library version for compatibility checking. Bumped to 0.8.0 with the
+# clean break that removed the bespoke spatial-grid / discretization / regrid
+# machinery in favour of `aggregate` Functional Aggregate Query nodes; legacy
+# loader files are now rejected by the schema's `additionalProperties: false`.
+# Prior steps: 0.4.0 added the sampled-function-tables block + `table_lookup`;
+# 0.5.0 widened `plots.y`; 0.6.0 added the `integral` AST op.
+_CURRENT_VERSION = (0, 8, 0)
 
 
 def _check_version_compatibility(version_string: str) -> None:
@@ -258,8 +247,7 @@ def _parse_equation(eq_data: Dict[str, Any]) -> Equation:
     lhs = _parse_expression(eq_data["lhs"])
     rhs = _parse_expression(eq_data["rhs"])
     comment = eq_data.get("_comment")
-    region = eq_data.get("region")
-    return Equation(lhs=lhs, rhs=rhs, _comment=comment, region=region)
+    return Equation(lhs=lhs, rhs=rhs, _comment=comment)
 
 
 def _parse_affect_equation(affect_data: Dict[str, Any]) -> AffectEquation:
@@ -509,40 +497,12 @@ def _parse_parameter_sweep(data: Dict[str, Any]) -> ParameterSweep:
     )
 
 
-def _parse_example_initial_state(data: Dict[str, Any]) -> InitialCondition:
-    """Parse an Example.initial_state block. Mirrors the top-level
-    InitialConditions schema (constant / per_variable / from_file / expression)."""
-    type_str = data["type"]
-    type_mapping = {
-        "constant": InitialConditionType.CONSTANT,
-        "per_variable": InitialConditionType.PER_VARIABLE,
-        "from_file": InitialConditionType.DATA,
-        "expression": InitialConditionType.EXPRESSION,
-    }
-    ic_type = type_mapping.get(type_str, InitialConditionType.CONSTANT)
-    values = None
-    expression_values = None
-    if ic_type == InitialConditionType.EXPRESSION:
-        expression_values = {
-            var: _parse_expression(expr)
-            for var, expr in (data.get("values") or {}).items()
-        }
-    else:
-        values = data.get("values")
-    return InitialCondition(
-        type=ic_type,
-        value=data.get("value"),
-        values=values,
-        function=None,
-        data_source=data.get("path"),
-        expression_values=expression_values,
-    )
-
-
 def _parse_example(data: Dict[str, Any]) -> Example:
+    # ``initial_state`` is a plain scalar-override map {var: number} (v0.8.0);
+    # initial fields themselves are declared with `ic` op equations in the model.
     initial_state = None
     if "initial_state" in data:
-        initial_state = _parse_example_initial_state(data["initial_state"])
+        initial_state = dict(data["initial_state"])
     sweep = None
     if "parameter_sweep" in data:
         sweep = _parse_parameter_sweep(data["parameter_sweep"])
@@ -591,21 +551,12 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
                 sub_model.name = sub_name
                 subsystems[sub_name] = sub_model
 
-    # Parse model-level boundary conditions (v0.2.0, RFC §9).
-    boundary_conditions: Dict[str, BoundaryCondition] = {}
-    if "boundary_conditions" in model_data:
-        bc_map = model_data["boundary_conditions"]
-        if not isinstance(bc_map, dict):
-            raise ValueError(
-                "Model 'boundary_conditions' must be an object keyed by BC id "
-                "(v0.2.0, RFC §9.1). Got: " + type(bc_map).__name__
-            )
-        for bc_id, bc_data in bc_map.items():
-            boundary_conditions[bc_id] = _parse_boundary_condition(bc_id, bc_data)
+    # Boundary conditions are not a declared model concern (no `bc` op, no
+    # `boundary_conditions` field); they are baked into discretization rewrite
+    # rules (esm-spec §9.6.8). Nothing to parse here.
 
     model = Model(name="", variables=variables, equations=equations,
-                  subsystems=subsystems,
-                  boundary_conditions=boundary_conditions)
+                  subsystems=subsystems)
 
     if "tolerance" in model_data:
         model.tolerance = _parse_tolerance(model_data["tolerance"])
@@ -634,79 +585,9 @@ def _parse_model(model_data: Dict[str, Any]) -> Model:
     if "index_sets" in model_data and model_data["index_sets"] is not None:
         model.index_sets = dict(model_data["index_sets"])
 
-    # Per-variable regridding configuration for loader-subsystem fields
-    # (RFC pure-io-data-loaders §5.2, §6).
-    if "regrid" in model_data and model_data["regrid"] is not None:
-        rg_map = model_data["regrid"]
-        if not isinstance(rg_map, dict):
-            raise ValueError(
-                "Model 'regrid' must be an object keyed by variable name "
-                "(RFC pure-io-data-loaders §5.2). Got: " + type(rg_map).__name__
-            )
-        model.regrid = {
-            var_name: _parse_regrid_spec(spec_data)
-            for var_name, spec_data in rg_map.items()
-        }
-
     return model
 
 
-def _parse_boundary_condition(bc_id: str, bc_data: Dict[str, Any]) -> BoundaryCondition:
-    """Parse a model-level boundary condition entry (RFC §9.2)."""
-    # Required fields
-    for required in ("variable", "side", "kind"):
-        if required not in bc_data:
-            raise ValueError(
-                f"boundary_conditions['{bc_id}']: missing required field '{required}' "
-                f"(RFC §9.2)"
-            )
-    try:
-        kind = BoundaryConditionKind(bc_data["kind"])
-    except ValueError:
-        valid = ", ".join(k.value for k in BoundaryConditionKind)
-        raise ValueError(
-            f"boundary_conditions['{bc_id}']: invalid kind "
-            f"'{bc_data['kind']}' (valid: {valid})"
-        )
-    contributed_by = None
-    cb_data = bc_data.get("contributed_by")
-    if cb_data is not None:
-        if "component" not in cb_data:
-            raise ValueError(
-                f"boundary_conditions['{bc_id}'].contributed_by: "
-                f"missing required field 'component'"
-            )
-        contributed_by = BCContributedBy(
-            component=cb_data["component"],
-            flux_sign=cb_data.get("flux_sign", "+"),
-        )
-    return BoundaryCondition(
-        variable=bc_data["variable"],
-        side=bc_data["side"],
-        kind=kind,
-        value=bc_data.get("value"),
-        robin_alpha=bc_data.get("robin_alpha"),
-        robin_beta=bc_data.get("robin_beta"),
-        robin_gamma=bc_data.get("robin_gamma"),
-        coupled_variable=bc_data.get("coupled_variable"),
-        flux_match=bool(bc_data.get("flux_match", False)),
-        face_coords=bc_data.get("face_coords"),
-        contributed_by=contributed_by,
-        description=bc_data.get("description"),
-    )
-
-
-def _parse_regrid_spec(spec_data: Dict[str, Any]) -> RegridSpec:
-    """Parse a per-variable RegridSpec entry (schema $defs/RegridSpec).
-
-    All fields are optional; the closed ``method`` value set is enforced by
-    JSON-schema validation, not here.
-    """
-    return RegridSpec(
-        method=spec_data.get("method"),
-        missing_value=spec_data.get("missing_value"),
-        description=spec_data.get("description"),
-    )
 
 
 def _parse_species(species_data: Dict[str, Any]) -> Species:
@@ -897,16 +778,6 @@ def _parse_data_loader_variable(var_data: Dict[str, Any]) -> DataLoaderVariable:
     )
 
 
-def _parse_data_loader_mesh(mesh_data: Dict[str, Any]) -> DataLoaderMesh:
-    """Parse a mesh descriptor from JSON data (esm-spec §8.9)."""
-    return DataLoaderMesh(
-        topology=DataLoaderMeshTopology(mesh_data["topology"]),
-        connectivity_fields=list(mesh_data["connectivity_fields"]),
-        metric_fields=list(mesh_data["metric_fields"]),
-        dimension_sizes=dict(mesh_data.get("dimension_sizes", {})),
-    )
-
-
 def _parse_data_loader_determinism(det_data: Dict[str, Any]) -> DataLoaderDeterminism:
     """Parse a determinism block from JSON data (esm-spec §8.9.2)."""
     return DataLoaderDeterminism(
@@ -930,18 +801,6 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
     if "temporal" in loader_data:
         temporal = _parse_data_loader_temporal(loader_data["temporal"])
 
-    grid = None
-    if "grid" in loader_data:
-        grid = _parse_grid(
-            loader_data.get("name", "grid"),
-            loader_data["grid"],
-            data_loaders={},
-        )
-
-    mesh = None
-    if "mesh" in loader_data:
-        mesh = _parse_data_loader_mesh(loader_data["mesh"])
-
     determinism = None
     if "determinism" in loader_data:
         determinism = _parse_data_loader_determinism(loader_data["determinism"])
@@ -958,8 +817,6 @@ def _parse_data_loader(loader_data: Dict[str, Any]) -> DataLoader:
         source=source,
         variables=variables,
         temporal=temporal,
-        grid=grid,
-        mesh=mesh,
         determinism=determinism,
         reference=reference,
         metadata=metadata,
@@ -1151,97 +1008,8 @@ def _parse_domain(domain_data: Dict[str, Any]) -> Domain:
             reference_time=temporal_data.get("reference_time")
         )
 
-    # Parse spatial domain
-    if "spatial" in domain_data:
-        spatial_data = domain_data["spatial"]
-        domain.spatial = {}
-        for dim_name, dim_data in spatial_data.items():
-            domain.spatial[dim_name] = SpatialDimension(
-                min=dim_data["min"],
-                max=dim_data["max"],
-                units=dim_data.get("units"),
-                grid_spacing=dim_data.get("grid_spacing")
-            )
-
-    # Parse coordinate transforms
-    if "coordinate_transforms" in domain_data:
-        for transform_data in domain_data["coordinate_transforms"]:
-            transform = CoordinateTransform(
-                id=transform_data["id"],
-                description=transform_data.get("description", ""),
-                dimensions=transform_data.get("dimensions", [])
-            )
-            domain.coordinate_transforms.append(transform)
-
-    # Parse spatial reference
-    if "spatial_ref" in domain_data:
-        domain.spatial_ref = domain_data["spatial_ref"]
-
-    # Parse initial conditions
-    if "initial_conditions" in domain_data:
-        ic_data = domain_data["initial_conditions"]
-        ic_type_str = ic_data["type"]
-
-        # Map schema types to our enum types
-        type_mapping = {
-            "constant": InitialConditionType.CONSTANT,
-            "per_variable": InitialConditionType.PER_VARIABLE,
-            "from_file": InitialConditionType.DATA,
-            "expression": InitialConditionType.EXPRESSION,
-        }
-
-        ic_type = type_mapping.get(ic_type_str, InitialConditionType.CONSTANT)
-
-        # Extract appropriate fields based on type
-        value = ic_data.get("value")
-        function = None
-        data_source = ic_data.get("path")  # Schema uses "path" for file source
-
-        # The ``expression`` type stores its ``values`` map as a variable->Expression
-        # AST (parsed), distinct from ``per_variable`` whose ``values`` are plain
-        # numbers. Keep them on separate fields so consumers never confuse a
-        # number map with an AST map.
-        values = None
-        expression_values = None
-        if ic_type == InitialConditionType.EXPRESSION:
-            expression_values = {
-                var: _parse_expression(expr)
-                for var, expr in (ic_data.get("values") or {}).items()
-            }
-        else:
-            values = ic_data.get("values")  # For per_variable type
-
-        domain.initial_conditions = InitialCondition(
-            type=ic_type,
-            value=value,
-            values=values,
-            function=function,
-            data_source=data_source,
-            expression_values=expression_values,
-        )
-
-    # v0.2.0 deprecation warning: domain-level boundary_conditions is retained
-    # for the transitional window only (RFC §10.1 + mayor decision per gt-2fvs).
-    # Model-level boundary_conditions is the canonical form. When the migration
-    # tool (gt-fmrq) lands and in-tree fixtures are migrated, this will flip to
-    # a hard error in a follow-up bead.
-    if "boundary_conditions" in domain_data:
-        import warnings
-        warnings.warn(
-            "[E_DEPRECATED_DOMAIN_BC] domains.<d>.boundary_conditions is "
-            "deprecated in ESM v0.2.0; migrate to models.<M>.boundary_conditions "
-            "(docs/rfcs/discretization.md §9). This field will be removed in a "
-            "future release.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        # Domain-level BCs are preserved on the dataclass for round-trip
-        # fidelity during the transitional window. They are stored untyped on
-        # the legacy 'boundaries' field rather than on a typed field, so that
-        # downstream code that relies on model-level BCs is not misled into
-        # consuming old-form entries.
-        domain.boundaries = {"_deprecated_v01_boundary_conditions":
-                             list(domain_data["boundary_conditions"])}
+    # Initial conditions are no longer a domain-level concept (v0.8.0): they are
+    # declared with `ic` op equations in the model (esm-spec §11.4).
 
     return domain
 
@@ -1267,297 +1035,8 @@ def _validate_domain(domain: Domain) -> None:
         except ValueError as e:
             errors.append(f"Temporal domain: invalid datetime format - {e}")
 
-    # Validate spatial dimensions
-    if domain.spatial:
-        for dim_name, dim_spec in domain.spatial.items():
-            if dim_spec.min >= dim_spec.max:
-                errors.append(f"Spatial dimension '{dim_name}': min value must be less than max value")
-
-            if dim_spec.grid_spacing is not None and dim_spec.grid_spacing <= 0:
-                errors.append(f"Spatial dimension '{dim_name}': grid spacing must be positive")
-
-            # Check reasonable coordinate ranges
-            if dim_name in ['lon', 'longitude']:
-                if dim_spec.min < -180 or dim_spec.max > 180:
-                    errors.append(f"Longitude dimension: values should be between -180 and 180 degrees")
-            elif dim_name in ['lat', 'latitude']:
-                if dim_spec.min < -90 or dim_spec.max > 90:
-                    errors.append(f"Latitude dimension: values should be between -90 and 90 degrees")
-
-    # Validate coordinate transforms reference valid dimensions
-    if domain.coordinate_transforms and domain.spatial:
-        for transform in domain.coordinate_transforms:
-            for dim in transform.dimensions:
-                if dim not in domain.spatial:
-                    errors.append(f"Coordinate transform '{transform.id}': references undefined dimension '{dim}'")
-
-    # Validate initial conditions have required fields
-    if domain.initial_conditions:
-        ic = domain.initial_conditions
-        if ic.type == InitialConditionType.CONSTANT and ic.value is None:
-            errors.append("Initial condition type 'constant' requires a value")
-        elif ic.type == InitialConditionType.FUNCTION and ic.function is None:
-            errors.append("Initial condition type 'function' requires a function specification")
-        elif ic.type == InitialConditionType.DATA and ic.data_source is None:
-            errors.append("Initial condition type 'data' requires a data source")
-        elif ic.type == InitialConditionType.EXPRESSION and not ic.expression_values:
-            errors.append(
-                "Initial condition type 'expression' requires a non-empty "
-                "'values' map (variable -> Expression)"
-            )
-
     if errors:
         raise ValueError("Domain validation failed:\n" + "\n".join(f"  - {error}" for error in errors))
-
-
-def _parse_grid_metric_generator(
-    gen_data: Dict[str, Any],
-    *,
-    context: str,
-    data_loaders: Dict[str, Any],
-) -> GridMetricGenerator:
-    """Parse a grid metric / connectivity generator (RFC §6.5).
-
-    Validates loader references against the top-level ``data_loaders`` map
-    and builtin names against the known set (raises with E_UNKNOWN_BUILTIN
-    / E_UNKNOWN_LOADER-style messages otherwise).
-    """
-    if "kind" not in gen_data:
-        raise ValueError(f"{context}: generator missing required 'kind' field (RFC §6.5)")
-    kind = gen_data["kind"]
-    if kind == "expression":
-        if "expr" not in gen_data:
-            raise ValueError(f"{context}: generator kind='expression' requires 'expr' field")
-        expr = _parse_expression(gen_data["expr"])
-        return GridMetricGenerator(kind="expression", expr=expr)
-    elif kind == "loader":
-        loader = gen_data.get("loader")
-        field_name = gen_data.get("field")
-        if loader is None or field_name is None:
-            raise ValueError(
-                f"{context}: generator kind='loader' requires 'loader' and 'field' fields"
-            )
-        if loader not in data_loaders:
-            raise ValueError(
-                f"[E_UNKNOWN_LOADER] {context}: generator references unknown data_loader "
-                f"'{loader}' (not declared in top-level data_loaders)"
-            )
-        return GridMetricGenerator(kind="loader", loader=loader, field=field_name)
-    elif kind == "builtin":
-        name = gen_data.get("name")
-        if name is None:
-            raise ValueError(f"{context}: generator kind='builtin' requires 'name' field")
-        if name not in _GRID_BUILTIN_NAMES:
-            valid = ", ".join(sorted(_GRID_BUILTIN_NAMES))
-            raise ValueError(
-                f"[E_UNKNOWN_BUILTIN] {context}: generator name='{name}' is not a known "
-                f"builtin (valid: {valid})"
-            )
-        return GridMetricGenerator(kind="builtin", name=name)
-    else:
-        raise ValueError(
-            f"{context}: generator kind='{kind}' is invalid "
-            f"(valid: expression, loader, builtin)"
-        )
-
-
-def _parse_grid_metric_array(
-    array_id: str,
-    array_data: Dict[str, Any],
-    *,
-    grid_name: str,
-    data_loaders: Dict[str, Any],
-) -> GridMetricArray:
-    """Parse a grid metric_array entry (RFC §6.5)."""
-    if "rank" not in array_data:
-        raise ValueError(
-            f"grids['{grid_name}'].metric_arrays['{array_id}']: missing required 'rank'"
-        )
-    if "generator" not in array_data:
-        raise ValueError(
-            f"grids['{grid_name}'].metric_arrays['{array_id}']: missing required 'generator'"
-        )
-    gen = _parse_grid_metric_generator(
-        array_data["generator"],
-        context=f"grids['{grid_name}'].metric_arrays['{array_id}']",
-        data_loaders=data_loaders,
-    )
-    return GridMetricArray(
-        rank=array_data["rank"],
-        generator=gen,
-        dim=array_data.get("dim"),
-        dims=array_data.get("dims"),
-        shape=array_data.get("shape"),
-    )
-
-
-def _parse_grid_connectivity(
-    conn_id: str,
-    conn_data: Dict[str, Any],
-    *,
-    grid_name: str,
-    section: str,
-    data_loaders: Dict[str, Any],
-) -> GridConnectivity:
-    """Parse a grid connectivity entry (RFC §6.3–§6.4)."""
-    context = f"grids['{grid_name}'].{section}['{conn_id}']"
-    if "shape" not in conn_data:
-        raise ValueError(f"{context}: missing required 'shape'")
-    if "rank" not in conn_data:
-        raise ValueError(f"{context}: missing required 'rank'")
-    loader = conn_data.get("loader")
-    field_name = conn_data.get("field")
-    generator = None
-    if "generator" in conn_data:
-        generator = _parse_grid_metric_generator(
-            conn_data["generator"],
-            context=context,
-            data_loaders=data_loaders,
-        )
-    if loader is not None and loader not in data_loaders:
-        raise ValueError(
-            f"[E_UNKNOWN_LOADER] {context}: references unknown data_loader '{loader}' "
-            f"(not declared in top-level data_loaders)"
-        )
-    return GridConnectivity(
-        shape=list(conn_data["shape"]),
-        rank=conn_data["rank"],
-        loader=loader,
-        field=field_name,
-        generator=generator,
-    )
-
-
-def _parse_grid_extent(extent_data: Dict[str, Any]) -> GridExtent:
-    """Parse a single cartesian grid extent entry (RFC §6.2)."""
-    return GridExtent(
-        n=extent_data["n"],
-        spacing=extent_data.get("spacing"),
-    )
-
-
-def _parse_grid(
-    grid_name: str,
-    grid_data: Dict[str, Any],
-    *,
-    data_loaders: Dict[str, Any],
-) -> Grid:
-    """Parse a top-level grid declaration (RFC §6)."""
-    for required in ("family", "dimensions"):
-        if required not in grid_data:
-            raise ValueError(
-                f"grids['{grid_name}']: missing required field '{required}' (RFC §6)"
-            )
-    family = grid_data["family"]
-    valid_families = {"cartesian", "unstructured"}
-    if family not in valid_families:
-        raise ValueError(
-            f"grids['{grid_name}']: invalid family '{family}' "
-            f"(valid: {', '.join(sorted(valid_families))})"
-        )
-
-    metric_arrays: Dict[str, GridMetricArray] = {}
-    for array_id, array_data in (grid_data.get("metric_arrays") or {}).items():
-        metric_arrays[array_id] = _parse_grid_metric_array(
-            array_id, array_data, grid_name=grid_name, data_loaders=data_loaders,
-        )
-
-    parameters: Dict[str, Parameter] = {}
-    for pname, pdata in (grid_data.get("parameters") or {}).items():
-        param = _parse_parameter(pdata)
-        param.name = pname
-        parameters[pname] = param
-
-    extents: Dict[str, GridExtent] = {}
-    for ename, edata in (grid_data.get("extents") or {}).items():
-        extents[ename] = _parse_grid_extent(edata)
-
-    connectivity: Dict[str, GridConnectivity] = {}
-    for cname, cdata in (grid_data.get("connectivity") or {}).items():
-        connectivity[cname] = _parse_grid_connectivity(
-            cname, cdata, grid_name=grid_name, section="connectivity",
-            data_loaders=data_loaders,
-        )
-
-    crs = None
-    if grid_data.get("crs") is not None:
-        crs = _parse_grid_crs(grid_name, grid_data["crs"])
-
-    return Grid(
-        family=family,
-        dimensions=list(grid_data["dimensions"]),
-        name=grid_name,
-        crs=crs,
-        description=grid_data.get("description"),
-        locations=grid_data.get("locations"),
-        metric_arrays=metric_arrays,
-        parameters=parameters,
-        domain=grid_data.get("domain"),
-        extents=extents,
-        connectivity=connectivity,
-    )
-
-
-def _parse_grid_crs(grid_name: str, crs_data: Dict[str, Any]) -> GridCRS:
-    """Parse a grid ``crs`` descriptor (RFC pure-io-data-loaders §4.2).
-
-    Number values (``R`` and each ``parameters`` entry) are preserved verbatim
-    so the descriptor round-trips unchanged.
-    """
-    if "projection" not in crs_data:
-        raise ValueError(
-            f"grids['{grid_name}'].crs: missing required field 'projection'"
-        )
-    return GridCRS(
-        projection=crs_data["projection"],
-        datum=crs_data.get("datum"),
-        R=crs_data.get("R"),
-        parameters=dict(crs_data.get("parameters") or {}),
-    )
-
-
-def _parse_staggering_rule(
-    rule_name: str,
-    rule_data: Dict[str, Any],
-    *,
-    grids: Dict[str, Grid],
-) -> StaggeringRule:
-    """Parse a top-level staggering-rule declaration (RFC §7.4).
-
-    For ``kind='unstructured_c_grid'`` the referenced ``grid`` must exist
-    in the top-level ``grids`` map and have family ``unstructured``.
-    """
-    for required in ("kind", "grid"):
-        if required not in rule_data:
-            raise ValueError(
-                f"staggering_rules['{rule_name}']: missing required field "
-                f"'{required}' (RFC §7.4)"
-            )
-    kind = rule_data["kind"]
-    grid_ref = rule_data["grid"]
-    if kind == "unstructured_c_grid":
-        if grid_ref not in grids:
-            raise ValueError(
-                f"staggering_rules['{rule_name}']: references unknown grid "
-                f"'{grid_ref}' (RFC §7.4)"
-            )
-        referenced = grids[grid_ref]
-        if referenced.family != "unstructured":
-            raise ValueError(
-                f"staggering_rules['{rule_name}']: kind='unstructured_c_grid' "
-                f"requires grid family 'unstructured', but grids['{grid_ref}'] "
-                f"has family '{referenced.family}' (RFC §7.4)"
-            )
-    return StaggeringRule(
-        kind=kind,
-        grid=grid_ref,
-        name=rule_name,
-        description=rule_data.get("description"),
-        cell_quantity_locations=dict(rule_data.get("cell_quantity_locations") or {}),
-        edge_normal_convention=rule_data.get("edge_normal_convention"),
-        dual_mesh_ref=rule_data.get("dual_mesh_ref"),
-        reference=rule_data.get("reference"),
-    )
 
 
 def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
@@ -1590,13 +1069,12 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
             rs.name = rs_name
             reaction_systems[rs_name] = rs
 
-    # Parse domains if present
-    domains = {}
-    if "domains" in data:
-        for domain_name, domain_data in data["domains"].items():
-            d = _parse_domain(domain_data)
-            _validate_domain(d)
-            domains[domain_name] = d
+    # Parse the single shared domain if present (v0.8.0: one `domain` object,
+    # not a map of named domains).
+    domain = None
+    if "domain" in data and data["domain"] is not None:
+        domain = _parse_domain(data["domain"])
+        _validate_domain(domain)
 
     # Parse data loaders
     data_loaders: Dict[str, DataLoader] = {}
@@ -1654,21 +1132,6 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         for coupling_data in data["coupling"]:
             coupling.append(_parse_coupling_entry(coupling_data))
 
-    # Parse grids (RFC §6). Must happen after data_loaders so loader-kind
-    # generators can be validated against the declared loaders.
-    grids: Dict[str, Grid] = {}
-    if "grids" in data:
-        grids_map = data["grids"]
-        if not isinstance(grids_map, dict):
-            raise ValueError(
-                "Top-level 'grids' must be an object keyed by grid id (RFC §6). "
-                f"Got: {type(grids_map).__name__}"
-            )
-        for grid_name, grid_data in grids_map.items():
-            grids[grid_name] = _parse_grid(
-                grid_name, grid_data, data_loaders=data_loaders,
-            )
-
     # Parse function_tables (esm-spec §9.5, v0.4.0). Each entry is a
     # FunctionTable carrying named axes plus literal nested-array data,
     # referenced by table_lookup AST nodes.
@@ -1711,21 +1174,6 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                 schema_version=ft_data.get("schema_version"),
             )
 
-    # Parse staggering_rules (RFC §7.4). Must happen after grids so we can
-    # validate that referenced grid entries exist and have a compatible family.
-    staggering_rules: Dict[str, StaggeringRule] = {}
-    if "staggering_rules" in data:
-        sr_map = data["staggering_rules"]
-        if not isinstance(sr_map, dict):
-            raise ValueError(
-                "Top-level 'staggering_rules' must be an object keyed by rule id "
-                f"(RFC §7.4). Got: {type(sr_map).__name__}"
-            )
-        for rule_name, rule_data in sr_map.items():
-            staggering_rules[rule_name] = _parse_staggering_rule(
-                rule_name, rule_data, grids=grids,
-            )
-
     # Collect events from models and reaction systems
     events = []
 
@@ -1749,13 +1197,6 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
                 for event_data in rs_data["continuous_events"]:
                     events.append(_parse_continuous_event(event_data))
 
-    # Discretization schemes (RFC §7). Held opaquely — standard stencil
-    # templates pass through unchanged. Schema-level validation already ran
-    # above in `validate(...)`.
-    discretizations = {}
-    if "discretizations" in data and data["discretizations"] is not None:
-        discretizations = copy.deepcopy(data["discretizations"])
-
     return EsmFile(
         version=data["esm"],
         metadata=metadata,
@@ -1768,10 +1209,7 @@ def _parse_esm_data(data: Dict[str, Any]) -> EsmFile:
         enums=enums,
         function_tables=function_tables,
         coupling=coupling,
-        domains=domains,
-        grids=grids,
-        staggering_rules=staggering_rules,
-        discretizations=discretizations,
+        domain=domain,
     )
 
 
@@ -2081,7 +1519,7 @@ def resolve_model_refs(esm_file: EsmFile, base_path: str) -> None:
 # Operator arity requirements: (min_args, max_args). None = unlimited.
 _OPERATOR_ARITY = {
     "+": (2, None), "-": (1, None), "*": (2, None), "/": (2, 2),
-    "^": (2, 2), "D": (1, 1), "grad": (1, 1), "div": (1, 1),
+    "^": (2, 2), "D": (1, 1), "ic": (1, 1), "grad": (1, 1), "div": (1, 1),
     "laplacian": (1, 1), "exp": (1, 1), "log": (1, 1), "log10": (1, 1),
     "sqrt": (1, 1), "abs": (1, 1), "sin": (1, 1), "cos": (1, 1),
     "tan": (1, 1), "asin": (1, 1), "acos": (1, 1), "atan": (1, 1),
@@ -2210,8 +1648,9 @@ def _build_symbol_tables(data: Dict[str, Any]) -> Dict[str, Any]:
         global_symbols.update(rs.keys())
     for d in data_loaders.values():
         global_symbols.update(d.keys())
-    # Add spatial dim names from domains
-    for dom in data.get("domains", {}).values():
+    # Add spatial dim names from the single shared domain, if it declares any.
+    dom = data.get("domain")
+    if isinstance(dom, dict):
         global_symbols.update(dom.get("spatial", {}).keys())
 
     return {
@@ -3281,14 +2720,6 @@ def load(path_or_string: Union[str, Path, dict]) -> EsmFile:
         lower_expression_templates,
     )
     reject_expression_templates_pre_v04(data)
-
-    # v0.7.0 pure-I/O hard break: reject a pre-0.7.0 loader still carrying the
-    # removed `regridding` / `spatial` blocks with a named, version-keyed
-    # diagnostic before schema validation, so the user sees the migration hint
-    # instead of a generic "extra property" error (esm-spec §8 / RFC
-    # pure-io-data-loaders §4.1).
-    from .reject_legacy_loaders import reject_legacy_data_loader_shapes
-    reject_legacy_data_loader_shapes(data)
 
     # Load and validate against schema
     schema = _get_schema()

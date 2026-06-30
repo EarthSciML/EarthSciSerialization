@@ -20,7 +20,7 @@
 export * from './types.js'
 
 // Export parsing and serialization functions
-export { load, validateSchema, ParseError, SchemaValidationError, GridValidationError } from './parse.js'
+export { load, validateSchema, ParseError, SchemaValidationError } from './parse.js'
 export type { SchemaError, LoadOptions } from './parse.js'
 export { save } from './serialize.js'
 export type { SaveOptions } from './serialize.js'
@@ -92,51 +92,6 @@ export {
   E_CANONICAL_DIVBY_ZERO,
 } from './canonicalize.js'
 
-// Rule engine (RFC §5.2). Pattern-match rewriting, guards, and fixed-point
-// loop. Produces byte-identical canonical output with Julia and Rust on
-// the Step 1 conformance fixtures.
-export {
-  rewrite,
-  matchPattern,
-  applyBindings,
-  checkGuards,
-  checkGuard,
-  parseRules,
-  parseExpr,
-  checkUnrewrittenPdeOps,
-  emptyContext,
-  RuleEngineError,
-  DEFAULT_MAX_PASSES,
-  E_RULES_NOT_CONVERGED,
-  E_UNREWRITTEN_PDE_OP,
-  E_PATTERN_VAR_UNBOUND,
-  E_PATTERN_VAR_TYPE,
-  E_UNKNOWN_GUARD,
-  E_RULE_PARSE,
-  E_RULE_REPLACEMENT_MISSING,
-} from './rule-engine.js'
-export type {
-  Rule,
-  Guard,
-  RuleContext,
-  GridMeta,
-  VariableMeta,
-  BoundaryPolicy,
-  BoundaryPolicyKind,
-  BoundaryPolicyString,
-  BoundaryPolicySpec,
-  GhostWidth,
-  RuleBinding,
-} from './rule-engine.js'
-
-// Discretization pipeline (RFC §11, gt-gbs2) + DAE binding contract (RFC §12, gt-q7sh).
-export {
-  discretize,
-  E_UNREWRITTEN_PDE_OP as E_DISCRETIZE_UNREWRITTEN_PDE_OP,
-  E_NO_DAE_SUPPORT,
-} from './discretize.js'
-export type { DiscretizeOptions } from './discretize.js'
-
 // Closed function registry (esm-spec §9.2 / RFC closed-function-registry).
 export {
   CLOSED_FUNCTION_NAMES,
@@ -160,37 +115,6 @@ export {
   rejectExpressionTemplatesPreV04,
   ExpressionTemplateError,
 } from './lower_expression_templates.js'
-
-// Load-time rejection of pre-0.7.0 data-loader shapes (RFC pure-io-data-loaders
-// §4.1, bead ess-v9a.7).
-export {
-  rejectLegacyDataLoaderShapes,
-  LegacyDataLoaderError,
-} from './reject_legacy_loaders.js'
-
-// Grid accessor contract (gt-j2b8, 2026-04-22 grid-inversion decision).
-// ESS owns the interface and registry; ESD ships concrete families and
-// registers them at runtime.
-export {
-  registerGridFamily,
-  unregisterGridFamily,
-  getGridFamily,
-  hasGridFamily,
-  listGridFamilies,
-  createGrid,
-  clearGridFamilies,
-  GridAccessorError,
-  E_GRID_FAMILY_UNKNOWN,
-  E_GRID_FAMILY_ALREADY_REGISTERED,
-  E_GRID_FAMILY_NAME_INVALID,
-} from './grid-accessor.js'
-export type {
-  GridAccessor,
-  GridAccessorFactory,
-  CellCenter,
-  CellIndex,
-  Dtype,
-} from './grid-accessor.js'
 
 // Package metadata
 export const VERSION = '0.1.0'

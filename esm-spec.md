@@ -1,6 +1,6 @@
 # ESM Format Specification
 
-**EarthSciML Serialization Format — Version 0.7.0**
+**EarthSciML Serialization Format — Version 0.8.0**
 
 ## 1. Overview
 
@@ -16,7 +16,7 @@ The single exception to full specification is **data loaders**, which are inhere
 
 ### 1.1 Authoring Policy: AST first, registry second, factoring third
 
-Authors and reviewers MUST prefer the built-in expression AST (Section 4) over the closed function registry (Section 9). A `{"op": "fn", ...}` node is justified **only** when the desired primitive cannot be written as a finite closed-form composition of the AST ops in §4.2 — typically because it requires non-AST ingredients (calendar arithmetic, table search). Anything expressible in finite closed form (powers, polynomials, transcendentals, conditionals, piecewise, clip/clamp) belongs in the AST. Reviewers MUST reject `fn` nodes whose body can be written using existing AST ops; `^`, `min`, `max`, `ifelse`, `sign` and the trig / exp / log family already cover ordinary scalar math.
+Authors and reviewers MUST prefer the built-in expression AST (Section 4) over the closed function registry (Section 9). A `{"op": "fn", ...}` node is justified **only** when the desired primitive cannot be written as a finite closed-form composition of the AST ops in §4.2 — typically because it requires non-AST ingredients (calendar arithmetic, polygon clipping). Anything expressible in finite closed form (powers, polynomials, transcendentals, conditionals, piecewise, clip/clamp) belongs in the AST. Reviewers MUST reject `fn` nodes whose body can be written using existing AST ops; `^`, `min`, `max`, `ifelse`, `sign` and the trig / exp / log family already cover ordinary scalar math.
 
 The closed function registry is **closed**: bindings MUST reject any `fn` node whose `name` is not in the spec-defined set for the file's declared `esm` version. There is no per-file declaration of new functions, no `handler_id` lookup, and no out-of-band runtime registry. Adding a primitive requires a spec rev (see `docs/rfcs/closed-function-registry.md` §7).
 
@@ -40,7 +40,7 @@ The full authoring stance, normatively:
 
 ```json
 {
-  "esm": "0.7.0",
+  "esm": "0.8.0",
   "metadata": { ... },
   "models": { ... },
   "reaction_systems": { ... },
@@ -48,9 +48,8 @@ The full authoring stance, normatively:
   "enums": { ... },
   "function_tables": { ... },
   "coupling": [ ... ],
-  "domains": { ... },
-  "interfaces": { ... },
-  "grids": { ... }
+  "domain": { ... },
+  "index_sets": { ... }
 }
 ```
 
@@ -64,15 +63,12 @@ The full authoring stance, normatively:
 | `enums` | | File-local symbol → positive-integer mappings used by the `enum` op to make categorical lookups cross-binding-portable (see Section 9.3) |
 | `function_tables` | | Component-scoped sampled function tables — named axes plus literal nested-array data, referenced by the `table_lookup` AST op (see Section 9.5) |
 | `coupling` | | Composition and coupling rules |
-| `domains` | | Named spatial/temporal domain specifications (see Section 11) |
-| `interfaces` | | Geometric connections between domains of different dimensionality (see Section 12) |
-| `grids` | | Named discretization grids (cartesian / unstructured) — see docs/rfcs/discretization.md §6 |
-| `staggering_rules` | | Named staggering conventions that declare where quantities live on a grid (e.g. MPAS unstructured C-grid) — see docs/rfcs/discretization.md §7.4 |
-| `discretizations` | | Named discretization schemes mapping PDE operators to stencil templates (§7.1) — see docs/rfcs/discretization.md §7 |
+| `domain` | | The single temporal domain shared by all components (see Section 11) |
+| `index_sets` | | Document-scoped registry of named iteration domains (grid axes, categorical dimensions, data-derived sets) referenced by `aggregate` ranges (RFC semiring-faq-unified-ir §5.2) |
 
-The `operators` and `registered_functions` blocks present in earlier drafts are **removed** in this revision. State-mutating numerical schemes (advection, gridded diffusion) are now expressed as discretization schemes (`discretizations`) with PDE operators in the model equations; pure functions are drawn from the closed function registry (Section 9) via the `fn` op. See `docs/rfcs/closed-function-registry.md` for the migration plan.
+Spatial grid geometry is **not** a special top-level concept. Coordinates, extents, spacing, CRS parameters, connectivity, and metric arrays are ordinary data — loaded from a `data_loaders` primitive or declared as variables/parameters — and grid topology and metrics are constructed declaratively with the `aggregate` Functional Aggregate Query op (RFC semiring-faq-unified-ir). The `operators`, `registered_functions`, `grids`, `staggering_rules`, and `discretizations` blocks present in earlier drafts are **removed**.
 
-At least one of `models`, `reaction_systems`, or `data_loaders` must be present (a GridDiscretization Descriptor file instead carries `kind: grid_discretization_descriptor`; see §4.7.1). A document whose sole top-level component is `data_loaders` is a valid loader-only file — referenceable as a loader subsystem (§4.7).
+At least one of `models`, `reaction_systems`, or `data_loaders` must be present. A document whose sole top-level component is `data_loaders` is a valid loader-only file — referenceable as a loader subsystem (§4.7).
 
 ---
 
@@ -133,6 +129,7 @@ ExprNode := { "op": string, "args": [Expr, ...], ...optional_fields }
 | Op | Additional fields | Meaning |
 |---|---|---|
 | `D` | `"wrt": "t"` | Time derivative: ∂/∂t |
+| `ic` | — | Initial-condition declaration, used as an equation LHS: `ic(u) ~ <initial field>` (§11.4). `args[0]` is the state variable. |
 | `grad` | `"dim": "x"` | Spatial gradient: ∂/∂x |
 | `div` | | Divergence: ∇· |
 | `laplacian` | | Laplacian: ∇² |
@@ -210,7 +207,7 @@ by this spec.
 
 | Op | Required extra fields | Meaning |
 |---|---|---|
-| `arrayop` | `output_idx`, `expr` | Generalized Einstein-notation tensor expression with implicit reductions over non-output indices. See Section 4.3.1. |
+| `aggregate` | `output_idx`, `expr` | Functional Aggregate Query node: a semiring aggregate of a product of factors over named index sets. Specializes to Einstein-notation tensor contraction with implicit reductions over non-output indices; its full surface (`semiring`, `from`/`of` ranges, `join`, `distinct`, `key`, `filter`) is specified in RFC semiring-faq-unified-ir. See Section 4.3.1. |
 | `makearray` | `regions`, `values` | Block assembly of an array from overlapping sub-region assignments. Later regions overwrite earlier ones. See Section 4.3.2. |
 | `index` | — | Element or sub-array access. `args[0]` is the array; `args[1..]` are the index expressions. See Section 4.3.3. |
 | `broadcast` | `fn` | Element-wise application of scalar operator `fn` to broadcast-compatible operands. See Section 4.3.4. |
@@ -222,11 +219,11 @@ by this spec.
 
 Earth-system models frequently need to serialize operations on arrays and tensors — discretized PDEs, matrix multiplies, stencils, index contractions, block assemblies. The array ops listed in Section 4.2 cover these cases. Their data model mirrors [`SymbolicUtils.jl`](https://github.com/JuliaSymbolics/SymbolicUtils.jl)'s `ArrayOp` and `ArrayMaker` (see `src/types.jl`, `src/arrayop.jl`, `src/arraymaker.jl`).
 
-**Implicit dimensions.** Array ops use an *implicit* dimension model: there is no per-variable `dimensions` field on schema variables. Index symbols are local to the enclosing `arrayop` node, and lengths are resolved at runtime from the `domain` section and the shapes of the operand arrays. A given string can be a variable reference in most contexts but serves as an index symbol inside `arrayop.output_idx`, `arrayop.expr`, and `arrayop.ranges` keys. Callers must not rely on cross-node scoping of index symbols.
+**Implicit dimensions.** Array ops use an *implicit* dimension model: there is no per-variable `dimensions` field on schema variables. Index symbols are local to the enclosing `aggregate` node, and lengths are resolved at runtime from the declared `index_sets` and the shapes of the operand arrays. A given string can be a variable reference in most contexts but serves as an index symbol inside `aggregate.output_idx`, `aggregate.expr`, and `aggregate.ranges` keys. Callers must not rely on cross-node scoping of index symbols.
 
-#### 4.3.1 `arrayop`
+#### 4.3.1 `aggregate`
 
-An `arrayop` node represents a generalized Einstein-notation expression.
+An `aggregate` node represents a generalized Einstein-notation expression — the `sum_product` specialization of the Functional Aggregate Query (RFC semiring-faq-unified-ir).
 
 Fields:
 - `output_idx`: array. Each entry is either a string (a symbolic index variable) or the integer literal `1` (a singleton dimension that can be inserted for reshape/broadcast, mirroring `@arrayop (i, 1, j, 1) ...`).
@@ -247,7 +244,7 @@ evaluated with each index taking every value in its inferred (or declared) range
 
 ```json
 {
-  "op": "arrayop",
+  "op": "aggregate",
   "output_idx": ["i", "j"],
   "expr": {
     "op": "*",
@@ -266,7 +263,7 @@ Here `k` is contracted (reduced with the default `+`) while `i` and `j` form the
 
 ```json
 {
-  "op": "arrayop",
+  "op": "aggregate",
   "output_idx": ["i", "j"],
   "expr": {
     "op": "+",
@@ -292,7 +289,7 @@ The `ranges` entries use the form `[start, stop]` to say that the interior point
 
 ```json
 {
-  "op": "arrayop",
+  "op": "aggregate",
   "output_idx": ["j"],
   "expr": { "op": "index", "args": ["A", "i", "j"] },
   "reduce": "+",
@@ -328,7 +325,7 @@ Fields:
   "values": [
     "x_row",
     {
-      "op": "arrayop",
+      "op": "aggregate",
       "output_idx": [1, "i"],
       "expr": {
         "op": "+",
@@ -342,7 +339,7 @@ Fields:
     1,
     { "op": "index", "args": ["z", 1] },
     {
-      "op": "arrayop",
+      "op": "aggregate",
       "output_idx": [],
       "expr": {
         "op": "*",
@@ -365,7 +362,7 @@ This mirrors the `@makearray` example in `SymbolicUtils/src/arraymaker.jl`.
 `index` performs array element or sub-array access.
 
 - `args[0]`: the array expression to index.
-- `args[1..]`: one index expression per dimension. Each index is an `Expression`, so it may be an integer literal, a symbolic index variable (as a string, when inside an `arrayop.expr`), or a composite expression (e.g. `{ "op": "+", "args": ["i", 1] }` for an offset stencil point).
+- `args[1..]`: one index expression per dimension. Each index is an `Expression`, so it may be an integer literal, a symbolic index variable (as a string, when inside an `aggregate.expr`), or a composite expression (e.g. `{ "op": "+", "args": ["i", 1] }` for an offset stencil point).
 
 Non-affine index expressions are legal; it is the author's responsibility to ensure runtime access is in-bounds (cf. `SymbolicUtils/src/arrayop.jl` § "Axis offsets"). Sparsity and other structured-array optimizations are runtime concerns and are not represented in the schema.
 
@@ -539,51 +536,6 @@ A subsystem may be a child **model**, a child **reaction system**, or a pure-I/O
 **Scoped references** work identically for referenced subsystems as for inline subsystems. After resolution, `"Parent.RefSubsystem.variable"` works the same regardless of whether `RefSubsystem` was defined inline or loaded from a reference.
 
 **Resolution timing:** Libraries must resolve all references at load time, before validation or any other processing. After resolution, the in-memory representation is identical to a file with all subsystems defined inline.
-
-#### 4.7.1 GridDiscretization Descriptors
-
-A **GridDiscretization Descriptor** (GDD) is a second referenceable file type distinct from model/reaction-system subsystems. A GDD carries grid geometry and discretization rules together in a single document, enabling test and example blocks to specify exactly how a PDE component is discretized without embedding that information in the component definition itself.
-
-GDD files are published by the EarthSciDiscretizations (ESD) project at stable URLs. Authors may also supply local paths or any HTTPS URL.
-
-**GDD file format:**
-
-```json
-{
-  "esm": "0.7.0",
-  "kind": "grid_discretization_descriptor",
-  "metadata": {
-    "title": "Cartesian 1-D dx=0.03125 with centered-2nd FD",
-    "description": "Uniform 1-D domain [0,1], grid_spacing=0.03125 (N=32), second-order centered finite differences"
-  },
-  "grids": {
-    "domain": {
-      "spatial": {
-        "x": { "min": 0.0, "max": 1.0, "units": "m", "grid_spacing": 0.03125 }
-      }
-    }
-  },
-  "discretizations": {
-    "grad": { "ref": "https://esd.earthsciml.org/rules/centered_2nd_uniform.json" }
-  }
-}
-```
-
-A GDD file is identified by `"kind": "grid_discretization_descriptor"`. It MUST NOT be placed in the `subsystems` map — it is not a model or reaction system. GDD files are referenced exclusively from test and example `grid_refs` fields (§6.6.2 and §6.7.2).
-
-**GDD file fields:**
-
-| Field | Required | Description |
-|---|---|---|
-| `esm` | ✓ | ESM format version string. |
-| `kind` | ✓ | Must be `"grid_discretization_descriptor"`. |
-| `metadata` | | Optional title and description. |
-| `grids` | ✓ | Dictionary mapping domain names to spatial grid specs. Domain names must match the `domain` field of the referencing component. Each entry overrides the component's declared `spatial` block for that domain when the test or example runs; `temporal`, `boundary_conditions`, and other domain fields are inherited from the component unchanged. |
-| `discretizations` | | Dictionary mapping operator names (e.g., `"grad"`, `"div"`) to discretization rules. Each value may be an inline rule object or a `{ref: URL-or-path}` pointing to an ESD rule file. Overrides the component's declared discretizations for this run. |
-
-**Dependency note:** For `grid_refs` to work in production, ESD must publish GDD files at stable, resolvable URLs or paths. Authors referencing ESD-published GDDs should pin a versioned URL to guard against upstream changes.
-
----
 
 ## 5. Events
 
@@ -984,7 +936,6 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 
 | Field | Required | Description |
 |---|---|---|
-| `domain` | | Name of a domain from the `domains` section that this model is defined on. Omit or set to `null` for 0D (non-spatial) models — ODE or algebraic systems with no spatial dimensions. |
 | `coupletype` | | Coupling type name (maps to EarthSciML `:coupletype` metadata). Informational label identifying this system's role in coupling. |
 | `reference` | | Academic citation: `doi`, `citation`, `url`, `notes` |
 | `variables` | ✓ | All variables, keyed by name |
@@ -995,7 +946,6 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `guesses` | | Initial-guess seeds for nonlinear solvers during initialization, keyed by variable name. Values are `Expression` graphs (numbers, strings, or nodes). |
 | `system_kind` | | Discriminates the MTK system type: `"ode"` (default; time-stepped), `"nonlinear"` (algebraic-only equilibrium — no time derivative), `"sde"` (stochastic — brownian variables present), `"pde"` (spatial domain + differential operators). Each binding's MTK integration uses this to select between `System`, `NonlinearSystem`, `SDESystem`, and `PDESystem` constructors. |
 | `subsystems` | | Named child models (subsystems), keyed by unique identifier. Each subsystem can be defined inline or included by reference (see Section 4.7). Enables hierarchical composition — variables in subsystems are referenced via dot notation (see Section 4.6). |
-| `regrid` | | Per-variable regridding configuration for fields consumed from data-loader subsystems, keyed by variable name (see Section 8.6). Each entry optionally overrides the regridding `method` and, for scattered-point (cell-averaging) point loaders, declares a `missing_value` no-data fill. |
 | `tolerance` | | Model-level default numerical tolerance used by tests (see Section 6.6). Object with optional `abs` and/or `rel` fields. |
 | `tests` | | Inline validation tests that exercise this model in isolation (see Section 6.6). |
 | `examples` | | Inline illustrative examples showing how to run this model (see Section 6.7). |
@@ -1008,12 +958,12 @@ Each model corresponds to an ODE system — a set of time-dependent equations wi
 | `parameter` | Values set externally or held constant during integration |
 | `observed` | Derived quantities; must include an `expression` field |
 
-Optional arrayed-variable fields (introduced in spec 0.2, discretization RFC §10.2):
+Optional arrayed-variable fields:
 
 | Field | Description |
 |---|---|
-| `shape` | Ordered list of dimension names drawn from the enclosing model's domain `spatial` map. Omitted or null means the variable is scalar. Used by the discretization pipeline and validated by `index` in discretization RFC §5.1. |
-| `location` | Staggered-grid location tag (e.g., `"cell_center"`, `"edge_normal"`, `"x_face"`, `"vertex"`). Omitted means no explicit staggering; spatialization (discretization RFC §11 step 2) defaults this to `"cell_center"` when the variable's model has a grid. |
+| `shape` | Ordered list of index-set names (keys in the document-scoped `index_sets` registry) the variable is arrayed over. Omitted or null means the variable is scalar. Index expressions into the variable (`index`, `aggregate` ranges) resolve against these sets. |
+| `location` | Optional advisory placement tag for a staggered quantity (e.g., `"cell_center"`, `"edge_normal"`, `"x_face"`, `"vertex"`). Metadata only — the index set a quantity lives on is given by `shape`. Omitted means no explicit placement. |
 
 ### 6.4 Advection Model Example
 
@@ -1121,11 +1071,6 @@ Because a test lives inside its parent component, there is no `model_ref` field:
     {
       "id": "photostationary_approach",
       "description": "Starting from NO=10, NO2=20, O3=50 ppbv, the system approaches photostationary state.",
-      "initial_conditions": {
-        "NO": 10.0,
-        "NO2": 20.0,
-        "O3": 50.0
-      },
       "parameter_overrides": {
         "j_NO2": 0.008,
         "k_NO_O3": 1.8e-5
@@ -1154,7 +1099,6 @@ Because a test lives inside its parent component, there is no `model_ref` field:
 | `time_span` | ✓ | `{start, end}` — simulation time interval in the component's time units. |
 | `tolerance` | | Test-level default tolerance; see Section 6.6.4. |
 | `assertions` | ✓ | Array of scalar checks; must contain at least one. |
-| `grid_refs` | | PDE only. Array of `{"ref": URL-or-path}` objects pointing to GridDiscretization Descriptor files (§4.7.1). Each entry overrides the component's declared spatial grid and discretization for one run. A single-element list runs the test on exactly that grid configuration. A list of two or more entries enables a resolution sweep — the test is executed once per entry and the results are available to `convergence_order` assertions (§6.6.6). Validators MUST reject `convergence_order` assertions in tests with fewer than two `grid_refs` entries. |
 
 #### 6.6.3 Assertion Semantics
 
@@ -1164,12 +1108,10 @@ Each assertion is a per-(variable, time) check against a scalar expected value:
 |---|---|---|
 | `variable` | ✓ | Variable or species name. Local names (e.g., `"O3"`) or scoped references into subsystems (e.g., `"inner.X"`) are both allowed. |
 | `time` | ✓ | Simulation time at which to evaluate the assertion; must lie in `[time_span.start, time_span.end]`. |
-| `expected` | ✓ (except `convergence_order`) | Expected scalar value. Not used for `convergence_order` assertions — use `expected_order` instead. |
+| `expected` | ✓ | Expected scalar value (compared within `tolerance`). |
 | `tolerance` | | Per-assertion tolerance override. |
 | `coords` | | PDE only: spatial-point sample. Map from domain dimension name to the numeric coordinate at which to evaluate the field. Mutually exclusive with `reduce`. |
-| `reduce` | | PDE only: collapse the spatial field to a scalar before comparison. One of `integral`, `mean`, `max`, `min`, `L2_error`, `Linf_error`, `convergence_order`. Mutually exclusive with `coords`. |
-| `reference` | error-norms and convergence | Required when `reduce` is `L2_error`, `Linf_error`, or `convergence_order`: an inline `Expression` (evaluated over the component's domain coordinates) or `{type: "from_file", path, format?}`. |
-| `expected_order` | `convergence_order` only | Required when `reduce` is `convergence_order`. The expected numerical convergence rate (e.g., `2.0` for second-order methods). |
+| `reduce` | | PDE only: collapse the spatial field to a scalar before comparison. One of `integral`, `mean`, `max`, `min`, `L2_error`, `Linf_error`. Mutually exclusive with `coords`. |
 
 Assertions are stored **inline** only — there is no file-reference option. Tests should be small (a handful of assertion points), not full reference trajectories.
 
@@ -1194,12 +1136,12 @@ Each level is a `{abs?, rel?}` object; absent fields fall through to the next le
 
 #### 6.6.5 PDE-Aware Assertions
 
-Pointwise scalar assertions (the default — neither `coords` nor `reduce`) only make sense on 0-D components: there is one trajectory per variable, indexed by time alone. On a component with a spatial domain (`component.domain.spatial` non-empty), every assertion MUST select a scalar via either `coords` or `reduce`. Validators MUST reject:
+Pointwise scalar assertions (the default — neither `coords` nor `reduce`) only make sense on 0-D components: there is one trajectory per variable, indexed by time alone. On a component whose variables are shaped over one or more spatial index sets, every assertion MUST select a scalar via either `coords` or `reduce`. Validators MUST reject:
 
 - a 0-D component carrying an assertion with `coords` or `reduce` set; and
 - a PDE component carrying a pointwise assertion (no `coords`, no `reduce`).
 
-`coords` keys MUST match dimension names declared in `component.domain.spatial`. The runtime samples the field at the named point (interpolation vs nearest-grid is a runtime concern). `coords` may pin a strict subset of dimensions only when the remaining dimensions resolve to a single sample (e.g., a 1-D component with a single dimension); otherwise the assertion is ill-defined and validators MUST reject.
+`coords` keys MUST match the spatial index-set names the field is shaped over. The runtime samples the field at the named point (interpolation vs nearest-grid is a runtime concern). `coords` may pin a strict subset of dimensions only when the remaining dimensions resolve to a single sample (e.g., a 1-D component with a single dimension); otherwise the assertion is ill-defined and validators MUST reject.
 
 `reduce` collapses the field over the entire spatial domain at the given `time`. The pure reductions (`integral`, `mean`, `max`, `min`) compare directly against `expected`. The error-norm reductions compare against a `reference` solution:
 
@@ -1230,63 +1172,6 @@ Worked example — 1-D heat equation `u_t = α u_xx` on `x ∈ [0, 1]` with `u(x
 }
 ```
 
-#### 6.6.6 Convergence-Order Assertions
-
-The `reduce: "convergence_order"` assertion is the **gold-standard PDE validation** for discretization accuracy. It runs the enclosing test at each resolution listed in `grid_refs` (§6.6.2), computes the relative L2 error against `reference` at each resolution, and asserts that the measured rate matches `expected_order`.
-
-**Mechanics:**
-
-1. The test is executed once per entry in `grid_refs`, substituting the GDD's grid and discretizations into the component's declared domain.
-2. At each run, the relative L2 error is computed: `e_k = ||u_k − u_ref||_2 / ||u_ref||_2`.
-3. The representative grid spacing `h_k` for each run is taken as the geometric mean of the per-dimension `grid_spacing` values declared in the GDD's `grids` block.
-4. The observed convergence order is estimated by linear regression of `log(e_k)` on `log(h_k)`: `p_obs = Δ log(e) / Δ log(h)`.
-5. The assertion passes when `p_obs ≥ expected_order × (1 − rel)` where `rel` is resolved from the assertion's `tolerance.rel` (default: `0.1` — allowing 10% under the nominal order).
-
-**Validator requirements:**
-
-- Validators MUST reject a `convergence_order` assertion in a test with fewer than two `grid_refs` entries.
-- Validators MUST reject a `convergence_order` assertion that omits `reference` or `expected_order`.
-- Validators MUST reject a `convergence_order` assertion that includes `expected` (the scalar-comparison field is inapplicable).
-
-**Worked example — 1-D heat equation MMS convergence test** at three grid refinement levels (`grid_spacing` = 0.0625, 0.03125, 0.015625, i.e. N = 16, 32, 64), expecting second-order convergence:
-
-```json
-{
-  "id": "mms_order2",
-  "description": "MMS convergence test: 1-D heat equation u_t = 0.01 u_xx, expect O(dx^2)",
-  "initial_conditions": {
-    "type": "expression",
-    "values": {
-      "u": { "op": "sin", "args": [{ "op": "*", "args": [3.14159265, "x"] }] }
-    }
-  },
-  "time_span": { "start": 0.0, "end": 0.1 },
-  "grid_refs": [
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p0625_fd2.gdd.json" },
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p03125_fd2.gdd.json" },
-    { "ref": "https://esd.earthsciml.org/grids/cartesian_1d_dx0p015625_fd2.gdd.json" }
-  ],
-  "assertions": [
-    {
-      "variable": "u",
-      "time": 0.1,
-      "reduce": "convergence_order",
-      "reference": {
-        "op": "*",
-        "args": [
-          { "op": "exp", "args": [{ "op": "*", "args": [-0.01, 9.8696, 0.1] }] },
-          { "op": "sin", "args": [{ "op": "*", "args": [3.14159265, "x"] }] }
-        ]
-      },
-      "expected_order": 2.0,
-      "tolerance": { "rel": 0.1 }
-    }
-  ]
-}
-```
-
-The three GDD files encode grids at `grid_spacing` = 0.0625, 0.03125, 0.015625 (halving each step, i.e. N = 16, 32, 64 cells). Assuming second-order centered FD, the runtime should observe `p_obs ≈ 2.0`. With `tolerance.rel = 0.1`, the test passes when `p_obs ≥ 1.8`.
-
 ### 6.7 Examples
 
 A model may also carry an array of **inline examples**. An example is an illustrative run (or family of runs) showing how the component is intended to be used. Examples do not produce pass/fail outcomes — they produce trajectories and plots.
@@ -1301,10 +1186,7 @@ Like tests, examples are per-component and travel with the model in the `.esm` d
     {
       "id": "rate_constant_sweep",
       "description": "Sweep over photolysis rates to explore the NO-NO2-O3 partitioning.",
-      "initial_state": {
-        "type": "per_variable",
-        "values": { "NO": 10.0, "NO2": 20.0, "O3": 50.0 }
-      },
+      "initial_state": { "NO": 10.0, "NO2": 20.0, "O3": 50.0 },
       "parameters": {
         "k_NO_O3": 1.8e-5
       },
@@ -1339,11 +1221,10 @@ Like tests, examples are per-component and travel with the model in the `.esm` d
 |---|---|---|
 | `id` | ✓ | Identifier unique within this component's `examples` array. |
 | `description` | | Human-readable description. |
-| `initial_state` | | Initial conditions. Reuses the same `InitialConditions` schema as the `domains` section: `{type: "constant", value}`, `{type: "per_variable", values: {...}}`, `{type: "from_file", path, format?}`, or — for PDE components — `{type: "expression", values: {var: Expression}}` (see §11.4). |
+| `initial_state` | | Scalar initial-value overrides for this run, keyed by state-variable name (`{var: number}`). A component's initial fields are declared with `ic` equations in the model (§11.4); this map overrides their scalar values for this run only. |
 | `parameters` | | Parameter overrides, keyed by local parameter name. |
 | `time_span` | ✓ | `{start, end}` in the component's time units. |
 | `parameter_sweep` | | Optional parameter sweep; see Section 6.7.3. When present, the example represents a family of runs rather than a single trajectory. |
-| `grid_refs` | | PDE only. Array of `{"ref": URL-or-path}` objects pointing to GridDiscretization Descriptor files (§4.7.1). Each entry overrides the component's declared spatial grid and discretization for one run. A single-element list runs the example on exactly that grid configuration. When multiple entries are provided, the example represents a family of runs at different grid configurations — analogous to `parameter_sweep` but varying the grid rather than parameters. `grid_refs` and `parameter_sweep` may be combined; the total run count is their Cartesian product. |
 | `plots` | | Plot specifications derived from the run(s); see Section 6.7.4. |
 
 #### 6.7.3 Parameter Sweeps
@@ -1660,7 +1541,6 @@ This section maps to Catalyst.jl's `ReactionSystem` but is fully self-contained.
 
 | Field | Required | Description |
 |---|---|---|
-| `domain` | | Name of a domain from the `domains` section that this reaction system is defined on. Omit or set to `null` for 0D (non-spatial) systems. |
 | `coupletype` | | Coupling type name. Informational label identifying this system's role in coupling. |
 | `reference` | | Academic citation |
 | `species` | ✓ | Named reactive species with units, defaults, descriptions. Each species may set `constant: true` to declare a **reservoir species** whose concentration is held fixed (no ODE integration) while it still participates in reactions as a substrate or product (see §7.4). |
@@ -1725,13 +1605,11 @@ Authentication, credential management, and per-variable temporal availability co
 
 | Field | Required | Description |
 |---|---|---|
-| `kind` | ✓ | Structural kind: `"grid"`, `"points"`, `"static"`, or `"mesh"`. The first three are the classical kinds (§8.2–§8.6); `"mesh"` (discretization RFC §8.A, see §8.9 below) declares a loader that publishes integer connectivity tables and float metric arrays for an unstructured grid. Scientific role (emissions, meteorology, elevation, …) is **not** schema-validated and belongs in `metadata.tags`. |
+| `kind` | ✓ | Structural kind: `"grid"` (gridded array source), `"points"` (scattered point/station source), or `"static"` (time-invariant source). Any grid geometry the loader reads — coordinates, connectivity, metric arrays — is exposed as ordinary loader `variables` and consumed downstream by `aggregate` FAQs; it needs no special descriptor. Scientific role (emissions, meteorology, elevation, …) is **not** schema-validated and belongs in `metadata.tags`. |
 | `source` | ✓ | File discovery object (see §8.2). |
 | `variables` | ✓ | Map of schema-level variable name → variable descriptor (see §8.5). At least one entry required. |
 | `temporal` | | Temporal coverage and record layout (see §8.3). |
-| `grid` | | Native grid in the unified GDD `Grid` format (see §8.4). Optional. |
-| `mesh` | conditional | Mesh descriptor (see §8.9). **Required when `kind: "mesh"`**, ignored otherwise. |
-| `determinism` | | Reproducibility contract — endian / float format / integer width (see §8.9). Applies to any loader kind, but is most commonly declared on mesh loaders. |
+| `determinism` | | Reproducibility contract for binary formats — endian / float format / integer width. A binding that cannot honor the declared layout MUST reject the file at load rather than reinterpret bytes. |
 | `reference` | | Data source citation. |
 | `metadata` | | Free-form metadata. The `tags` array is conventional for scientific role. |
 
@@ -1770,30 +1648,6 @@ temporal:
 
 Both **static declaration** (`records_per_file` + `frequency`) and **runtime discovery** (`time_variable`) are allowed. If both are present, the static declaration wins and `time_variable` acts as a fallback. `records_per_file: "auto"` explicitly defers to runtime discovery.
 
-### 8.4 `grid` — native grid (GDD `Grid`)
-
-The optional `grid` field describes the data's **native** grid — the grid the loader reads from disk — using the same unified GDD `Grid` format that discretization grids and model-target grids use (see the `Grid` `$def`). This replaces the former bespoke `spatial` block (`crs` string + `grid_type` enum), so loader-native grids, model-target grids, and discretization grids share one schema that can be cross-validated.
-
-```
-grid:
-  family: "cartesian" | "unstructured"     # required
-  crs:                                      # optional; orthogonal to family
-    projection: "longlat" | "lambert_conformal" | "mercator" | "polar_stereographic" | "rotated_pole"
-    datum: "sphere" | "WGS84"               # R required when datum=sphere
-    R: number                               # sphere radius in metres
-    parameters: { <name>: number }          # e.g. LCC {lat_1, lat_2, lat_0, lon_0}
-  dimensions: [string]                      # required; ordered logical dim names
-  extents:                                  # required for cartesian
-    <dim>: { n: integer|string, spacing: "uniform"|"nonuniform" }
-  connectivity: { ... }                     # required for unstructured (see Grid $def)
-  locations: [string]                       # optional declared stagger locations
-  parameters: { <name>: Parameter }         # optional; e.g. runtime-resolved dim counts
-```
-
-The `crs` descriptor **names** the native projection and the parameters a downstream reprojection rule consumes; the grid itself performs no reprojection. Geographic grids use `projection: "longlat"` (the identity case). A projected native grid — e.g. WRF / NEI Lambert Conformal — is topologically `cartesian` with a `crs` naming the projection: `crs` is **orthogonal** to the topological `family` (a lat-lon grid and an LCC grid share `family: "cartesian"` and differ only in `crs`).
-
-`grid` applies to `kind: "grid"` (cartesian, geographic or projected). For `kind: "points"` the native grid is an unstructured geographic point cloud; because the GDD `Grid` `unstructured` family requires connectivity tables that a bare point cloud lacks, point loaders may **omit** `grid` (their geographic CRS is conventional). For `kind: "mesh"`, geometry is described by the `mesh` descriptor (§8.9) plus a `grids.<g>` entry, and `grid` is omitted. A loader whose native grid is fully resolved at runtime may also omit it; dimension counts that are only known at load time can be expressed as `extents.<dim>.n` parameter references (§8.4 `parameters`).
-
 ### 8.5 `variables` — variable mapping
 
 ```
@@ -1808,30 +1662,31 @@ variables:
 
 `file_variable` lets the schema-level variable name differ from the on-disk name. `unit_conversion` is either a plain multiplicative factor or a full `Expression` AST (§4); the runtime applies it when producing values in the declared `units`.
 
-### 8.6 Regridding — removed (now a model concern)
+### 8.6 Regridding — a coupling expression
 
-Earlier revisions carried a loader-level `regridding` block (`fill_value`, `extrapolation`). It has been **removed**: a data loader is pure I/O and performs no regridding. Transferring a loader's native fields onto a consuming model's target grid — and the choice of method (conservative for cell-centered fields, interpolating for staggered fields, cell-averaging with a configurable missing value for scattered points) — is a **model** concern, selected **per variable** on the model that owns the loader as a subsystem (RFC pure-io-data-loaders §4.1, §5.2, §6). Both blocks were removed in the **v0.7.0** hard break.
+A data loader is pure I/O and performs no regridding. There is no `regridding`
+block on the loader and no `Model.regrid` map: transferring a loaded field onto a
+consuming variable's grid is expressed like any other coupling, as an ordinary
+expression in the coupling relationship between the two variables (§10). Because
+the numeric core of every standard regridder is a Functional Aggregate Query —
+the overlap-area `sum_product` apply, the normalization group-by, and the
+temporal-interpolation blend are all `aggregate` nodes (RFC
+semiring-faq-unified-ir §A.8) — a regridding coupling is just an `aggregate`
+expression over the source field and the (FAQ-constructed or loaded) overlap
+weights. The kernels map cleanly:
 
-A loader that still carries a `regridding` block (or the old `spatial` block) is **rejected** at load. Two layers enforce this: the pure-I/O `DataLoader` declares `additionalProperties: false`, so JSON-Schema validation reports each stale block as an unknown property; and, independently, bindings MUST emit a named, version-keyed load-time diagnostic that reads the file's declared `esm` version and points at this revision — **`data_loader_regridding_removed`** for a surviving `regridding` block and **`data_loader_spatial_removed`** for a surviving `spatial` block. (These mirror `apply_expression_template_version_too_old`: a clear, migration-directing error keyed on the declared `esm` version, rather than a bare schema rejection.) Loading MUST fail. A pre-0.7.0 loader file is migrated by deleting the `spatial`/`regridding` blocks, describing the native grid under `grid` (a GDD `Grid`, §8.4), and moving any per-variable regridding choice to the owning model's `Model.regrid` map (§6.2).
+- **conservative** (area-weighted, mass-conserving): `A_ij = area(src_i ∩ tgt_j)`
+  via the `intersect_polygon` kernel leaf + a `polygon_area` `sum_product` FAQ,
+  then a `sum_product` apply normalized by a group-by row-sum.
+- **B-spline / bilinear** (interpolating): a `sum_product` over an interpolation
+  stencil whose weights are an ordinary FAQ of the source coordinates.
+- **cell-averaging** (scattered points → cells): a bin/`skolem` spatial join
+  followed by a `sum_product` mean, with a `missing_value` fill expressed as an
+  `ifelse` over the per-cell contributor count.
 
-The per-variable choice is expressed by the optional **`Model.regrid`** map (§6.2), keyed by the loader-field variable name. Each entry is a `RegridSpec` with these optional fields:
-
-| Field | Description |
-|---|---|
-| `method` | Explicit override of the regridding kernel: `"conservative"` (area-weighted, mass-conserving — cell-centered gridded fields), `"bspline"` (staggered-grid B-spline interpolation — edge/face-staggered gridded fields), or `"cell_average"` (bin-average of source stations falling in each target cell — scattered points). Absent ⇒ derived from the variable's staggering on its native grid. These name the abstract kernel; each maps to a declarative ESD `regridding/*.esm` program. |
-| `missing_value` | Number consumed **only** by `cell_average` (scattered-point) regridding: the value placed in a target cell that contains **no** contributing source station — the point analogue of a no-data fill. Ignored by the `conservative`/`bspline` kernels. |
-| `description` | Optional human-readable note. |
-
-This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loader model (e.g. OpenAQ) declares, per regridded variable, the fill returned for empty target cells. It is distinct from `Interface.regridding`, which governs dimension-resolution matching at a domain interface (§11), not loader-field transfer.
-
-```jsonc
-// A model owning an OpenAQ point loader as a subsystem, regridding PM2.5 by
-// cell-averaging with a -999.0 no-data fill for cells with no station:
-"regrid": {
-  "PM2_5": { "method": "cell_average", "missing_value": -999.0,
-             "description": "empty target cells receive the no-data sentinel" }
-}
-```
+None of this needs schema support beyond `aggregate` (and the `intersect_polygon`
+leaf): a regridding rule is a normal coupling expression, authored inline or
+referenced as an ESD subsystem.
 
 ### 8.7 Out of scope
 
@@ -1856,19 +1711,6 @@ This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loa
       "file_period": "PT1H",
       "frequency":   "PT1H",
       "records_per_file": 1
-    },
-    "grid": {
-      "family": "cartesian",
-      "crs": { "projection": "longlat", "datum": "WGS84" },
-      "dimensions": ["lon", "lat"],
-      "extents": {
-        "lon": { "n": "n_lon", "spacing": "uniform" },
-        "lat": { "n": "n_lat", "spacing": "uniform" }
-      },
-      "parameters": {
-        "n_lon": { "description": "longitude cell count, resolved from the source file" },
-        "n_lat": { "description": "latitude cell count, resolved from the source file" }
-      }
     },
     "variables": {
       "u": { "file_variable": "U10M", "units": "m/s", "description": "10-m eastward wind" },
@@ -1905,19 +1747,6 @@ This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loa
       "frequency":   "P1M",
       "records_per_file": 12,
       "time_variable": "time"
-    },
-    "grid": {
-      "family": "cartesian",
-      "crs": { "projection": "longlat", "datum": "WGS84" },
-      "dimensions": ["lon", "lat"],
-      "extents": {
-        "lon": { "n": "n_lon", "spacing": "uniform" },
-        "lat": { "n": "n_lat", "spacing": "uniform" }
-      },
-      "parameters": {
-        "n_lon": { "description": "longitude cell count, resolved from the source file" },
-        "n_lat": { "description": "latitude cell count, resolved from the source file" }
-      }
     },
     "variables": {
       "emis_NOx": {
@@ -1957,21 +1786,6 @@ This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loa
       "records_per_file": "auto",
       "time_variable": "time"
     },
-    "grid": {
-      "family": "cartesian",
-      "crs": { "projection": "longlat", "datum": "WGS84" },
-      "dimensions": ["lon", "lat", "lev"],
-      "extents": {
-        "lon": { "n": "n_lon", "spacing": "uniform" },
-        "lat": { "n": "n_lat", "spacing": "uniform" },
-        "lev": { "n": "n_lev", "spacing": "nonuniform" }
-      },
-      "parameters": {
-        "n_lon": { "description": "longitude cell count, resolved from the source file" },
-        "n_lat": { "description": "latitude cell count, resolved from the source file" },
-        "n_lev": { "description": "pressure-level count, resolved from the source file" }
-      }
-    },
     "variables": {
       "T": {
         "file_variable": "t",
@@ -2009,19 +1823,6 @@ This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loa
     "source": {
       "url_template": "s3://prd-tnm/StagedProducts/Elevation/1/TIFF/USGS_Seamless_DEM_1.tif"
     },
-    "grid": {
-      "family": "cartesian",
-      "crs": { "projection": "longlat", "datum": "WGS84" },
-      "dimensions": ["lon", "lat"],
-      "extents": {
-        "lon": { "n": "n_lon", "spacing": "uniform" },
-        "lat": { "n": "n_lat", "spacing": "uniform" }
-      },
-      "parameters": {
-        "n_lon": { "description": "longitude cell count, resolved from the source file" },
-        "n_lat": { "description": "latitude cell count, resolved from the source file" }
-      }
-    },
     "variables": {
       "elevation": {
         "file_variable": "Band1",
@@ -2037,134 +1838,6 @@ This is the **point cell-averaging missing_value** slot (RFC §5.2): a point-loa
   }
 }
 ```
-
-#### WRF regional (projected native grid — Lambert Conformal Conic)
-
-A projected native grid is topologically `cartesian` with a `crs` naming the projection and its parameters (orthogonal to `family`). The loader still performs no reprojection; the `crs` parameters are exactly what a downstream model's reprojection rule consumes.
-
-```json
-{
-  "WRF_d01": {
-    "kind": "grid",
-    "source": {
-      "url_template": "https://data.rda.ucar.edu/wrfout_d01_{date:%Y-%m-%d_%H:%M:%S}.nc"
-    },
-    "temporal": { "file_period": "PT1H", "frequency": "PT1H", "records_per_file": 1, "time_variable": "time" },
-    "grid": {
-      "family": "cartesian",
-      "crs": {
-        "projection": "lambert_conformal",
-        "datum": "sphere",
-        "R": 6370000.0,
-        "parameters": { "lat_1": 30.0, "lat_2": 60.0, "lat_0": 38.999996, "lon_0": -97.0 }
-      },
-      "dimensions": ["west_east", "south_north", "bottom_top"],
-      "extents": {
-        "west_east": { "n": "n_x", "spacing": "uniform" },
-        "south_north": { "n": "n_y", "spacing": "uniform" },
-        "bottom_top": { "n": "n_z", "spacing": "nonuniform" }
-      },
-      "parameters": {
-        "n_x": { "description": "west-east cell count, resolved from the source file" },
-        "n_y": { "description": "south-north cell count, resolved from the source file" },
-        "n_z": { "description": "vertical level count, resolved from the source file" }
-      }
-    },
-    "variables": {
-      "T2": { "file_variable": "T2", "units": "K", "description": "2-m air temperature" },
-      "U10": { "file_variable": "U10", "units": "m/s", "description": "10-m eastward wind" }
-    },
-    "reference": { "citation": "Skamarock et al. (2019), WRF v4", "url": "https://www2.mmm.ucar.edu/wrf/users/" },
-    "metadata": { "tags": ["meteorology", "wrf", "lambert_conformal"] }
-  }
-}
-```
-
-### 8.9 `kind: "mesh"` — mesh loaders (discretization RFC §8.A)
-
-A loader declared with `kind: "mesh"` publishes the integer connectivity tables and float metric arrays that an unstructured `grids.<g>` entry (see the discretization RFC §6) resolves by `{loader, field}` reference. `"mesh"` is distinct from `kind: "grid"` (which describes a regular gridded dataset with a native grid under `grid`, §8.4) and from `kind: "points"` (which is a point-cloud placeholder with no connectivity).
-
-#### 8.9.1 `mesh` — mesh descriptor
-
-```
-mesh:
-  topology: enum                    # required — closed set, see below
-  connectivity_fields: [string]     # required — integer-typed fields
-  metric_fields: [string]           # required — float-typed fields
-  dimension_sizes:                  # optional
-    <dim>: integer | "from_file"
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `topology` | ✓ | Closed enum: `"mpas_voronoi"` (v0.2.0 MVP), `"fesom_triangular"` (reserved), `"icon_triangular"` (reserved). Adding a new value is a minor version bump. |
-| `connectivity_fields` | ✓ | List of integer-typed fields the loader exposes. Entries are referenceable from `grids.<g>.connectivity.<name>.field`. |
-| `metric_fields` | ✓ | List of float-typed fields the loader exposes. Entries are referenceable from `grids.<g>.metric_arrays.<name>.generator.field`. |
-| `dimension_sizes` | | Map of dimension name → integer extent or the literal string `"from_file"`. Values populate grid-level `parameters` marked `value: "from_loader"`. |
-
-#### 8.9.2 `determinism` — reproducibility contract
-
-```
-determinism:
-  endian: "little" | "big"
-  float_format: "ieee754_single" | "ieee754_double"
-  integer_width: 32 | 64
-```
-
-`determinism` is a loader-level contract for bit-exact reproducibility. All fields are optional; declared fields are a contract that bindings MUST honor. A binding that cannot honor a declared endian / float format / integer width MUST reject the file at load rather than silently reinterpreting bytes. `determinism` is meaningful for any loader kind but is most commonly declared on mesh loaders where on-wire integer layouts vary.
-
-#### 8.9.3 Worked example — MPAS cvmesh
-
-```json
-{
-  "data_loaders": {
-    "mpas_mesh": {
-      "kind": "mesh",
-      "source": { "url_template": "file:///data/mpas/x1.2562.grid.nc" },
-      "mesh": {
-        "topology": "mpas_voronoi",
-        "connectivity_fields": ["cellsOnEdge", "edgesOnCell", "verticesOnEdge", "nEdgesOnCell"],
-        "metric_fields":       ["dcEdge", "dvEdge", "areaCell"],
-        "dimension_sizes":     { "nCells": "from_file", "nEdges": "from_file", "maxEdges": "from_file" }
-      },
-      "determinism": {
-        "endian": "little",
-        "float_format": "ieee754_double",
-        "integer_width": 32
-      },
-      "variables": {
-        "cellsOnEdge":    { "file_variable": "cellsOnEdge",    "units": "1" },
-        "edgesOnCell":    { "file_variable": "edgesOnCell",    "units": "1" },
-        "verticesOnEdge": { "file_variable": "verticesOnEdge", "units": "1" },
-        "nEdgesOnCell":   { "file_variable": "nEdgesOnCell",   "units": "1" },
-        "dcEdge":         { "file_variable": "dcEdge",         "units": "m" },
-        "dvEdge":         { "file_variable": "dvEdge",         "units": "m" },
-        "areaCell":       { "file_variable": "areaCell",       "units": "m^2" }
-      },
-      "reference": { "doi": "10.5194/gmd-5-1115-2012" }
-    }
-  }
-}
-```
-
-The grid that consumes this loader references fields by name, not by kind:
-
-```json
-"grids": {
-  "mpas_cvmesh": {
-    "family": "unstructured",
-    "dimensions": ["cell", "edge", "vertex"],
-    "connectivity": {
-      "cellsOnEdge": { "shape": ["nEdges", 2], "rank": 2, "loader": "mpas_mesh", "field": "cellsOnEdge" }
-    },
-    "metric_arrays": {
-      "dcEdge": { "rank": 1, "dim": "edge", "generator": { "kind": "loader", "loader": "mpas_mesh", "field": "dcEdge" } }
-    }
-  }
-}
-```
-
----
 
 ## 9. Closed Function Registry
 
@@ -2507,13 +2180,21 @@ Conformance fixtures under `tests/conformance/function_tables/` exercise:
 
 Each fixture pairs an `.esm` file with a small numeric harness that asserts the lowered evaluation matches the equivalent inline-const lookup at the §9.2 tolerance contract (`abs: 0, rel: 0` non-FMA, `abs: 0, rel: 4e-16` mixed-FMA cross-binding). All five bindings MUST pass.
 
-### 9.6 Expression templates (v0.4.0)
+### 9.6 Rewrite rules (expression templates)
 
-v0.4.0 adds **component-scoped in-file Expression-AST templates** for factoring repeated kinetic / rate forms. The mechanism is purely structural: a template names a fixed Expression body with parameter substitution slots, and `apply_expression_template` AST nodes elsewhere in the same component reference the template by name with per-parameter bindings. See `docs/content/rfcs/ast-expression-templates.md` for the full RFC and motivation; this section pins the normative load-time behavior.
+An `expression_templates` entry is a **rewrite rule**: a set of metavariable `params`, an Expression `body` (the replacement), and an optional `match` pattern. It is the **single** structural-substitution mechanism in the format, covering three cases with one engine:
+
+| Case | `match` | Applied by |
+|---|---|---|
+| **Variable substitution** | a bare metavariable | binding a name → AST |
+| **Named template expansion** | *absent* | an explicit `apply_expression_template` node |
+| **Operator lowering** (e.g. `grad`, `div`, `laplacian`) | an operator pattern like `{op:"grad", args:["f"], dim:"d"}` | auto-applied wherever the pattern matches |
+
+The mechanism is purely structural — no evaluation, no metaprogramming. **PDE-operator discretization — including its boundary conditions — is not special schema machinery; it is an ordinary rewrite rule** that lowers a high-level op (`grad`/`div`/`laplacian`) into an `aggregate` + `makearray` stencil with the boundary treatment baked into the `makearray` (§9.6.8). There is no separate boundary-condition declaration anywhere in the format. See `docs/content/rfcs/ast-expression-templates.md` for motivation; this section pins the normative load-time behavior.
 
 #### 9.6.1 The `expression_templates` block
 
-`expression_templates` is declared **inside a single `model` or `reaction_system`** (top-level templates and cross-component sharing are deferred to a follow-up RFC). It is a JSON object whose keys are template names and whose values are template definitions:
+`expression_templates` is declared **inside a single `model` or `reaction_system`** (top-level templates and cross-component sharing are deferred to a follow-up RFC). It is a JSON object whose keys are template names and whose values are rewrite-rule definitions:
 
 ```json
 "expression_templates": {
@@ -2533,8 +2214,12 @@ v0.4.0 adds **component-scoped in-file Expression-AST templates** for factoring 
 
 Required fields:
 
-- `params`: ordered array of unique non-empty parameter names (strings).
-- `body`: a normal Expression AST. Parameter occurrences appear as bare parameter-name strings in any variable-reference position.
+- `params`: ordered array of unique non-empty parameter (metavariable) names (strings).
+- `body`: a normal Expression AST (the replacement). Parameter occurrences appear as bare parameter-name strings in any variable-reference position.
+
+Optional field:
+
+- `match`: a pattern Expression that makes the entry an **auto-applied rewrite rule**. Parameter names appearing as bare strings in `match` are wildcards: a parameter in an operand/`args` position binds to the matched sub-AST; a parameter in a scalar field (e.g. `dim`, `side`) binds to the matched literal. The rule fires wherever `match` structurally matches a node. When `match` is absent the entry is applied only by explicit `apply_expression_template` invocation (§9.6.2).
 
 #### 9.6.2 The `apply_expression_template` op
 
@@ -2557,8 +2242,8 @@ Required fields:
 
 #### 9.6.3 Constraints (normative)
 
-1. **AST → AST only.** Templates take Expression args and produce an Expression. No string interpolation, no schema-level substitution, no metaprogramming.
-2. **No template-calls-template, no recursion.** A template `body` MUST NOT contain `apply_expression_template` nodes itself.
+1. **AST → AST only.** Rules take Expression args and produce an Expression. No string interpolation, no schema-level substitution, no metaprogramming.
+2. **Single-pass, no recursion.** Rewriting is one bottom-up load-time pass over each expression tree, applying `match` rules in template **declaration order**; a replacement `body` is **not** re-scanned for further matches. A `match` rule whose `body` re-introduces its own pattern is rejected with diagnostic `rewrite_rule_nonterminating`. A `body` MUST NOT contain `apply_expression_template` nodes (`apply_expression_template_recursive_body`). (Bounded multi-pass fixpoint rewriting is deferred to a follow-up.)
 3. **Typed signatures (positional-by-name).** Bindings MUST cover every entry of the template's `params` exactly — no missing keys, no extras.
 4. **Component-local scope.** Templates declared inside one `model` / `reaction_system` are visible only within that component's expression positions.
 5. **Pure syntactic substitution.** Every parameter occurrence in `body` is replaced by the bound argument's AST in source order. Expansion MUST NOT depend on argument evaluation.
@@ -2594,6 +2279,48 @@ Conformance fixtures live under `tests/conformance/expression_templates/`. The v
 
 - `arrhenius_smoke/fixture.esm` — a 2-parameter `arrhenius` template applied across three reactions with different scalar bindings.
 - `arrhenius_smoke/expanded.esm` — the canonical post-expansion form. All five bindings (Julia, Python, Rust, TypeScript, Go) MUST produce a structurally-equal `reactions` array on load.
+
+#### 9.6.8 PDE-operator lowering — discretization with boundary conditions baked in
+
+The high-level spatial operators `grad`, `div`, `laplacian` are **sugar**: each lowers to an `aggregate` + `makearray` expression via a `match` rewrite rule (§9.6) at load time — exactly as `table_lookup` lowers to `interp.*` (§9.5). There is **no** discretization block and **no** boundary-condition declaration anywhere in the format. A discretized spatial operator over a finite domain is inseparable from its boundary treatment, so **the boundary conditions are part of the rewrite rule itself**: the rule body is a single `makearray` whose interior region is the stencil `aggregate` and whose boundary-face regions encode the BC (later regions overwrite earlier, §4.3.2). Boundary conditions cannot be — and must not be — specified anywhere else.
+
+A discretization rule therefore names its BC in its identity. `central_grad_lon_zero_grad_bc` matches `grad(f, dim: "lon")` and builds a `makearray` from the interior central-difference `aggregate` plus two one-sided boundary faces for the zero-gradient condition (here over the §13.1 grid, `lon` size 144, `lat` size 91):
+
+```json
+"central_grad_lon_zero_grad_bc": {
+  "params": ["f"],
+  "match": { "op": "grad", "args": ["f"], "dim": "lon" },
+  "body": {
+    "op": "makearray",
+    "regions": [ [[2, 143], [1, 91]], [[1, 1], [1, 91]], [[144, 144], [1, 91]] ],
+    "values": [
+      { "op": "aggregate", "output_idx": ["i", "j"], "args": ["f"],
+        "ranges": { "i": [2, 143], "j": { "from": "lat" } },
+        "expr": { "op": "/", "args": [
+          { "op": "-", "args": [
+            { "op": "index", "args": ["f", { "op": "+", "args": ["i", 1] }, "j"] },
+            { "op": "index", "args": ["f", { "op": "-", "args": ["i", 1] }, "j"] } ] },
+          { "op": "*", "args": [2, "dx"] } ] } },
+      { "op": "aggregate", "output_idx": ["j"], "args": ["f"],
+        "ranges": { "j": { "from": "lat" } },
+        "expr": { "op": "/", "args": [
+          { "op": "-", "args": [ { "op": "index", "args": ["f", 2, "j"] },
+                                 { "op": "index", "args": ["f", 1, "j"] } ] }, "dx" ] } },
+      { "op": "aggregate", "output_idx": ["j"], "args": ["f"],
+        "ranges": { "j": { "from": "lat" } },
+        "expr": { "op": "/", "args": [
+          { "op": "-", "args": [ { "op": "index", "args": ["f", 144, "j"] },
+                                 { "op": "index", "args": ["f", 143, "j"] } ] }, "dx" ] } }
+    ]
+  }
+}
+```
+
+The first region fills the interior columns (`i ∈ [2,143]`) with the centered difference; the two single-cell faces (`i=1`, `i=144`) hold the one-sided (zero-gradient) difference. The three regions tile the axis, so the discretized gradient is fully defined with its BC and there is nowhere else a boundary condition could live.
+
+**Choosing a scheme = choosing a rule.** A periodic-BC gradient is a *different* rule (`central_grad_lon_periodic`) whose single interior `aggregate` gathers with the `periodic` boundary policy (CONFORMANCE_SPEC §5.5.5) and needs no face overrides; a Dirichlet rule overwrites the faces with the fixed value; a Robin rule overwrites with the solved boundary expression; and a rule for a seam shared with another variable overwrites the face with an `index` into that variable. Bindings ship **default built-in** rules for the common (operator × standard-BC) combinations, so a file MAY use `grad`/`div`/`laplacian` with no in-file rules (as in §13.2). An author overrides by declaring an earlier `match` rule (upwind, WENO, a custom spacing, or a different BC; declaration order wins, §9.6.3).
+
+**Determinism.** Lowering is the single-pass rewrite of §9.6.3 (rules applied in declaration order, replacements not re-scanned). Two bindings expanding the same file MUST produce structurally identical post-lowering ASTs.
 
 ---
 
@@ -2716,41 +2443,27 @@ For `variable_map` coupling entries, `transform` specifies how the source variab
 | `multiplicative` | Multiply the target by the source variable |
 | `conversion_factor` | Apply a unit conversion factor (specified in the `factor` field) |
 
-### 10.5 Cross-Domain Coupling
+### 10.5 Coupling across grids and dimensionality
 
-When two coupled systems live on different domains, the coupling entry must specify how to handle the dimension mismatch. There are two mechanisms: **interface-mediated** coupling (for spatial domains that share a geometric boundary) and **lifting** (for coupling between 0D and spatial systems).
+Coupled components may live on different index sets (resolutions), or differ in dimensionality (a 0-D box model feeding a spatial PDE), or read from a data loader whose native grid differs from the model's. The coupling entry handles the mismatch in one of two ways: a **regridding expression** (different grids/resolutions) or **lifting** (0-D ↔ spatial).
 
-#### The `interface` Field
+#### Regridding
 
-For coupling between spatial domains of different dimensionality, reference a named interface from the `interfaces` section (see Section 12). The interface defines the geometric relationship — which dimensions are shared, how non-shared dimensions are constrained, and what regridding strategy to use.
+When a variable is mapped between two components on different index sets — or from a data loader's native grid onto a model's grid — the coupling entry's `transform` is a **regridding expression**: an ordinary `aggregate` (FAQ) that maps the source field onto the target grid (overlap-area weighting, interpolation, or slicing a higher-dimensional field at a fixed level are all just `aggregate` index expressions; §8.6, RFC semiring-faq-unified-ir §A.8). There is no separate geometric-relationship declaration.
 
 ```json
 {
   "type": "variable_map",
-  "from": "AtmosphericDynamics.wind_u",
-  "to": "WildfirePropagation.wind_u",
-  "transform": "param_to_var",
-  "interface": "ground_surface",
-  "description": "Ground-level eastward wind drives wildfire spread"
-}
-```
-
-The interface handles both dimension reduction (e.g., extracting a 2D slice from a 3D field) and regridding (when shared dimensions have different resolutions across domains). The coupling entry only needs to name the interface — the dimensional details are defined once in the interface specification.
-
-For `operator_compose` and `couple`, the `interface` field works similarly:
-
-```json
-{
-  "type": "operator_compose",
-  "systems": ["AtmosphericDynamics", "WildfireHeatSource"],
-  "interface": "ground_surface",
-  "description": "Inject wildfire heat release into lowest atmospheric layer"
+  "from": "GEOSFP.u",
+  "to": "Advection.u_wind",
+  "transform": { "op": "aggregate", "comment": "regrid the loader's native lon/lat onto the model's lon/lat index sets" },
+  "description": "Eastward wind regridded onto the model grid"
 }
 ```
 
 #### The `lifting` Field
 
-For coupling between a 0D (non-spatial) system and a spatially-resolved system, the `lifting` field specifies how the 0D system's inputs and outputs map to the spatial grid. The lifting is relative to the **target system's domain** — i.e., the spatial grid on which the operation is evaluated.
+For coupling between a 0-D (scalar-shaped) system and a spatially-resolved system, the `lifting` field specifies how the 0-D system's inputs and outputs map to the spatial grid.
 
 ```json
 {
@@ -2759,64 +2472,31 @@ For coupling between a 0D (non-spatial) system and a spatially-resolved system, 
   "to": "WildfirePropagation.spread_rate",
   "transform": "param_to_var",
   "lifting": "pointwise",
-  "description": "Wind-computed spread rate feeds wildfire PDE at each grid point"
+  "description": "Wind-computed spread rate feeds the wildfire PDE at each grid point"
 }
 ```
 
 | Lifting | Description |
 |---|---|
-| `pointwise` | **(Default.)** The 0D system is evaluated independently at each grid point. Inputs are pointwise values extracted from spatial fields; outputs are pointwise values applied to the spatial grid. This is how column physics parameterizations work in climate models. |
-| `broadcast` | A single scalar output from the 0D system is applied uniformly to all grid points. Use when the 0D system computes a domain-wide quantity (e.g., a global scaling factor). |
-| `mean` | Inputs to the 0D system are the spatial mean of the source fields. Output is scalar (combine with `broadcast` on the output side if needed). |
-| `integral` | Inputs to the 0D system are the spatial integral of the source fields. Output is scalar. |
+| `pointwise` | **(Default.)** The 0-D system is evaluated independently at each grid point. This is how column physics parameterizations work in climate models. |
+| `broadcast` | A single scalar output from the 0-D system is applied uniformly to all grid points. |
+| `mean` | Inputs to the 0-D system are the spatial mean of the source fields; output is scalar. |
+| `integral` | Inputs to the 0-D system are the spatial integral of the source fields; output is scalar. |
 
-When `lifting` is omitted and the source or target system has `"domain": null`, pointwise lifting is assumed.
+When `lifting` is omitted and one side has scalar-shaped (0-D) variables, pointwise lifting is assumed.
 
-#### Combining `interface` and `lifting`
+#### Combining regridding and lifting
 
-A coupling chain may require both an interface (for dimension reduction between spatial domains) and lifting (for 0D intermediaries). This is expressed as separate coupling entries. For example, extracting ground-level winds from a 3D atmosphere, passing them through a 0D algebraic fire-spread calculator, and feeding the result into a 2D wildfire model:
+A coupling chain may need both a regridding expression and lifting; express each as a separate coupling entry — e.g. loaded winds regridded onto the model grid, then a 0-D fire-spread calculator lifted pointwise into a spatial wildfire model.
 
-```json
-[
-  {
-    "type": "variable_map",
-    "from": "AtmosphericDynamics.wind_u",
-    "to": "FireSpreadCalculator.wind_u",
-    "transform": "param_to_var",
-    "interface": "ground_surface",
-    "lifting": "pointwise",
-    "description": "Ground-level u-wind to fire spread calculator"
-  },
-  {
-    "type": "variable_map",
-    "from": "FireSpreadCalculator.spread_rate",
-    "to": "WildfirePropagation.R_spread",
-    "transform": "param_to_var",
-    "lifting": "pointwise",
-    "description": "Calculated spread rate drives wildfire propagation"
-  }
-]
-```
+### 10.6 Coupling Rules
 
-In the first entry, `interface` reduces 3D→2D (extracting at the ground surface) and `lifting: "pointwise"` maps the resulting 2D field into the 0D system at each grid point. In the second entry, `lifting: "pointwise"` maps the 0D output to the 2D wildfire grid.
-
-### 10.6 Cross-Domain Coupling Rules
-
-1. **Same-domain coupling** requires no `interface` or `lifting` field and works as described in Sections 10.1–10.4.
-
-2. **Cross-domain spatial coupling** (between domains that share a geometric boundary) **must** reference a named `interface`. The interface defines dimension mapping and regridding. It is an error to couple systems on different spatial domains without an interface.
-
-3. **0D ↔ spatial coupling** **must** specify a `lifting` strategy (or accept the default `pointwise`). A 0D system coupled to a spatial system is evaluated on the spatial system's grid according to the lifting strategy.
-
-4. **0D ↔ 0D coupling** requires neither `interface` nor `lifting` — it is standard scalar coupling.
-
-5. **Cross-domain with 0D intermediary**: When a 0D system mediates between two spatial domains (e.g., atmosphere → 0D calculator → wildfire), each leg of the coupling is a separate entry. The first entry uses `interface` + `lifting`, the second uses `lifting` alone.
-
-6. **Interface-mediated `operator_compose`**: When `operator_compose` crosses an interface, the operator's equations are evaluated on the *lower-dimensional* domain's grid. The interface handles projection/injection automatically — the operator adds terms to the target system's equations after the interface has mapped the fields.
-
-7. **Bidirectional interfaces**: An interface can be traversed in either direction. Coupling from a 3D domain to a 2D domain through an interface performs restriction (slicing + regridding). Coupling from a 2D domain to a 3D domain through the same interface performs prolongation (injection into the constrained dimension level + regridding).
-
-8. **Multiple interfaces between the same domain pair**: Different interfaces between the same two domains are permitted (e.g., `ground_surface` at `lev=min` and `tropopause` at a specific pressure level). Each coupling entry references the specific interface it uses.
+1. **Same-grid coupling** needs neither a regridding transform nor `lifting` (§10.1–10.4).
+2. **Different grids / resolutions** → a regridding `transform` expression (an `aggregate`).
+3. **0-D ↔ spatial coupling** → a `lifting` strategy (default `pointwise`).
+4. **0-D ↔ 0-D coupling** → standard scalar coupling.
+5. **0-D intermediary between two spatial components** → separate entries (regrid in, lift out).
+6. **`operator_compose` across grids** → evaluated on the target grid; the regridding transform maps the source fields onto it first.
 
 ### 10.7 Coupled System Flattening
 
@@ -2836,421 +2516,110 @@ The last dot-separated segment is always the variable name; all preceding segmen
 
 - **Graph construction** — the expression graph (Section 4.8.2 of the library spec) operates on the flattened system to produce cross-system dependency edges.
 - **Coupled system validation** — checking that all coupling references resolve, no variables are orphaned, and equation–unknown balance holds across the full system.
-- **Simulation** — Julia libraries convert the flattened system to a single MTK `ODESystem` (for 0D/ODE-only systems) or `PDESystem` (for systems with spatial derivatives), using MTK's native namespace separator (`₊`) in place of dots.
+- **Simulation** — Julia libraries might convert the flattened system to a single MTK `ODESystem` (for 0D/ODE-only systems) or `PDESystem` (for systems with spatial derivatives), using MTK's native namespace separator (`₊`) in place of dots.
 - **Export and display** — pretty-printing the full coupled system as a single set of equations.
 
 The flattening algorithm is specified in detail in the ESM Library Specification (Section 4.7.5).
 
 ---
 
-## 11. Domains
+## 11. Domain
 
-The `domains` section is a dictionary of named spatiotemporal domains. Each domain corresponds to an `EarthSciMLBase.DomainInfo` and specifies the extent, discretization, coordinate system, and boundary/initial conditions for one spatial region. Models and reaction systems reference domains by name via their `domain` field.
+The `domain` is a **single** object giving the temporal extent and numeric representation shared by every component in the document. A document has at most one domain: all spatial models live on it, and a 0-D model simply has scalar-shaped variables (§11.2). There is no `domains` collection and no per-model domain selector.
 
-Multi-domain configurations enable coupling between systems of different dimensionality — for example, a 3D atmospheric dynamics PDE coupled to a 2D wildfire propagation PDE, or a 3D ocean coupled to the atmosphere at the sea surface.
+A domain does **not** carry spatial-grid geometry. The spatial axes a PDE iterates over are entries in the document-scoped `index_sets` registry (RFC semiring-faq-unified-ir §5.2); their physical coordinates, spacing, and CRS parameters are ordinary data — loaded from a `data_loaders` primitive or declared as variables/parameters. Initial conditions are `ic` equations (§11.4) and boundary conditions are baked into discretization rewrite rules (§9.6.8); neither is a domain field.
 
 ### 11.1 Schema
 
 ```json
 {
-  "domains": {
-    "atmosphere": {
-      "independent_variable": "t",
-
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z",
-        "reference_time": "2024-07-15T00:00:00Z"
-      },
-
-      "spatial": {
-        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.1 },
-        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.1 },
-        "lev": { "min": 0.0, "max": 20000.0, "units": "m", "grid_spacing": 500.0 }
-      },
-
-      "coordinate_transforms": [
-        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
-      ],
-      "spatial_ref": "WGS84",
-
-      "initial_conditions": { "type": "constant", "value": 0.0 },
-      "boundary_conditions": [
-        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
-        { "type": "zero_gradient", "dimensions": ["lev"] }
-      ],
-      "element_type": "Float64",
-      "array_type": "Array"
+  "index_sets": {
+    "lon": { "kind": "interval", "size": 50 },
+    "lat": { "kind": "interval", "size": 30 },
+    "lev": { "kind": "interval", "size": 40 }
+  },
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-07-15T00:00:00Z",
+      "end": "2024-07-16T00:00:00Z",
+      "reference_time": "2024-07-15T00:00:00Z"
     },
-
-    "wildfire_surface": {
-      "independent_variable": "t",
-
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z"
-      },
-
-      "spatial": {
-        "lon": { "min": -119.0, "max": -117.0, "units": "degrees", "grid_spacing": 0.01 },
-        "lat": { "min": 34.0, "max": 35.0, "units": "degrees", "grid_spacing": 0.01 }
-      },
-
-      "coordinate_transforms": [
-        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
-      ],
-      "spatial_ref": "WGS84",
-
-      "initial_conditions": { "type": "constant", "value": 0.0 },
-      "boundary_conditions": [
-        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
-      ],
-      "element_type": "Float64"
-    },
-
-    "ocean": {
-      "independent_variable": "t",
-
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z"
-      },
-
-      "spatial": {
-        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.25 },
-        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.25 },
-        "depth": { "min": 0.0, "max": 5000.0, "units": "m", "grid_spacing": 50.0 }
-      },
-
-      "coordinate_transforms": [
-        { "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }
-      ],
-      "spatial_ref": "WGS84",
-
-      "initial_conditions": { "type": "constant", "value": 0.0 },
-      "boundary_conditions": [
-        { "type": "periodic", "dimensions": ["lon"] },
-        { "type": "zero_gradient", "dimensions": ["lat"] },
-        { "type": "zero_gradient", "dimensions": ["depth"] }
-      ],
-      "element_type": "Float64"
-    }
+    "element_type": "Float64",
+    "array_type": "Array"
   }
 }
 ```
 
-### 11.2 Domain Dimensionality
+The spatial axes a model iterates over (here `lon`, `lat`, `lev`) are `index_sets` entries; each state variable names them in its `shape`. Their coordinate arrays, spacing, and any CRS parameters are bound from a loader field or a coordinate expression — not from the domain.
 
-Domains are categorized by their spatial dimensionality:
+### 11.2 Model Dimensionality
 
-| Dimensionality | `spatial` field | Example use cases |
+A model's dimensionality is the number of spatial `index_sets` its state variables are shaped over (via each variable's `shape`) — it is a property of the model, not the domain:
+
+| Dimensionality | Spatial index sets in variable `shape` | Example use cases |
 |---|---|---|
-| **0D** | Omitted or `{}` | Box models, point-source chemistry, algebraic parameterizations |
-| **1D** | 1 spatial dimension | Column models, vertical profiles, transect models |
-| **2D** | 2 spatial dimensions | Surface fire spread, sea-ice extent, land surface models |
-| **3D** | 3 spatial dimensions | Atmospheric dynamics, ocean circulation, subsurface flow |
+| **0D** | none (scalar variables) | Box models, point-source chemistry, algebraic parameterizations |
+| **1D** | 1 | Column models, vertical profiles, transect models |
+| **2D** | 2 | Surface fire spread, sea-ice extent, land surface models |
+| **3D** | 3 | Atmospheric dynamics, ocean circulation, subsurface flow |
 
-Models with `"domain": null` are 0D regardless of whether a 0D domain exists. A 0D model has no spatial grid — when coupled to a spatial system, the lifting strategy (Section 10.5) determines how it maps to the spatial grid.
+Models with `"domain": null` (or scalar-only `shape`) are 0D. A 0D model has no spatial axes; when coupled to a spatial system, the lifting strategy (Section 10.5) determines how it maps onto the spatial index sets.
 
 ### 11.3 Domain Fields
 
-Each named domain supports the following fields:
+The `domain` supports the following fields:
 
 | Field | Required | Description |
 |---|---|---|
 | `independent_variable` | | Name of the time variable (default: `"t"`) |
 | `temporal` | | Temporal extent: `start`, `end`, `reference_time` (ISO 8601) |
-| `spatial` | | Dictionary of named spatial dimensions, each with `min`, `max`, `units`, `grid_spacing` |
-| `coordinate_transforms` | | Array of coordinate transform specifications |
-| `spatial_ref` | | Spatial reference system (e.g., `"WGS84"`) |
-| `initial_conditions` | | Initial condition specification (see Section 11.4) |
-| `boundary_conditions` | | Array of boundary condition specifications (see Section 11.5) |
 | `element_type` | | Numeric element type (e.g., `"Float32"`, `"Float64"`) |
 | `array_type` | | Array implementation type (e.g., `"Array"`) |
 
-### 11.4 Initial Condition Types
+### 11.4 Initial conditions (the `ic` op)
 
-| Type | Fields | Description |
-|---|---|---|
-| `constant` | `value` | Uniform initial value for all state variables |
-| `per_variable` | `values: {var: value}` | Per-variable initial values |
-| `from_file` | `path`, `format` | Load from external file |
-| `expression` | `values: {var: Expression}` | Per-variable closed-form initial fields. Each value is an `Expression` whose free symbols MUST be names of the component domain's spatial dimensions; the runtime evaluates the expression at every grid point to produce the initial field. PDE components only — meaningless on 0-D components, where validators MUST reject. |
-
-The `expression` shape replaces the prior need to spill PDE initial conditions into a sidecar file: a closed-form initial field (e.g., `u(x, 0) = sin(π x)`) round-trips through the document just like any other inline math.
-
-**Example** — heat equation initial profile on a 1-D domain with dimension `x ∈ [0, 1]`:
+An initial condition is an **equation** whose left-hand side is an `ic` op — `{op: "ic", args: [<variable>]}` — and whose right-hand side is the initial field. There is **no** `initial_conditions` field on domains and no initial-condition type: ICs live in a model's `equations` array alongside its dynamics, exactly like `D(u)/dt ~ …`:
 
 ```json
-{
-  "type": "expression",
-  "values": {
-    "u": { "op": "sin", "args": [{ "op": "*", "args": [3.141592653589793, "x"] }] }
-  }
-}
+{ "lhs": { "op": "ic", "args": ["u"] },
+  "rhs": { "op": "sin", "args": [{ "op": "*", "args": [3.141592653589793, "x"] }] } }
 ```
 
-#### Consumer contract for `expression` entries
+The RHS is an ordinary Expression:
 
-**Simulators** (consumers that integrate the model equations) MUST evaluate each variable's expression at every spatial grid point to produce the initial field. Every free symbol in the expression MUST be bound to the corresponding domain spatial-dimension coordinate. Failing to evaluate an `expression` IC is an error for these consumers.
+- **uniform value** → a constant: `ic(u) ~ 0.0`.
+- **closed-form field** → a coordinate expression whose free symbols are spatial index-set names: `ic(u) ~ 0.2 * x`, evaluated at every grid point.
+- **externally-supplied field** → a reference to a loaded variable.
 
-**Non-integrating consumers** (renderers, schema validators, documentation generators) that do not have access to discretization infrastructure MUST NOT raise an error when they encounter `{type: "expression"}`. They MUST handle it one of the following two ways:
+A 0-D component's `ic` RHS is a scalar; a PDE component's may be a coordinate expression. Every state variable SHOULD have exactly one `ic` equation; a missing one defaults to the variable's declared `default`.
 
-1. **Skip with placeholder** *(minimum requirement)*: omit the variable from any scalar display and MAY substitute a human-readable label such as `"⟨expression IC: varname⟩"` wherever a scalar value would otherwise appear.
-2. **Sample for illustration** *(optional enrichment)*: evaluate the expression on a coarse uniform grid derived from the declared domain spatial dimensions, and render the result as an illustrative thumbnail. This requires the consumer to implement the ESM expression AST evaluator (§4).
+**Run-time overrides.** A test or example MAY override the *scalar* initial value of a state variable for one run via `test.initial_conditions` / `example.initial_state` (a `{var: number}` map, §6.6 / §6.7) — this overrides the `ic` equation's value for that run without changing the model.
 
-Option 1 is always acceptable. Silently dropping the variable from all output without any indication to the user is PERMITTED but DISCOURAGED — it makes the IC invisible without explanation. Option 2 is reserved for consumers that already embed an expression evaluator.
+### 11.5 Boundary conditions
 
-The key invariant: **a consumer MUST NOT crash or return an error code merely because an IC is expression-typed.** Unrecognised IC shapes MUST be surfaced as validation warnings, not unhandled exceptions.
+Boundary conditions are **not** a declarable construct — there is no `boundary_conditions` field and no boundary-condition op. A discretized spatial operator over a finite domain is inseparable from its boundary treatment, so the boundary condition lives **inside the discretization rewrite rule** that lowers `grad`/`div`/`laplacian` to an `aggregate` + `makearray` stencil: the interior region is the stencil, and the boundary-face `makearray` regions encode the BC (Dirichlet → fixed value; Neumann/zero-gradient → one-sided difference; Robin → the solved boundary expression; a seam shared with another variable → an `index` into that variable; periodic → the gather's periodic policy, no override). See §9.6.8. A boundary condition therefore cannot be specified anywhere outside its discretization rule.
 
-#### Design rationale: discriminated union
-
-`InitialConditions` uses a **discriminated union on the `type` field**. Any consumer can short-circuit on `type !== "expression"` without inspecting the structure of `values`.
-
-Two alternative designs were considered and rejected:
-
-- **Polymorphic `values` map** (scalars and expressions intermixed in one map without a type tag): consumers must duck-type or speculatively parse every entry to distinguish scalars from expression trees. This is the failure mode that motivated this contract — a renderer that iterated `values` assuming all entries were numbers would silently drop or misrender expression entries.
-- **Two-channel split** (`values` for scalars, `value_expressions` for symbolic): readers must consult two sibling fields to reconstruct the full IC picture; merging, copying, or validating IC objects becomes more complex with no compensating benefit.
-
-The discriminated union is the canonical JSON Schema pattern for variant records. Bindings in all five languages can dispatch cleanly on a single string field.
-
-### 11.5 Boundary Condition Types
-
-| Type | Description |
-|---|---|
-| `constant` | Fixed value at boundaries |
-| `zero_gradient` | ∂u/∂n = 0 at boundaries (Neumann) |
-| `periodic` | Wrap-around boundaries |
-| `dirichlet` | Fixed value at boundaries (equivalent to `constant`) |
-| `neumann` | ∂u/∂n = 0 at boundaries (equivalent to `zero_gradient`) |
-| `robin` | Mixed boundary condition: αu + β∂u/∂n = γ |
-| `interface` | Value-continuity coupling: u(x\*) = v(x\*) at a shared boundary point |
-
-#### Additional Boundary Condition Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `value` | number | Boundary value (for `constant`/`dirichlet` types) |
-| `function` | string | Function specification for time/space-varying boundaries |
-| `robin_alpha` | number | Robin BC coefficient α for u term in αu + β∂u/∂n = γ |
-| `robin_beta` | number | Robin BC coefficient β for ∂u/∂n term in αu + β∂u/∂n = γ |
-| `robin_gamma` | number | Robin BC RHS value γ in αu + β∂u/∂n = γ |
-| `coupled_variable` | string | For `interface` kind: name of the model variable at the other side of the shared point (required) |
-| `flux_match` | boolean | For `interface` kind: also enforce ∂u/∂n = ∂v/∂n (default false) |
-
-**Note:** `dirichlet` and `neumann` are alternative names for `constant` and `zero_gradient` respectively. The Robin boundary condition provides a general mixed formulation where appropriate coefficients can recover Dirichlet (α=1, β=0) or Neumann (α=0, β=1) conditions as special cases.
-
-The `interface` BC couples two variables at a shared domain boundary using the ghost-cell approach: ghost reads of `u` beyond its declared side are replaced by index accesses into `coupled_variable`. For `xmax`: u[N+k] → v[k]; for `xmin`: u[1-k] → v[N+1-k]. Both variables must occupy the same grid dimension. The user declares a matching `interface` BC on both variables (one at `xmax`, the other at `xmin`).
-
-### 11.6 Shared Temporal Domain
-
-All domains in a coupled system must have compatible temporal extents. Individual domains may use different spatial discretizations but share the same simulation time window. If temporal extents differ, the runtime uses the intersection of all domain temporal ranges.
-
----
-
-## 12. Interfaces
-
-Interfaces define the geometric relationship between two domains of potentially different dimensionality. They specify which spatial dimensions are shared, how non-shared dimensions are constrained at the interface, and what regridding strategy is used when shared dimensions have different resolutions.
-
-### 12.1 Schema
-
-```json
-{
-  "interfaces": {
-    "ground_surface": {
-      "description": "Ground-level interface between atmosphere and land surface / wildfire domain",
-      "domains": ["atmosphere", "wildfire_surface"],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "wildfire_surface.lon",
-          "atmosphere.lat": "wildfire_surface.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": {
-            "value": "min",
-            "description": "Ground level (lowest atmospheric layer)"
-          }
-        }
-      },
-      "regridding": {
-        "method": "bilinear"
-      }
-    },
-
-    "sea_surface": {
-      "description": "Air-sea interface between atmosphere and ocean",
-      "domains": ["atmosphere", "ocean"],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "ocean.lon",
-          "atmosphere.lat": "ocean.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": {
-            "value": "min",
-            "description": "Lowest atmospheric level"
-          },
-          "ocean.depth": {
-            "value": "min",
-            "description": "Ocean surface layer"
-          }
-        }
-      },
-      "regridding": {
-        "method": "conservative",
-        "description": "Flux-conserving interpolation for energy and mass exchange"
-      }
-    }
-  }
-}
-```
-
-### 12.2 Interface Fields
-
-| Field | Required | Description |
-|---|---|---|
-| `description` | | Human-readable description of the interface |
-| `domains` | ✓ | Two-element array naming the domains connected by this interface |
-| `dimension_mapping` | ✓ | Specifies shared dimensions and constraints (see below) |
-| `regridding` | | Regridding strategy when shared dimensions differ in resolution |
-
-### 12.3 Dimension Mapping
-
-The `dimension_mapping` object has two sub-fields:
-
-**`shared`**: A dictionary mapping dimensions that correspond across the two domains. Keys and values use `"domain.dimension"` notation. Shared dimensions define the geometric surface where the two domains meet. If the shared dimensions have different extents, the interface surface is their intersection.
-
-```json
-"shared": {
-  "atmosphere.lon": "wildfire_surface.lon",
-  "atmosphere.lat": "wildfire_surface.lat"
-}
-```
-
-**`constraints`**: A dictionary specifying how non-shared dimensions are fixed at the interface. Each key is a `"domain.dimension"` reference; the value specifies where that dimension is constrained.
-
-| Constraint value | Description |
-|---|---|
-| `"min"` | The minimum value of the dimension's range |
-| `"max"` | The maximum value of the dimension's range |
-| *(number)* | A specific coordinate value within the dimension's range |
-| `"boundary"` | The domain boundary (equivalent to `"min"` or `"max"` depending on orientation) |
-
-```json
-"constraints": {
-  "atmosphere.lev": { "value": "min", "description": "Ground level" },
-  "ocean.depth": { "value": 0.0, "description": "Sea surface" }
-}
-```
-
-**Constraint semantics**: When a variable is transferred **from** a domain with a constrained dimension, the field is *sliced* (restricted) at that coordinate — reducing dimensionality by one per constraint. When a variable is transferred **to** a domain with a constrained dimension, the lower-dimensional field is *injected* (prolongated) at that coordinate — embedded into the higher-dimensional grid at the specified level.
-
-### 12.4 Regridding
-
-When shared dimensions have different resolutions or extents across the two domains, regridding interpolates fields between the grids. The `regridding` field specifies the interpolation strategy.
-
-| Method | Description |
-|---|---|
-| `bilinear` | Bilinear interpolation. Suitable for smooth fields (temperature, pressure, winds). |
-| `conservative` | Flux-conserving remapping. Preserves integrated quantities (mass, energy). Required for budget-critical exchanges. |
-| `nearest` | Nearest-neighbor assignment. Suitable for categorical or discontinuous fields (land use type, fire/no-fire mask). |
-| `patch` | Higher-order patch recovery interpolation. Smooth and accurate but more expensive. |
-
-If `regridding` is omitted and the shared dimensions have identical grids (same min, max, and grid_spacing), no regridding is needed. If grids differ and `regridding` is omitted, it is an error.
-
-### 12.5 Interface Examples
-
-#### 3D Atmosphere ↔ 2D Wildfire Surface
-
-The atmosphere has 3 spatial dimensions (lon, lat, lev). The wildfire model has 2 (lon, lat). They share the horizontal dimensions; the vertical dimension is constrained at ground level.
-
-```json
-{
-  "ground_surface": {
-    "description": "Ground-level interface: atmosphere ↔ wildfire",
-    "domains": ["atmosphere", "wildfire_surface"],
-    "dimension_mapping": {
-      "shared": {
-        "atmosphere.lon": "wildfire_surface.lon",
-        "atmosphere.lat": "wildfire_surface.lat"
-      },
-      "constraints": {
-        "atmosphere.lev": { "value": "min" }
-      }
-    },
-    "regridding": { "method": "bilinear" }
-  }
-}
-```
-
-Transferring `atmosphere.wind_u` through this interface: the 3D field is sliced at `lev=min` to produce a 2D field on the atmosphere's horizontal grid, then regridded to the wildfire grid via bilinear interpolation.
-
-Transferring `wildfire.heat_flux` through this interface in reverse: the 2D field on the wildfire grid is regridded to the atmosphere's horizontal grid, then injected into the 3D atmospheric grid at `lev=min`.
-
-#### 3D Atmosphere ↔ 3D Ocean
-
-Both domains are 3D, but they share only the horizontal dimensions. The vertical dimensions are independent (atmospheric levels vs. ocean depth), and both are constrained at their interface values.
-
-```json
-{
-  "sea_surface": {
-    "description": "Air-sea interface: atmosphere ↔ ocean",
-    "domains": ["atmosphere", "ocean"],
-    "dimension_mapping": {
-      "shared": {
-        "atmosphere.lon": "ocean.lon",
-        "atmosphere.lat": "ocean.lat"
-      },
-      "constraints": {
-        "atmosphere.lev": { "value": "min" },
-        "ocean.depth": { "value": "min" }
-      }
-    },
-    "regridding": { "method": "conservative" }
-  }
-}
-```
-
-Transferring `atmosphere.surface_stress` through this interface: the 3D atmospheric field is sliced at `lev=min` to produce a 2D field, regridded from the atmosphere's horizontal grid to the ocean's horizontal grid (conservative), then injected into the ocean at `depth=min`.
-
-#### 1D Column ↔ 3D Atmosphere
-
-A 1D column model (e.g., vertical turbulence parameterization) coupled to a 3D atmosphere. The column model has one spatial dimension (height); the interface constrains the atmospheric horizontal coordinates to a specific column.
-
-```json
-{
-  "observation_column": {
-    "description": "Single column extracted from 3D atmosphere",
-    "domains": ["atmosphere", "column_model"],
-    "dimension_mapping": {
-      "shared": {
-        "atmosphere.lev": "column_model.z"
-      },
-      "constraints": {
-        "atmosphere.lon": { "value": -118.0 },
-        "atmosphere.lat": { "value": 34.0 }
-      }
-    }
-  }
-}
-```
-
----
 
 ## 13. Complete Examples
 
-### 13.1 Single-Domain: Atmospheric Chemistry with Advection
+### 13.1 Atmospheric Chemistry with Advection
 
 A minimal but complete `.esm` file representing atmospheric chemistry with advection:
 
 ```json
 {
-  "esm": "0.1.0",
+  "esm": "0.8.0",
   "metadata": {
     "name": "MinimalChemAdvection",
-    "description": "O3-NO-NO2 chemistry with advection and external meteorology",
+    "description": "O3-NO-NO2 chemistry with advection over a lon-lat grid and external meteorology",
     "authors": ["Chris Tessum"],
-    "created": "2026-02-11T00:00:00Z"
+    "created": "2026-06-30T00:00:00Z"
+  },
+
+  "index_sets": {
+    "lon": { "kind": "interval", "size": 144 },
+    "lat": { "kind": "interval", "size": 91 }
   },
 
   "reaction_systems": {
@@ -3296,20 +2665,74 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
 
   "models": {
     "Advection": {
-      "reference": { "notes": "First-order advection" },
+      "reference": { "notes": "First-order advection of each transported field over the lon-lat grid" },
       "variables": {
-        "u_wind": { "type": "parameter", "units": "m/s", "default": 0.0 },
-        "v_wind": { "type": "parameter", "units": "m/s", "default": 0.0 }
+        "u_wind": { "type": "parameter", "units": "m/s", "default": 0.0, "shape": ["lon", "lat"] },
+        "v_wind": { "type": "parameter", "units": "m/s", "default": 0.0, "shape": ["lon", "lat"] },
+        "dx": { "type": "parameter", "units": "m", "default": 27750.0, "description": "Eastward grid spacing" },
+        "dy": { "type": "parameter", "units": "m", "default": 27750.0, "description": "Northward grid spacing" }
+      },
+      "expression_templates": {
+        "central_grad_lon_zero_grad_bc": {
+          "params": ["f"],
+          "match": { "op": "grad", "args": ["f"], "dim": "lon" },
+          "body": {
+            "op": "makearray",
+            "regions": [ [[2, 143], [1, 91]], [[1, 1], [1, 91]], [[144, 144], [1, 91]] ],
+            "values": [
+              { "op": "aggregate", "output_idx": ["i", "j"], "args": ["f"],
+                "ranges": { "i": [2, 143], "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "index", "args": ["f", { "op": "+", "args": ["i", 1] }, "j"] },
+                    { "op": "index", "args": ["f", { "op": "-", "args": ["i", 1] }, "j"] } ] },
+                  { "op": "*", "args": [2, "dx"] } ] } },
+              { "op": "aggregate", "output_idx": ["j"], "args": ["f"], "ranges": { "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", 2, "j"] }, { "op": "index", "args": ["f", 1, "j"] } ] }, "dx" ] } },
+              { "op": "aggregate", "output_idx": ["j"], "args": ["f"], "ranges": { "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", 144, "j"] }, { "op": "index", "args": ["f", 143, "j"] } ] }, "dx" ] } }
+            ]
+          }
+        },
+        "central_grad_lat_zero_grad_bc": {
+          "params": ["f"],
+          "match": { "op": "grad", "args": ["f"], "dim": "lat" },
+          "body": {
+            "op": "makearray",
+            "regions": [ [[1, 144], [2, 90]], [[1, 144], [1, 1]], [[1, 144], [91, 91]] ],
+            "values": [
+              { "op": "aggregate", "output_idx": ["i", "j"], "args": ["f"],
+                "ranges": { "i": { "from": "lon" }, "j": [2, 90] },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "index", "args": ["f", "i", { "op": "+", "args": ["j", 1] }] },
+                    { "op": "index", "args": ["f", "i", { "op": "-", "args": ["j", 1] }] } ] },
+                  { "op": "*", "args": [2, "dy"] } ] } },
+              { "op": "aggregate", "output_idx": ["i"], "args": ["f"], "ranges": { "i": { "from": "lon" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", "i", 2] }, { "op": "index", "args": ["f", "i", 1] } ] }, "dy" ] } },
+              { "op": "aggregate", "output_idx": ["i"], "args": ["f"], "ranges": { "i": { "from": "lon" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", "i", 91] }, { "op": "index", "args": ["f", "i", 90] } ] }, "dy" ] } }
+            ]
+          }
+        }
       },
       "equations": [
         {
           "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
           "rhs": {
             "op": "+", "args": [
-              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "x" }] },
-              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "y" }] }
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "lon" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "lat" }] }
             ]
           }
+        },
+        {
+          "lhs": { "op": "ic", "args": ["_var"] },
+          "rhs": 1.0e-9
         }
       ]
     }
@@ -3328,12 +2751,6 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
         "frequency":   "PT1H",
         "records_per_file": 1
       },
-      "spatial": {
-        "crs": "EPSG:4326",
-        "grid_type": "latlon",
-        "staggering": { "lon": "center", "lat": "center" },
-        "resolution": { "lon": 0.3125, "lat": 0.25 }
-      },
       "variables": {
         "u": { "file_variable": "U10M", "units": "m/s", "description": "Eastward wind" },
         "v": { "file_variable": "V10M", "units": "m/s", "description": "Northward wind" },
@@ -3350,353 +2767,16 @@ A minimal but complete `.esm` file representing atmospheric chemistry with advec
     { "type": "variable_map", "from": "GEOSFP.v", "to": "Advection.v_wind", "transform": "param_to_var" }
   ],
 
-  "domains": {
-    "default": {
-      "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
-      "spatial": {
-        "lon": { "min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees" }
-      },
-      "coordinate_transforms": [
-        { "id": "lonlat_to_meters", "dimensions": ["lon"] }
-      ],
-      "initial_conditions": { "type": "constant", "value": 1.0e-9 },
-      "boundary_conditions": [
-        { "type": "zero_gradient", "dimensions": ["lon"] }
-      ],
-      "element_type": "Float32"
-    }
+  "domain": {
+    "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
+    "element_type": "Float32"
   }
 }
 ```
 
-**Note:** When all models share a single domain, `"domain"` fields on individual models may be omitted — all models default to the sole domain.
+The spatial axes (`lon`, `lat`) are `index_sets`; the `Advection` model's variables are shaped over them, and `grad` is lowered by the in-file `central_grad_*_zero_grad_bc` rewrite rules (§9.6.8) — each a `makearray` that combines the interior central-difference `aggregate` with the two boundary-face regions encoding the zero-gradient condition. The boundary conditions live **inside** the discretization rule; there is no separate boundary-condition declaration. Wind and temperature come from the `GEOSFP` loader as ordinary variables.
 
-### 13.2 Multi-Domain: Wildfire–Atmosphere–Ocean Coupling
-
-A coupled system with a 3D atmospheric dynamics PDE, a 2D wildfire propagation PDE, a 3D ocean dynamics PDE, and 0D algebraic intermediaries. This example demonstrates mixed-dimension coupling through interfaces and pointwise lifting of 0D systems.
-
-```json
-{
-  "esm": "0.1.0",
-  "metadata": {
-    "name": "WildfireAtmosphereOcean",
-    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations",
-    "authors": ["EarthSciML"],
-    "created": "2026-04-08T00:00:00Z"
-  },
-
-  "models": {
-    "AtmosphericDynamics": {
-      "domain": "atmosphere",
-      "reference": { "notes": "Simplified 3D atmospheric dynamics" },
-      "variables": {
-        "T": { "type": "state", "units": "K", "default": 288.0, "description": "Temperature" },
-        "wind_u": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward wind" },
-        "wind_v": { "type": "state", "units": "m/s", "default": 0.0, "description": "Northward wind" },
-        "q_heat": { "type": "parameter", "units": "K/s", "default": 0.0, "description": "External heating rate" }
-      },
-      "equations": [
-        {
-          "lhs": { "op": "D", "args": ["T"], "wrt": "t" },
-          "rhs": {
-            "op": "+",
-            "args": [
-              { "op": "*", "args": [{ "op": "-", "args": ["wind_u"] }, { "op": "grad", "args": ["T"], "dim": "x" }] },
-              { "op": "*", "args": [{ "op": "-", "args": ["wind_v"] }, { "op": "grad", "args": ["T"], "dim": "y" }] },
-              "q_heat"
-            ]
-          }
-        }
-      ]
-    },
-
-    "WildfirePropagation": {
-      "domain": "wildfire_surface",
-      "reference": { "notes": "Level-set wildfire spread model" },
-      "variables": {
-        "phi": { "type": "state", "units": "1", "default": 1.0, "description": "Level-set function (phi<0 = burned)" },
-        "R_spread": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Fire spread rate" },
-        "fuel": { "type": "state", "units": "kg/m^2", "default": 10.0, "description": "Fuel load" },
-        "heat_release": {
-          "type": "observed", "units": "W/m^2",
-          "expression": {
-            "op": "*",
-            "args": [
-              "R_spread", "fuel",
-              { "op": "ifelse", "args": [
-                { "op": "<", "args": ["phi", 0] }, 18000.0, 0.0
-              ]}
-            ]
-          },
-          "description": "Heat release rate at fire front"
-        }
-      },
-      "equations": [
-        {
-          "lhs": { "op": "D", "args": ["phi"], "wrt": "t" },
-          "rhs": {
-            "op": "*",
-            "args": [
-              { "op": "-", "args": ["R_spread"] },
-              { "op": "sqrt", "args": [
-                { "op": "+", "args": [
-                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "x" }, 2] },
-                  { "op": "^", "args": [{ "op": "grad", "args": ["phi"], "dim": "y" }, 2] }
-                ]}
-              ]}
-            ]
-          }
-        },
-        {
-          "lhs": { "op": "D", "args": ["fuel"], "wrt": "t" },
-          "rhs": {
-            "op": "ifelse",
-            "args": [
-              { "op": "<", "args": ["phi", 0] },
-              { "op": "*", "args": [-0.01, "fuel"] },
-              0.0
-            ]
-          }
-        }
-      ]
-    },
-
-    "FireSpreadCalculator": {
-      "domain": null,
-      "reference": { "notes": "Rothermel-style wind-driven spread rate (algebraic)" },
-      "variables": {
-        "wind_u": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Eastward wind at ground level" },
-        "wind_v": { "type": "parameter", "units": "m/s", "default": 0.0, "description": "Northward wind at ground level" },
-        "R_base": { "type": "parameter", "units": "m/s", "default": 0.05, "description": "Base spread rate (no wind)" },
-        "wind_factor": { "type": "parameter", "units": "1", "default": 0.3, "description": "Wind enhancement coefficient" },
-        "wind_speed": {
-          "type": "observed", "units": "m/s",
-          "expression": {
-            "op": "sqrt",
-            "args": [{ "op": "+", "args": [
-              { "op": "^", "args": ["wind_u", 2] },
-              { "op": "^", "args": ["wind_v", 2] }
-            ]}]
-          },
-          "description": "Wind speed magnitude"
-        },
-        "spread_rate": {
-          "type": "observed", "units": "m/s",
-          "expression": {
-            "op": "*",
-            "args": [
-              "R_base",
-              { "op": "+", "args": [1.0, { "op": "*", "args": ["wind_factor", "wind_speed"] }] }
-            ]
-          },
-          "description": "Wind-enhanced fire spread rate"
-        }
-      },
-      "equations": []
-    },
-
-    "OceanDynamics": {
-      "domain": "ocean",
-      "reference": { "notes": "Simplified 3D ocean dynamics" },
-      "variables": {
-        "SST": { "type": "state", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
-        "u_ocean": { "type": "state", "units": "m/s", "default": 0.0, "description": "Eastward ocean current" },
-        "surface_heat_flux": { "type": "parameter", "units": "W/m^2", "default": 0.0, "description": "Net heat flux from atmosphere" }
-      },
-      "equations": [
-        {
-          "lhs": { "op": "D", "args": ["SST"], "wrt": "t" },
-          "rhs": {
-            "op": "+",
-            "args": [
-              { "op": "*", "args": [{ "op": "-", "args": ["u_ocean"] }, { "op": "grad", "args": ["SST"], "dim": "x" }] },
-              { "op": "/", "args": ["surface_heat_flux", 4.18e6] }
-            ]
-          }
-        }
-      ]
-    },
-
-    "AirSeaFluxCalculator": {
-      "domain": null,
-      "reference": { "notes": "Bulk formula for air-sea heat exchange (algebraic)" },
-      "variables": {
-        "T_atm": { "type": "parameter", "units": "K", "default": 288.0, "description": "Atmospheric temperature at surface" },
-        "SST": { "type": "parameter", "units": "K", "default": 290.0, "description": "Sea surface temperature" },
-        "wind_speed": { "type": "parameter", "units": "m/s", "default": 5.0, "description": "Surface wind speed" },
-        "C_H": { "type": "parameter", "units": "1", "default": 1.2e-3, "description": "Heat transfer coefficient" },
-        "rho_air": { "type": "parameter", "units": "kg/m^3", "default": 1.225, "description": "Air density" },
-        "c_p": { "type": "parameter", "units": "J/(kg*K)", "default": 1005.0, "description": "Specific heat of air" },
-        "sensible_heat_flux": {
-          "type": "observed", "units": "W/m^2",
-          "expression": {
-            "op": "*",
-            "args": ["rho_air", "c_p", "C_H", "wind_speed",
-              { "op": "-", "args": ["T_atm", "SST"] }
-            ]
-          },
-          "description": "Sensible heat flux (positive = ocean to atmosphere)"
-        }
-      },
-      "equations": []
-    }
-  },
-
-  "domains": {
-    "atmosphere": {
-      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
-      "spatial": {
-        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.1 },
-        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.1 },
-        "lev": { "min": 0.0, "max": 20000.0, "units": "m", "grid_spacing": 500.0 }
-      },
-      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
-      "spatial_ref": "WGS84",
-      "initial_conditions": { "type": "constant", "value": 0.0 },
-      "boundary_conditions": [
-        { "type": "zero_gradient", "dimensions": ["lon", "lat"] },
-        { "type": "zero_gradient", "dimensions": ["lev"] }
-      ],
-      "element_type": "Float64"
-    },
-    "wildfire_surface": {
-      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
-      "spatial": {
-        "lon": { "min": -119.0, "max": -117.0, "units": "degrees", "grid_spacing": 0.01 },
-        "lat": { "min": 34.0, "max": 35.0, "units": "degrees", "grid_spacing": 0.01 }
-      },
-      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
-      "spatial_ref": "WGS84",
-      "initial_conditions": { "type": "constant", "value": 1.0 },
-      "boundary_conditions": [
-        { "type": "zero_gradient", "dimensions": ["lon", "lat"] }
-      ],
-      "element_type": "Float64"
-    },
-    "ocean": {
-      "temporal": { "start": "2024-07-15T00:00:00Z", "end": "2024-07-16T00:00:00Z" },
-      "spatial": {
-        "lon": { "min": -120.0, "max": -115.0, "units": "degrees", "grid_spacing": 0.25 },
-        "lat": { "min": 33.0, "max": 36.0, "units": "degrees", "grid_spacing": 0.25 },
-        "depth": { "min": 0.0, "max": 5000.0, "units": "m", "grid_spacing": 50.0 }
-      },
-      "coordinate_transforms": [{ "id": "lonlat_to_meters", "dimensions": ["lon", "lat"] }],
-      "spatial_ref": "WGS84",
-      "initial_conditions": { "type": "constant", "value": 290.0 },
-      "boundary_conditions": [
-        { "type": "periodic", "dimensions": ["lon"] },
-        { "type": "zero_gradient", "dimensions": ["lat", "depth"] }
-      ],
-      "element_type": "Float64"
-    }
-  },
-
-  "interfaces": {
-    "ground_surface": {
-      "description": "Ground-level interface: atmosphere ↔ wildfire",
-      "domains": ["atmosphere", "wildfire_surface"],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "wildfire_surface.lon",
-          "atmosphere.lat": "wildfire_surface.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": { "value": "min" }
-        }
-      },
-      "regridding": { "method": "bilinear" }
-    },
-    "sea_surface": {
-      "description": "Air-sea interface: atmosphere ↔ ocean",
-      "domains": ["atmosphere", "ocean"],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "ocean.lon",
-          "atmosphere.lat": "ocean.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": { "value": "min" },
-          "ocean.depth": { "value": "min" }
-        }
-      },
-      "regridding": { "method": "conservative" }
-    }
-  },
-
-  "coupling": [
-    {
-      "type": "variable_map",
-      "from": "AtmosphericDynamics.wind_u",
-      "to": "FireSpreadCalculator.wind_u",
-      "transform": "param_to_var",
-      "interface": "ground_surface",
-      "lifting": "pointwise",
-      "description": "Ground-level u-wind to fire spread calculator"
-    },
-    {
-      "type": "variable_map",
-      "from": "AtmosphericDynamics.wind_v",
-      "to": "FireSpreadCalculator.wind_v",
-      "transform": "param_to_var",
-      "interface": "ground_surface",
-      "lifting": "pointwise",
-      "description": "Ground-level v-wind to fire spread calculator"
-    },
-    {
-      "type": "variable_map",
-      "from": "FireSpreadCalculator.spread_rate",
-      "to": "WildfirePropagation.R_spread",
-      "transform": "param_to_var",
-      "lifting": "pointwise",
-      "description": "Calculated spread rate drives wildfire propagation"
-    },
-    {
-      "type": "variable_map",
-      "from": "WildfirePropagation.heat_release",
-      "to": "AtmosphericDynamics.q_heat",
-      "transform": "param_to_var",
-      "interface": "ground_surface",
-      "factor": 2.4e-7,
-      "description": "Wildfire heat injection into lowest atmospheric layer (W/m^2 → K/s)"
-    },
-    {
-      "type": "variable_map",
-      "from": "AtmosphericDynamics.T",
-      "to": "AirSeaFluxCalculator.T_atm",
-      "transform": "param_to_var",
-      "interface": "sea_surface",
-      "lifting": "pointwise",
-      "description": "Surface air temperature to air-sea flux calculator"
-    },
-    {
-      "type": "variable_map",
-      "from": "OceanDynamics.SST",
-      "to": "AirSeaFluxCalculator.SST",
-      "transform": "param_to_var",
-      "interface": "sea_surface",
-      "lifting": "pointwise",
-      "description": "Sea surface temperature to air-sea flux calculator"
-    },
-    {
-      "type": "variable_map",
-      "from": "AirSeaFluxCalculator.sensible_heat_flux",
-      "to": "OceanDynamics.surface_heat_flux",
-      "transform": "param_to_var",
-      "lifting": "pointwise",
-      "description": "Calculated heat flux drives ocean surface temperature"
-    }
-  ]
-}
-```
-
-This example demonstrates:
-- **3D → 2D coupling** via the `ground_surface` interface (atmospheric winds → fire spread)
-- **2D → 3D coupling** via the same interface in reverse (wildfire heat → atmosphere)
-- **3D → 3D coupling** via the `sea_surface` interface (atmosphere ↔ ocean, both constrained to surface)
-- **0D intermediaries** with `"lifting": "pointwise"` (`FireSpreadCalculator`, `AirSeaFluxCalculator`)
-- **Cross-domain 0D algebraic systems** that take inputs from one domain and produce outputs for another
-
----
+**Note:** Every component shares the single `domain`; there is no per-model domain field. A model is spatial if its variables are shaped over index sets, 0-D otherwise.
 
 ## 14. Design Principles
 
@@ -3730,13 +2810,12 @@ Reaction networks are a higher-level, more constrained representation. Keeping t
 
 The composition rules are arguably more important than the individual models, since they capture the scientific decisions about how processes interact. Making coupling explicit and inspectable is essential for understanding and reproducing complex Earth system models.
 
-### Interfaces separate geometry from physics
+### Coupling across grids is a regridding expression
 
-Cross-domain coupling requires two distinct concerns: the *geometric relationship* between domains (shared dimensions, constraints, regridding) and the *physical coupling* (which variables connect, how they transform). Interfaces capture the geometry once; coupling entries reference interfaces and specify the physics. This separation means:
+Coupling between components on different grids (or from a loader's native grid onto a model's) carries its geometry in the coupling entry's `transform` — an `aggregate` regridding expression that maps the source field onto the target grid (slicing, overlap-area weighting, interpolation). There is no separate interface or geometry-relationship construct; the regridding is an ordinary FAQ over index sets, the same algebra as everything else in the format. This means:
 
-- The same interface can be reused by many coupling entries (e.g., dozens of variables exchanged at the sea surface)
-- Geometric details don't clutter individual coupling rules
-- Changes to grid resolution or regridding strategy propagate automatically to all couplings that use the interface
+- Grid transfer is expressed with the same `aggregate` machinery as discretization and reductions — one mechanism, not a special geometry layer.
+- A reusable regridding rule can be factored as an `expression_templates` rewrite rule and shared across coupling entries.
 
 ### 0D systems are first-class coupling intermediaries
 

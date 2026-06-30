@@ -32,7 +32,7 @@
         {
           "_comment": "Lon-periodic heat equation. i=lon index (1..4, periodic wrap), j=lat index (1..2, Dirichlet ghost cells). RHS = coeff*(u[wrap(i-1),j] + (-2)*u[i,j] + u[wrap(i+1),j]).",
           "lhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i", "j"],
             "expr": {
@@ -43,7 +43,7 @@
             "ranges": {"i": [1, 4], "j": [1, 2]}
           },
           "rhs": {
-            "op": "arrayop",
+            "op": "aggregate",
             "args": [],
             "output_idx": ["i", "j"],
             "expr": {

@@ -217,7 +217,6 @@ function add_reaction(system::ReactionSystem, reaction::Reaction)::ReactionSyste
         new_reactions,
         parameters=system.parameters,
         subsystems=system.subsystems,
-        domain=system.domain,
         tolerance=system.tolerance,
         tests=system.tests,
     )
@@ -249,7 +248,6 @@ function remove_reaction(system::ReactionSystem, id::String)::ReactionSystem
         new_reactions,
         parameters=system.parameters,
         subsystems=system.subsystems,
-        domain=system.domain,
         tolerance=system.tolerance,
         tests=system.tests,
     )
@@ -280,7 +278,6 @@ function add_species(system::ReactionSystem, name::String, species::Species)::Re
         system.reactions,
         parameters=system.parameters,
         subsystems=system.subsystems,
-        domain=system.domain,
         tolerance=system.tolerance,
         tests=system.tests,
     )
@@ -318,7 +315,6 @@ function remove_species(system::ReactionSystem, name::String)::ReactionSystem
         system.reactions,
         parameters=system.parameters,
         subsystems=system.subsystems,
-        domain=system.domain,
         tolerance=system.tolerance,
         tests=system.tests,
     )
@@ -411,8 +407,7 @@ function add_coupling(file::EsmFile, entry::CouplingEntry)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domains=file.domains,
-        interfaces=file.interfaces
+        domain=file.domain
     )
 end
 
@@ -438,8 +433,7 @@ function remove_coupling(file::EsmFile, index::Int)::EsmFile
         data_loaders=file.data_loaders,
         operators=file.operators,
         coupling=new_coupling,
-        domains=file.domains,
-        interfaces=file.interfaces
+        domain=file.domain
     )
 end
 
@@ -493,13 +487,8 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
                       file_b.operators === nothing ? file_a.operators :
                       Base.merge(file_a.operators, file_b.operators)
 
-    merged_domains = file_a.domains === nothing ? file_b.domains :
-                    file_b.domains === nothing ? file_a.domains :
-                    Base.merge(file_a.domains, file_b.domains)
-
-    merged_interfaces = file_a.interfaces === nothing ? file_b.interfaces :
-                       file_b.interfaces === nothing ? file_a.interfaces :
-                       Base.merge(file_a.interfaces, file_b.interfaces)
+    # v0.8.0: a single shared `domain` object (file_b takes precedence).
+    merged_domain = file_b.domain === nothing ? file_a.domain : file_b.domain
 
     # Combine coupling arrays
     merged_coupling = vcat(file_a.coupling, file_b.coupling)
@@ -515,8 +504,7 @@ function merge(file_a::EsmFile, file_b::EsmFile)::EsmFile
         data_loaders=merged_data_loaders,
         operators=merged_operators,
         coupling=merged_coupling,
-        domains=merged_domains,
-        interfaces=merged_interfaces
+        domain=merged_domain
     )
 end
 
@@ -594,7 +582,6 @@ function extract(file::EsmFile, component_name::String)::EsmFile
         data_loaders=extracted_data_loaders,
         operators=extracted_operators,
         coupling=relevant_coupling,
-        domains=file.domains,
-        interfaces=file.interfaces
+        domain=file.domain
     )
 end

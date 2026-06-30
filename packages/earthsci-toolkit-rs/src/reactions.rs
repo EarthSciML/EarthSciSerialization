@@ -157,7 +157,6 @@ pub fn lower_reactions_to_equations(
         equations.push(Equation {
             lhs,
             rhs,
-            region: None,
         });
     }
 
@@ -207,9 +206,7 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
     let equations = lower_reactions_to_equations(&system.reactions, &system.species)?;
 
     Ok(Model {
-        regrid: None,
         name: None,
-        domain: system.domain.clone(),
         index_sets: None,
         coupletype: system.coupletype.clone(),
         reference: system.reference.clone(),
@@ -221,7 +218,6 @@ pub fn derive_odes(system: &ReactionSystem) -> Result<Model, DeriveError> {
         description: None,
         tolerance: None,
         tests: None,
-        boundary_conditions: None,
         initialization_equations: None,
         guesses: None,
         system_kind: None,
@@ -372,7 +368,6 @@ pub fn stoichiometric_matrix(system: &ReactionSystem) -> Vec<Vec<f64>> {
 ///
 /// // Assuming you have a reaction system
 /// let reaction_system = ReactionSystem {
-///     domain: None,
 ///     coupletype: None,
 ///     reference: None,
 ///     species: std::collections::HashMap::new(),

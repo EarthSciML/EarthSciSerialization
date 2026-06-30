@@ -9,7 +9,7 @@ opening anything — useful for pre-flight checks and caching.
 from __future__ import annotations
 
 import datetime as _dt
-from typing import Any, List, Mapping, Optional, Sequence, Union
+from typing import Any, List, Optional, Union
 
 from ..esm_types import DataLoader, DataLoaderKind
 from .grid import GridLoader
@@ -27,7 +27,6 @@ def load_data(
     data_loader: DataLoader,
     *,
     time: Optional[Union[_dt.datetime, _dt.date, str]] = None,
-    target_grid: Optional[Mapping[str, Sequence[float]]] = None,
     opener: Optional[Any] = None,
     fetcher: Optional[Any] = None,
     parser: Optional[Any] = None,
@@ -42,7 +41,6 @@ def load_data(
     if kind == DataLoaderKind.GRID:
         return GridLoader(data_loader).load(
             time=time,
-            target_grid=target_grid,
             opener=opener,
             **substitutions,
         )
@@ -52,7 +50,7 @@ def load_data(
         )
     if kind == DataLoaderKind.STATIC:
         return StaticLoader(data_loader).load(
-            target_grid=target_grid, opener=opener, **substitutions
+            opener=opener, **substitutions
         )
     raise DataLoaderDispatchError(
         f"no runtime loader registered for kind {kind!r}"
