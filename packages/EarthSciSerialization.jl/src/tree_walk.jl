@@ -666,20 +666,22 @@ function _build_evaluator_impl(model::Model;
                          # front-door; empty on a direct typed call (RFC §5.3 / §6.1).
                          _vi_maps=_EMPTY_VI_MAPS)
     _has_value_invention = !isempty(_vi_vars)
-    # ---- M4 geometry kernel detection (RFC §8.1), guarded ----
-    # Active only when the model uses intersect_polygon — non-geometry files are
-    # byte-identical. Observed variables may be defined by their `expression`
-    # field (the shared geometry fixtures do) rather than an explicit equation;
-    # synthesize an observed equation `name = expression` for each so they flow
-    # through the same ISR-resolution / observed-substitution pipeline as
-    # equation-defined observeds. `_geom_ring_vars` are the (array-shaped) observed
-    # variables whose defining expression is an intersect_polygon clip; they are
-    # materialized into const_arrays at setup rather than treated as scalar
-    # observeds.
+    # ---- Observed-from-expression synthesis (universal) ----
+    # Observed variables may be defined by their `expression` field rather than
+    # an explicit equation; synthesize an observed equation `name = expression`
+    # for each so-defined observed (skipping any an equation already defines) so
+    # they flow through the same ISR-resolution / observed-substitution pipeline
+    # as equation-defined observeds. This is the transitive-inlining path that
+    # lets a DEEP algebraic chain — e.g. the flattened Rothermel fire-physics
+    # chain reconstituted by `flattened_to_esm` — resolve through `build_evaluator`
+    # with NO caller pre-inlining (`_resolve_observed` collapses the chain to a
+    # fixed point below). It used to be gated on `_has_geometry`, which left a
+    # non-geometry expression-defined observed unbound. Synthesis only ADDS
+    # equations for observeds lacking one, so equation-defined models stay
+    # byte-identical.
     _has_geometry = _model_has_intersect_polygon(model)
     _model_equations = model.equations
-    if _has_geometry
-        synth = Equation[]
+    let synth = Equation[]
         for (name, v) in model.variables
             (v.type == ObservedVariable && v.expression isa Expr) || continue
             any(eq -> eq.lhs isa VarExpr && (eq.lhs::VarExpr).name == name,
@@ -688,6 +690,9 @@ function _build_evaluator_impl(model::Model;
         end
         isempty(synth) || (_model_equations = vcat(model.equations, synth))
     end
+    # `_geom_ring_vars` are the (array-shaped) observed variables whose defining
+    # expression is an intersect_polygon clip; they are materialized into
+    # const_arrays at setup (RFC §8.1) rather than treated as scalar observeds.
     _geom_ring_vars = Set{String}()
     if _has_geometry
         for eq in _model_equations
@@ -1394,6 +1399,19 @@ function build_evaluator(esm::AbstractDict;
                            _vi_maps=(_vi === nothing ? _EMPTY_VI_MAPS :
                                      (maps=_vi.maps, map_sets=_vi.map_sets)),
                            kwargs...)
+end
+
+"""
+    build_evaluator(flat::FlattenedSystem; kwargs...)
+
+Build an evaluator directly from a `FlattenedSystem` by reconstituting it into a
+single-model native ESM document (`flattened_to_esm`) and running the
+`AbstractDict` front-door — so the regridders' value-invention geometry is
+materialized. Use this for a 0-D / array flattened system; for one carrying a
+spatial PDE, `discretize(flat; …)` first.
+"""
+function build_evaluator(flat::FlattenedSystem; kwargs...)
+    return build_evaluator(flattened_to_esm(flat); kwargs...)
 end
 
 # Select one raw model document (native dict) from a raw ESM dict, mirroring

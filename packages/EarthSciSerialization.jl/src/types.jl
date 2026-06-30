@@ -207,6 +207,50 @@ function Base.getproperty(e::OpExpr, name::Symbol)
     return getfield(e, name)
 end
 
+"""
+    reconstruct(e::OpExpr; op=…, args=…, <any OpExpr field>=…) -> OpExpr
+
+Rebuild an `OpExpr`, copying EVERY field from `e` by default and overriding only
+the keywords explicitly passed. This is the ONE canonical, field-preserving way
+to reconstruct a node after a structural rewrite (substitution, namespacing,
+simplification, canonicalization, …).
+
+It exists because `OpExpr` carries ~26 optional fields (geometry `manifold`/`id`,
+`table`/`table_axes`/`output`, aggregate `semiring`/`ranges`/`output_idx`/
+`expr_body`/`reduce`, relational `join`/`filter`/`join_gates`, `int_var`/`lower`/
+`upper`, …) and the historical reconstruction sites each hand-listed a different
+subset of keywords — silently dropping whatever they forgot. That made
+`flatten`/`substitute`/`namespace_expr` LOSSY: e.g. a coupling `substitute`
+erased an `intersect_polygon`'s `manifold`, and `namespace_expr` erased a
+`table_lookup`'s `table`. Routing every rewrite through `reconstruct` makes
+field preservation the default and a drop an explicit, visible choice.
+
+Callers that transform sub-expressions should pass the already-transformed
+result for the relevant field, e.g. `reconstruct(e; args=new_args)` or
+`reconstruct(e; expr_body=new_body, filter=new_filter)`.
+"""
+function reconstruct(e::OpExpr;
+        op::String = e.op,
+        args = e.args,
+        wrt = e.wrt, dim = e.dim, int_var = e.int_var,
+        lower = e.lower, upper = e.upper,
+        output_idx = e.output_idx, expr_body = e.expr_body,
+        reduce = e.reduce, semiring = e.semiring, ranges = e.ranges,
+        regions = e.regions, values = e.values, shape = e.shape,
+        perm = e.perm, axis = e.axis, fn = e.fn, name = e.name, value = e.value,
+        table = e.table, table_axes = e.table_axes, output = e.output,
+        join = e.join, filter = e.filter, join_gates = e.join_gates,
+        id = e.id, manifold = e.manifold)
+    return OpExpr(op, args;
+        wrt=wrt, dim=dim, int_var=int_var, lower=lower, upper=upper,
+        output_idx=output_idx, expr_body=expr_body, reduce=reduce,
+        semiring=semiring, ranges=ranges, regions=regions, values=values,
+        shape=shape, perm=perm, axis=axis, fn=fn, name=name, value=value,
+        table=table, table_axes=table_axes, output=output,
+        join=join, filter=filter, join_gates=join_gates,
+        id=id, manifold=manifold)
+end
+
 # ========================================
 # 2. Equation Types
 # ========================================

@@ -57,9 +57,25 @@ function substitute(expr::VarExpr, bindings::Dict{String,Expr})::Expr
 end
 
 function substitute(expr::OpExpr, bindings::Dict{String,Expr})::Expr
-    # Recursively substitute arguments
+    # Substitute into EVERY sub-expression the node carries — not just `args` —
+    # so substitution is complete inside aggregate/arrayop bodies, filter
+    # predicates, integral bounds, makearray values, and table_lookup axis
+    # inputs. `reconstruct` then preserves all other fields (semiring, ranges,
+    # output_idx, table, manifold, id, join, …) that earlier hand-listed
+    # rebuilds silently dropped. Bound locals (index vars, `int_var`) are short
+    # local symbols never present in `bindings` (whose keys are namespaced
+    # globals / parameter names), so recursing cannot capture them.
+    sub(x) = x === nothing ? nothing : substitute(x, bindings)
     new_args = Expr[substitute(arg, bindings) for arg in expr.args]
-    return OpExpr(expr.op, new_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=expr.lower, upper=expr.upper)
+    new_values = expr.values === nothing ? nothing :
+        Expr[substitute(v, bindings) for v in expr.values]
+    new_table_axes = expr.table_axes === nothing ? nothing :
+        Dict{String,Expr}(k => substitute(v, bindings) for (k, v) in expr.table_axes)
+    return reconstruct(expr;
+        args = new_args,
+        lower = sub(expr.lower), upper = sub(expr.upper),
+        expr_body = sub(expr.expr_body), filter = sub(expr.filter),
+        values = new_values, table_axes = new_table_axes)
 end
 
 # ========================================
@@ -251,7 +267,7 @@ function simplify(expr::OpExpr)::Expr
     if all(is_literal, simplified_args)
         try
             result_value = evaluate_expr(
-                OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified),
+                reconstruct(expr; args=simplified_args, lower=lower_simplified, upper=upper_simplified),
                 Dict{String,Float64}())
             all_int = all(arg -> isa(arg, IntExpr), simplified_args)
             if all_int && isfinite(result_value) && result_value == trunc(result_value) &&
@@ -277,7 +293,7 @@ function simplify(expr::OpExpr)::Expr
         elseif length(non_zero_args) == 1
             return non_zero_args[1]
         else
-            return OpExpr(op, Expr[non_zero_args...], wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+            return reconstruct(expr; args=Expr[non_zero_args...], lower=lower_simplified, upper=upper_simplified)
         end
 
     elseif op == "*"
@@ -295,7 +311,7 @@ function simplify(expr::OpExpr)::Expr
         elseif length(non_one_args) == 1
             return non_one_args[1]
         else
-            return OpExpr(op, Expr[non_one_args...], wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+            return reconstruct(expr; args=Expr[non_one_args...], lower=lower_simplified, upper=upper_simplified)
         end
 
     elseif op == "^" && length(simplified_args) == 2
@@ -322,7 +338,7 @@ function simplify(expr::OpExpr)::Expr
             return NumExpr(1.0)
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+        return reconstruct(expr; args=simplified_args, lower=lower_simplified, upper=upper_simplified)
 
     elseif op == "-" && length(simplified_args) == 2
         # x - 0 = x
@@ -330,7 +346,7 @@ function simplify(expr::OpExpr)::Expr
             return simplified_args[1]
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+        return reconstruct(expr; args=simplified_args, lower=lower_simplified, upper=upper_simplified)
 
     elseif op == "/" && length(simplified_args) == 2
         # x / 1 = x
@@ -343,9 +359,9 @@ function simplify(expr::OpExpr)::Expr
             return NumExpr(0.0)
         end
 
-        return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+        return reconstruct(expr; args=simplified_args, lower=lower_simplified, upper=upper_simplified)
     end
 
     # If no simplification rules apply, return the expression with simplified arguments
-    return OpExpr(op, simplified_args, wrt=expr.wrt, dim=expr.dim, int_var=expr.int_var, lower=lower_simplified, upper=upper_simplified)
+    return reconstruct(expr; args=simplified_args, lower=lower_simplified, upper=upper_simplified)
 end

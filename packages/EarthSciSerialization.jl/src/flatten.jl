@@ -210,6 +210,18 @@ Fields:
 - `domain::Union{Domain, Nothing}`: the target domain after any dimension
   promotion (§4.7.6), or `nothing` for purely 0D systems.
 - `metadata::FlattenMetadata`: provenance.
+- `index_sets::OrderedDict{String, IndexSet}`: the merged document-scoped
+  index-set registry (RFC semiring-faq-unified-ir §5.2), collected from every
+  source model and namespaced per-component (`<prefix>.<setname>`) so the value-
+  invention geometry of sibling components — e.g. five conservative regridders
+  each declaring `src_cells` / `candidate_pairs` / `clip_ring` — does not
+  collide after flattening. Empty when no source model declares any.
+- `function_tables::Dict{String, FunctionTable}`: the file-scoped sampled
+  function tables (esm-spec §9.5) referenced by `table_lookup` AST nodes. These
+  are keyed by globally-unique table id, so they are merged without namespacing.
+  Empty when the file declares none. Carrying both here is what lets a flattened
+  system round-trip back into a runnable single-model `EsmFile` (`flattened_to_esm`)
+  without dropping the geometry registry or the table data.
 """
 struct FlattenedSystem
     independent_variables::Vector{Symbol}
@@ -221,7 +233,16 @@ struct FlattenedSystem
     discrete_events::Vector{DiscreteEvent}
     domain::Union{Domain, Nothing}
     metadata::FlattenMetadata
+    index_sets::OrderedDict{String, IndexSet}
+    function_tables::Dict{String, FunctionTable}
 end
+
+# Backward-compatible 9-arg constructor: callers that predate the index-set /
+# function-table registry (e.g. hand-built MTK PDESystem fixtures) get empty
+# registries. The full flattener always passes all 11.
+FlattenedSystem(ivs, sv, p, obs, eqs, cev, dev, dom, meta) =
+    FlattenedSystem(ivs, sv, p, obs, eqs, cev, dev, dom, meta,
+                    OrderedDict{String, IndexSet}(), Dict{String, FunctionTable}())
 
 # ========================================
 # Reaction Lowering Helper (§4.6 + §4.7.6)
@@ -317,15 +338,18 @@ segment is treated as the local symbol: if it is in `local_names` (a local
 subsystem), the whole dotted path is prefixed; otherwise the reference is
 already external and is left unchanged. Numeric literals are unchanged.
 """
-function namespace_expr(expr::NumExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
+function namespace_expr(expr::NumExpr, prefix::String, local_names::Set{String},
+                        idx_names::Set{String}=Set{String}())::EarthSciSerialization.Expr
     return expr
 end
 
-function namespace_expr(expr::IntExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
+function namespace_expr(expr::IntExpr, prefix::String, local_names::Set{String},
+                        idx_names::Set{String}=Set{String}())::EarthSciSerialization.Expr
     return expr
 end
 
-function namespace_expr(expr::VarExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
+function namespace_expr(expr::VarExpr, prefix::String, local_names::Set{String},
+                        idx_names::Set{String}=Set{String}())::EarthSciSerialization.Expr
     if occursin('.', expr.name)
         first_part = String(split(expr.name, '.')[1])
         if first_part in local_names
@@ -339,39 +363,62 @@ function namespace_expr(expr::VarExpr, prefix::String, local_names::Set{String})
     return expr
 end
 
-function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String})::EarthSciSerialization.Expr
-    new_args = EarthSciSerialization.Expr[namespace_expr(a, prefix, local_names) for a in expr.args]
-    # Recurse into array-op subtrees so variables inside arrayop bodies,
-    # makearray values, etc. get their prefix rewrites too.
-    new_expr_body = expr.expr_body === nothing ? nothing :
-        namespace_expr(expr.expr_body, prefix, local_names)
+# Namespace a `ranges` map: rewrite each `IndexSetRef`'s `from` set name when it
+# is a component-local index identifier, and namespace any expression-valued
+# dense bound. Index-VARIABLE names (the `of` parents, the range keys) are
+# arrayop-local and are left untouched.
+function _namespace_ranges(ranges, prefix::String, local_names::Set{String},
+                           idx_names::Set{String})
+    ranges === nothing && return nothing
+    out = Dict{String,Any}()
+    for (k, v) in ranges
+        if v isa IndexSetRef
+            newfrom = v.from in idx_names ? "$(prefix).$(v.from)" : v.from
+            out[k] = IndexSetRef(newfrom; of=v.of)
+        elseif v isa AbstractVector
+            out[k] = Any[x isa EarthSciSerialization.Expr ?
+                         namespace_expr(x, prefix, local_names, idx_names) : x for x in v]
+        else
+            out[k] = v
+        end
+    end
+    return out
+end
+
+function namespace_expr(expr::OpExpr, prefix::String, local_names::Set{String},
+                        idx_names::Set{String}=Set{String}())::EarthSciSerialization.Expr
+    ns(x) = x === nothing ? nothing : namespace_expr(x, prefix, local_names, idx_names)
+    new_args = EarthSciSerialization.Expr[namespace_expr(a, prefix, local_names, idx_names) for a in expr.args]
+    # Recurse into EVERY variable-bearing sub-expression so prefix rewrites reach
+    # arrayop / makearray bodies, filter predicates (M2 §7.2), integral bounds
+    # (`lower`/`upper`), and table_lookup per-axis input expressions. `reconstruct`
+    # preserves all other fields (semiring, output_idx, table, output, int_var,
+    # join/join_gates, manifold, …) — earlier this rebuild hand-listed keywords
+    # and silently dropped int_var/lower/upper/table/table_axes/output. `join`/
+    # `join_gates` carry only index-symbol / position data, so they pass through.
     new_values = expr.values === nothing ? nothing :
-        EarthSciSerialization.Expr[namespace_expr(v, prefix, local_names) for v in expr.values]
-    # A `filter` predicate (M2, §7.2) holds variable references — namespace it
-    # too. `join`/`join_gates` carry only index-symbol / position data, so they
-    # pass through unchanged.
-    new_filter = expr.filter === nothing ? nothing :
-        namespace_expr(expr.filter, prefix, local_names)
-    return OpExpr(expr.op, new_args;
-        wrt=expr.wrt, dim=expr.dim,
-        output_idx=expr.output_idx,
-        expr_body=new_expr_body,
-        reduce=expr.reduce,
-        semiring=expr.semiring,
-        ranges=expr.ranges,
-        regions=expr.regions,
+        EarthSciSerialization.Expr[namespace_expr(v, prefix, local_names, idx_names) for v in expr.values]
+    new_table_axes = expr.table_axes === nothing ? nothing :
+        Dict{String,EarthSciSerialization.Expr}(
+            k => namespace_expr(v, prefix, local_names, idx_names) for (k, v) in expr.table_axes)
+    # Namespace index-set references so a flattened component's private
+    # geometry/index names don't collide with a sibling's after merge: the `id`
+    # naming a value-invention producer (matched by a derived set's `from_faq`)
+    # and every `ranges[*]` `{from: <set>}` reference. Gated on `idx_names`, which
+    # is empty for models that declare no index sets — so non-geometry models are
+    # byte-identical to before.
+    new_id = (expr.id !== nothing && expr.id in idx_names) ? "$(prefix).$(expr.id)" : expr.id
+    new_ranges = _namespace_ranges(expr.ranges, prefix, local_names, idx_names)
+    return reconstruct(expr;
+        args=new_args,
+        expr_body=ns(expr.expr_body),
+        filter=ns(expr.filter),
+        lower=ns(expr.lower),
+        upper=ns(expr.upper),
         values=new_values,
-        shape=expr.shape,
-        perm=expr.perm,
-        axis=expr.axis,
-        fn=expr.fn,
-        name=expr.name,
-        value=expr.value,
-        join=expr.join,
-        filter=new_filter,
-        join_gates=expr.join_gates,
-        id=expr.id,
-        manifold=expr.manifold)
+        table_axes=new_table_axes,
+        id=new_id,
+        ranges=new_ranges)
 end
 
 """
@@ -441,12 +488,64 @@ function _collect_spatial_dims!(dims::Set{Symbol}, expr::EarthSciSerialization.E
 end
 
 # ========================================
+# Index-set namespacing (RFC semiring-faq-unified-ir §5.2)
+# ========================================
+
+# Collect every value-invention producer `id` reachable in an expression tree.
+# A derived index set names its producer via `from_faq`, matched against these.
+function _collect_node_ids!(acc::Set{String}, expr::EarthSciSerialization.Expr)
+    expr isa OpExpr || return acc
+    expr.id === nothing || push!(acc, expr.id)
+    for a in expr.args
+        _collect_node_ids!(acc, a)
+    end
+    for f in (expr.expr_body, expr.filter, expr.lower, expr.upper)
+        f === nothing || _collect_node_ids!(acc, f)
+    end
+    if expr.values !== nothing
+        for v in expr.values
+            _collect_node_ids!(acc, v)
+        end
+    end
+    if expr.table_axes !== nothing
+        for v in values(expr.table_axes)
+            _collect_node_ids!(acc, v)
+        end
+    end
+    return acc
+end
+
+# Namespace one IndexSet entry: prefix its `from_faq` producer id and any `of`
+# parent that is itself a component-local index identifier; namespace the
+# `values`/`offsets` factor-array references that name component-local variables.
+# `kind`/`size`/`members` carry data, not names, and pass through unchanged.
+function _namespace_index_set(is::IndexSet, prefix::String,
+                              local_names::Set{String}, idx_names::Set{String})::IndexSet
+    pfx(n) = "$(prefix).$(n)"
+    new_from_faq = (is.from_faq !== nothing && is.from_faq in idx_names) ?
+        pfx(is.from_faq) : is.from_faq
+    new_of = is.of === nothing ? nothing :
+        String[o in idx_names ? pfx(o) : o for o in is.of]
+    new_values = (is.values !== nothing && is.values in local_names) ?
+        pfx(is.values) : is.values
+    new_offsets = (is.offsets !== nothing && is.offsets in local_names) ?
+        pfx(is.offsets) : is.offsets
+    return IndexSet(is.kind; size=is.size, members=is.members, of=new_of,
+                    offsets=new_offsets, values=new_values, from_faq=new_from_faq,
+                    members_raw=is.members_raw)
+end
+
+# ========================================
 # Per-system collection
 # ========================================
 
 """
 Collect a Model's variables and equations into the flattener accumulators,
 recursing through subsystems. All names are rewritten to `prefix.local_name`.
+A model's document-scoped index sets (RFC §5.2) are namespaced per-component and
+merged into `index_sets_acc`, with their references inside equations (`ranges`
+`from`, producer `id`) rewritten in lockstep, so sibling components' identically-
+named geometry sets don't collide.
 """
 function _collect_model!(states::OrderedDict{String, ModelVariable},
                          params::OrderedDict{String, ModelVariable},
@@ -454,12 +553,39 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
                          equations::Vector{Equation},
                          continuous_events::Vector{ContinuousEvent},
                          discrete_events::Vector{DiscreteEvent},
-                         model::Model, prefix::String)
+                         model::Model, prefix::String,
+                         index_sets_acc::OrderedDict{String, IndexSet}=
+                             OrderedDict{String, IndexSet}())
     local_names = Set{String}(keys(model.variables))
     # Also include subsystem-qualified names from this level's subsystems so
     # that references inside the model to subsystem variables get namespaced.
     for (sub_name, _) in model.subsystems
         push!(local_names, sub_name)
+    end
+
+    # The set of component-local index identifiers to namespace: declared
+    # index-set names, the producer ids their `from_faq` point at, and every
+    # `id` on a node in the model's equations. Empty (so a no-op) for models
+    # that declare no index sets — keeping non-geometry components byte-identical.
+    idx_names = Set{String}()
+    if !isempty(model.index_sets)
+        union!(idx_names, keys(model.index_sets))
+        for is in values(model.index_sets)
+            is.from_faq === nothing || push!(idx_names, is.from_faq)
+        end
+        for eq in model.equations
+            _collect_node_ids!(idx_names, eq.lhs)
+            _collect_node_ids!(idx_names, eq.rhs)
+        end
+        for (name, var) in model.variables
+            var.type == ObservedVariable && var.expression !== nothing &&
+                _collect_node_ids!(idx_names, var.expression)
+        end
+        # Merge the namespaced registry. Keys become `<prefix>.<setname>`.
+        for (sname, is) in model.index_sets
+            index_sets_acc["$(prefix).$(sname)"] =
+                _namespace_index_set(is, prefix, local_names, idx_names)
+        end
     end
 
     for (name, var) in model.variables
@@ -475,8 +601,8 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
 
     explicit_lhs_names = Set{String}()
     for eq in model.equations
-        lhs = namespace_expr(eq.lhs, prefix, local_names)
-        rhs = namespace_expr(eq.rhs, prefix, local_names)
+        lhs = namespace_expr(eq.lhs, prefix, local_names, idx_names)
+        rhs = namespace_expr(eq.rhs, prefix, local_names, idx_names)
         push!(equations, Equation(lhs, rhs; _comment=eq._comment, region=eq.region))
         if lhs isa VarExpr
             push!(explicit_lhs_names, lhs.name)
@@ -495,15 +621,15 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
         namespaced = "$(prefix).$(name)"
         namespaced in explicit_lhs_names && continue
         lhs = VarExpr(namespaced)
-        rhs = namespace_expr(var.expression, prefix, local_names)
+        rhs = namespace_expr(var.expression, prefix, local_names, idx_names)
         push!(equations, Equation(lhs, rhs))
     end
 
     for ev in model.continuous_events
-        new_conds = EarthSciSerialization.Expr[namespace_expr(c, prefix, local_names) for c in ev.conditions]
+        new_conds = EarthSciSerialization.Expr[namespace_expr(c, prefix, local_names, idx_names) for c in ev.conditions]
         new_affects = AffectEquation[
             AffectEquation(startswith(a.lhs, prefix * ".") || occursin('.', a.lhs) ? a.lhs : "$(prefix).$(a.lhs)",
-                           namespace_expr(a.rhs, prefix, local_names))
+                           namespace_expr(a.rhs, prefix, local_names, idx_names))
             for a in ev.affects
         ]
         push!(continuous_events,
@@ -514,12 +640,12 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
         new_affects = FunctionalAffect[
             FunctionalAffect(
                 occursin('.', a.target) ? a.target : "$(prefix).$(a.target)",
-                namespace_expr(a.expression, prefix, local_names);
+                namespace_expr(a.expression, prefix, local_names, idx_names);
                 operation=a.operation)
             for a in ev.affects
         ]
         new_trigger = if ev.trigger isa ConditionTrigger
-            ConditionTrigger(namespace_expr(ev.trigger.expression, prefix, local_names))
+            ConditionTrigger(namespace_expr(ev.trigger.expression, prefix, local_names, idx_names))
         else
             ev.trigger
         end
@@ -535,7 +661,7 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
         sub_model isa Model || continue
         _collect_model!(states, params, observeds, equations,
                         continuous_events, discrete_events,
-                        sub_model, "$(prefix).$(sub_name)")
+                        sub_model, "$(prefix).$(sub_name)", index_sets_acc)
     end
 end
 
@@ -1160,6 +1286,7 @@ function flatten(file::EsmFile)::FlattenedSystem
     equations = Equation[]
     continuous_events = ContinuousEvent[]
     discrete_events = DiscreteEvent[]
+    index_sets = OrderedDict{String, IndexSet}()
     source_systems = String[]
 
     file_domains = file.domains
@@ -1170,7 +1297,7 @@ function flatten(file::EsmFile)::FlattenedSystem
             push!(source_systems, name)
             _collect_model!(states, params, observeds, equations,
                             continuous_events, discrete_events,
-                            model, name)
+                            model, name, index_sets)
         end
     end
 
@@ -1223,10 +1350,16 @@ function flatten(file::EsmFile)::FlattenedSystem
         opaque_coupling_refs=opaque_refs,
     )
 
+    # File-scoped function tables (esm-spec §9.5) are keyed by globally-unique id
+    # and referenced by `table_lookup` nodes — carry them through unchanged so the
+    # flattened system can round-trip into a runnable EsmFile (`flattened_to_esm`).
+    function_tables = file.function_tables === nothing ?
+        Dict{String, FunctionTable}() : copy(file.function_tables)
+
     return FlattenedSystem(
         ivs, states, params, observeds,
         equations, continuous_events, discrete_events,
-        target_domain, metadata,
+        target_domain, metadata, index_sets, function_tables,
     )
 end
 
@@ -1252,6 +1385,75 @@ function flatten(rsys::ReactionSystem; name::String="anonymous")::FlattenedSyste
     file = EsmFile("0.1.0", Metadata(name);
                    reaction_systems=Dict{String, ReactionSystem}(name => rsys))
     return flatten(file)
+end
+
+# ========================================
+# FlattenedSystem → runnable single-model ESM document
+# ========================================
+
+"""
+    flattened_to_esm(flat::FlattenedSystem; name="Flattened", esm_version="0.5.0") -> Dict{String,Any}
+
+Reconstitute a `FlattenedSystem` into a single-model native ESM **document**
+(`Dict{String,Any}`) that can be run directly: `build_evaluator(doc)` for a 0-D /
+array system, or `discretize(doc)` first when it carries a spatial PDE.
+
+A native dict — not a typed `EsmFile` — is the target on purpose: the value-
+invention front-door (RFC §6.1, geometry / derived index sets) and the
+`discretize` entry both dispatch on `AbstractDict`, and only the raw document
+carries the index-set / `table_lookup` vocabulary the typed IR doesn't surface.
+
+The single model collects:
+- all three variable partitions (states, parameters, observeds) — observeds keep
+  their defining `expression`, which the geometry materializer reads directly;
+- every flattened equation (state ODEs + the synthesized observed definitions),
+  so the evaluator's own observed-equation synthesis is a no-op (it skips any
+  observed already defined by an equation — no double definition);
+- the namespaced `index_sets` registry (so the five regridders' `ranges.from` /
+  `from_faq` / producer `id` references resolve without collision);
+- the file-scoped `function_tables` (the fuel `table_lookup` data).
+
+This is the monolithic path the staged camp-fire run previously could not take,
+because a lossy `flatten` dropped the geometry `manifold` / `table` data and the
+index-set registry. With those preserved (canonical `reconstruct` + the registry
+fields on `FlattenedSystem`), the whole flattened document lowers in one shot.
+"""
+function flattened_to_esm(flat::FlattenedSystem;
+                          name::AbstractString="Flattened",
+                          esm_version::AbstractString="0.5.0")::Dict{String,Any}
+    sname = String(name)
+    variables = Dict{String,Any}()
+    # Order: states, parameters, observeds. A later partition never re-keys an
+    # earlier one (flatten guarantees disjoint names), so merge is unambiguous.
+    for partition in (flat.state_variables, flat.parameters, flat.observed_variables)
+        for (k, v) in partition
+            variables[k] = serialize_model_variable(v)
+        end
+    end
+
+    model = Dict{String,Any}(
+        "variables" => variables,
+        "equations" => Any[serialize_equation(eq) for eq in flat.equations],
+    )
+    if !isempty(flat.index_sets)
+        model["index_sets"] = Dict{String,Any}(
+            k => serialize_index_set(v) for (k, v) in flat.index_sets)
+    end
+
+    doc = Dict{String,Any}(
+        "esm" => String(esm_version),
+        "metadata" => Dict{String,Any}("name" => sname),
+        "models" => Dict{String,Any}(sname => model),
+    )
+    if !isempty(flat.function_tables)
+        doc["function_tables"] = Dict{String,Any}(
+            k => serialize_function_table(v) for (k, v) in flat.function_tables)
+    end
+    if flat.domain !== nothing
+        model["domain"] = "domain"
+        doc["domains"] = Dict{String,Any}("domain" => serialize_domain(flat.domain))
+    end
+    return doc
 end
 
 # ========================================

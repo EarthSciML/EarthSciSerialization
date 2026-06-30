@@ -120,6 +120,31 @@ function discretize(esm::AbstractDict;
     return out
 end
 
+"""
+    discretize(flat::FlattenedSystem; grids=nothing, rules=nothing, kwargs...)
+
+Discretize a `FlattenedSystem` directly: reconstitute it into a single-model
+native document (`flattened_to_esm`), splice in any caller-supplied `grids` and
+discretization `rules` (the spatial level-set front needs a grid + `grad`
+stencil rules the flattened IR does not itself carry), then run the dict
+discretizer. The returned document is ready for `build_evaluator`. A mixed
+system — spatial PDE + 0-D scalar physics + array regrid — passes its
+non-spatial equations through unchanged while the spatial ones are lowered.
+"""
+function discretize(flat::FlattenedSystem;
+                    grids::Union{AbstractDict,Nothing}=nothing,
+                    rules::Union{AbstractVector,Nothing}=nothing,
+                    kwargs...)
+    doc = flattened_to_esm(flat)
+    if grids !== nothing
+        doc["grids"] = Dict{String,Any}(String(k) => v for (k, v) in grids)
+    end
+    if rules !== nothing
+        doc["rules"] = collect(Any, rules)
+    end
+    return discretize(doc; kwargs...)
+end
+
 # Default `dae_support` honors the `ESM_DAE_SUPPORT` env var (RFC §12 says
 # bindings MAY expose either an env var or a binding-specific flag; Julia
 # exposes both). Any falsy value ("0", "false", "off", "no") disables.
