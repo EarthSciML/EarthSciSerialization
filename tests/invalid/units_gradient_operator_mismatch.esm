@@ -9,7 +9,6 @@
 
   "models": {
     "SpatialModel": {
-      "domain": "default",
       "variables": {
         "c":         { "type": "state",     "units": "mol/m^3", "default": 0.0, "description": "Tracer concentration (state)" },
         "t":         { "type": "parameter", "units": "s",       "default": 1.0, "description": "Time (independent variable placeholder)" },
@@ -35,12 +34,7 @@
     }
   },
 
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "spatial": {
-        "x": { "min": 0.0, "max": 10.0 }
-      }
-    }
+  "domain": {
+    "independent_variable": "t"
   }
 }

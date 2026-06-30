@@ -410,18 +410,12 @@
       "description": "Cross-layer ozone transport using deeply nested scoped references"
     }
   ],
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "temporal": {
-        "start": "2024-06-01T00:00:00Z",
-        "end": "2024-06-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 0.0
-      },
-      "element_type": "Float64"
-    }
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-02T00:00:00Z"
+    },
+    "element_type": "Float64"
   }
 }

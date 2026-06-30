@@ -1,8 +1,8 @@
 {
-  "esm": "0.2.0",
+  "esm": "0.8.0",
   "metadata": {
     "name": "CrossDomainCoupling",
-    "description": "Test fixture for coupling entries with interface and lifting fields across domains of different dimensionality\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+    "description": "Test fixture for cross-domain air-sea coupling with lifting strategies and a regridding aggregate.\nThe old air_sea interface (shared lon/lat between the atmosphere surface grid and the ocean surface grid) is re-expressed in v0.8.0 as a regridding aggregate inside Ocean3D: the atmosphere-grid sensible flux is remapped onto the ocean grid via overlap weights. 0-D <-> spatial mappings to the bulk flux calculator are captured by the coupling lifting field.\nMigrated to ESM v0.8.0.",
     "authors": [
       "EarthSciML"
     ],
@@ -10,35 +10,127 @@
     "tags": [
       "cross-domain",
       "coupling",
-      "interface",
+      "regridding",
       "lifting",
-      "migrated_from_v01"
+      "migrated_to_v08"
     ]
   },
   "models": {
     "Ocean3D": {
-      "domain": "ocean",
+      "index_sets": {
+        "ocean_cells": {
+          "kind": "interval",
+          "size": 3
+        },
+        "atmos_cells": {
+          "kind": "interval",
+          "size": 3
+        }
+      },
       "variables": {
         "SST": {
           "type": "state",
           "units": "K",
           "default": 290.0,
-          "description": "Sea surface temperature"
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Sea surface temperature on the ocean surface grid"
         },
         "salinity": {
           "type": "state",
           "units": "psu",
           "default": 35.0,
-          "description": "Salinity"
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Salinity on the ocean surface grid"
         },
-        "heat_flux": {
+        "flux_atmos": {
           "type": "parameter",
           "units": "W/m^2",
           "default": 0.0,
-          "description": "Surface heat flux"
+          "shape": [
+            "atmos_cells"
+          ],
+          "description": "Sensible heat flux sampled on the atmosphere surface grid (air-sea flux calculator output), regridded onto the ocean surface grid across the air-sea interface"
+        },
+        "air_sea_weight": {
+          "type": "parameter",
+          "units": "1",
+          "shape": [
+            "ocean_cells",
+            "atmos_cells"
+          ],
+          "description": "Conservative air-sea regrid weights W[o,a] mapping atmosphere surface cells onto ocean surface cells over shared lon/lat (the old air_sea interface expressed as a regridding operator; each ocean-cell row sums to 1)"
+        },
+        "heat_flux": {
+          "type": "observed",
+          "units": "W/m^2",
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Surface heat flux on the ocean grid, regridded from the atmosphere-grid sensible flux: heat_flux[o] = sum_a air_sea_weight[o,a] * flux_atmos[a]",
+          "expression": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": [
+              "o"
+            ],
+            "ranges": {
+              "o": {
+                "from": "ocean_cells"
+              },
+              "a": {
+                "from": "atmos_cells"
+              }
+            },
+            "args": [
+              "air_sea_weight",
+              "flux_atmos"
+            ],
+            "expr": {
+              "op": "*",
+              "args": [
+                {
+                  "op": "index",
+                  "args": [
+                    "air_sea_weight",
+                    "o",
+                    "a"
+                  ]
+                },
+                {
+                  "op": "index",
+                  "args": [
+                    "flux_atmos",
+                    "a"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "SST"
+            ]
+          },
+          "rhs": 290.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "salinity"
+            ]
+          },
+          "rhs": 290.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -68,7 +160,6 @@
       ]
     },
     "Atmosphere2D": {
-      "domain": "atmos_surface",
       "variables": {
         "T_air": {
           "type": "state",
@@ -92,6 +183,24 @@
       "equations": [
         {
           "lhs": {
+            "op": "ic",
+            "args": [
+              "T_air"
+            ]
+          },
+          "rhs": 288.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "wind_speed"
+            ]
+          },
+          "rhs": 288.0
+        },
+        {
+          "lhs": {
             "op": "D",
             "args": [
               "T_air"
@@ -113,7 +222,6 @@
       ]
     },
     "BulkFluxCalculator": {
-      "domain": null,
       "variables": {
         "T_air_in": {
           "type": "parameter",
@@ -186,49 +294,12 @@
       "equations": []
     }
   },
-  "domains": {
-    "ocean": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 290.0
-      },
-      "element_type": "Float64"
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-02T00:00:00Z"
     },
-    "atmos_surface": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 288.0
-      },
-      "element_type": "Float64"
-    }
-  },
-  "interfaces": {
-    "air_sea": {
-      "description": "Air-sea interface coupling atmosphere and ocean surface",
-      "domains": [
-        "atmos_surface",
-        "ocean"
-      ],
-      "dimension_mapping": {
-        "shared": {
-          "atmos_surface.lon": "ocean.lon",
-          "atmos_surface.lat": "ocean.lat"
-        },
-        "constraints": {
-          "ocean.depth": {
-            "value": "min"
-          }
-        }
-      }
-    }
+    "element_type": "Float64"
   },
   "coupling": [
     {
@@ -252,18 +323,16 @@
       "from": "Ocean3D.SST",
       "to": "BulkFluxCalculator.SST_in",
       "transform": "param_to_var",
-      "interface": "air_sea",
-      "lifting": "pointwise",
-      "description": "SST from ocean surface to bulk flux calculator"
+      "lifting": "mean",
+      "description": "SST from the spatial ocean surface grid reduced (mean) to the 0-D bulk flux calculator"
     },
     {
       "type": "variable_map",
       "from": "BulkFluxCalculator.sensible_flux",
-      "to": "Ocean3D.heat_flux",
+      "to": "Ocean3D.flux_atmos",
       "transform": "param_to_var",
-      "interface": "air_sea",
-      "lifting": "pointwise",
-      "description": "Sensible heat flux drives ocean surface temperature"
+      "lifting": "broadcast",
+      "description": "Sensible heat flux broadcast onto the atmosphere surface grid; Ocean3D regrids it onto the ocean grid (heat_flux) across the air-sea interface"
     }
   ]
 }

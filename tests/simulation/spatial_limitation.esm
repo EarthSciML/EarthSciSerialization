@@ -85,6 +85,15 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "concentration"
+            ]
+          },
+          "rhs": 1.0
         }
       ]
     },
@@ -167,20 +176,20 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "tracer"
+            ]
+          },
+          "rhs": 0.5
         }
       ]
     }
   },
-  "domains": {
-    "default": {
-      "temporal": {},
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "SpatialDiffusion.concentration": 1.0,
-          "AdvectionDiffusion.tracer": 0.5
-        }
-      }
-    }
+  "domain": {
+    "temporal": {}
   }
 }

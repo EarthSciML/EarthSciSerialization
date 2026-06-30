@@ -1,38 +1,67 @@
 {
-  "esm": "0.2.0",
+  "esm": "0.8.0",
   "metadata": {
     "name": "InterfaceDefinitions",
-    "description": "Test fixture for interface definitions with dimension_mapping, constraints, and regridding methods\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+    "description": "Test fixture for cross-grid coupling re-expressed as regridding aggregates.\nThe old tropopause/land_atmosphere/ice_atmosphere interfaces (shared lon/lat plus level/pressure selection between two domains) are migrated to v0.8.0: the tropopause coupling is realized as a regridding aggregate inside LowerAtmosphere that remaps stratospheric ozone onto the troposphere; spatial <-> 0-D mappings use the coupling lifting field.\nMigrated to ESM v0.8.0.",
     "authors": [
       "EarthSciML"
     ],
     "created": "2026-04-09T00:00:00Z",
     "tags": [
       "interfaces",
-      "dimension-mapping",
       "regridding",
-      "constraints",
-      "migrated_from_v01"
+      "cross-grid",
+      "lifting",
+      "migrated_to_v08"
     ]
   },
   "models": {
     "UpperAtmosphere": {
-      "domain": "upper_atmos",
+      "index_sets": {
+        "upper_cells": {
+          "kind": "interval",
+          "size": 3
+        }
+      },
       "variables": {
         "O3": {
           "type": "state",
           "units": "mol/mol",
           "default": 1e-07,
-          "description": "Ozone mixing ratio"
+          "shape": [
+            "upper_cells"
+          ],
+          "description": "Ozone mixing ratio on the stratospheric grid"
         },
         "T": {
           "type": "state",
           "units": "K",
           "default": 220.0,
-          "description": "Temperature"
+          "shape": [
+            "upper_cells"
+          ],
+          "description": "Temperature on the stratospheric grid"
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O3"
+            ]
+          },
+          "rhs": 0.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "T"
+            ]
+          },
+          "rhs": 0.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -56,28 +85,120 @@
       ]
     },
     "LowerAtmosphere": {
-      "domain": "lower_atmos",
+      "index_sets": {
+        "lower_cells": {
+          "kind": "interval",
+          "size": 3
+        },
+        "upper_cells": {
+          "kind": "interval",
+          "size": 3
+        }
+      },
       "variables": {
         "T": {
           "type": "state",
           "units": "K",
           "default": 288.0,
-          "description": "Temperature"
+          "shape": [
+            "lower_cells"
+          ],
+          "description": "Temperature on the tropospheric grid"
         },
         "q": {
           "type": "state",
           "units": "kg/kg",
           "default": 0.01,
-          "description": "Specific humidity"
+          "shape": [
+            "lower_cells"
+          ],
+          "description": "Specific humidity on the tropospheric grid"
         },
-        "O3_boundary": {
+        "O3_strat": {
           "type": "parameter",
           "units": "mol/mol",
           "default": 5e-08,
-          "description": "Ozone from upper atmosphere"
+          "shape": [
+            "upper_cells"
+          ],
+          "description": "Stratospheric ozone sampled on the upper-atmosphere grid (coupling input), regridded to the troposphere across the tropopause"
+        },
+        "tropopause_weight": {
+          "type": "parameter",
+          "units": "1",
+          "shape": [
+            "lower_cells",
+            "upper_cells"
+          ],
+          "description": "Tropopause regrid weights mapping upper-atmosphere cells onto lower-atmosphere cells over shared lon/lat (the old tropopause interface expressed as a regridding operator; each lower-cell row sums to 1)"
+        },
+        "O3_boundary": {
+          "type": "observed",
+          "units": "mol/mol",
+          "shape": [
+            "lower_cells"
+          ],
+          "description": "Ozone boundary value on the tropospheric grid, regridded from the stratosphere: O3_boundary[l] = sum_u tropopause_weight[l,u] * O3_strat[u]",
+          "expression": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": [
+              "l"
+            ],
+            "ranges": {
+              "l": {
+                "from": "lower_cells"
+              },
+              "u": {
+                "from": "upper_cells"
+              }
+            },
+            "args": [
+              "tropopause_weight",
+              "O3_strat"
+            ],
+            "expr": {
+              "op": "*",
+              "args": [
+                {
+                  "op": "index",
+                  "args": [
+                    "tropopause_weight",
+                    "l",
+                    "u"
+                  ]
+                },
+                {
+                  "op": "index",
+                  "args": [
+                    "O3_strat",
+                    "u"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "T"
+            ]
+          },
+          "rhs": 288.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "q"
+            ]
+          },
+          "rhs": 288.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -101,7 +222,6 @@
       ]
     },
     "LandSurface": {
-      "domain": "land",
       "variables": {
         "T_soil": {
           "type": "state",
@@ -123,6 +243,24 @@
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "T_soil"
+            ]
+          },
+          "rhs": 290.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "soil_moisture"
+            ]
+          },
+          "rhs": 290.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -152,7 +290,6 @@
       ]
     },
     "IceSheet": {
-      "domain": "ice",
       "variables": {
         "thickness": {
           "type": "state",
@@ -168,6 +305,15 @@
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "thickness"
+            ]
+          },
+          "rhs": 1000.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -186,116 +332,21 @@
       ]
     }
   },
-  "domains": {
-    "upper_atmos": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 0.0
-      },
-      "element_type": "Float64"
+  "domain": {
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-02T00:00:00Z"
     },
-    "lower_atmos": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 288.0
-      },
-      "element_type": "Float64"
-    },
-    "land": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 290.0
-      },
-      "element_type": "Float64"
-    },
-    "ice": {
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 1000.0
-      },
-      "element_type": "Float64"
-    }
-  },
-  "interfaces": {
-    "tropopause": {
-      "description": "Tropopause interface between upper and lower atmosphere",
-      "domains": [
-        "upper_atmos",
-        "lower_atmos"
-      ],
-      "dimension_mapping": {
-        "shared": {
-          "upper_atmos.lon": "lower_atmos.lon",
-          "upper_atmos.lat": "lower_atmos.lat"
-        },
-        "constraints": {
-          "upper_atmos.pressure": {
-            "value": "max"
-          },
-          "lower_atmos.lev": {
-            "value": "max"
-          }
-        }
-      }
-    },
-    "land_atmosphere": {
-      "description": "Land-atmosphere interface at ground level",
-      "domains": [
-        "lower_atmos",
-        "land"
-      ],
-      "dimension_mapping": {
-        "shared": {
-          "lower_atmos.lon": "land.lon",
-          "lower_atmos.lat": "land.lat"
-        },
-        "constraints": {
-          "lower_atmos.lev": {
-            "value": "min"
-          }
-        }
-      }
-    },
-    "ice_atmosphere": {
-      "description": "Ice sheet to atmosphere interface with coordinate transform",
-      "domains": [
-        "lower_atmos",
-        "ice"
-      ],
-      "dimension_mapping": {
-        "shared": {},
-        "constraints": {
-          "lower_atmos.lev": {
-            "value": "min"
-          }
-        }
-      }
-    }
+    "element_type": "Float64"
   },
   "coupling": [
     {
       "type": "variable_map",
       "from": "UpperAtmosphere.O3",
-      "to": "LowerAtmosphere.O3_boundary",
+      "to": "LowerAtmosphere.O3_strat",
       "transform": "param_to_var",
-      "interface": "tropopause",
-      "description": "Ozone flux from stratosphere to troposphere"
+      "lifting": "pointwise",
+      "description": "Stratospheric ozone supplied to the lower atmosphere on the upper grid; LowerAtmosphere regrids it to the troposphere (O3_boundary) across the tropopause"
     },
     {
       "type": "variable_map",
@@ -303,8 +354,8 @@
       "to": "LandSurface.atm_precip",
       "transform": "conversion_factor",
       "factor": 0.001,
-      "interface": "land_atmosphere",
-      "description": "Precipitation from atmosphere to land surface"
+      "lifting": "mean",
+      "description": "Tropospheric humidity reduced (mean) from the spatial grid to the 0-D land surface as precipitation"
     }
   ]
 }

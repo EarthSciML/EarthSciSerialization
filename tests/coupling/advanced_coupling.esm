@@ -80,6 +80,24 @@
               "NO"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O3"
+            ]
+          },
+          "rhs": 1e-09
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO"
+            ]
+          },
+          "rhs": 1e-09
         }
       ]
     },
@@ -172,6 +190,15 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "u"
+            ]
+          },
+          "rhs": 1e-09
         }
       ]
     }
@@ -302,16 +329,10 @@
       "description": "Write diagnostic output every 10 minutes"
     }
   ],
-  "domains": {
-    "default": {
-      "temporal": {
-        "start": "2024-06-01T00:00:00Z",
-        "end": "2024-06-01T12:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 1e-09
-      }
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-01T12:00:00Z"
     }
   }
 }

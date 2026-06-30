@@ -166,6 +166,33 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O3"
+            ]
+          },
+          "rhs": 0.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO"
+            ]
+          },
+          "rhs": 0.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO2"
+            ]
+          },
+          "rhs": 0.0
         }
       ]
     },
@@ -243,6 +270,15 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "u"
+            ]
+          },
+          "rhs": 0.0
         }
       ]
     },
@@ -651,19 +687,13 @@
       "description": "Reduce emissions on weekends (days 5-6 of week)"
     }
   ],
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "temporal": {
-        "start": "2024-07-01T00:00:00Z",
-        "end": "2024-07-08T00:00:00Z",
-        "reference_time": "2024-07-01T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 0.0
-      },
-      "element_type": "Float64"
-    }
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-08T00:00:00Z",
+      "reference_time": "2024-07-01T00:00:00Z"
+    },
+    "element_type": "Float64"
   }
 }

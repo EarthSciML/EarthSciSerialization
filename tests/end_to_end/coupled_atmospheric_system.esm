@@ -341,6 +341,51 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O3"
+            ]
+          },
+          "rhs": 4e-08
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO"
+            ]
+          },
+          "rhs": 5e-10
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO2"
+            ]
+          },
+          "rhs": 2e-09
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "HCHO"
+            ]
+          },
+          "rhs": 1e-09
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "HO2"
+            ]
+          },
+          "rhs": 1e-12
         }
       ],
       "continuous_events": [
@@ -1097,25 +1142,13 @@
       "description": "Reduce vertical mixing when PBL height drops below 100m"
     }
   ],
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-17T00:00:00Z",
-        "reference_time": "2024-07-15T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "AtmosphericChemistry.O3": 4e-08,
-          "AtmosphericChemistry.NO": 5e-10,
-          "AtmosphericChemistry.NO2": 2e-09,
-          "AtmosphericChemistry.HCHO": 1e-09,
-          "AtmosphericChemistry.HO2": 1e-12
-        }
-      },
-      "element_type": "Float64"
-    }
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-07-15T00:00:00Z",
+      "end": "2024-07-17T00:00:00Z",
+      "reference_time": "2024-07-15T00:00:00Z"
+    },
+    "element_type": "Float64"
   }
 }

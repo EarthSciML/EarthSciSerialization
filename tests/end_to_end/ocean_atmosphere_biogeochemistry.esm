@@ -66,7 +66,26 @@
           "description": "Total atmospheric carbon (simplified)"
         }
       },
-      "equations": []
+      "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "CO2"
+            ]
+          },
+          "rhs": 0.00042
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O2"
+            ]
+          },
+          "rhs": 0.2095
+        }
+      ]
     },
     "OceanCarbon": {
       "coupletype": "OceanCoupler",
@@ -254,6 +273,33 @@
               "mixed_layer_depth"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "DIC"
+            ]
+          },
+          "rhs": 2100.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "ALK"
+            ]
+          },
+          "rhs": 2300.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O2_dissolved"
+            ]
+          },
+          "rhs": 250.0
         }
       ]
     },
@@ -610,6 +656,42 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "nutrients"
+            ]
+          },
+          "rhs": 15.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "phytoplankton"
+            ]
+          },
+          "rhs": 2.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "zooplankton"
+            ]
+          },
+          "rhs": 1.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "detritus"
+            ]
+          },
+          "rhs": 0.5
         }
       ]
     },
@@ -1112,29 +1194,13 @@
       "description": "Seasonal nutrient injection every 90 days (upwelling)"
     }
   ],
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2025-01-01T00:00:00Z",
-        "reference_time": "2024-01-01T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "AtmosphericCarbon.CO2": 0.00042,
-          "AtmosphericCarbon.O2": 0.2095,
-          "OceanCarbon.DIC": 2100.0,
-          "OceanCarbon.ALK": 2300.0,
-          "OceanCarbon.O2_dissolved": 250.0,
-          "MarineEcosystem.nutrients": 15.0,
-          "MarineEcosystem.phytoplankton": 2.0,
-          "MarineEcosystem.zooplankton": 1.0,
-          "MarineEcosystem.detritus": 0.5
-        }
-      },
-      "element_type": "Float64"
-    }
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2025-01-01T00:00:00Z",
+      "reference_time": "2024-01-01T00:00:00Z"
+    },
+    "element_type": "Float64"
   }
 }

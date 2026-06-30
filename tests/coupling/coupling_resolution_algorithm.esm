@@ -356,12 +356,10 @@
       "description": "TEST CASE 8: couple with scoped references in connector expressions"
     }
   ],
-  "domains": {
-    "default": {
-      "temporal": {
-        "start": "2024-06-01T00:00:00Z",
-        "end": "2024-06-01T12:00:00Z"
-      }
+  "domain": {
+    "temporal": {
+      "start": "2024-06-01T00:00:00Z",
+      "end": "2024-06-01T12:00:00Z"
     }
   }
 }

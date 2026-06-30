@@ -516,6 +516,15 @@
               "source"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "phi"
+            ]
+          },
+          "rhs": 1.0
         }
       ]
     },
@@ -667,6 +676,24 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "prey"
+            ]
+          },
+          "rhs": 100.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "predator"
+            ]
+          },
+          "rhs": 10.0
         }
       ]
     }
@@ -757,21 +784,11 @@
       "transform": "param_to_var"
     }
   ],
-  "domains": {
-    "default": {
-      "temporal": {
-        "start": "2024-03-01T00:00:00Z",
-        "end": "2024-03-02T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "phi": 1.0,
-          "prey": 100.0,
-          "predator": 10.0
-        }
-      },
-      "element_type": "Float32"
-    }
+  "domain": {
+    "temporal": {
+      "start": "2024-03-01T00:00:00Z",
+      "end": "2024-03-02T00:00:00Z"
+    },
+    "element_type": "Float32"
   }
 }

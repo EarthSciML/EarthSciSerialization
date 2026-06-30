@@ -1,19 +1,21 @@
 {
-  "esm": "0.2.0",
+  "esm": "0.8.0",
   "metadata": {
     "name": "WildfireAtmosphereOcean",
-    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations\nMigrated from ESM v0.1.0 to v0.2.0 via esm-migrate.",
+    "description": "Coupled wildfire-atmosphere-ocean system with 0D parameterizations.\nThe old ground_surface and sea_surface interfaces (shared lon/lat plus level/depth selection) are migrated to v0.8.0: the air-sea coupling is realized as a regridding aggregate inside OceanDynamics that remaps the atmosphere-grid sensible heat flux onto the ocean grid; 0-D <-> spatial mappings use the coupling lifting field.\nMigrated to ESM v0.8.0.",
     "authors": [
       "EarthSciML"
     ],
     "created": "2026-04-08T00:00:00Z",
     "tags": [
-      "migrated_from_v01"
+      "coupling",
+      "regridding",
+      "lifting",
+      "migrated_to_v08"
     ]
   },
   "models": {
     "AtmosphericDynamics": {
-      "domain": "atmosphere",
       "reference": {
         "notes": "Simplified 3D atmospheric dynamics"
       },
@@ -44,6 +46,33 @@
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "T"
+            ]
+          },
+          "rhs": 0.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "wind_u"
+            ]
+          },
+          "rhs": 0.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "wind_v"
+            ]
+          },
+          "rhs": 0.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -98,7 +127,6 @@
       ]
     },
     "WildfirePropagation": {
-      "domain": "wildfire_surface",
       "reference": {
         "notes": "Level-set wildfire spread model"
       },
@@ -149,6 +177,24 @@
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "phi"
+            ]
+          },
+          "rhs": 1.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "fuel"
+            ]
+          },
+          "rhs": 1.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -237,7 +283,6 @@
       ]
     },
     "FireSpreadCalculator": {
-      "domain": null,
       "reference": {
         "notes": "Rothermel-style wind-driven spread rate (algebraic)"
       },
@@ -323,31 +368,123 @@
       "equations": []
     },
     "OceanDynamics": {
-      "domain": "ocean",
       "reference": {
         "notes": "Simplified 3D ocean dynamics"
+      },
+      "index_sets": {
+        "ocean_cells": {
+          "kind": "interval",
+          "size": 3
+        },
+        "atmos_cells": {
+          "kind": "interval",
+          "size": 3
+        }
       },
       "variables": {
         "SST": {
           "type": "state",
           "units": "K",
           "default": 290.0,
-          "description": "Sea surface temperature"
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Sea surface temperature on the ocean surface grid"
         },
         "u_ocean": {
           "type": "state",
           "units": "m/s",
           "default": 0.0,
-          "description": "Eastward ocean current"
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Eastward ocean current on the ocean surface grid"
         },
-        "surface_heat_flux": {
+        "flux_atmos": {
           "type": "parameter",
           "units": "W/m^2",
           "default": 0.0,
-          "description": "Net heat flux from atmosphere"
+          "shape": [
+            "atmos_cells"
+          ],
+          "description": "Air-sea sensible heat flux sampled on the atmosphere surface grid (air-sea flux calculator output), regridded onto the ocean surface grid across the sea-surface interface"
+        },
+        "air_sea_weight": {
+          "type": "parameter",
+          "units": "1",
+          "shape": [
+            "ocean_cells",
+            "atmos_cells"
+          ],
+          "description": "Conservative air-sea regrid weights W[o,a] mapping atmosphere surface cells onto ocean surface cells over shared lon/lat (the old sea_surface interface expressed as a regridding operator; each ocean-cell row sums to 1)"
+        },
+        "surface_heat_flux": {
+          "type": "observed",
+          "units": "W/m^2",
+          "shape": [
+            "ocean_cells"
+          ],
+          "description": "Net heat flux from atmosphere on the ocean grid, regridded from the atmosphere-grid sensible flux: surface_heat_flux[o] = sum_a air_sea_weight[o,a] * flux_atmos[a]",
+          "expression": {
+            "op": "aggregate",
+            "semiring": "sum_product",
+            "output_idx": [
+              "o"
+            ],
+            "ranges": {
+              "o": {
+                "from": "ocean_cells"
+              },
+              "a": {
+                "from": "atmos_cells"
+              }
+            },
+            "args": [
+              "air_sea_weight",
+              "flux_atmos"
+            ],
+            "expr": {
+              "op": "*",
+              "args": [
+                {
+                  "op": "index",
+                  "args": [
+                    "air_sea_weight",
+                    "o",
+                    "a"
+                  ]
+                },
+                {
+                  "op": "index",
+                  "args": [
+                    "flux_atmos",
+                    "a"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       "equations": [
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "SST"
+            ]
+          },
+          "rhs": 290.0
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "u_ocean"
+            ]
+          },
+          "rhs": 290.0
+        },
         {
           "lhs": {
             "op": "D",
@@ -390,7 +527,6 @@
       ]
     },
     "AirSeaFluxCalculator": {
-      "domain": null,
       "reference": {
         "notes": "Bulk formula for air-sea heat exchange (algebraic)"
       },
@@ -456,81 +592,12 @@
       "equations": []
     }
   },
-  "domains": {
-    "atmosphere": {
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 0.0
-      },
-      "element_type": "Float64"
+  "domain": {
+    "temporal": {
+      "start": "2024-07-15T00:00:00Z",
+      "end": "2024-07-16T00:00:00Z"
     },
-    "wildfire_surface": {
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 1.0
-      },
-      "element_type": "Float64"
-    },
-    "ocean": {
-      "temporal": {
-        "start": "2024-07-15T00:00:00Z",
-        "end": "2024-07-16T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 290.0
-      },
-      "element_type": "Float64"
-    }
-  },
-  "interfaces": {
-    "ground_surface": {
-      "description": "Ground-level interface: atmosphere <-> wildfire",
-      "domains": [
-        "atmosphere",
-        "wildfire_surface"
-      ],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "wildfire_surface.lon",
-          "atmosphere.lat": "wildfire_surface.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": {
-            "value": "min"
-          }
-        }
-      }
-    },
-    "sea_surface": {
-      "description": "Air-sea interface: atmosphere <-> ocean",
-      "domains": [
-        "atmosphere",
-        "ocean"
-      ],
-      "dimension_mapping": {
-        "shared": {
-          "atmosphere.lon": "ocean.lon",
-          "atmosphere.lat": "ocean.lat"
-        },
-        "constraints": {
-          "atmosphere.lev": {
-            "value": "min"
-          },
-          "ocean.depth": {
-            "value": "min"
-          }
-        }
-      }
-    }
+    "element_type": "Float64"
   },
   "coupling": [
     {
@@ -538,7 +605,6 @@
       "from": "AtmosphericDynamics.wind_u",
       "to": "FireSpreadCalculator.wind_u",
       "transform": "param_to_var",
-      "interface": "ground_surface",
       "lifting": "pointwise",
       "description": "Ground-level u-wind to fire spread calculator"
     },
@@ -547,7 +613,6 @@
       "from": "AtmosphericDynamics.wind_v",
       "to": "FireSpreadCalculator.wind_v",
       "transform": "param_to_var",
-      "interface": "ground_surface",
       "lifting": "pointwise",
       "description": "Ground-level v-wind to fire spread calculator"
     },
@@ -564,7 +629,6 @@
       "from": "WildfirePropagation.heat_release",
       "to": "AtmosphericDynamics.q_heat",
       "transform": "param_to_var",
-      "interface": "ground_surface",
       "factor": 2.4e-07,
       "description": "Wildfire heat injection into lowest atmospheric layer (W/m^2 -> K/s)"
     },
@@ -573,7 +637,6 @@
       "from": "AtmosphericDynamics.T",
       "to": "AirSeaFluxCalculator.T_atm",
       "transform": "param_to_var",
-      "interface": "sea_surface",
       "lifting": "pointwise",
       "description": "Surface air temperature to air-sea flux calculator"
     },
@@ -582,17 +645,16 @@
       "from": "OceanDynamics.SST",
       "to": "AirSeaFluxCalculator.SST",
       "transform": "param_to_var",
-      "interface": "sea_surface",
-      "lifting": "pointwise",
-      "description": "Sea surface temperature to air-sea flux calculator"
+      "lifting": "mean",
+      "description": "Sea surface temperature reduced (mean) from the spatial ocean grid to the 0-D air-sea flux calculator"
     },
     {
       "type": "variable_map",
       "from": "AirSeaFluxCalculator.sensible_heat_flux",
-      "to": "OceanDynamics.surface_heat_flux",
+      "to": "OceanDynamics.flux_atmos",
       "transform": "param_to_var",
-      "lifting": "pointwise",
-      "description": "Calculated heat flux drives ocean surface temperature"
+      "lifting": "broadcast",
+      "description": "Sensible heat flux broadcast onto the atmosphere surface grid; OceanDynamics regrids it onto the ocean grid (surface_heat_flux) across the sea-surface interface"
     }
   ]
 }

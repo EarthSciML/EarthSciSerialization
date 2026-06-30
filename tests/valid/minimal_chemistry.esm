@@ -20,12 +20,12 @@
       "species": {
         "O3": {
           "units": "mol/mol",
-          "default": 4e-08,
+          "default": 1e-09,
           "description": "Ozone"
         },
         "NO": {
           "units": "mol/mol",
-          "default": 1e-10,
+          "default": 1e-09,
           "description": "Nitric oxide"
         },
         "NO2": {
@@ -244,17 +244,11 @@
       "transform": "param_to_var"
     }
   ],
-  "domains": {
-    "default": {
-      "temporal": {
-        "start": "2024-05-01T00:00:00Z",
-        "end": "2024-05-03T00:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "constant",
-        "value": 1e-09
-      },
-      "element_type": "Float32"
-    }
+  "domain": {
+    "temporal": {
+      "start": "2024-05-01T00:00:00Z",
+      "end": "2024-05-03T00:00:00Z"
+    },
+    "element_type": "Float32"
   }
 }

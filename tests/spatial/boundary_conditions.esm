@@ -16,7 +16,7 @@
   "models": {
     "NeumannBoundary": {
       "reference": {
-        "notes": "Test zero-gradient (Neumann) boundary conditions: \u2202C/\u2202n = 0 at domain edges"
+        "notes": "Test zero-gradient (Neumann) boundary conditions: ∂C/∂n = 0 at domain edges"
       },
       "variables": {
         "concentration": {
@@ -53,12 +53,21 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "concentration"
+            ]
+          },
+          "rhs": 1e-08
         }
       ]
     },
     "DirichletBoundary": {
       "reference": {
-        "notes": "Test fixed-value (Dirichlet) boundary conditions: C = C\u2080 at domain edges"
+        "notes": "Test fixed-value (Dirichlet) boundary conditions: C = C₀ at domain edges"
       },
       "variables": {
         "tracer": {
@@ -100,12 +109,21 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "tracer"
+            ]
+          },
+          "rhs": 0.0
         }
       ]
     },
     "PeriodicBoundary": {
       "reference": {
-        "notes": "Test periodic boundary conditions: C(0) = C(L) for global atmospheric models. Per RFC \u00a79.2.1, declare once on xmin; the xmax side is implicit."
+        "notes": "Test periodic boundary conditions: C(0) = C(L) for global atmospheric models. Per RFC §9.2.1, declare once on xmin; the xmax side is implicit."
       },
       "variables": {
         "global_tracer": {
@@ -148,12 +166,21 @@
               }
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "global_tracer"
+            ]
+          },
+          "rhs": 1e-09
         }
       ]
     },
     "RobinBoundary": {
       "reference": {
-        "notes": "Test Robin boundary conditions: \u03b1u + \u03b2\u2202u/\u2202n = \u03b3 at the domain edge."
+        "notes": "Test Robin boundary conditions: αu + β∂u/∂n = γ at the domain edge."
       },
       "variables": {
         "temperature": {
@@ -187,12 +214,21 @@
               "temperature"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "temperature"
+            ]
+          },
+          "rhs": 288.15
         }
       ]
     },
     "MixedBoundaries": {
       "reference": {
-        "notes": "Test mixed BCs: a flux_contrib from a dry deposition component and an emission flux_contrib on the same (variable, side) pair — the rewrite engine aggregates both into the zmin Neumann template (RFC \u00a79.3)."
+        "notes": "Test mixed BCs: a flux_contrib from a dry deposition component and an emission flux_contrib on the same (variable, side) pair — the rewrite engine aggregates both into the zmin Neumann template (RFC §9.3)."
       },
       "variables": {
         "pollution": {
@@ -229,28 +265,25 @@
               "pollution"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "pollution"
+            ]
+          },
+          "rhs": 0.0
         }
       ]
     }
   },
-  "domains": {
-    "default": {
-      "independent_variable": "t",
-      "temporal": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-01T06:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "concentration": 1e-08,
-          "tracer": 0.0,
-          "global_tracer": 1e-09,
-          "pollution": 0.0,
-          "temperature": 288.15
-        }
-      },
-      "element_type": "Float64"
-    }
+  "domain": {
+    "independent_variable": "t",
+    "temporal": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T06:00:00Z"
+    },
+    "element_type": "Float64"
   }
 }

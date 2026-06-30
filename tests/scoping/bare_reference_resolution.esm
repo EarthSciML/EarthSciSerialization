@@ -108,6 +108,42 @@
               "NO"
             ]
           }
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "O3"
+            ]
+          },
+          "rhs": 4e-08
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO"
+            ]
+          },
+          "rhs": 1e-10
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "NO2"
+            ]
+          },
+          "rhs": 1e-09
+        },
+        {
+          "lhs": {
+            "op": "ic",
+            "args": [
+              "Photochemistry.NO2_photo"
+            ]
+          },
+          "rhs": 1e-09
         }
       ],
       "continuous_events": [
@@ -377,21 +413,10 @@
       "description": "Cross-system event showing required scoped references in coupling context"
     }
   ],
-  "domains": {
-    "default": {
-      "temporal": {
-        "start": "2024-07-01T00:00:00Z",
-        "end": "2024-07-01T06:00:00Z"
-      },
-      "initial_conditions": {
-        "type": "per_variable",
-        "values": {
-          "SimpleChemistry.O3": 4e-08,
-          "SimpleChemistry.NO": 1e-10,
-          "SimpleChemistry.NO2": 1e-09,
-          "SimpleChemistry.Photochemistry.NO2_photo": 1e-09
-        }
-      }
+  "domain": {
+    "temporal": {
+      "start": "2024-07-01T00:00:00Z",
+      "end": "2024-07-01T06:00:00Z"
     }
   }
 }
