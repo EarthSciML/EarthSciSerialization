@@ -1244,6 +1244,12 @@ pub enum CouplingEntry {
         /// Variable mappings when LHS variables don't have matching names
         #[serde(skip_serializing_if = "Option::is_none")]
         translate: Option<serde_json::Value>,
+        /// Spatial-lift strategy for the merged state ODEs (esm-spec §10.5).
+        /// `"pointwise"` array-ifies each merged reaction+operator state ODE onto
+        /// the operator's grid (the flattener's pointwise lift); `None` leaves the
+        /// merged 0-D equations as-is.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        lifting: Option<String>,
         /// Optional description
         #[serde(skip_serializing_if = "Option::is_none")]
         description: Option<String>,

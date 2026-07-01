@@ -15,11 +15,11 @@
 
 use crate::types::{
     ContinuousEvent, CouplingEntry, DiscreteEvent, Domain, Equation, EsmFile, Expr, ExpressionNode,
-    Model, ModelVariable, ReactionSystem, VariableType,
+    Model, ModelVariable, RangeSpec, ReactionSystem, VariableType,
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 // ============================================================================
@@ -166,6 +166,17 @@ pub struct FlattenedSystem {
     /// that consume this should target an SDESystem (Julia/MTK) or equivalent.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub brownian_variables: IndexMap<String, ModelVariable>,
+    /// Deferred scoped-reference / array `ic` equations (esm-spec §11.4.1),
+    /// classified out of `equations` by [`flatten`]. Each entry is
+    /// `(target_state, rhs)` where `target_state` names the (post-lift, grid-
+    /// shaped) state variable and `rhs` is the initial-field expression — a bare
+    /// reference to a provider-served loaded field (e.g. `InitialConditions.O3_init`)
+    /// or a broadcast constant. The array simulator folds these into `u0` cell-by-
+    /// cell at build time, reading the loaded field from the data-Provider seam
+    /// (DESIGN pde_simulation_pipeline §2 R2). Empty for a system with no `ic`
+    /// equations, so the ordinary ODE path is unaffected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub field_ics: Vec<(String, Expr)>,
     /// Flattened equations in processing order. Every variable reference is
     /// dot-namespaced.
     pub equations: Vec<Equation>,
@@ -309,6 +320,12 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
     let mut continuous_events: Vec<ContinuousEvent> = Vec::new();
     let mut discrete_events: Vec<DiscreteEvent> = Vec::new();
 
+    // Scoped-reference / array `ic` equations (esm-spec §11.4.1) are classified
+    // out of the ordinary equation list here — the downstream simulator folds
+    // them into `u0` from the data-Provider seam rather than treating them as
+    // state ODEs. Collected as `(target_state, rhs)`.
+    let mut field_ics: Vec<(String, Expr)> = Vec::new();
+
     for block in per_system {
         for (name, var) in block.state_vars {
             state_variables.insert(name, var);
@@ -322,20 +339,75 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         for (name, var) in block.brownian_vars {
             brownian_variables.insert(name, var);
         }
-        equations.extend(block.equations);
+        for eq in block.equations {
+            if let Some(target) = extract_ic_target(&eq.lhs) {
+                field_ics.push((target, eq.rhs));
+            } else {
+                equations.push(eq);
+            }
+        }
         continuous_events.extend(block.continuous_events);
         discrete_events.extend(block.discrete_events);
     }
 
-    // Apply post-collection variable_map parameter removals.
+    // Apply post-collection variable_map parameter removals. A `param_to_var`
+    // that binds a LOADED field (its producer's owning system is a top-level
+    // `data_loaders` entry) onto a grid-shaped consumer parameter records the
+    // producer name + rank so the pointwise lift indexes the loaded field per
+    // grid cell (esm-spec §11.5 "BCs from data"). The loaded producer is NOT
+    // added to `parameters`: it is served at runtime through the data-Provider
+    // forcing seam, not as a scalar parameter (which the array evaluator would
+    // otherwise resolve ahead of the forcing buffer).
+    let loader_names: HashSet<String> = file
+        .data_loaders
+        .as_ref()
+        .map(|dl| dl.keys().cloned().collect())
+        .unwrap_or_default();
+    let mut loaded_producers: HashMap<String, usize> = HashMap::new();
     if let Some(entries) = &file.coupling {
         for entry in entries {
-            if let CouplingEntry::VariableMap { to, transform, .. } = entry
+            if let CouplingEntry::VariableMap {
+                from,
+                to,
+                transform,
+                ..
+            } = entry
                 && matches!(transform.as_str(), "param_to_var" | "conversion_factor")
             {
+                let consumer_shape_rank = parameters
+                    .get(to)
+                    .and_then(|v| v.shape.as_ref())
+                    .map(|s| s.len())
+                    .filter(|r| *r > 0);
                 parameters.shift_remove(to);
+                let from_owner = from.split('.').next().unwrap_or("");
+                if let Some(rank) = consumer_shape_rank
+                    && loader_names.contains(from_owner)
+                    && !parameters.contains_key(from)
+                {
+                    loaded_producers.insert(from.clone(), rank);
+                }
             }
         }
+    }
+
+    // Step 5b: pointwise spatial lift (esm-spec §10.5). `operator_compose` has
+    // merged each reaction/model state ODE with the spatial operator's advection
+    // makearray; array-ify those merged equations onto the operator's grid so the
+    // lifted reaction network runs pointwise. No-op unless an `operator_compose`
+    // entry declares `lifting: "pointwise"` and a merged equation carries an
+    // operator makearray.
+    let pointwise = file
+        .coupling
+        .as_ref()
+        .map(|entries| {
+            entries.iter().any(|e| {
+                matches!(e, CouplingEntry::OperatorCompose { lifting: Some(l), .. } if l == "pointwise")
+            })
+        })
+        .unwrap_or(false);
+    if pointwise {
+        apply_pointwise_lift(&mut equations, &mut state_variables, &loaded_producers)?;
     }
 
     Ok(FlattenedSystem {
@@ -344,6 +416,7 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         parameters,
         observed_variables,
         brownian_variables,
+        field_ics,
         equations,
         continuous_events,
         discrete_events,
@@ -1006,24 +1079,372 @@ fn apply_variable_map(
 
 /// Substitute every occurrence of the variable named `target` with the
 /// expression `replacement` in `expr`.
+///
+/// Array nodes (`makearray`/`arrayop`/`aggregate`/`integral`/…) carry their
+/// value/body sub-expressions in out-of-band fields (`values`, `expr`, `filter`,
+/// `lower`, `upper`) plus structural metadata (`regions`, `output_idx`, `ranges`,
+/// …). Every field is preserved by cloning first, then the expression-bearing
+/// ones are recursively substituted — otherwise a `variable_map` binding could
+/// not reach a loaded inflow field referenced inside a `makearray`'s `values`
+/// (the boundary stencil), and the `..Default::default()` rebuild would silently
+/// drop `regions`/`values` and corrupt the discretized operator.
 fn substitute_var(expr: &Expr, target: &str, replacement: &Expr) -> Expr {
     match expr {
         Expr::Number(n) => Expr::Number(*n),
         Expr::Integer(n) => Expr::Integer(*n),
         Expr::Variable(name) if name == target => replacement.clone(),
         Expr::Variable(name) => Expr::Variable(name.clone()),
-        Expr::Operator(node) => Expr::Operator(ExpressionNode {
-            op: node.op.clone(),
-            args: node
+        Expr::Operator(node) => {
+            let mut out = node.clone();
+            out.args = node
                 .args
                 .iter()
                 .map(|a| substitute_var(a, target, replacement))
-                .collect(),
-            wrt: node.wrt.clone(),
-            dim: node.dim.clone(),
-            ..Default::default()
-        }),
+                .collect();
+            out.expr = node
+                .expr
+                .as_ref()
+                .map(|e| Box::new(substitute_var(e, target, replacement)));
+            out.filter = node
+                .filter
+                .as_ref()
+                .map(|e| Box::new(substitute_var(e, target, replacement)));
+            out.lower = node
+                .lower
+                .as_ref()
+                .map(|e| Box::new(substitute_var(e, target, replacement)));
+            out.upper = node
+                .upper
+                .as_ref()
+                .map(|e| Box::new(substitute_var(e, target, replacement)));
+            out.values = node.values.as_ref().map(|vs| {
+                vs.iter()
+                    .map(|v| substitute_var(v, target, replacement))
+                    .collect()
+            });
+            Expr::Operator(out)
+        }
     }
+}
+
+// ============================================================================
+// Scoped-reference `ic` classification (esm-spec §11.4.1)
+// ============================================================================
+
+/// If `lhs` is `ic(target)` — an `ic` operator over a single variable argument —
+/// return the target state name, else `None`.
+fn extract_ic_target(lhs: &Expr) -> Option<String> {
+    let Expr::Operator(node) = lhs else {
+        return None;
+    };
+    if node.op != "ic" || node.args.len() != 1 {
+        return None;
+    }
+    match &node.args[0] {
+        Expr::Variable(v) => Some(v.clone()),
+        _ => None,
+    }
+}
+
+// ============================================================================
+// Pointwise spatial lift of merged state ODEs (esm-spec §10.5)
+// ============================================================================
+//
+// Reaction ODE-gen and `operator_compose` both run at the AST level and IN THAT
+// ORDER (reactions → generic `D(sp)=Σ terms`, then `operator_compose` merges each
+// species' reaction ODE with the spatial operator's advection contribution). What
+// operator_compose does NOT do is array-ify the result: the merged
+// `D(sp) = <reaction in scalar sp> + <-u·makearray(grad(sp))>` still has a SCALAR
+// `sp` while its advection `makearray` indexes `sp` per grid cell. This pass
+// performs the `lifting:"pointwise"` promotion — it wraps each such merged state
+// ODE in an `aggregate` over the grid, indexing the bare reaction species per cell
+// and each operator makearray per cell, so the reaction network runs pointwise on
+// the grid through the existing array evaluator. Mirrors the Julia reference
+// `_apply_pointwise_lift!` (flatten.jl).
+
+/// Collect every `makearray` node reachable from `expr`.
+fn collect_makearrays<'a>(acc: &mut Vec<&'a ExpressionNode>, expr: &'a Expr) {
+    let Expr::Operator(node) = expr else {
+        return;
+    };
+    if node.op == "makearray" {
+        acc.push(node);
+    }
+    for a in &node.args {
+        collect_makearrays(acc, a);
+    }
+    if let Some(e) = &node.expr {
+        collect_makearrays(acc, e);
+    }
+    if let Some(vs) = &node.values {
+        for v in vs {
+            collect_makearrays(acc, v);
+        }
+    }
+}
+
+/// First `Variable` leaf name in an index-argument expression (the loop variable
+/// of that index position), or `None` for a constant position.
+fn index_arg_loop(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Variable(v) => Some(v.clone()),
+        Expr::Operator(node) => {
+            for a in &node.args {
+                if let Some(v) = index_arg_loop(a) {
+                    return Some(v);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Determine the ordered spatial loop variables of a lowered spatial operator by
+/// reading an `index(<lifted species>, a1, …, aRank)` gather inside `ma` whose
+/// every position carries a loop variable (the interior stencil). Returns the
+/// loop names in index-position (dim) order, or `None`.
+fn detect_lift_loops(ma: &ExpressionNode, lifted: &HashSet<String>, rank: usize) -> Option<Vec<String>> {
+    fn walk(expr: &Expr, lifted: &HashSet<String>, rank: usize, out: &mut Option<Vec<String>>) {
+        if out.is_some() {
+            return;
+        }
+        let Expr::Operator(node) = expr else {
+            return;
+        };
+        if node.op == "index"
+            && node.args.len() == rank + 1
+            && let Some(Expr::Variable(name)) = node.args.first()
+            && lifted.contains(name)
+        {
+            let mut loops = Vec::with_capacity(rank);
+            let mut ok = true;
+            for a in node.args.iter().skip(1) {
+                match index_arg_loop(a) {
+                    Some(lv) => loops.push(lv),
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                *out = Some(loops);
+                return;
+            }
+        }
+        for a in &node.args {
+            walk(a, lifted, rank, out);
+        }
+        if let Some(e) = &node.expr {
+            walk(e, lifted, rank, out);
+        }
+        if let Some(vs) = &node.values {
+            for v in vs {
+                walk(v, lifted, rank, out);
+            }
+        }
+    }
+    let mut out = None;
+    for a in &ma.args {
+        walk(a, lifted, rank, &mut out);
+    }
+    if let Some(vs) = &ma.values {
+        for v in vs {
+            walk(v, lifted, rank, &mut out);
+        }
+    }
+    out
+}
+
+/// Per-dimension grid extent of a lowered spatial operator: the largest cell
+/// index addressed in each `regions` dimension.
+fn makearray_extents(ma: &ExpressionNode) -> Vec<i64> {
+    let Some(regions) = &ma.regions else {
+        return Vec::new();
+    };
+    let Some(first) = regions.first() else {
+        return Vec::new();
+    };
+    let rank = first.len();
+    let mut ext = vec![0i64; rank];
+    for region in regions {
+        if region.len() != rank {
+            continue;
+        }
+        for (d, r) in region.iter().enumerate() {
+            ext[d] = ext[d].max(r[1]);
+        }
+    }
+    ext
+}
+
+/// Rewrite a scalar (merged reaction + operator) RHS into its per-cell form over
+/// the spatial `loops`: a bare reference to an array variable becomes
+/// `index(var, loops…)`, and each spatial-operator `makearray` becomes
+/// `index(makearray, loops…)` (its region values already index per cell).
+/// Self-contained nodes (`index`/`aggregate`/`arrayop`) are left untouched;
+/// elementwise ops recurse.
+fn lift_rhs_to_cell(expr: &Expr, arrayvars: &HashSet<String>, loops: &[String]) -> Expr {
+    match expr {
+        Expr::Variable(name) if arrayvars.contains(name) => index_node(name, loops),
+        Expr::Variable(_) | Expr::Number(_) | Expr::Integer(_) => expr.clone(),
+        Expr::Operator(node) => {
+            if node.op == "makearray" {
+                return index_makearray(node, loops);
+            }
+            if matches!(node.op.as_str(), "index" | "aggregate" | "arrayop") {
+                return expr.clone();
+            }
+            let mut out = node.clone();
+            out.args = node
+                .args
+                .iter()
+                .map(|a| lift_rhs_to_cell(a, arrayvars, loops))
+                .collect();
+            Expr::Operator(out)
+        }
+    }
+}
+
+/// Build `index(name, loops…)`.
+fn index_node(name: &str, loops: &[String]) -> Expr {
+    let mut args = Vec::with_capacity(loops.len() + 1);
+    args.push(Expr::Variable(name.to_string()));
+    for l in loops {
+        args.push(Expr::Variable(l.clone()));
+    }
+    Expr::Operator(ExpressionNode {
+        op: "index".to_string(),
+        args,
+        ..Default::default()
+    })
+}
+
+/// Build `index(<makearray>, loops…)`.
+fn index_makearray(ma: &ExpressionNode, loops: &[String]) -> Expr {
+    let mut args = Vec::with_capacity(loops.len() + 1);
+    args.push(Expr::Operator(ma.clone()));
+    for l in loops {
+        args.push(Expr::Variable(l.clone()));
+    }
+    Expr::Operator(ExpressionNode {
+        op: "index".to_string(),
+        args,
+        ..Default::default()
+    })
+}
+
+/// Pointwise spatial lift (esm-spec §10.5). Promotes every state ODE that
+/// `operator_compose` merged with a spatial operator (its merged RHS carries an
+/// operator `makearray`) from a 0-D scalar to the operator's grid shape, and
+/// rewrites the equation into an `aggregate` over the grid. `loaded_producers`
+/// maps loaded field name → rank; a producer whose rank equals the grid rank is
+/// indexed per cell alongside the lifted species.
+fn apply_pointwise_lift(
+    equations: &mut [Equation],
+    state_variables: &mut IndexMap<String, ModelVariable>,
+    loaded_producers: &HashMap<String, usize>,
+) -> Result<(), FlattenError> {
+    // A species is lifted iff its state ODE's merged RHS carries a spatial-operator
+    // makearray (the advection contribution operator_compose added).
+    let mut lifted: HashSet<String> = HashSet::new();
+    for eq in equations.iter() {
+        let Some(species) = extract_ddt_dependent(&eq.lhs) else {
+            continue;
+        };
+        let mut mas: Vec<&ExpressionNode> = Vec::new();
+        collect_makearrays(&mut mas, &eq.rhs);
+        if !mas.is_empty() {
+            lifted.insert(species);
+        }
+    }
+    if lifted.is_empty() {
+        return Ok(());
+    }
+
+    for eq in equations.iter_mut() {
+        let Some(species) = extract_ddt_dependent(&eq.lhs) else {
+            continue;
+        };
+        if !lifted.contains(&species) {
+            continue;
+        }
+        let mut mas: Vec<&ExpressionNode> = Vec::new();
+        collect_makearrays(&mut mas, &eq.rhs);
+        let Some(first_ma) = mas.first() else {
+            continue;
+        };
+        let regions = match &first_ma.regions {
+            Some(r) if !r.is_empty() => r,
+            _ => continue,
+        };
+        let rank = regions[0].len();
+
+        // Loop variables of the grid iteration, read from an interior stencil.
+        let mut loops: Option<Vec<String>> = None;
+        for ma in &mas {
+            loops = detect_lift_loops(ma, &lifted, rank);
+            if loops.is_some() {
+                break;
+            }
+        }
+        let loops = loops.ok_or_else(|| FlattenError::UnsupportedMapping {
+            mapping_type: "pointwise".to_string(),
+            reason: format!(
+                "could not determine the spatial loop variables for species '{species}' from its operator makearray"
+            ),
+        })?;
+
+        let extents = makearray_extents(first_ma);
+
+        // Operands to index per cell: the lifted species plus any loaded producer
+        // whose rank matches the grid rank (e.g. a grid-shaped wind field).
+        let mut arrayvars: HashSet<String> = lifted.clone();
+        for (name, r) in loaded_producers {
+            if *r == rank {
+                arrayvars.insert(name.clone());
+            }
+        }
+
+        // Grid ranges: dense `[1, extent]` intervals keyed by the loop symbols.
+        let mut ranges: HashMap<String, RangeSpec> = HashMap::new();
+        for (d, loop_name) in loops.iter().enumerate() {
+            ranges.insert(loop_name.clone(), RangeSpec::Interval([1, extents[d]]));
+        }
+
+        // Promote the species to the grid shape (a synthetic shape axis per dim)
+        // so downstream consumers see an array state. The array simulator infers
+        // the concrete extent from the lifted equations regardless.
+        if let Some(var) = state_variables.get_mut(&species) {
+            var.shape = Some(loops.iter().map(|l| format!("_lift_{l}")).collect());
+        }
+
+        let idx_species = index_node(&species, &loops);
+        let d_body = Expr::Operator(ExpressionNode {
+            op: "D".to_string(),
+            args: vec![idx_species],
+            wrt: Some("t".to_string()),
+            ..Default::default()
+        });
+        let new_lhs = Expr::Operator(ExpressionNode {
+            op: "aggregate".to_string(),
+            output_idx: Some(loops.clone()),
+            ranges: Some(ranges.clone()),
+            expr: Some(Box::new(d_body)),
+            ..Default::default()
+        });
+        let new_rhs = Expr::Operator(ExpressionNode {
+            op: "aggregate".to_string(),
+            output_idx: Some(loops.clone()),
+            ranges: Some(ranges),
+            expr: Some(Box::new(lift_rhs_to_cell(&eq.rhs, &arrayvars, &loops))),
+            ..Default::default()
+        });
+        eq.lhs = new_lhs;
+        eq.rhs = new_rhs;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

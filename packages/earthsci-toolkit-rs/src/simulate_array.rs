@@ -287,6 +287,14 @@ pub struct ArrayCompiled {
     /// `ModelVariable.refresh` field (plan PR-2) is deferred: forcing resolves
     /// by name at runtime and does not need it.
     forcing: Rc<RefCell<HashMap<String, ArrayD<f64>>>>,
+    /// Deferred scoped-reference / array `ic` equations (esm-spec §11.4.1),
+    /// carried from [`crate::flatten::FlattenedSystem::field_ics`]. Each entry is
+    /// `(target_state, rhs)`: at `u0` build time [`Self::simulate`] resolves the
+    /// target's grid cells and folds the loaded initial field — read from the
+    /// data-Provider forcing buffer keyed by the loader-qualified `rhs` name — into
+    /// the flat state vector cell-by-cell (DESIGN pde_simulation_pipeline §2 R2).
+    /// Empty on the raw single-model (`from_file`) path.
+    field_ics: Vec<(String, Expr)>,
 }
 
 // ============================================================================
@@ -708,7 +716,11 @@ impl ArrayCompiled {
         // Flatten does not carry the document `index_sets` registry today (see
         // note above), so resolve against an empty registry: dense `[lo, hi]`
         // ranges — what discretized stencils emit — need no registry.
-        Self::from_model(&model, &HashMap::new())
+        let mut compiled = Self::from_model(&model, &HashMap::new())?;
+        // Carry the classified scoped-reference `ic` equations through so `u0` is
+        // folded from the provider-served loaded initial fields at build time.
+        compiled.field_ics = flat.field_ics.clone();
+        Ok(compiled)
     }
 
     /// Build from a single [`Model`] and the document-scoped `index_sets`
@@ -1069,6 +1081,7 @@ impl ArrayCompiled {
             rhs_rules,
             n_states,
             forcing: Rc::new(RefCell::new(HashMap::new())),
+            field_ics: Vec::new(),
         })
     }
 
@@ -1192,6 +1205,36 @@ impl ArrayCompiled {
         );
     }
 
+    /// Resolve the deferred scoped-reference / array `ic` equations
+    /// (esm-spec §11.4.1) into per-slot initial values keyed by flat state slot.
+    /// A loaded-field RHS (`InitialConditions.O3_init`) is read from the
+    /// provider-seeded forcing buffer and folded into the lifted grid state's cells
+    /// (column-major, matching the slot enumeration in [`Self::from_model`]); a
+    /// constant RHS broadcasts to every cell. Empty on the non-`ic` path.
+    fn resolve_field_ics(&self) -> Result<HashMap<usize, f64>, SimulateError> {
+        let mut out: HashMap<usize, f64> = HashMap::new();
+        if self.field_ics.is_empty() {
+            return Ok(out);
+        }
+        let forcing = self.forcing.borrow();
+        for (target, rhs) in &self.field_ics {
+            let vs = self.var_shapes.get(target).ok_or_else(|| {
+                SimulateError::InvalidInitialCondition {
+                    name: format!(
+                        "ic({target}): scoped-reference target is not a state variable of the flattened system"
+                    ),
+                }
+            })?;
+            let total = vs.shape.iter().copied().product::<usize>().max(1);
+            for flat in 0..total {
+                let multi = flat_to_multi_col_major(flat, &vs.shape);
+                let slot = vs.flat_offset + flat;
+                out.insert(slot, resolve_field_ic_cell(target, rhs, &multi, &forcing)?);
+            }
+        }
+        Ok(out)
+    }
+
     /// Run the simulation.
     pub fn simulate(
         &self,
@@ -1227,9 +1270,16 @@ impl ArrayCompiled {
                 return Err(SimulateError::InvalidInitialCondition { name: key.clone() });
             }
         }
+        // Fold scoped-reference / array `ic` fields (esm-spec §11.4.1) into u0 from
+        // the provider-seeded forcing buffer (DESIGN pde_simulation_pipeline §2 R2).
+        // Priority per slot: explicit `initial_conditions` override > loaded field
+        // ic > variable default.
+        let field_ic_map = self.resolve_field_ics()?;
         let mut ic_vec = vec![0.0f64; n_states];
         for (i, name) in self.scalar_state_names.iter().enumerate() {
             if let Some(&v) = initial_conditions.get(name) {
+                ic_vec[i] = v;
+            } else if let Some(&v) = field_ic_map.get(&i) {
                 ic_vec[i] = v;
             } else if let Some(d) = self.state_defaults[i] {
                 ic_vec[i] = d;
@@ -1470,6 +1520,57 @@ impl ArrayCompiled {
             },
         })
     }
+}
+
+/// Resolve one grid cell's initial value for a scoped-reference / array `ic`
+/// equation (esm-spec §11.4.1). `cell` is the 0-based multi-index of the element
+/// within the target's grid shape. Supported RHS forms, in order:
+///
+/// 1. A LOADED FIELD — a bare reference to a provider-served forcing entry that
+///    supplies the initial field over the lifted grid. The cell is read directly
+///    when the field's rank matches the target grid; a single-element field is
+///    broadcast.
+/// 2. A BROADCAST CONSTANT — an RHS that const-folds to a scalar.
+///
+/// Anything else is a hard error, so a scoped-reference ic that cannot be resolved
+/// is never silently dropped.
+fn resolve_field_ic_cell(
+    target: &str,
+    rhs: &Expr,
+    cell: &[usize],
+    forcing: &HashMap<String, ArrayD<f64>>,
+) -> Result<f64, SimulateError> {
+    // (1) Loaded field served through the provider forcing buffer.
+    if let Expr::Variable(name) = rhs
+        && let Some(arr) = forcing.get(name)
+    {
+        if arr.ndim() == cell.len() {
+            return Ok(arr[IxDyn(cell)]);
+        } else if arr.len() == 1 {
+            return Ok(arr.iter().copied().next().unwrap());
+        }
+        return Err(SimulateError::InvalidInitialCondition {
+            name: format!(
+                "ic({target}): loaded field '{name}' has ndim={} which does not match the {}-D lifted target grid",
+                arr.ndim(),
+                cell.len()
+            ),
+        });
+    }
+    // (2) Broadcast constant.
+    if let Ok(c) = crate::simulate::fold_constant_expr(rhs, &HashMap::new()) {
+        return Ok(c);
+    }
+    // (3) Unsupported RHS — a clear error, never a silent drop.
+    let hint = match rhs {
+        Expr::Variable(name) => format!(" (no provider field named '{name}')"),
+        _ => String::new(),
+    };
+    Err(SimulateError::InvalidInitialCondition {
+        name: format!(
+            "ic({target}): RHS is neither a provider-served loaded field nor a constant{hint}"
+        ),
+    })
 }
 
 /// The target variable an observed algebraic rule defines.
