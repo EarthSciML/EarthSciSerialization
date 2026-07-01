@@ -1,0 +1,257 @@
+{
+  "esm": "0.8.0",
+  "metadata": {
+    "name": "AdvectionReactionLoadedICBC",
+    "description": "Worked example of the v0.8.0 scoped-reference `ic` pattern (spec §11.4.1) for a reaction system that is spatially lifted by advection. A 0-D O3-NO-NO2 chemistry (`Chemistry`) is lifted onto a lon/lat grid by `operator_compose(Chemistry, Advection)`; the lifted species get their initial fields from a data loader via scoped-reference `ic` equations hosted in a dedicated IC model (`ChemistryICs`), and one species (O3) additionally gets a Dirichlet inflow boundary condition read from a loaded field, baked into a per-species advection discretization rule. Structural fixture: every construct is schema-valid and idiomatic, but full cross-binding numeric evaluability is not the goal (see the coupling notes on the deliberately doubled O3 transport).",
+    "authors": [
+      "EarthSciML Test Suite"
+    ],
+    "created": "2026-06-30T00:00:00Z",
+    "tags": [
+      "reaction-system",
+      "advection",
+      "scoped-reference-ic",
+      "loaded-boundary-condition",
+      "operator-compose",
+      "lift"
+    ]
+  },
+
+  "index_sets": {
+    "lon": { "kind": "interval", "size": 8 },
+    "lat": { "kind": "interval", "size": 4 }
+  },
+
+  "reaction_systems": {
+    "Chemistry": {
+      "coupletype": "ChemistryCoupler",
+      "reference": { "notes": "Minimal O3-NOx photochemical cycle (the reaction part). A reaction system is 0-D: each species is a scalar with a `default`, and it has no `equations` field, so it cannot host an `ic` of its own — a non-constant / loaded-field IC for a species is declared with a scoped-reference `ic` in a model (see ChemistryICs, spec §7 / §11.4.1)." },
+      "species": {
+        "O3":  { "units": "mol/mol", "default": 40e-9,  "description": "Ozone. Scalar default here; its spatial initial field is set by ic(Chemistry.O3) in ChemistryICs once this system is lifted onto the grid." },
+        "NO":  { "units": "mol/mol", "default": 0.1e-9, "description": "Nitric oxide." },
+        "NO2": { "units": "mol/mol", "default": 1.0e-9, "description": "Nitrogen dioxide." }
+      },
+      "parameters": {
+        "T":    { "units": "K",          "default": 298.15,  "description": "Temperature (replaced by the loaded field via variable_map)." },
+        "M":    { "units": "molec/cm^3", "default": 2.46e19, "description": "Air number density." },
+        "jNO2": { "units": "1/s",        "default": 0.005,   "description": "NO2 photolysis rate." }
+      },
+      "reactions": [
+        {
+          "id": "R1",
+          "name": "NO_O3",
+          "substrates": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "products": [
+            { "species": "NO2", "stoichiometry": 1 }
+          ],
+          "rate": { "op": "*", "args": [1.8e-12, { "op": "exp", "args": [{ "op": "/", "args": [-1370, "T"] }] }, "M"] }
+        },
+        {
+          "id": "R2",
+          "name": "NO2_photolysis",
+          "substrates": [ { "species": "NO2", "stoichiometry": 1 } ],
+          "products": [
+            { "species": "NO", "stoichiometry": 1 },
+            { "species": "O3", "stoichiometry": 1 }
+          ],
+          "rate": "jNO2"
+        }
+      ]
+    }
+  },
+
+  "models": {
+    "Advection": {
+      "reference": { "notes": "Generic first-order advection operator (spec §6.4). The `_var` placeholder is substituted with each state variable of the target system when this model is coupled by operator_compose, so a single equation advects every lifted chemistry species. Its lon grad rule carries a Dirichlet inflow BC on the west face read from a loaded field, and a zero-gradient outflow on the east face; the lat grad rule is zero-gradient on both faces. Because a generic `_var` operator cannot name-mangle a per-species boundary field, the inflow field is SHARED across every species it transports (see the rule comment)." },
+      "variables": {
+        "u_wind": { "type": "parameter", "units": "m/s", "default": 0.0, "shape": ["lon", "lat"], "description": "Eastward wind on the model grid (bound from the Meteorology loader)." },
+        "v_wind": { "type": "parameter", "units": "m/s", "default": 0.0, "shape": ["lon", "lat"], "description": "Northward wind on the model grid (bound from the Meteorology loader)." },
+        "dx": { "type": "parameter", "units": "m", "default": 27750.0, "description": "Eastward grid spacing." },
+        "dy": { "type": "parameter", "units": "m", "default": 27750.0, "description": "Northward grid spacing." }
+      },
+      "expression_templates": {
+        "central_grad_lon_inflow_bc": {
+          "description": "Lowers grad(f, lon) over the 8x4 grid: interior central difference, a LOADED DIRICHLET INFLOW BC on the west face (i=1), and a zero-gradient outflow on the east face (i=8) — the BC lives inside the rule (spec §9.6.8 + §11.5 'BCs from data'), there is no separate boundary-condition declaration. The west boundary region reads the prescribed inflow concentration from the loaded field BoundaryConditions.inflow via index(BoundaryConditions.inflow, 1, j), exactly as it would index any other variable. NOTE ON GENERICITY: a generic advection operator (the `_var` idiom) carries a SINGLE, SHARED inflow field across every species it transports, because `_var` cannot name-mangle a per-species boundary field; giving each species its own inflow BC would require per-species (non-generic) operators, each with its own rule reading its own loaded field.",
+          "params": ["f"],
+          "match": { "op": "grad", "args": ["f"], "dim": "lon" },
+          "body": {
+            "op": "makearray",
+            "args": [],
+            "regions": [ [[2, 7], [1, 4]], [[1, 1], [1, 4]], [[8, 8], [1, 4]] ],
+            "values": [
+              { "op": "aggregate", "output_idx": ["i", "j"], "args": ["f"],
+                "ranges": { "i": [2, 7], "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "index", "args": ["f", { "op": "+", "args": ["i", 1] }, "j"] },
+                    { "op": "index", "args": ["f", { "op": "-", "args": ["i", 1] }, "j"] } ] },
+                  { "op": "*", "args": [2, "dx"] } ] } },
+              { "op": "aggregate", "output_idx": ["j"], "args": ["f"], "ranges": { "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "index", "args": ["f", 2, "j"] },
+                    { "op": "index", "args": ["BoundaryConditions.inflow", 1, "j"] } ] },
+                  { "op": "*", "args": [2, "dx"] } ] } },
+              { "op": "aggregate", "output_idx": ["j"], "args": ["f"], "ranges": { "j": { "from": "lat" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", 8, "j"] }, { "op": "index", "args": ["f", 7, "j"] } ] }, "dx" ] } }
+            ]
+          }
+        },
+        "central_grad_lat_zero_grad_bc": {
+          "description": "Lowers grad(f, lat) over the 8x4 grid: interior central difference plus zero-gradient south (j=1) and north (j=4) faces (spec §9.6.8).",
+          "params": ["f"],
+          "match": { "op": "grad", "args": ["f"], "dim": "lat" },
+          "body": {
+            "op": "makearray",
+            "args": [],
+            "regions": [ [[1, 8], [2, 3]], [[1, 8], [1, 1]], [[1, 8], [4, 4]] ],
+            "values": [
+              { "op": "aggregate", "output_idx": ["i", "j"], "args": ["f"],
+                "ranges": { "i": { "from": "lon" }, "j": [2, 3] },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [
+                    { "op": "index", "args": ["f", "i", { "op": "+", "args": ["j", 1] }] },
+                    { "op": "index", "args": ["f", "i", { "op": "-", "args": ["j", 1] }] } ] },
+                  { "op": "*", "args": [2, "dy"] } ] } },
+              { "op": "aggregate", "output_idx": ["i"], "args": ["f"], "ranges": { "i": { "from": "lon" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", "i", 2] }, { "op": "index", "args": ["f", "i", 1] } ] }, "dy" ] } },
+              { "op": "aggregate", "output_idx": ["i"], "args": ["f"], "ranges": { "i": { "from": "lon" } },
+                "expr": { "op": "/", "args": [
+                  { "op": "-", "args": [ { "op": "index", "args": ["f", "i", 4] }, { "op": "index", "args": ["f", "i", 3] } ] }, "dy" ] } }
+            ]
+          }
+        }
+      },
+      "equations": [
+        {
+          "_comment": "Operator-style advection: `_var` is expanded by operator_compose to every state variable of the coupled target (each lifted chemistry species). grad is lowered by this model's central_grad_lon_inflow_bc (loaded Dirichlet inflow on the west face) and central_grad_lat_zero_grad_bc rules above.",
+          "lhs": { "op": "D", "args": ["_var"], "wrt": "t" },
+          "rhs": {
+            "op": "+", "args": [
+              { "op": "*", "args": [{ "op": "-", "args": ["u_wind"] }, { "op": "grad", "args": ["_var"], "dim": "lon" }] },
+              { "op": "*", "args": [{ "op": "-", "args": ["v_wind"] }, { "op": "grad", "args": ["_var"], "dim": "lat" }] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "ChemistryICs": {
+      "reference": { "notes": "Dedicated IC model (spec §11.4.1): its sole purpose is to declare initial conditions for OTHER components, so it has an empty `variables` map and carries only `ic` equations. Each equation's `ic` argument is a scoped reference to a Chemistry species; the RHS is a field exposed by the InitialConditions data loader. Resolution is post-lift on the flattened system (§10.7): after operator_compose lifts Chemistry onto lon/lat, the `ic` target is the spatially-arrayed species and the RHS loaded field supplies its initial field per grid point." },
+      "variables": {},
+      "equations": [
+        {
+          "_comment": "Scoped-reference ic for a reaction-system species: sets the initial O3 field from the loaded grid variable InitialConditions.O3_init. This is the star pattern of §11.4.1 — the ic arg is a scoped ref to a reaction-system species, hosted in a model, resolved post-lift, RHS a loaded field.",
+          "lhs": { "op": "ic", "args": ["Chemistry.O3"] },
+          "rhs": "InitialConditions.O3_init"
+        },
+        {
+          "_comment": "Scoped-reference ic for NO from the loaded field.",
+          "lhs": { "op": "ic", "args": ["Chemistry.NO"] },
+          "rhs": "InitialConditions.NO_init"
+        },
+        {
+          "_comment": "Scoped-reference ic for NO2 from the loaded field.",
+          "lhs": { "op": "ic", "args": ["Chemistry.NO2"] },
+          "rhs": "InitialConditions.NO2_init"
+        }
+      ]
+    }
+  },
+
+  "data_loaders": {
+    "Meteorology": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/GEOSFP/{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "start": "2024-05-01T00:00:00Z",
+        "end": "2024-05-03T00:00:00Z",
+        "file_period": "PT1H",
+        "frequency": "PT1H",
+        "records_per_file": 1
+      },
+      "variables": {
+        "u": { "file_variable": "U10M", "units": "m/s", "description": "Eastward wind (mapped to the Advection u_wind parameter)." },
+        "v": { "file_variable": "V10M", "units": "m/s", "description": "Northward wind (mapped to the Advection v_wind parameter)." },
+        "T": { "file_variable": "T2M",  "units": "K",   "description": "Temperature (mapped to Chemistry.T)." }
+      },
+      "metadata": { "tags": ["meteorology", "reanalysis"] }
+    },
+    "InitialConditions": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/ICs/chem_initial_{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "start": "2024-05-01T00:00:00Z",
+        "end": "2024-05-01T00:00:00Z",
+        "file_period": "PT1H",
+        "frequency": "PT1H",
+        "records_per_file": 1
+      },
+      "variables": {
+        "O3_init":  { "file_variable": "O3",  "units": "mol/mol", "description": "Initial ozone field over lon/lat; RHS of ic(Chemistry.O3)." },
+        "NO_init":  { "file_variable": "NO",  "units": "mol/mol", "description": "Initial NO field over lon/lat; RHS of ic(Chemistry.NO)." },
+        "NO2_init": { "file_variable": "NO2", "units": "mol/mol", "description": "Initial NO2 field over lon/lat; RHS of ic(Chemistry.NO2)." }
+      },
+      "metadata": { "tags": ["initial-conditions", "chemistry"] }
+    },
+    "BoundaryConditions": {
+      "kind": "grid",
+      "source": {
+        "url_template": "file:///data/BCs/chem_boundary_{date:%Y%m%d_%H%M}.nc"
+      },
+      "temporal": {
+        "start": "2024-05-01T00:00:00Z",
+        "end": "2024-05-03T00:00:00Z",
+        "file_period": "PT1H",
+        "frequency": "PT1H",
+        "records_per_file": 1
+      },
+      "variables": {
+        "inflow": { "file_variable": "conc_bc", "units": "mol/mol", "description": "Prescribed inflow concentration on the western boundary; read as the Dirichlet ghost value by the generic Advection central_grad_lon_inflow_bc rule via index(BoundaryConditions.inflow, 1, j). Shared across every species the generic operator transports (see that rule's genericity note); per-species inflow would require per-species operators, each reading its own field here." }
+      },
+      "metadata": { "tags": ["boundary-conditions", "chemistry"] }
+    }
+  },
+
+  "coupling": [
+    {
+      "type": "operator_compose",
+      "systems": ["Chemistry", "Advection"],
+      "lifting": "pointwise",
+      "description": "Spatially LIFT the 0-D chemistry onto the lon/lat grid and add advection to every species tendency. `pointwise` lifting (spec §10.5/§10.6) evaluates the 0-D reaction network independently at each grid point; the single generic `_var` operator then adds -u*grad-v*grad to each lifted species' D(.)/dt, with the loaded Dirichlet inflow and zero-gradient BCs baked into its grad rules."
+    },
+    {
+      "type": "variable_map",
+      "from": "Meteorology.T",
+      "to": "Chemistry.T",
+      "transform": "param_to_var",
+      "description": "Replace the constant chemistry temperature with the loaded field."
+    },
+    {
+      "type": "variable_map",
+      "from": "Meteorology.u",
+      "to": "Advection.u_wind",
+      "transform": "param_to_var"
+    },
+    {
+      "type": "variable_map",
+      "from": "Meteorology.v",
+      "to": "Advection.v_wind",
+      "transform": "param_to_var"
+    }
+  ],
+
+  "domain": {
+    "temporal": { "start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z" },
+    "element_type": "Float32"
+  }
+}
