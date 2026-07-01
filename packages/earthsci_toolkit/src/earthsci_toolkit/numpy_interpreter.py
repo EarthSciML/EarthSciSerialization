@@ -1454,6 +1454,22 @@ def _eval_makearray(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
         for d, (lo, hi) in enumerate(region):
             if hi > shape[d]:
                 shape[d] = int(hi)
+
+    # Stencil makearray carrying its own loop symbols (``output_idx``, set by the
+    # pointwise lift, esm-spec §10.5). Each region's value expression indexes the
+    # grid relative to those loop symbols (``index(sp, i+1, j)``), so it MUST be
+    # evaluated with the symbols bound to that region's own arange — never to an
+    # enclosing aggregate's scalar cell (which would read ``i+1`` out of bounds).
+    # Delegate to the region-wise vectorized builder, which binds + restores per
+    # region. Absent ``output_idx`` (every ESD-discretized / const makearray) this
+    # is skipped, so behaviour is byte-for-byte unchanged there.
+    if expr.output_idx:
+        out_syms = [s for s in expr.output_idx if isinstance(s, str)]
+        if len(out_syms) == ndim:
+            return _materialize_makearray_vectorized(
+                expr, ctx, out_syms, tuple(shape)
+            )
+
     out = np.zeros(tuple(shape), dtype=float)
     for region, value_expr in zip(regions, values):
         v = eval_expr(value_expr, ctx)

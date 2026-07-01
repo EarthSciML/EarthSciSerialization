@@ -690,6 +690,8 @@ def _serialize_coupling_entry(coupling: CouplingEntry) -> Dict[str, Any]:
             result["systems"] = coupling.systems
         if coupling.translate:
             result["translate"] = coupling.translate
+        if coupling.lifting is not None:
+            result["lifting"] = coupling.lifting
 
     elif isinstance(coupling, CouplingCouple):
         result["type"] = "couple"

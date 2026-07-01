@@ -536,6 +536,10 @@ class OperatorComposeCoupling(BaseCouplingEntry):
     coupling_type: CouplingType = field(default=CouplingType.OPERATOR_COMPOSE, init=False)
     systems: List[str] = field(default_factory=list)
     translate: Dict[str, Any] = field(default_factory=dict)
+    # Spatial-lift strategy (esm-spec §10.5). ``"pointwise"`` requests the
+    # flattener array-ify each merged reaction+operator state ODE onto the grid
+    # (per-cell reaction evaluation). None ⇒ no lift (0-D / already-array system).
+    lifting: Optional[str] = None
 
 
 @dataclass

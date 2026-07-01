@@ -430,6 +430,7 @@ def simulate(
     cse: bool = True,
     loader_provider: Optional["LoaderProvider"] = None,
     provider_factory: Optional[Callable] = None,
+    providers: Optional[Dict[str, Any]] = None,
 ) -> SimulationResult:
     """Simulate an ESM model via the flattened representation (spec §4.7.5).
 
@@ -488,6 +489,15 @@ def simulate(
         provider and takes its segment boundaries from ``refresh_times()``.
         Inject a real EarthSciIO provider here. Ignored for systems without data
         loaders, and superseded by ``loader_provider`` when both are given.
+    providers:
+        Optional ``{"<Loader>.<var>": provider}`` map — the loaded-data injection
+        seam for TOP-LEVEL ``data_loaders`` bound through ``variable_map`` /
+        scoped-reference ``ic`` (DESIGN pde_simulation_pipeline §2). Each provider
+        is either a callable ``(t) -> array_like`` or an object exposing
+        ``sample(t)`` / ``provider_sample(t)``; it is sampled ONCE at build time
+        (``t = tspan[0]``) and its array is bound under the loader-qualified name.
+        The scoped-``ic`` fold reads it into u0 and the lifted consumer gather
+        resolves from it. No field is injected by internal consumer name.
 
     Raises
     ------
@@ -530,6 +540,24 @@ def simulate(
             success=False,
             message="SciPy is required for simulation but not available.",
             nfev=0, njev=0, nlu=0,
+        )
+
+    # Provider injection for top-level ``data_loaders`` bound through
+    # ``variable_map`` / scoped-reference ``ic`` (DESIGN pde_simulation_pipeline
+    # §2). Loaded fields enter ONLY through the data-Provider seam, keyed by their
+    # declared ``<Loader>.<var>`` name — never as raw arrays keyed by an internal
+    # consumer name. Each provider is materialized ONCE at build time (t0),
+    # reachable when a scoped-``ic`` folds ``Loader.*`` into u0 (R2) and when a
+    # loader→consumer ``variable_map`` routes a lifted gather to the loader name.
+    if providers:
+        t0 = float(tspan[0])
+        loaded_arrays = {
+            name: np.asarray(_provider_sample_field(prov, t0), dtype=float)
+            for name, prov in providers.items()
+        }
+        return _simulate_with_numpy(
+            flat, tspan, parameters, initial_conditions, method,
+            rtol=rtol, atol=atol, loader_arrays=loaded_arrays,
         )
 
     # Data-loader injection (RFC pure-io-data-loaders §4.3): if the system has
@@ -1408,6 +1436,75 @@ class _NumpyRhsBuild:
     elem_names: List[str]
 
 
+def _resolve_field_ic(
+    target: str,
+    rhs: Expr,
+    cell: Tuple[int, ...],
+    loader_arrays: Dict[str, "np.ndarray"],
+) -> float:
+    """Resolve one grid cell's initial value for a scoped-reference / array ``ic``
+    equation (esm-spec §11.4.1). ``cell`` is the 1-based integer index tuple.
+
+    Supported RHS forms, in order:
+
+    1. A LOADED FIELD — a bare reference to a ``loader_arrays`` entry supplying
+       the initial field over the lifted grid. The cell is read directly when the
+       field's rank matches the target grid; a single-element field is broadcast.
+    2. A BROADCAST CONSTANT — a numeric RHS applied to every cell.
+
+    Anything else is a hard error, so a scoped-reference ic that cannot be
+    resolved is never silently dropped. Mirrors tree_walk.jl ``_resolve_field_ic``.
+    """
+    if isinstance(rhs, str) and rhs in loader_arrays:
+        arr = np.asarray(loader_arrays[rhs], dtype=float)
+        if arr.ndim == len(cell):
+            return float(arr[tuple(c - 1 for c in cell)])
+        if arr.size == 1:
+            return float(arr.flat[0])
+        raise SimulationError(
+            f"ic({target}): loaded field {rhs!r} has ndim={arr.ndim} which does "
+            f"not match the {len(cell)}-D lifted target grid"
+        )
+    if isinstance(rhs, (int, float)) and not isinstance(rhs, bool):
+        return float(rhs)
+    detail = (f" (no loader_arrays entry named {rhs!r})"
+              if isinstance(rhs, str) else "")
+    raise SimulationError(
+        f"ic({target}): RHS is neither a loaded field nor a constant{detail}; "
+        f"supply the initial field via the data-Provider seam or a scalar value"
+    )
+
+
+def _fold_field_ics(
+    y0: "np.ndarray",
+    field_ic_eqs: List[Tuple[str, Expr]],
+    shapes: Dict[str, Tuple[int, ...]],
+    state_layout: Dict[str, slice],
+    loader_arrays: Dict[str, "np.ndarray"],
+) -> None:
+    """Fold every scoped-reference / array ``ic`` equation into ``y0`` cell-by-cell
+    (esm-spec §11.4.1). Each target must name a lifted/array state of the
+    flattened system; an unresolved target or RHS is a hard error."""
+    for target, rhs in field_ic_eqs:
+        if target not in state_layout:
+            raise SimulationError(
+                f"ic({target}): scoped-reference target is not a state variable "
+                f"of the flattened system"
+            )
+        shape = shapes.get(target, ())
+        if not shape:
+            raise SimulationError(
+                f"ic({target}): scoped-reference target resolves to no array cells; "
+                f"the target must name a lifted/array state variable"
+            )
+        start = state_layout[target].start
+        for multi in np.ndindex(*shape):
+            cell = tuple(int(i) + 1 for i in multi)
+            y0[start + _linear_pos(shape, list(cell))] = _resolve_field_ic(
+                target, rhs, cell, loader_arrays
+            )
+
+
 def _build_numpy_rhs(
     flat: FlattenedSystem,
     parameters: Dict[str, float],
@@ -1420,8 +1517,15 @@ def _build_numpy_rhs(
     cross-language PDE-simulation conformance tier drives the latter so a binding
     can report f(u, t) at a fixed state, mirroring the Rust ``debug_eval_rhs``."""
     shapes = infer_variable_shapes(flat)
+    # Prefer the concrete grid shapes assigned by the pointwise lift (esm-spec
+    # §10.5). A lifted species' own operator makearray reads offset cells
+    # (``index(sp, i+1, j)``) that would otherwise widen the index-use-inferred
+    # extent past the true grid; the lift's recorded extent is authoritative.
+    if flat.lifted_shapes:
+        shapes.update(flat.lifted_shapes)
     state_names = list(flat.state_variables.keys())
     observed_names: Set[str] = set(flat.observed_variables.keys())
+    loader_arrays = loader_arrays or {}
 
     # Layout: concatenate every state variable's flattened payload.
     state_layout: Dict[str, slice] = {}
@@ -1448,8 +1552,18 @@ def _build_numpy_rhs(
     # algebraic constraints) flows through the existing driver path.
     observed_eqs: List[Tuple[str, Expr]] = []
     driver_equations: List[FlattenedEquation] = []
+    # Scoped-reference / array ``ic`` equations (esm-spec §11.4.1): LHS is an
+    # ``ic`` op naming a (lifted) ARRAY state; RHS is the initial FIELD. These are
+    # NOT ODE drivers — they fold into u0 at build time (below), so route them
+    # out. Scalar ``ic`` targets are left on the driver path (their historic,
+    # no-op handling) so scalar-ic fixtures behave exactly as before.
+    field_ic_eqs: List[Tuple[str, Expr]] = []
     for eq in flat.equations:
-        if isinstance(eq.lhs, str) and eq.lhs in observed_names:
+        if (isinstance(eq.lhs, ExprNode) and eq.lhs.op == "ic"
+                and eq.lhs.args and isinstance(eq.lhs.args[0], str)
+                and shapes.get(eq.lhs.args[0])):
+            field_ic_eqs.append((eq.lhs.args[0], eq.rhs))
+        elif isinstance(eq.lhs, str) and eq.lhs in observed_names:
             observed_eqs.append((eq.lhs, eq.rhs))
         else:
             driver_equations.append(eq)
@@ -1494,6 +1608,13 @@ def _build_numpy_rhs(
     # the grid at t=0 into y0 (reusing the NumPy interpreter). Runs before the
     # explicit per-element overrides so those still win.
     _seed_expression_initial_conditions(y0, flat, state_layout, shapes, state_names)
+    # Scoped-reference / array ``ic`` fold (esm-spec §11.4.1): now that each array
+    # state's grid shape is known, fold every deferred field-ic into per-element
+    # initial values. The RHS may be a LOADED FIELD (a ``loader_arrays`` entry —
+    # provider-seeded at build time, DESIGN §2 R2) supplying the initial field
+    # over the lifted grid, or a broadcast constant. Runs before the explicit
+    # per-element overrides so those still win.
+    _fold_field_ics(y0, field_ic_eqs, shapes, state_layout, loader_arrays)
     _apply_initial_conditions(
         y0, state_layout, shapes, state_names, initial_conditions
     )
@@ -1593,10 +1714,18 @@ def _simulate_with_numpy(
     method: str,
     rtol: float = 1e-10,
     atol: float = 1e-12,
+    loader_arrays: Optional[Dict[str, "np.ndarray"]] = None,
 ) -> SimulationResult:
-    """Simulate a flattened system containing array ops via the NumPy interpreter."""
+    """Simulate a flattened system containing array ops via the NumPy interpreter.
+
+    ``loader_arrays`` maps each declared loader field name (``<Loader>.<var>``) to
+    its provider-materialized array (DESIGN pde_simulation_pipeline §2): the
+    RHS resolves those names through :class:`EvalContext.input_arrays`, and any
+    scoped-reference ``ic`` folds them into u0 at build time (R2)."""
     try:
-        build = _build_numpy_rhs(flat, parameters, initial_conditions)
+        build = _build_numpy_rhs(
+            flat, parameters, initial_conditions, loader_arrays=loader_arrays
+        )
         shapes = build.shapes
         state_names = build.state_names
         state_layout = build.state_layout
@@ -1720,6 +1849,26 @@ def _simulate_with_numpy(
 # (e.g. a fixture stub) via ``simulate(..., loader_provider=...)``; the default
 # executes the real loader I/O.
 LoaderProvider = Callable[[LoaderField, float], "np.ndarray"]
+
+
+def _provider_sample_field(provider: Any, t: float) -> "np.ndarray":
+    """Sample a top-level ``providers`` entry at simulation time ``t``.
+
+    Accepts three duck-typed shapes so a fixture stub or a real EarthSciIO-style
+    provider both fit (DESIGN pde_simulation_pipeline §2): a plain callable
+    ``(t) -> array_like``; an object exposing ``sample(t)``; or one exposing
+    ``provider_sample(t)`` (the Julia-parity name)."""
+    if callable(provider) and not hasattr(provider, "sample") \
+            and not hasattr(provider, "provider_sample"):
+        return provider(t)
+    if hasattr(provider, "sample"):
+        return provider.sample(t)
+    if hasattr(provider, "provider_sample"):
+        return provider.provider_sample(t)
+    raise SimulationError(
+        "provider must be callable (t)->array or expose sample(t) / "
+        f"provider_sample(t); got {type(provider).__name__}"
+    )
 
 
 def _field_epoch(field: LoaderField) -> Optional[_dt.datetime]:

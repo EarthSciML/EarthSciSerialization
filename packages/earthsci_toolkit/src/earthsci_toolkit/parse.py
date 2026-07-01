@@ -894,7 +894,8 @@ def _parse_coupling_entry(coupling_data: Dict[str, Any]) -> CouplingEntry:
         return OperatorComposeCoupling(
             description=description,
             systems=coupling_data.get("systems", []),
-            translate=coupling_data.get("translate", {})
+            translate=coupling_data.get("translate", {}),
+            lifting=coupling_data.get("lifting"),
         )
 
     elif coupling_type == CouplingType.COUPLE:
@@ -1526,7 +1527,11 @@ def resolve_model_refs(esm_file: EsmFile, base_path: str) -> None:
 # Operator arity requirements: (min_args, max_args). None = unlimited.
 _OPERATOR_ARITY = {
     "+": (2, None), "-": (1, None), "*": (2, None), "/": (2, 2),
-    "^": (2, 2), "D": (1, 1), "ic": (1, 1), "grad": (1, 1), "div": (1, 1),
+    # `grad`/`div` accept an optional second operand: a per-field boundary
+    # (Dirichlet inflow) metavariable bound by a two-arg `grad(f, inflow, dim)`
+    # expression-template `match` (esm-spec §9.6; the schema does not constrain
+    # grad/div arity — the second arg supplies that field's own loaded BC).
+    "^": (2, 2), "D": (1, 1), "ic": (1, 1), "grad": (1, 2), "div": (1, 2),
     "laplacian": (1, 1), "exp": (1, 1), "log": (1, 1), "log10": (1, 1),
     "sqrt": (1, 1), "abs": (1, 1), "sin": (1, 1), "cos": (1, 1),
     "tan": (1, 1), "asin": (1, 1), "acos": (1, 1), "atan": (1, 1),

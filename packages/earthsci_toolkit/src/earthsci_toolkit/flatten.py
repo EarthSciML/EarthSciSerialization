@@ -112,6 +112,12 @@ class FlattenedVariable:
     default: Any = None
     description: Optional[str] = None
     source_system: Optional[str] = None
+    # Array-variable shape: the ordered index-set names (esm-spec §10.5 / RFC
+    # §5.2) the variable is shaped over, e.g. ``["lon", "lat"]``. None / empty
+    # means scalar. Carried so the pointwise lift can recognize a grid-shaped
+    # operand (a loaded wind / BC field bound by ``variable_map``) that must be
+    # indexed per grid cell.
+    shape: Optional[List[str]] = None
 
 
 @dataclass
@@ -224,6 +230,13 @@ class FlattenedSystem:
     # Empty ⇒ the system has no data-loader subsystems, so simulate() behaves
     # exactly as before (no injection path).
     loader_fields: List[LoaderField] = field(default_factory=list)
+    # Concrete integer grid shapes assigned by the pointwise spatial lift
+    # (esm-spec §10.5) to each lifted state variable, e.g.
+    # ``{"Chemistry.O3": (4, 2)}``. The simulator's shape resolution prefers
+    # these over index-use inference (a lifted species' own operator makearray
+    # reads offset cells like ``index(sp, i+1, j)`` that would otherwise widen
+    # the inferred extent). Empty ⇒ no lift ran.
+    lifted_shapes: Dict[str, Tuple[int, ...]] = field(default_factory=dict)
 
     @property
     def variables(self) -> Dict[str, str]:
@@ -537,6 +550,7 @@ def _collect_model(name: str, model: Model, prefix: Optional[str] = None) -> _Co
             default=var.default,
             description=var.description,
             source_system=full_prefix,
+            shape=list(var.shape) if var.shape else None,
         )
         if var.type == "state":
             component.state_vars[namespaced] = flat_var
@@ -848,6 +862,7 @@ def _apply_couple(
 def _apply_variable_map(
     components: "OrderedDict[str, _ComponentSystem]",
     entry: VariableMapCoupling,
+    loader_names: Optional[Set[str]] = None,
 ) -> None:
     """Substitute the target parameter with the source variable.
 
@@ -855,9 +870,21 @@ def _apply_variable_map(
     list (it becomes a shared variable). For other transforms (``identity``,
     ``additive``, ``multiplicative``, ``conversion_factor``) we still substitute
     so the equation set references the canonical name.
+
+    ``loader_names`` is the set of top-level ``data_loaders`` keys. When a
+    ``param_to_var`` binds a LOADED field (``from_var``'s owning system is a data
+    loader) onto a GRID-SHAPED consumer parameter (``to_var`` carries a non-scalar
+    ``shape``), the shape is transferred to the loader-qualified ``from_var`` name
+    (added as a shaped parameter) so the downstream pointwise lift (esm-spec §10.5)
+    recognizes it as an array operand to index per grid cell. Without this,
+    deleting the shaped ``to_var`` would strip the field's grid shape and the lift
+    would leave a bare (scalar) loader reference — e.g. ``-Meteorology.u_wind *
+    grad(...)`` would not lift to ``-index(Meteorology.u_wind, i, j) * …``.
+    (esm-spec §11.5 "BCs from data" + §10.4 ``param_to_var``.)
     """
     if not entry.from_var or not entry.to_var:
         return
+    loader_names = loader_names or set()
     factor = entry.factor or 1.0
     src: Expr = entry.from_var
     if factor != 1.0:
@@ -878,7 +905,25 @@ def _apply_variable_map(
     promoted = transform in ("param_to_var", "conversion_factor", "")
     if promoted:
         for comp in components.values():
-            comp.parameters.pop(entry.to_var, None)
+            to_var = comp.parameters.pop(entry.to_var, None)
+            if to_var is None:
+                continue
+            # Carry a grid shape from the (deleted) consumer parameter onto the
+            # loader-qualified producer name so the pointwise lift indexes the
+            # loaded field per cell. Only when ``from_var`` is a data-loader
+            # variable (guards against binding a model STATE) and the producer is
+            # not already a known variable.
+            from_owner = entry.from_var.split(".", 1)[0]
+            if (to_var.shape and from_owner in loader_names
+                    and entry.from_var not in comp.parameters):
+                comp.parameters[entry.from_var] = FlattenedVariable(
+                    name=entry.from_var,
+                    type="parameter",
+                    units=to_var.units,
+                    description=to_var.description,
+                    source_system=from_owner,
+                    shape=list(to_var.shape),
+                )
 
 
 # ============================================================================
@@ -983,8 +1028,11 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
     for cp in couple_entries:
         _apply_couple(components, cp)
 
+    # Top-level data-loader names — used to recognize a ``param_to_var`` whose
+    # producer is a LOADED field, so a grid-shaped binding keeps its shape.
+    loader_names: Set[str] = set(getattr(esm_file, "data_loaders", None) or {})
     for vm in var_map_entries:
-        _apply_variable_map(components, vm)
+        _apply_variable_map(components, vm, loader_names)
 
     # Step 3: assemble the final FlattenedSystem from the per-component pieces.
     flat = FlattenedSystem(metadata=metadata)
@@ -1078,6 +1126,14 @@ def flatten(esm_file: EsmFile) -> FlattenedSystem:
                 priority=event.priority,
             ))
 
+    # Step 4b: Pointwise spatial lift (esm-spec §10.5). ``operator_compose`` has
+    # merged each reaction/model state ODE with the spatial operator's advection
+    # (its makearray); array-ify those merged equations — promote the species to
+    # the grid shape and wrap each in an ``aggregate`` over the grid — so the
+    # lifted reaction network runs pointwise. No-op unless a coupling requests
+    # ``lifting: "pointwise"`` and a merged equation carries an operator makearray.
+    _apply_pointwise_lift(flat, esm_file.coupling)
+
     # Step 5: domain pass-through. The Python tier does not currently apply
     # dimension-promotion rules from §4.7.6 — only the spatial-rejection check
     # in simulate() distinguishes ODE-only flattened systems from PDE inputs.
@@ -1135,6 +1191,220 @@ def _expand_operator_compose_placeholders(
         else:
             new_equations.append(eq)
     b.equations = new_equations
+
+
+# ============================================================================
+# Pointwise spatial lift (esm-spec §10.5)
+# ============================================================================
+#
+# Reaction ODE-gen and coupling both run at the AST level and IN THAT ORDER
+# (reactions -> generic ``D(sp)=Σ terms``; then ``operator_compose`` merges each
+# species' reaction ODE with the spatial operator's advection makearray). What
+# operator_compose does NOT do is array-ify the result: the merged
+# ``D(sp) = <reaction> + <-u·makearray(grad(sp))>`` still has a SCALAR ``sp``
+# while its advection makearray indexes ``sp`` per grid cell. This pass performs
+# the ``lifting:"pointwise"`` promotion — wrapping each merged state ODE in an
+# ``aggregate`` over the grid, indexing the bare reaction species per cell and
+# each operator makearray per cell, and recording the species' concrete grid
+# shape. The reaction network then runs pointwise on the grid through the
+# existing NumPy arrayop evaluator. Julia counterpart: flatten.jl
+# ``_apply_pointwise_lift!``.
+
+
+def _collect_makearrays(expr: Expr, acc: List[ExprNode]) -> List[ExprNode]:
+    """Collect every ``makearray`` node reachable from ``expr``."""
+    if not isinstance(expr, ExprNode):
+        return acc
+    if expr.op == "makearray":
+        acc.append(expr)
+    for a in expr.args:
+        _collect_makearrays(a, acc)
+    if expr.expr is not None:
+        _collect_makearrays(expr.expr, acc)
+    if expr.values is not None:
+        for v in expr.values:
+            _collect_makearrays(v, acc)
+    return acc
+
+
+def _index_arg_loop(expr: Expr) -> Optional[str]:
+    """First bare-name leaf in an index-position expression (its loop variable),
+    or ``None`` for a constant position."""
+    if isinstance(expr, str):
+        return expr
+    if isinstance(expr, ExprNode):
+        for a in expr.args:
+            v = _index_arg_loop(a)
+            if v is not None:
+                return v
+    return None
+
+
+def _detect_lift_loops(
+    ma: ExprNode, lifted: Set[str], rank: int
+) -> Optional[List[str]]:
+    """Ordered spatial loop variables of a lowered operator makearray, read from
+    an ``index(<lifted species>, a1, …, aRank)`` gather whose every position
+    carries a loop variable (the interior stencil). Returns the loop names in
+    index-position order, or ``None`` if none is found."""
+    found: List[Optional[List[str]]] = [None]
+
+    def walk(e: Expr) -> None:
+        if found[0] is not None or not isinstance(e, ExprNode):
+            return
+        if (e.op == "index" and e.args and isinstance(e.args[0], str)
+                and e.args[0] in lifted and len(e.args) - 1 == rank):
+            loops: List[str] = []
+            ok = True
+            for k in range(1, len(e.args)):
+                lv = _index_arg_loop(e.args[k])
+                if lv is None:
+                    ok = False
+                    break
+                loops.append(lv)
+            if ok:
+                found[0] = loops
+                return
+        for a in e.args:
+            walk(a)
+        if e.expr is not None:
+            walk(e.expr)
+        if e.values is not None:
+            for v in e.values:
+                walk(v)
+
+    walk(ma)
+    return found[0]
+
+
+def _makearray_extents(ma: ExprNode) -> List[int]:
+    """Per-dimension grid extent of a lowered operator makearray: the largest
+    cell index addressed in each ``regions`` dimension."""
+    regions = ma.regions or []
+    if not regions:
+        return []
+    rank = len(regions[0])
+    ext = [0] * rank
+    for region in regions:
+        if len(region) != rank:
+            continue
+        for d in range(rank):
+            ext[d] = max(ext[d], int(region[d][1]))
+    return ext
+
+
+def _lift_rhs_to_cell(
+    expr: Expr, arrayvars: Set[str], loops: List[str]
+) -> Expr:
+    """Rewrite a scalar (merged reaction + operator) RHS into its per-cell form
+    over the spatial ``loops``: a bare reference to an array variable becomes
+    ``index(var, loops…)``, and each spatial-operator ``makearray`` becomes
+    ``index(makearray, loops…)`` (its region values already index per cell).
+    Self-contained nodes (index / aggregate) are left untouched; elementwise ops
+    recurse."""
+    if isinstance(expr, str):
+        if expr in arrayvars:
+            return ExprNode(op="index", args=[expr, *loops])
+        return expr
+    if isinstance(expr, ExprNode):
+        if expr.op == "makearray":
+            # Tag the makearray with its loop symbols so the evaluator binds each
+            # region's own arange when materializing the field (esm-spec §10.5);
+            # otherwise a per-cell gather would read the stencil out of bounds.
+            ma = replace(expr, output_idx=list(loops))
+            return ExprNode(op="index", args=[ma, *loops])
+        if expr.op in ("index", "aggregate", "arrayop"):
+            return expr
+        new_args = [_lift_rhs_to_cell(a, arrayvars, loops) for a in expr.args]
+        return replace(expr, args=new_args)
+    return expr
+
+
+def _apply_pointwise_lift(
+    flat: FlattenedSystem, coupling: List[CouplingEntry]
+) -> None:
+    """Pointwise spatial lift (esm-spec §10.5) for ``operator_compose`` couplings
+    that declare ``lifting: "pointwise"``. Promotes every state ODE that
+    operator_compose merged with a spatial operator (its merged RHS carries an
+    operator ``makearray``) from a 0-D scalar to the operator's grid shape, and
+    rewrites the equation into an ``aggregate`` over the grid. No-op when no
+    coupling requests pointwise lifting, or no merged equation carries a
+    spatial-operator makearray."""
+    if not any(
+        isinstance(c, OperatorComposeCoupling) and c.lifting == "pointwise"
+        for c in coupling
+    ):
+        return
+
+    def _d_target(lhs: Expr) -> Optional[str]:
+        if (isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args
+                and isinstance(lhs.args[0], str)):
+            return lhs.args[0]
+        return None
+
+    # A species is lifted iff its state ODE's merged RHS carries a spatial-operator
+    # makearray (the advection contribution operator_compose added).
+    lifted: Set[str] = set()
+    for eq in flat.equations:
+        target = _d_target(eq.lhs)
+        if target is None:
+            continue
+        if _collect_makearrays(eq.rhs, []):
+            lifted.add(target)
+    if not lifted:
+        return
+
+    # Operands to index per cell: the lifted species plus any already array-shaped
+    # parameter/observed/state (e.g. a grid-shaped wind field bound from a loader).
+    arrayvars: Set[str] = set(lifted)
+    for table in (flat.parameters, flat.observed_variables, flat.state_variables):
+        for name, var in table.items():
+            if getattr(var, "shape", None):
+                arrayvars.add(name)
+
+    new_equations: List[FlattenedEquation] = []
+    for eq in flat.equations:
+        target = _d_target(eq.lhs)
+        if target is None or target not in lifted:
+            new_equations.append(eq)
+            continue
+
+        mas = _collect_makearrays(eq.rhs, [])
+        if not mas or not mas[0].regions:
+            new_equations.append(eq)
+            continue
+        rank = len(mas[0].regions[0])
+        loops: Optional[List[str]] = None
+        for ma in mas:
+            loops = _detect_lift_loops(ma, lifted, rank)
+            if loops is not None:
+                break
+        if loops is None:
+            raise DimensionPromotionError(
+                f"pointwise lift: could not determine the spatial loop variables "
+                f"for species {target!r} from its operator makearray"
+            )
+
+        extents = _makearray_extents(mas[0])
+        ranges: Dict[str, Any] = {loops[d]: [1, extents[d]] for d in range(rank)}
+        output_idx: List[Any] = list(loops)
+
+        flat.lifted_shapes[target] = tuple(extents)
+
+        idx_species = ExprNode(op="index", args=[target, *loops])
+        new_lhs = ExprNode(
+            op="aggregate", output_idx=output_idx, ranges=ranges,
+            expr=ExprNode(op="D", args=[idx_species], wrt="t"),
+        )
+        new_rhs = ExprNode(
+            op="aggregate", output_idx=output_idx, ranges=ranges,
+            expr=_lift_rhs_to_cell(eq.rhs, arrayvars, loops),
+        )
+        new_equations.append(FlattenedEquation(
+            lhs=new_lhs, rhs=new_rhs, source_system=eq.source_system,
+        ))
+
+    flat.equations = new_equations
 
 
 # ============================================================================
