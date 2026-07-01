@@ -173,10 +173,15 @@ function _build_Aij_via_evaluator()
     F_SRC = _const_vec(vars, "F_src")
     dx = _param_default(vars, "dx")
     dy = _param_default(vars, "dy")
-    src_bins = [_bin_key(_const_vec(vars, "src_lon")[i], _const_vec(vars, "src_lat")[i], dx, dy)
-                for i in eachindex(SRC)]
-    tgt_bins = [_bin_key(_const_vec(vars, "tgt_lon")[j], _const_vec(vars, "tgt_lat")[j], dx, dy)
-                for j in eachindex(TGT)]
+    # Binning coords mirror the fixture's inline `min`-reduction over each cell's
+    # vertex ring (src_lon[i] = min_v src_poly[i,v,1], etc.) — the pure form the
+    # evaluator now derives at setup, so this host-side broad-phase mirror computes
+    # them the same way instead of reading a (no-longer-present) const vector.
+    _min_ring(rings, c) = [minimum(@view r[:, c]) for r in rings]
+    src_lon, src_lat = _min_ring(SRC, 1), _min_ring(SRC, 2)
+    tgt_lon, tgt_lat = _min_ring(TGT, 1), _min_ring(TGT, 2)
+    src_bins = [_bin_key(src_lon[i], src_lat[i], dx, dy) for i in eachindex(SRC)]
+    tgt_bins = [_bin_key(tgt_lon[j], tgt_lat[j], dx, dy) for j in eachindex(TGT)]
     pairs = _candidate_pairs(src_bins, tgt_bins)
 
     nS, nT = length(SRC), length(TGT)
@@ -191,16 +196,14 @@ end
 # Drive the WHOLE fixture end-to-end through ONE build_evaluator call: the bin-skolem
 # broad phase (value invention), the fused-leaf narrow phase (A_ij at setup), the
 # row-sum / normalize (A_j / W_ij at setup), and the apply ODEs (A_j_check, F_tgt).
-# Only the float binning coords enter value invention as const factors (the front-
-# door reads them from the const_arrays kwarg). Returns (A_j, F_tgt).
+# The binning coords enter value invention as const factors DERIVED IN-FILE: each is
+# an inline `min`-reduction over the cell geometry (src_lon[i] = min_v src_poly[i,v,1]),
+# which the front-door evaluates at setup from the `const` src_poly/tgt_poly ring
+# stacks — so no host-supplied binning coords are needed (RFC §8.6.1 purity).
+# Returns (A_j, F_tgt).
 function _build_fixture_end_to_end()
     raw = _asm_raw()
-    vars = _asm_vars(raw)
-    ca = Dict{String,Any}(
-        "src_lon" => _const_vec(vars, "src_lon"), "src_lat" => _const_vec(vars, "src_lat"),
-        "tgt_lon" => _const_vec(vars, "tgt_lon"), "tgt_lat" => _const_vec(vars, "tgt_lat"))
-    f!, u0, p, _, vmap = build_evaluator(raw;
-        model_name="ConservativeRegridAssembly", const_arrays=ca)
+    f!, u0, p, _, vmap = build_evaluator(raw; model_name="ConservativeRegridAssembly")
     du = similar(u0); f!(du, u0, p, 0.0)
     n = 4
     A_j = [du[vmap["A_j_check[$j]"]] for j in 1:n]

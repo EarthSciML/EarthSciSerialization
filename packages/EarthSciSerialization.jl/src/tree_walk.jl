@@ -540,6 +540,20 @@ function _materialize_ranged_clip(arrayop, env, index_sets, derived_extents,
     return clip
 end
 
+# The (init, ⊕) fold for a setup-time array reduction, keyed by the aggregate's
+# `reduce` / `semiring`. Defaults to SUM (the `sum_product` FAQ additive identity),
+# so every existing geometry materialization (`A_j` row-sum, `A_ij` map) is
+# byte-identical; `min` / `max` / `prod` support a build-time BINNING-COORDINATE
+# projection over an in-file geometry array (e.g. `src_lon[i] = min_v src_poly[i,v,1]`,
+# RFC §8.6.1 broad phase) so the coordinate need not be supplied by the host.
+function _geo_reduce_fold(reduce_spec, semiring_spec)
+    r = reduce_spec !== nothing ? reduce_spec : semiring_spec
+    r == "min" && return (Inf, min)
+    r == "max" && return (-Inf, max)
+    (r == "prod" || r == "*") && return (1.0, *)
+    return (0.0, +)   # "+", "sum", "sum_product", or unspecified → additive fold
+end
+
 # Materialize a geometry-derived array observed (e.g. `area[p]`, `A_ij[i,j]`) by
 # evaluating its `arrayop` body once per output cell against the (already
 # materialized) geometry in `env`.
@@ -579,18 +593,19 @@ function _materialize_geom_array(arrayop, env, index_sets, derived_extents,
                                     var_shapes, setof)
         end
     else
+        init, fold = _geo_reduce_fold(arrayop.reduce, arrayop.semiring)
         cexts = Int[_geo_index_extent(arrayop.ranges[c], index_sets, derived_extents)
                     for c in contract]
         for tup in Iterators.product((1:e for e in exts)...)
-            acc = 0.0
+            acc = init
             for ct in Iterators.product((1:e for e in cexts)...)
                 ie = Dict{String,Any}(zip(out, tup))
                 for (lv, cv) in zip(contract, ct)
                     ie[lv] = cv
                 end
                 _geo_agg_gate(arrayop, ie, env, setof, var_shapes, index_sets, derived_extents) || continue
-                acc += _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents,
-                                 var_shapes, setof)
+                acc = fold(acc, _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents,
+                                          var_shapes, setof))
             end
             arr[tup...] = acc
         end
@@ -791,6 +806,83 @@ function _materialize_geometry_setup(setup, defs, model, const_arrays_kw,
               _materialize_geom_array(rhs, env, index_sets, derived_extents, var_shapes)
         env[n] = arr
         out[n] = arr
+    end
+    return out
+end
+
+# ---- Build-time binning-COORDINATE derivation (RFC §8.6.1 broad phase) ----
+# A broad-phase binning coordinate may be declared INLINE as a `reduce` aggregate
+# over the in-file `const` cell geometry — e.g. a bbox-min corner
+# `src_lon[i] = min_v src_poly[i, v, 1]` — instead of being supplied as a `const`
+# vector. Such an observed reads only build-time literal geometry (no state, no live
+# field), so its value is a build-time constant: it is evaluated ONCE here and fed
+# into the value-invention `const_arrays` so `skolem("bin", floor(index(src_lon,i)/dx),
+# …)` resolves at setup, and to the typed build as a derived const array (excluded
+# from the ODE like any `const`-op array observed). This keeps the fixture PURE — the
+# coordinate is derived from geometry, not hand-supplied.
+
+# A reduce-aggregate whose body reads only const-array factors already in `env`
+# (never a state / live field), contracting at least one non-output index — i.e. a
+# build-time coordinate projection eligible for the derivation above.
+_REDUCE_PROJECTION_KINDS = ("min", "max", "sum", "prod")
+
+function _is_reduce_projection_agg(e, env, state_names)
+    (e isa OpExpr && _is_aggregate_op(e.op)) || return false
+    (e.reduce !== nothing && e.reduce in _REDUCE_PROJECTION_KINDS) || return false
+    (e.output_idx !== nothing && !isempty(e.output_idx)) || return false
+    (e.ranges !== nothing && !isempty(e.ranges)) || return false
+    e.expr_body === nothing && return false
+    any(k -> !(k in e.output_idx), keys(e.ranges)) || return false   # genuine reduction
+    # Bound loop indices (the aggregate's own `ranges` / `output_idx` symbols) are
+    # not data references — only the FACTOR names the body gathers from must be
+    # build-time const arrays already in `env`.
+    bound = Set{String}(String(k) for k in keys(e.ranges))
+    for k in e.output_idx
+        push!(bound, String(k))
+    end
+    for r in _referenced_var_names(e)
+        r in bound && continue
+        r in state_names && return false        # must be build-time, not live state
+        haskey(env, r) || return false          # every referenced factor is a const array
+    end
+    return true
+end
+
+# Evaluate every inline binning-coordinate observed (a `_is_reduce_projection_agg`
+# over the in-file `const`-op geometry) into a dense `Vector{Float64}`, reusing the
+# reduce-aware setup-time array materializer (`_materialize_geom_array`). Returns
+# name → values; empty (byte-identical) for a model without such an observed.
+function _derive_binning_coords(model, index_sets, const_arrays_kw, param_overrides)
+    out = Dict{String,Vector{Float64}}()
+    env = Dict{String,Any}()
+    # In-file `const`-op array observeds (the `src_poly` / `tgt_poly` ring stacks) are
+    # build-time literal data the projection gathers per cell via `index(src_poly,i)`.
+    for (n, v) in model.variables
+        (v.type == ObservedVariable && _is_array_shape(v.shape) && _is_const_op(v.expression)) || continue
+        env[n] = _const_op_to_array((v.expression::OpExpr).value)
+    end
+    for (k, v) in const_arrays_kw
+        env[String(k)] = v isa AbstractArray ? Array{Float64}(v) : v
+    end
+    for (n, v) in model.variables
+        v.type == ParameterVariable && !_is_array_shape(v.shape) && v.default !== nothing &&
+            (env[n] = Float64(v.default))
+    end
+    for (k, v) in param_overrides
+        env[String(k)] = Float64(v)
+    end
+    state_names = Set{String}(n for (n, v) in model.variables if v.type == StateVariable)
+    var_shapes = Dict{String,Vector{String}}()
+    for (n, v) in model.variables
+        v.shape === nothing && continue
+        var_shapes[n] = String[String(s) for s in v.shape if s isa AbstractString]
+    end
+    derived_extents = Dict{String,Int}()
+    for (n, v) in model.variables
+        (v.type == ObservedVariable && _is_array_shape(v.shape)) || continue
+        _is_reduce_projection_agg(v.expression, env, state_names) || continue
+        arr = _materialize_geom_array(v.expression, env, index_sets, derived_extents, var_shapes)
+        out[n] = vec(Array{Float64}(arr))
     end
     return out
 end
@@ -1065,6 +1157,22 @@ function _build_evaluator_impl(model::Model;
              _is_const_op(v.expression) && !(name in _pia_operand_vars) &&
              !(name in _geom_ring_vars)) || continue
             _const_obs_arrays[name] = _const_op_to_array((v.expression::OpExpr).value)
+            push!(_const_obs_vars, name)
+        end
+    end
+    # A build-time BINNING-COORDINATE observed (an inline reduce aggregate over
+    # geometry, e.g. `src_lon[i] = min_v src_poly[i,v,1]`) is derived once by the
+    # AbstractDict front-door and supplied to the typed build as a `const_arrays`
+    # entry (RFC §8.6.1 purity). Like a `const`-op ring stack it is build-time
+    # literal data feeding the broad-phase skolem, so materialize it into the const
+    # arrays and drop it from the ODE partition — not a scalar observed / state.
+    if _has_setup_geometry || _has_value_invention
+        for (name, v) in model.variables
+            (v.type == ObservedVariable && _is_array_shape(v.shape) &&
+             haskey(const_arrays, name) && !(name in _const_obs_vars) &&
+             !(name in _pia_operand_vars) && !(name in _geom_ring_vars) &&
+             !_is_const_op(v.expression)) || continue
+            _const_obs_arrays[name] = Array{Float64}(const_arrays[name])
             push!(_const_obs_vars, name)
         end
     end
@@ -1828,17 +1936,34 @@ function build_evaluator(esm::AbstractDict;
     # no-op (and byte-identical) for models without a skolem/distinct/rank node.
     kwd = Dict{Symbol,Any}(kwargs)
     model_json = _select_model_json(esm, model_name)
+
+    # ---- Build-time binning-coordinate derivation (RFC §8.6.1 purity) ----
+    # A broad-phase binning coordinate declared INLINE as a reduce aggregate over the
+    # in-file `const` geometry (e.g. `src_lon[i] = min_v src_poly[i,v,1]`) is a
+    # build-time constant. Evaluate it once from the const-op arrays and thread it
+    # into `const_arrays`, so `floor(index(src_lon,i)/dx)→skolem` resolves at setup
+    # without the host supplying the coordinate. No-op (byte-identical) when no such
+    # observed exists.
+    _params = get(kwd, :parameter_overrides, Dict{String,Float64}())
+    _ca = Dict{String,Any}(String(k) => v for (k, v) in get(kwd, :const_arrays, Dict{String,Any}()))
+    if model_json !== nothing
+        _derived = _derive_binning_coords(_select_model(file, model_name),
+                                          file.index_sets, _ca, _params)
+        if !isempty(_derived)
+            merge!(_ca, _derived)
+            kwd[:const_arrays] = _ca
+        end
+    end
+
     _vi = model_json === nothing ? nothing :
-          materialize_value_invention(model_json,
-              get(kwd, :const_arrays, Dict{String,Any}()),
-              get(kwd, :parameter_overrides, Dict{String,Float64}()))
+          materialize_value_invention(model_json, _ca, _params)
 
     return build_evaluator(file; model_name=model_name,
                            _vi_extents=(_vi === nothing ? Dict{String,Int}() : _vi.extents),
                            _vi_vars=(_vi === nothing ? Set{String}() : _vi.vi_var_names),
                            _vi_maps=(_vi === nothing ? _EMPTY_VI_MAPS :
                                      (maps=_vi.maps, map_sets=_vi.map_sets)),
-                           kwargs...)
+                           kwd...)
 end
 
 """
