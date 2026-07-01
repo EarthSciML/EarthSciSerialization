@@ -101,6 +101,8 @@ pub enum StructuralErrorCode {
     CircularDependency,
     /// Reaction rate expression has incompatible units for reaction stoichiometry
     UnitInconsistency,
+    /// An `ic`-op equation placed inside a reaction system's `constraint_equations`
+    IcInReactionSystem,
 }
 
 impl std::fmt::Display for StructuralErrorCode {
@@ -121,6 +123,7 @@ impl std::fmt::Display for StructuralErrorCode {
             Self::OperatorVariableMissing => "operator_variable_missing",
             Self::CircularDependency => "circular_dependency",
             Self::UnitInconsistency => "unit_inconsistency",
+            Self::IcInReactionSystem => "ic_in_reaction_system",
         };
         write!(f, "{s}")
     }

@@ -234,6 +234,12 @@ describe('Conformance Test Suite', () => {
       {
         file: join(testsDir, 'invalid/unknown_variable_ref.esm'),
         expectedCode: 'undefined_variable'
+      },
+      {
+        // spec §11.4.1: an `ic`-op equation inside a reaction system's
+        // constraint_equations is schema-valid but rejected structurally.
+        file: join(testsDir, 'invalid/ic_in_reaction_system.esm'),
+        expectedCode: 'ic_in_reaction_system'
       }
     ];
 

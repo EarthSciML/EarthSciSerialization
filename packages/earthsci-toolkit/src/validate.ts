@@ -621,6 +621,55 @@ function validateReactionConsistency(reactionSystem: ReactionSystem, systemPath:
 }
 
 /**
+ * Reject `ic`-op equations placed inside a reaction system's
+ * `constraint_equations` (spec §11.4.1).
+ *
+ * A reaction system has no `equations` field and hosts no initial conditions:
+ * a species' initial value is its scalar `species.default`, and a non-constant
+ * / spatial IC is declared with a scoped-reference `ic` equation in a MODEL
+ * (`ic(Chemistry.O3) ~ <field>`), never inside the reaction system. Such a file
+ * is SCHEMA-VALID (`constraint_equations` is an array of Equation and `ic` is a
+ * legal op) but MUST be rejected structurally with code `ic_in_reaction_system`.
+ */
+function validateReactionSystemICs(
+    reactionSystem: ReactionSystem,
+    systemName: string,
+    systemPath: string,
+): StructuralError[] {
+    const errors: StructuralError[] = [];
+    const constraintEquations = reactionSystem.constraint_equations;
+    if (!constraintEquations) return errors;
+
+    for (let i = 0; i < constraintEquations.length; i++) {
+        const lhs = constraintEquations[i]?.lhs;
+        if (!lhs || typeof lhs !== 'object' || !('op' in lhs)) continue;
+        const node = lhs as ExpressionNode;
+        if (node.op !== 'ic') continue;
+
+        let species: string | null = null;
+        if (node.args && node.args.length > 0 && typeof node.args[0] === 'string') {
+            species = node.args[0];
+        }
+
+        errors.push({
+            path: `${systemPath}/constraint_equations/${i}`,
+            code: 'ic_in_reaction_system',
+            message:
+                'ic equation not allowed in a reaction system; a reaction system has no equations ' +
+                'field and hosts no ic equations (ICs are model-hosted: species.default, or a ' +
+                'scoped-reference ic equation in a model, spec §11.4.1)',
+            details: {
+                system: systemName,
+                species,
+                constraint_equation_index: i,
+            },
+        });
+    }
+
+    return errors;
+}
+
+/**
  * Build a unit-binding map for a single reaction system covering its species
  * and parameters. Mirrors the binding environment used by validateUnits but
  * scoped to one system so dimensional checks see the author-declared units
@@ -1370,6 +1419,7 @@ function performStructuralValidation(esmFile: EsmFile): StructuralError[] {
 
             errors.push(...validateReactionConsistency(reactionSystem, systemPath));
             errors.push(...validateReactionRateUnits(reactionSystem, systemPath));
+            errors.push(...validateReactionSystemICs(reactionSystem, systemName, systemPath));
 
             // Recursively validate subsystems
             if (reactionSystem.subsystems) {

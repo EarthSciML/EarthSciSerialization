@@ -1460,6 +1460,46 @@ function coerce_domain(data::Any)::Domain
 end
 
 """
+    _reject_ic_in_reaction_system(raw_data)
+
+Raw-JSON structural check for spec §11.4.1: an `ic`-op equation MUST NOT appear
+inside a reaction system's `constraint_equations`. A reaction system has no
+`equations` field and hosts no initial conditions — a species' initial value is
+its scalar `species.default`, and a non-constant / spatial IC is declared with a
+scoped-reference `ic` equation in a MODEL (`ic(Chemistry.O3) ~ <field>`), never
+inside the reaction system. Throws `ParseError` (diagnostic code
+`ic_in_reaction_system`) on the first offending constraint equation. Operates on
+the raw JSON document because Julia does not parse a reaction system's
+`constraint_equations` into its typed form.
+"""
+function _reject_ic_in_reaction_system(raw_data)
+    rss = _json_get(raw_data, "reaction_systems")
+    rss === nothing && return
+    for (rs_name, rs) in pairs(rss)
+        ce = _json_get(rs, "constraint_equations")
+        ce === nothing && continue
+        for (i, eq) in enumerate(ce)
+            lhs = _json_get(eq, "lhs")
+            # Only operator-node LHSs carry an `op`; a bare-string / numeric LHS
+            # (e.g. an algebraic constraint `"O3" ~ <value>`) is not an ic.
+            (lhs isa JSON3.Object || lhs isa AbstractDict) || continue
+            _json_get(lhs, "op") == "ic" || continue
+            args = _json_get(lhs, "args")
+            species = (args !== nothing && length(args) >= 1 && args[1] isa AbstractString) ?
+                      String(args[1]) : ""
+            throw(ParseError(
+                "ic_in_reaction_system at " *
+                "/reaction_systems/$(rs_name)/constraint_equations/$(i - 1): " *
+                "ic equation not allowed in a reaction system; a reaction system has no " *
+                "equations field and hosts no ic equations (ICs are model-hosted: " *
+                "species.default, or a scoped-reference ic equation in a model, spec §11.4.1) " *
+                "[system=$(rs_name), species=$(species)]"
+            ))
+        end
+    end
+end
+
+"""
     load(path::String) -> EsmFile
 
 Load and parse an ESM file from a file path.
@@ -1507,6 +1547,15 @@ function load(io::IO)::EsmFile
             end
             throw(SchemaValidationError(error_msg, schema_errors))
         end
+
+        # v0.8.0 §11.4.1: reject an `ic`-op equation placed inside a reaction
+        # system's `constraint_equations`. Julia does not parse a reaction
+        # system's `constraint_equations` into its typed form, so this is a raw
+        # JSON structural check run here (schema has already passed — the file
+        # is schema-valid, `constraint_equations` is an array of Equation and
+        # `ic` is a legal op, so nothing in JSON Schema forbids it). Diagnostic
+        # code: `ic_in_reaction_system`.
+        _reject_ic_in_reaction_system(raw_data)
 
         # Emit E_DEPRECATED_DOMAIN_BC for any v0.1.0-style domain-level
         # boundary_conditions (v0.2.0 transitional shim per RFC §10.1 +

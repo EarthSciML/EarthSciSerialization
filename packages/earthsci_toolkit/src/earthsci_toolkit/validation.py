@@ -160,6 +160,10 @@ def validate(esm_file) -> ValidationResult:
         # 3b. Reaction rate/stoichiometry dimensional check (mass-action contract)
         _validate_reaction_rate_dimensions(esm_file, structural_errors)
 
+        # 3c. Reject `ic`-op equations inside a reaction system's
+        # constraint_equations (spec §11.4.1).
+        _validate_reaction_system_ics(esm_file, structural_errors)
+
         # 4. Event Consistency validation
         _validate_event_consistency(esm_file, structural_errors)
 
@@ -571,6 +575,42 @@ def _validate_reaction_consistency(esm_file: EsmFile, structural_errors: List[Va
             # Validate rate constant references (full expression parsing)
             if hasattr(reaction, 'rate_constant') and reaction.rate_constant is not None:
                 _validate_rate_expression(reaction.rate_constant, param_names, species_names, rs.name, reaction_path, structural_errors)
+
+
+def _validate_reaction_system_ics(esm_file: EsmFile, structural_errors: List[ValidationError]) -> None:
+    """Reject ``ic``-op equations placed inside a reaction system's
+    ``constraint_equations`` (spec §11.4.1).
+
+    A reaction system has no ``equations`` field and hosts no initial
+    conditions: a species' initial value is its scalar ``species.default``, and a
+    non-constant / spatial IC is declared with a scoped-reference ``ic`` equation
+    in a MODEL (``ic(Chemistry.O3) ~ <field>``), never inside the reaction
+    system. Such a file is SCHEMA-VALID (``constraint_equations`` is an array of
+    Equation and ``ic`` is a legal op, so nothing in JSON Schema forbids it) but
+    MUST be rejected structurally with code ``ic_in_reaction_system``.
+    """
+    for rs_name, rs in esm_file.reaction_systems.items():
+        for ce_idx, eq in enumerate(rs.constraint_equations):
+            lhs = getattr(eq, "lhs", None)
+            if getattr(lhs, "op", None) != "ic":
+                continue
+            args = getattr(lhs, "args", None) or []
+            species = args[0] if args and isinstance(args[0], str) else None
+            structural_errors.append(ValidationError(
+                path=f"/reaction_systems/{rs_name}/constraint_equations/{ce_idx}",
+                message=(
+                    "ic equation not allowed in a reaction system; a reaction "
+                    "system has no equations field and hosts no ic equations "
+                    "(ICs are model-hosted: species.default, or a scoped-reference "
+                    "ic equation in a model, spec §11.4.1)"
+                ),
+                code="ic_in_reaction_system",
+                details={
+                    "system": rs_name,
+                    "species": species,
+                    "constraint_equation_index": ce_idx,
+                },
+            ))
 
 
 def _validate_rate_expression(rate_expr, param_names: Set[str], species_names: Set[str],

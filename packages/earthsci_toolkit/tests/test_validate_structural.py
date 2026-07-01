@@ -377,6 +377,65 @@ class TestValidationWithFixtures:
             "reaction_order": 2,
         }
 
+    def test_ic_in_reaction_system_fixture_rejected(self, fixtures_dir):
+        """spec §11.4.1: an `ic`-op equation inside a reaction system's
+        `constraint_equations` is SCHEMA-VALID but MUST be rejected structurally
+        with code ``ic_in_reaction_system`` (matches the cross-language contract
+        in ``tests/invalid/expected_errors.json``)."""
+        fixture = fixtures_dir / "invalid" / "ic_in_reaction_system.esm"
+        assert fixture.exists(), f"fixture missing: {fixture}"
+        with open(fixture) as f:
+            content = f.read()
+
+        # Schema-valid: load() must accept it (rejection is structural, not schema).
+        load(content)
+
+        result = validate(content)
+        assert not result.is_valid
+        assert result.schema_errors == []
+        matches = [
+            e for e in result.structural_errors
+            if e.code == "ic_in_reaction_system"
+        ]
+        assert len(matches) == 1, (
+            f"expected one ic_in_reaction_system error, got "
+            f"{[(e.code, e.path) for e in result.structural_errors]}"
+        )
+        err = matches[0]
+        assert err.path == "/reaction_systems/Chemistry/constraint_equations/0"
+        assert err.details == {
+            "system": "Chemistry",
+            "species": "O3",
+            "constraint_equation_index": 0,
+        }
+
+    def test_normal_reaction_system_no_ic_false_positive(self, fixtures_dir):
+        """A reaction system without an `ic` in its constraint_equations must not
+        trip the ic_in_reaction_system diagnostic (no false positives)."""
+        content = json.dumps({
+            "esm": "0.8.0",
+            "metadata": {"name": "ok", "authors": ["t"],
+                         "created": "2026-07-01T00:00:00Z"},
+            "reaction_systems": {
+                "Chemistry": {
+                    "species": {"O3": {"units": "mol/mol", "default": 4.0e-8}},
+                    "parameters": {"k": {"units": "1/s", "default": 1.0e-3}},
+                    "reactions": [{
+                        "id": "R1", "name": "O3_loss",
+                        "substrates": [{"species": "O3", "stoichiometry": 1}],
+                        "products": None, "rate": "k",
+                    }],
+                    "constraint_equations": [
+                        {"lhs": "O3", "rhs": 4.0e-8},
+                    ],
+                }
+            },
+        })
+        result = validate(content)
+        assert not any(
+            e.code == "ic_in_reaction_system" for e in result.structural_errors
+        )
+
     def test_all_valid_fixtures_pass_validation(self, fixtures_dir):
         """Test that all files in valid/ directory pass validation."""
         valid_dir = fixtures_dir / "valid"

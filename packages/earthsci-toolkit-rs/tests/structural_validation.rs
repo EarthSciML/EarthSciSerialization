@@ -206,6 +206,70 @@ fn test_null_reaction() {
     }
 }
 
+/// Test that an `ic`-op equation inside a reaction system's
+/// `constraint_equations` (spec §11.4.1) is SCHEMA-VALID but rejected
+/// structurally with code `ic_in_reaction_system`. Matches the cross-language
+/// contract in tests/invalid/expected_errors.json.
+#[test]
+fn test_ic_in_reaction_system() {
+    let fixture = include_str!("../../../tests/invalid/ic_in_reaction_system.esm");
+
+    // Schema-valid: load() must succeed (rejection is structural, not schema).
+    let esm_file = load(fixture).expect("ic_in_reaction_system fixture should load");
+    let validation_result = validate(&esm_file);
+    assert!(validation_result.has_errors());
+
+    let ic_errors: Vec<_> = validation_result
+        .errors()
+        .into_iter()
+        .filter(|err| matches!(err.code, StructuralErrorCode::IcInReactionSystem))
+        .collect();
+    assert_eq!(
+        ic_errors.len(),
+        1,
+        "expected one ic_in_reaction_system error, got {:?}",
+        validation_result.errors()
+    );
+    let err = &ic_errors[0];
+    assert_eq!(err.path, "/reaction_systems/Chemistry/constraint_equations/0");
+    assert_eq!(err.details["system"], "Chemistry");
+    assert_eq!(err.details["species"], "O3");
+    assert_eq!(err.details["constraint_equation_index"], 0);
+}
+
+/// A reaction system whose constraint_equations carry no `ic` op must not trip
+/// the diagnostic (no false positives).
+#[test]
+fn test_reaction_system_non_ic_constraint_ok() {
+    let json = r#"{
+        "esm": "0.8.0",
+        "metadata": {"name": "ok"},
+        "reaction_systems": {
+            "Chemistry": {
+                "species": {"O3": {"units": "mol/mol", "default": 4.0e-8}},
+                "parameters": {"k": {"units": "1/s", "default": 1.0e-3}},
+                "reactions": [{
+                    "id": "R1", "name": "O3_loss",
+                    "substrates": [{"species": "O3", "stoichiometry": 1}],
+                    "products": null, "rate": "k"
+                }],
+                "constraint_equations": [
+                    {"lhs": "O3", "rhs": 4.0e-8}
+                ]
+            }
+        }
+    }"#;
+    let esm_file = load(json).expect("fixture should load");
+    let validation_result = validate(&esm_file);
+    assert!(
+        !validation_result
+            .errors()
+            .iter()
+            .any(|err| matches!(err.code, StructuralErrorCode::IcInReactionSystem)),
+        "unexpected ic_in_reaction_system false positive"
+    );
+}
+
 /// Test missing observed expression
 #[test]
 fn test_missing_observed_expression() {

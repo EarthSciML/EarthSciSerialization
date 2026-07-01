@@ -76,4 +76,51 @@ using EarthSciSerialization
         end
     end
 
+    @testset "ic in reaction system constraint_equations (spec §11.4.1)" begin
+        # An `ic`-op equation placed inside a reaction system's
+        # constraint_equations is SCHEMA-VALID but MUST be rejected at the
+        # raw-JSON structural level with diagnostic code `ic_in_reaction_system`.
+        fixture = joinpath(@__DIR__, "..", "..", "..", "tests", "invalid",
+                           "ic_in_reaction_system.esm")
+        @test isfile(fixture)
+
+        local threw = false
+        local msg = ""
+        try
+            EarthSciSerialization.load(fixture)
+        catch e
+            threw = true
+            msg = e isa EarthSciSerialization.ParseError ? e.message : string(e)
+        end
+        @test threw
+        @test occursin("ic_in_reaction_system", msg)
+        @test occursin("/reaction_systems/Chemistry/constraint_equations/0", msg)
+        @test occursin("species=O3", msg)
+
+        # No false positive: a reaction system whose constraint_equations carry
+        # no `ic` op loads without error.
+        ok_json = """
+        {
+            "esm": "0.8.0",
+            "metadata": {"name": "ok", "authors": ["t"],
+                         "created": "2026-07-01T00:00:00Z"},
+            "reaction_systems": {
+                "Chemistry": {
+                    "species": {"O3": {"units": "mol/mol", "default": 4.0e-8}},
+                    "parameters": {"k": {"units": "1/s", "default": 1.0e-3}},
+                    "reactions": [{
+                        "id": "R1", "name": "O3_loss",
+                        "substrates": [{"species": "O3", "stoichiometry": 1}],
+                        "products": null, "rate": "k"
+                    }],
+                    "constraint_equations": [
+                        {"lhs": "O3", "rhs": 4.0e-8}
+                    ]
+                }
+            }
+        }
+        """
+        @test EarthSciSerialization.load(IOBuffer(ok_json)) isa EarthSciSerialization.EsmFile
+    end
+
 end

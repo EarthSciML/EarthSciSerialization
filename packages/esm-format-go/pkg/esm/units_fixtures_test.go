@@ -160,6 +160,96 @@ func TestReactionRateUnitsMismatchFixtureRejected(t *testing.T) {
 	expectDetail("reaction_order", 2)
 }
 
+// TestICInReactionSystemFixtureRejected verifies that the shared
+// tests/invalid/ic_in_reaction_system.esm fixture (an `ic`-op equation placed
+// inside a reaction system's constraint_equations) is SCHEMA-VALID but rejected
+// as a structural error with code "ic_in_reaction_system" (spec §11.4.1). This
+// mirrors the Python/TS/Julia/Rust checks so all five bindings agree.
+func TestICInReactionSystemFixtureRejected(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "tests", "invalid", "ic_in_reaction_system.esm")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	// Schema-valid: LoadString must accept it (rejection is structural, not schema).
+	file, err := LoadString(string(content))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	result := ValidateFile(file, string(content))
+	if result.IsValid {
+		t.Fatalf("expected fixture to fail validation, got is_valid=true")
+	}
+	if len(result.SchemaErrors) != 0 {
+		t.Fatalf("expected no schema errors, got: %+v", result.SchemaErrors)
+	}
+	var found *StructuralError
+	for i, e := range result.StructuralErrors {
+		if e.Code == ErrorIcInReactionSystem {
+			found = &result.StructuralErrors[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected ic_in_reaction_system error, got: %+v", result.StructuralErrors)
+	}
+	if found.Path != "/reaction_systems/Chemistry/constraint_equations/0" {
+		t.Errorf("unexpected path: %q", found.Path)
+	}
+	expectDetail := func(key string, want interface{}) {
+		t.Helper()
+		got, ok := found.Details[key]
+		if !ok {
+			t.Errorf("details[%q] missing", key)
+			return
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("details[%q] = %v, want %v", key, got, want)
+		}
+	}
+	expectDetail("system", "Chemistry")
+	expectDetail("species", "O3")
+	expectDetail("constraint_equation_index", 0)
+}
+
+// TestReactionSystemNonICConstraintOK verifies that a reaction system whose
+// constraint_equations carry no `ic` op does not trip the
+// ic_in_reaction_system diagnostic (no false positives).
+func TestReactionSystemNonICConstraintOK(t *testing.T) {
+	jsonStr := `{
+		"esm": "0.8.0",
+		"metadata": {"name": "ok"},
+		"reaction_systems": {
+			"Chemistry": {
+				"species": {"O3": {"units": "mol/mol", "default": 4.0e-8}},
+				"parameters": {"k": {"units": "1/s", "default": 1.0e-3}},
+				"reactions": [{
+					"id": "R1", "name": "O3_loss",
+					"substrates": [{"species": "O3", "stoichiometry": 1}],
+					"products": null, "rate": "k"
+				}],
+				"constraint_equations": [
+					{"lhs": "O3", "rhs": 4.0e-8}
+				]
+			}
+		}
+	}`
+	file, err := LoadString(jsonStr)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	result := ValidateFile(file, jsonStr)
+	for _, e := range result.StructuralErrors {
+		if e.Code == ErrorIcInReactionSystem {
+			t.Fatalf("unexpected ic_in_reaction_system false positive: %+v", e)
+		}
+	}
+}
+
 // TestConversionFactorErrorFixtureRejected verifies that
 // tests/invalid/units_conversion_factor_error.esm (observed variable in Pa
 // assigned `50000 * p_atm` where p_atm is in atm — expected factor 101325) is

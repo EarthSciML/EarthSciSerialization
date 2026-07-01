@@ -50,6 +50,7 @@ const (
 	ErrorMissingObservedExpr   = "missing_observed_expr"
 	ErrorEventVarUndeclared    = "event_var_undeclared"
 	ErrorUnitInconsistency     = "unit_inconsistency"
+	ErrorIcInReactionSystem    = "ic_in_reaction_system"
 )
 
 // ValidationMessage represents a single validation issue (for backward compatibility)
@@ -947,6 +948,38 @@ func validateReactionSystemWithCodes(systemName string, system *ReactionSystem, 
 
 		// Validate rate expression
 		validateExpressionVariablesWithStructuredCodes(reaction.Rate, allVars, fmt.Sprintf("%s.rate", reactionPath), result, file, systemName)
+	}
+
+	// v0.8.0 §11.4.1: an `ic`-op equation MUST NOT appear inside a reaction
+	// system's `constraint_equations`. A reaction system has no `equations`
+	// field and hosts no ICs — a species' initial value is its scalar
+	// `species.default`, or a scoped-reference `ic` equation in a MODEL. The
+	// document is schema-valid (`constraint_equations` is an array of Equation
+	// and `ic` is a legal op) but is rejected here structurally.
+	for i, eq := range system.ConstraintEquations {
+		node, ok := eq.LHS.(ExprNode)
+		if !ok || node.Op != "ic" {
+			continue
+		}
+		species := ""
+		if len(node.Args) > 0 {
+			if s, ok := node.Args[0].(string); ok {
+				species = s
+			}
+		}
+		result.Valid = false
+		result.StructuralErrors = append(result.StructuralErrors, StructuralError{
+			Path: fmt.Sprintf("/reaction_systems/%s/constraint_equations/%d", systemName, i),
+			Code: ErrorIcInReactionSystem,
+			Message: "ic equation not allowed in a reaction system; a reaction system has no equations " +
+				"field and hosts no ic equations (ICs are model-hosted: species.default, or a " +
+				"scoped-reference ic equation in a model, spec §11.4.1)",
+			Details: map[string]interface{}{
+				"system":                    systemName,
+				"species":                   species,
+				"constraint_equation_index": i,
+			},
+		})
 	}
 }
 
