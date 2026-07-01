@@ -27,7 +27,13 @@ end
 # `type: array` check does not recognize JSON3.Array as an array, so free-form
 # fields that are round-tripped through schema validation must be converted.
 function _to_native_json(x)
-    if x isa JSON3.Array
+    if x isa JSONLikeDict
+        # The expression-template lowering pass wraps the document in
+        # `JSONLikeDict`, which is not an `AbstractDict`; convert it (and its
+        # nested wrapped values) to native containers so struct fields typed
+        # `Dict{String,Any}`/`Any` accept the result.
+        return Dict{String,Any}(string(k) => _to_native_json(v) for (k, v) in pairs(x))
+    elseif x isa JSON3.Array || x isa AbstractVector
         return Any[_to_native_json(v) for v in x]
     elseif x isa JSON3.Object || x isa AbstractDict
         return Dict{String,Any}(string(k) => _to_native_json(v) for (k, v) in pairs(x))
@@ -1212,6 +1218,12 @@ end
 Coerce JSON data into concrete CouplingEntry subtype based on the 'type' field.
 """
 function coerce_coupling_entry(data::Any)::CouplingEntry
+    # A coupling entry arrives as a `JSONLikeDict` when the document went through
+    # the expression-template lowering pass (which wraps the doc), and the typed
+    # per-type coercers below dispatch on `::AbstractDict`, which `JSONLikeDict`
+    # is not. Normalize it to a native dict so a file combining
+    # `expression_templates` with `coupling` loads.
+    data isa JSONLikeDict && (data = _to_native_json(data))
     if !(data isa AbstractDict) || !haskey(data, "type")
         throw(ParseError("CouplingEntry must be an object with 'type' field"))
     end

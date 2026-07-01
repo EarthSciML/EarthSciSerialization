@@ -1208,6 +1208,14 @@ function _build_evaluator_impl(model::Model;
     # otherwise be rejected as an unsupported equation form). No-op for files
     # without an ic equation in `equations`.
     _eq_ics = Dict{String,Float64}()
+    # Scoped-reference / array `ic` targets (spec §11.4.1) are deferred here and
+    # folded per grid cell once array cells are known (below). Each entry is
+    # `(target_state_name, rhs_field_expr)`; the target may be a dot-namespaced
+    # reference to another component's species that coupling has lifted onto the
+    # grid (`ic(Chemistry.O3) ~ InitialConditions.O3_init`), and the RHS is a
+    # per-cell FIELD (a loaded const-array field, a broadcast constant, or a
+    # coordinate expression) rather than a single scalar.
+    _field_ics = Tuple{String,EarthSciSerialization.Expr}[]
     let kept = Equation[]
         for eq in equations
             if eq.lhs isa OpExpr && (eq.lhs::OpExpr).op == "ic"
@@ -1216,12 +1224,20 @@ function _build_evaluator_impl(model::Model;
                     throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
                         "ic(...) LHS must name a single state variable"))
                 vn = (lop.args[1]::VarExpr).name
-                _eq_ics[vn] = try
-                    Float64(evaluate_expr(eq.rhs, Dict{String,Float64}();
-                                          registered_functions=registered_functions))
-                catch err
-                    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
-                        "ic($(vn)) RHS must const-fold to a scalar for the tree-walk path"))
+                # An `ic` whose target is an array-shaped state variable is a
+                # scoped-reference / field IC: defer it (its RHS is a field, not
+                # a scalar). A scalar target keeps the const-fold fast path.
+                _tvar = get(model.variables, vn, nothing)
+                if _tvar !== nothing && _is_array_shape(_tvar.shape)
+                    push!(_field_ics, (vn, eq.rhs))
+                else
+                    _eq_ics[vn] = try
+                        Float64(evaluate_expr(eq.rhs, Dict{String,Float64}();
+                                              registered_functions=registered_functions))
+                    catch err
+                        throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
+                            "ic($(vn)) RHS must const-fold to a scalar for the tree-walk path"))
+                    end
                 end
             else
                 push!(kept, eq)
@@ -1266,6 +1282,28 @@ function _build_evaluator_impl(model::Model;
         array_var_info[vname] = (lo, hi)
     end
 
+    # ---- Fold scoped-reference / array `ic` equations into u0 (spec §11.4.1) ----
+    # Now that each array state's cells are known, expand every deferred field-ic
+    # into per-element initial values keyed by the flat element name. The RHS may
+    # be a LOADED FIELD (a `const_arrays` entry supplying the initial field over
+    # the lifted grid), a broadcast constant, or a coordinate expression. Folding
+    # here means the array-cell u0 seeding below (and callers that don't override)
+    # pick these up exactly like a model-local `ic`. A target that resolves to no
+    # array cells, or an RHS the seed path cannot evaluate, is a hard error — a
+    # missing/unsupported scoped ic is never silently dropped.
+    for (target, rhs) in _field_ics
+        cells = get(array_cells, target, nothing)
+        (cells === nothing || isempty(cells)) && throw(TreeWalkError(
+            "E_TREEWALK_UNSUPPORTED_EQUATION",
+            "ic($(target)): scoped-reference target resolves to no array cells; the " *
+            "target must name a lifted/array state variable of the flattened system"))
+        for cell in cells
+            idxs = collect(Int, cell)
+            _eq_ics[_cell_key(target, idxs)] =
+                _resolve_field_ic(target, rhs, idxs, const_arrays, registered_functions)
+        end
+    end
+
     # ---- Build flat state vector: scalars first, then array cells ----
     # Array cells are enumerated in column-major order (first index fastest,
     # consistent with Julia's native array layout and the Rust/Python runtimes).
@@ -1306,6 +1344,8 @@ function _build_evaluator_impl(model::Model;
         i_abs = n_scalar + i_rel
         if haskey(initial_conditions, cname)
             u0[i_abs] = Float64(initial_conditions[cname])
+        elseif haskey(_eq_ics, cname)
+            u0[i_abs] = _eq_ics[cname]   # scoped-reference / array ic (§11.4.1)
         else
             # Try the parent variable's scalar default (rare fallback).
             m = match(r"^([^\[]+)\[", cname)
@@ -3369,6 +3409,51 @@ end
 # Format an array-cell key like "u[3]" (1D) or "u[2,3]" (2D).
 function _cell_key(var_name::String, indices)
     return "$(var_name)[$(join(indices, ","))]"
+end
+
+"""
+    _resolve_field_ic(target, rhs, cell, const_arrays, registered_functions) -> Float64
+
+Resolve one grid cell's initial value for a scoped-reference / array `ic`
+equation (spec §11.4.1). `cell` is the 1-based integer index tuple of the
+element. Supported RHS forms, in order:
+
+1. A LOADED FIELD — a bare reference to a `const_arrays` entry that supplies the
+   initial field over the lifted grid. The cell is read directly when the field's
+   rank matches the target grid; a single-element field is broadcast.
+2. A BROADCAST CONSTANT — an RHS that const-folds to a scalar applied to every
+   cell.
+
+Anything else (e.g. a coordinate/loaded expression the seed path cannot fold) is
+a hard error, so a scoped-reference ic that cannot be resolved is never silently
+dropped.
+"""
+function _resolve_field_ic(target::AbstractString, rhs::EarthSciSerialization.Expr,
+                           cell::Vector{Int}, const_arrays, registered_functions)::Float64
+    # (1) Loaded field supplied as a const array over the lifted grid.
+    if rhs isa VarExpr && haskey(const_arrays, rhs.name)
+        arr = const_arrays[rhs.name]
+        if ndims(arr) == length(cell)
+            return Float64(arr[cell...])
+        elseif length(arr) == 1
+            return Float64(first(arr))
+        else
+            throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
+                "ic($(target)): loaded field '$(rhs.name)' has ndims=$(ndims(arr)) " *
+                "which does not match the $(length(cell))-D lifted target grid"))
+        end
+    end
+    # (2) Broadcast constant.
+    try
+        return Float64(evaluate_expr(rhs, Dict{String,Float64}();
+                                     registered_functions=registered_functions))
+    catch
+    end
+    # (3) Unsupported RHS — a clear error, never a silent drop.
+    _fld = rhs isa VarExpr ? " (no const_arrays entry named '$(rhs.name)')" : ""
+    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
+        "ic($(target)): RHS is neither a loaded const-array field nor a constant" *
+        "$(_fld); supply the initial field via const_arrays or a scalar expression"))
 end
 
 # Expand a ranges entry to the concrete list of integer values.
