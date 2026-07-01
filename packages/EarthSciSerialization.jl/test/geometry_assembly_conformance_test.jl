@@ -32,23 +32,29 @@
 #      the bin-skolem equi-join — floor(coord/dx)→skolem bin key→shared-bin pairs.
 #      This is build-time (`skolem`/`distinct`), computed here mirroring the fixture.
 #   2. NARROW phase (through build_evaluator): the fused `polygon_intersection_area`
-#      leaf is lowered and evaluated by `build_evaluator` from the fixture's OWN
-#      in-file const rings, ONE call filling every candidate pair's overlap area
-#      (`_build_Aij_via_evaluator`). A_ij[i,j] for a non-candidate pair is 0, exactly
-#      as the fixture's `join.on [[src_bin,tgt_bin]]` restricts it. This REPLACES the
-#      old standalone `ESS.intersect_polygon`+`ESS.polygon_area` computation — A_ij now
-#      flows through the evaluator's fused-leaf op dispatch. (A definitional cross-check
-#      against the standalone kernels is retained as an oracle.)
+#      leaf is lowered and evaluated by `build_evaluator` as ONE WHOLE-MESH aggregate
+#      — the fixture's OWN `A_ij[i,j] = polygon_intersection_area(src_poly[i],
+#      tgt_poly[j])` node, with the ranged fused leaf resolving its INDEXED operands
+#      by gathering each cell's ring from the in-file const ring stacks at setup. A_ij
+#      materializes as one dense [i,j] const array in a single call
+#      (`_build_Aij_via_evaluator`, reading `index(A_ij,i,j)` into a state). A_ij[i,j]
+#      for a non-candidate pair is 0 (zero geometric overlap), matching the fixture's
+#      `join.on [[src_bin,tgt_bin]]`. This REPLACES both the old standalone
+#      `ESS.intersect_polygon`+`ESS.polygon_area` computation AND the earlier
+#      per-candidate-pair driving — A_ij now flows through the evaluator's whole-mesh
+#      fused-leaf aggregate. (A definitional cross-check against the standalone kernels
+#      is retained as an oracle.)
 #   3. APPLY / NORMALIZE (through build_evaluator): A_j, F_tgt via the evaluable
 #      apply FAQ with the load-bearing bin join + sliver filter (`_apply_only_esm`).
 #
 # The one part that stays build-time is the candidate-set CONSTRUCTION (the
-# `skolem`/`distinct` broad phase), by design (§8.6.1). The current evaluator's fused
-# leaf resolves BARE const-ring operands (as in polygon_intersection_area_planar.esm),
-# so the ranged aggregate's `index(src_poly,i)` operands are driven per candidate pair
-# over that build-time candidate set rather than as one whole-mesh aggregate call —
-# equivalent, since the fixture's join restricts A_ij to exactly those pairs. The
-# conservation / partition-of-unity NUMERIC checks are UNCHANGED in strength.
+# `skolem`/`distinct` broad phase), by design (§8.6.1). The narrow phase A_ij is now
+# a SINGLE whole-mesh aggregate call over the entire src × tgt mesh (the ranged fused
+# leaf resolves `index(src_poly,i)` / `index(tgt_poly,j)` operands from the in-file
+# const rings), no longer driven per candidate pair. The WHOLE fixture — broad phase,
+# narrow phase, row-sum/normalize, and apply — additionally builds end-to-end through
+# ONE build_evaluator call (`_build_fixture_end_to_end`), reproducing A_j and F_tgt.
+# The conservation / partition-of-unity NUMERIC checks are UNCHANGED in strength.
 
 using Test
 using EarthSciSerialization
@@ -106,39 +112,60 @@ function _candidate_pairs(src_bins, tgt_bins)
 end
 
 # ======================================================================
-# NARROW PHASE through build_evaluator: the FUSED polygon_intersection_area leaf.
+# NARROW PHASE through build_evaluator: the WHOLE-MESH fused-leaf aggregate.
 # ======================================================================
-# One ESM carrying every candidate pair k: area_obs_k =
-# polygon_intersection_area(src_k, tgt_k) (the fused planar clip+area leaf), consumed
-# by d(area_k)/dt = area_obs_k from a zero IC, so `du[area_k] = A_ij` for that pair.
-# The operand rings are supplied per pair via `const_arrays`, so the evaluator
-# const-folds each fused leaf to its scalar overlap area. ONE build_evaluator call
-# fills the whole candidate set — the narrow phase evaluated by the evaluator.
-function _narrow_phase_esm(npairs)
-    vars = Dict{String,Any}()
-    eqs = Any[]
-    for k in 1:npairs
-        vars["src_$k"] = Dict{String,Any}("type" => "parameter", "shape" => Any["verts", "coord"])
-        vars["tgt_$k"] = Dict{String,Any}("type" => "parameter", "shape" => Any["verts", "coord"])
-        vars["ao_$k"] = Dict{String,Any}("type" => "observed",
-            "expression" => Dict{String,Any}("op" => "polygon_intersection_area",
-                "manifold" => "planar", "args" => Any["src_$k", "tgt_$k"]))
-        vars["area_$k"] = Dict{String,Any}("type" => "state", "default" => 0.0)
-        push!(eqs, Dict{String,Any}("lhs" => Dict{String,Any}("op" => "ic", "args" => Any["area_$k"]), "rhs" => 0.0))
-        push!(eqs, Dict{String,Any}("lhs" => Dict{String,Any}("op" => "D", "args" => Any["area_$k"], "wrt" => "t"),
-            "rhs" => "ao_$k"))
-    end
-    Dict{String,Any}("esm" => "0.8.0", "metadata" => Dict{String,Any}("name" => "narrow_phase"),
+# The narrow phase is now driven as ONE whole-mesh aggregate — the FIXTURE's OWN
+# `A_ij[i,j] = polygon_intersection_area(src_poly[i], tgt_poly[j])` node — not per
+# candidate pair. The evaluator resolves the ranged fused leaf with INDEXED operands
+# (`index(src_poly,i)` / `index(tgt_poly,j)`) by gathering each cell's ring from the
+# in-file const ring stacks at setup, so A_ij materializes as one dense [i,j] const
+# array. We extract it by reading `index(A_ij,i,j)` into a zero-IC array state
+# `A_ex[i,j]` (du = the fused-leaf overlap area for every cell in one call).
+_native(x) = ESS.Cadence.to_native(x)
+
+# The whole-mesh A_ij extraction ESM: the fixture's OWN src_poly / tgt_poly const
+# rings and its OWN A_ij aggregate node, plus D(A_ex[i,j]) = index(A_ij,i,j). The
+# A_ij join references the broad-phase bins (src_bin/tgt_bin); those columns are
+# absent here, so the setup gate skips them (a non-candidate pair has zero overlap
+# regardless — the join is a candidate-set narrowing, not a correctness gate for
+# the geometric area itself).
+function _aij_extract_esm(vars)
+    ix(a...) = Dict{String,Any}("op" => "index", "args" => collect(Any, a))
+    nv = length(vars["src_poly"]["expression"]["value"][1])
+    nc = length(vars["src_poly"]["expression"]["value"][1][1])
+    nS = length(vars["src_poly"]["expression"]["value"])
+    nT = length(vars["tgt_poly"]["expression"]["value"])
+    agg(oidx, body) = Dict{String,Any}("op" => "aggregate", "output_idx" => collect(Any, oidx),
+        "ranges" => Dict{String,Any}("i" => Dict{String,Any}("from" => "src_cells"),
+                                     "j" => Dict{String,Any}("from" => "tgt_cells")),
+        "expr" => body)
+    model = Dict{String,Any}("variables" => Dict{String,Any}(
+            "src_poly" => Dict{String,Any}("type" => "observed",
+                "shape" => Any["src_cells", "cell_verts", "coord"],
+                "expression" => _native(vars["src_poly"]["expression"])),
+            "tgt_poly" => Dict{String,Any}("type" => "observed",
+                "shape" => Any["tgt_cells", "cell_verts", "coord"],
+                "expression" => _native(vars["tgt_poly"]["expression"])),
+            "A_ij" => Dict{String,Any}("type" => "observed",
+                "shape" => Any["src_cells", "tgt_cells"],
+                "expression" => _native(vars["A_ij"]["expression"])),
+            "A_ex" => Dict{String,Any}("type" => "state", "shape" => Any["src_cells", "tgt_cells"])),
+        "equations" => Any[Dict{String,Any}(
+            "lhs" => agg(["i", "j"], Dict{String,Any}("op" => "D", "args" => Any[ix("A_ex", "i", "j")], "wrt" => "t")),
+            "rhs" => agg(["i", "j"], ix("A_ij", "i", "j")))])
+    Dict{String,Any}("esm" => "0.8.0", "metadata" => Dict{String,Any}("name" => "aij_extract"),
         "index_sets" => Dict{String,Any}(
-            "verts" => Dict{String,Any}("kind" => "interval", "size" => 4),
-            "coord" => Dict{String,Any}("kind" => "interval", "size" => 2)),
-        "models" => Dict{String,Any}("NarrowPhase" => Dict{String,Any}(
-            "variables" => vars, "equations" => eqs)))
+            "coord" => Dict{String,Any}("kind" => "interval", "size" => nc),
+            "cell_verts" => Dict{String,Any}("kind" => "interval", "size" => nv),
+            "src_cells" => Dict{String,Any}("kind" => "interval", "size" => nS),
+            "tgt_cells" => Dict{String,Any}("kind" => "interval", "size" => nT)),
+        "models" => Dict{String,Any}("AijExtract" => model))
 end
 
-# Build the overlap-area matrix A_ij by driving the fused
-# polygon_intersection_area leaf through build_evaluator, from the fixture's OWN
-# const rings, over the bin-skolem candidate set. Returns (A_ij, F_src, pairs).
+# Build the overlap-area matrix A_ij by driving the fixture's OWN whole-mesh fused-
+# leaf aggregate through ONE build_evaluator call. Returns (A_ij, F_src, pairs); the
+# candidate pairs come from the broad-phase bin mirror (used only for the broad-phase
+# candidate-set assertion — the narrow phase is now a single dense aggregate call).
 function _build_Aij_via_evaluator()
     vars = _asm_vars(_asm_raw())
     SRC = _const_rings(vars, "src_poly")
@@ -152,23 +179,33 @@ function _build_Aij_via_evaluator()
                 for j in eachindex(TGT)]
     pairs = _candidate_pairs(src_bins, tgt_bins)
 
-    npairs = length(pairs)
-    const_arrays = Dict{String,Any}()
-    ics = Dict{String,Float64}()
-    for (k, (i, j)) in enumerate(pairs)
-        const_arrays["src_$k"] = SRC[i]
-        const_arrays["tgt_$k"] = TGT[j]
-        ics["area_$k"] = 0.0
-    end
-    f!, u0, p, _, vmap = build_evaluator(_narrow_phase_esm(npairs);
-        model_name="NarrowPhase", initial_conditions=ics, const_arrays=const_arrays)
+    nS, nT = length(SRC), length(TGT)
+    ics = Dict("A_ex[$i,$j]" => 0.0 for i in 1:nS, j in 1:nT)
+    f!, u0, p, _, vmap = build_evaluator(_aij_extract_esm(vars);
+        model_name="AijExtract", initial_conditions=ics)
     du = similar(u0); f!(du, u0, p, 0.0)
-
-    A = zeros(Float64, length(SRC), length(TGT))
-    for (k, (i, j)) in enumerate(pairs)
-        A[i, j] = du[vmap["area_$k"]]     # the fused-leaf overlap area, via the evaluator
-    end
+    A = [du[vmap["A_ex[$i,$j]"]] for i in 1:nS, j in 1:nT]   # whole-mesh fused-leaf A_ij
     return A, F_SRC, pairs
+end
+
+# Drive the WHOLE fixture end-to-end through ONE build_evaluator call: the bin-skolem
+# broad phase (value invention), the fused-leaf narrow phase (A_ij at setup), the
+# row-sum / normalize (A_j / W_ij at setup), and the apply ODEs (A_j_check, F_tgt).
+# Only the float binning coords enter value invention as const factors (the front-
+# door reads them from the const_arrays kwarg). Returns (A_j, F_tgt).
+function _build_fixture_end_to_end()
+    raw = _asm_raw()
+    vars = _asm_vars(raw)
+    ca = Dict{String,Any}(
+        "src_lon" => _const_vec(vars, "src_lon"), "src_lat" => _const_vec(vars, "src_lat"),
+        "tgt_lon" => _const_vec(vars, "tgt_lon"), "tgt_lat" => _const_vec(vars, "tgt_lat"))
+    f!, u0, p, _, vmap = build_evaluator(raw;
+        model_name="ConservativeRegridAssembly", const_arrays=ca)
+    du = similar(u0); f!(du, u0, p, 0.0)
+    n = 4
+    A_j = [du[vmap["A_j_check[$j]"]] for j in 1:n]
+    F_tgt = [du[vmap["F_tgt[$j]"]] for j in 1:n]
+    return A_j, F_tgt
 end
 
 # Definitional oracle: A_ij via the STANDALONE constituent kernels
@@ -292,12 +329,13 @@ end
         @test haskey(vars["A_j"]["expression"], "filter")
     end
 
-    # The fused-leaf narrow phase (through build_evaluator) built the expected sparse
-    # overlap-area matrix from the fixture's OWN geometry: a within-bin refinement
-    # overlap pattern, zero across bins, full source coverage (row sums = cell areas =
-    # 1) ⇒ conservation exact. Definitionally cross-checked against the standalone
-    # intersect_polygon+polygon_area kernels (§8.6.1: the fused leaf equals them).
-    @testset "narrow phase A_ij (fused leaf via evaluator) is the expected sparse matrix" begin
+    # The WHOLE-MESH fused-leaf narrow phase (ONE build_evaluator call over the entire
+    # src × tgt aggregate) built the expected sparse overlap-area matrix from the
+    # fixture's OWN geometry: a within-bin refinement overlap pattern, zero across bins,
+    # full source coverage (row sums = cell areas = 1) ⇒ conservation exact.
+    # Definitionally cross-checked against the standalone intersect_polygon+polygon_area
+    # kernels (§8.6.1: the fused leaf equals them).
+    @testset "narrow phase A_ij (whole-mesh fused-leaf aggregate) is the expected sparse matrix" begin
         @test A_ij ≈ [1.0 0.0 0.0 0.0;
                       0.5 0.5 0.0 0.0;
                       0.0 0.0 1.0 0.0;
@@ -321,6 +359,25 @@ end
         F_tgt_expected = [sum(A_ij[i, j] * F_src[i] for i in 1:4) / dst_areas[j] for j in 1:4]
         @test F_tgt ≈ F_tgt_expected
         @test F_tgt ≈ [40.0 / 3, 20.0, 100.0 / 3, 40.0]
+    end
+
+    # WHOLE-FIXTURE END-TO-END through ONE build_evaluator call: the fixture's own
+    # broad phase (bin-skolem value invention), whole-mesh fused-leaf narrow phase
+    # (A_ij at setup), row-sum / normalize (A_j / W_ij at setup) and apply ODEs all
+    # run together — no per-part harness, no host-supplied A_ij. A_j_check (= A_j) and
+    # F_tgt are read straight off the integrated states. This is the fixture built as
+    # ONE whole-mesh aggregate; it must reproduce the apply-FAQ A_j / F_tgt exactly.
+    @testset "WHOLE fixture builds + evaluates end-to-end (one build_evaluator call)" begin
+        A_j_e2e, F_tgt_e2e = _build_fixture_end_to_end()
+        @test A_j_e2e ≈ dst_areas
+        @test A_j_e2e ≈ [1.5, 0.5, 1.5, 0.5]
+        @test F_tgt_e2e ≈ [40.0 / 3, 20.0, 100.0 / 3, 40.0]
+        # conservation Σ_j A_j·F_tgt = Σ_i A_i·F_src = 100, straight from the fixture.
+        @test isapprox(sum(A_j_e2e .* F_tgt_e2e), 100.0; rtol=1e-12)
+        # partition-of-unity Σ_i W_ij = Σ_i A_ij / A_j = 1 for every target cell.
+        for j in 1:4
+            @test isapprox(sum(A_ij[i, j] for i in 1:4) / A_j_e2e[j], 1.0; rtol=1e-12, atol=1e-12)
+        end
     end
 
     # ACCEPTANCE INVARIANT 1 — CONSERVATION (§5.8.3): the global remapped mass

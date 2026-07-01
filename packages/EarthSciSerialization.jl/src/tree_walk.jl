@@ -230,6 +230,40 @@ function _pia_const_matrix(val)::Matrix{Float64}
     return M
 end
 
+# True iff `e` is a `const`-op node (build-time literal data — a polygon vertex
+# ring array, a source field). Its value lives in `e.value`, not `e.args`.
+_is_const_op(e) = e isa OpExpr && (e::OpExpr).op == "const"
+
+# A `const`-op node's stored (nested-vector) value → a dense Float64 array whose
+# rank is the nesting depth (`[[[...]]]` → 3-D). Generalizes `_pia_const_matrix`
+# (which fixes rank 2) to the ND case: an in-file `src_poly[cell, vert, coord]`
+# ring stack or a 1-D `F_src[cell]` field. Column-major fill matches Julia's
+# native layout, so `index(src_poly, i)` slices out cell `i`'s ring matrix.
+function _const_op_to_array(val)::Array{Float64}
+    dims = Int[]
+    node = val
+    while !(node isa Number)
+        n = length(node)
+        push!(dims, n)
+        n == 0 && break
+        node = first(node)
+    end
+    A = Array{Float64}(undef, dims...)
+    _fill_const_array!(A, val, ())
+    return A
+end
+
+function _fill_const_array!(A, node, idx::Tuple)
+    if node isa Number
+        A[idx...] = Float64(node)
+        return
+    end
+    for (k, sub) in enumerate(node)
+        _fill_const_array!(A, sub, (idx..., k))
+    end
+    return
+end
+
 """
     _polygon_intersection_area(poly_a, poly_b, manifold) -> Float64
 
@@ -509,22 +543,57 @@ end
 # Materialize a geometry-derived array observed (e.g. `area[p]`, `A_ij[i,j]`) by
 # evaluating its `arrayop` body once per output cell against the (already
 # materialized) geometry in `env`.
+#
+# Two shapes are handled uniformly. A pure MAP (`output_idx == ranges` keys, e.g.
+# `A_ij[i,j] = polygon_intersection_area(src[i], tgt[j])`) evaluates the body once
+# per output cell. A CONTRACTING aggregate — the on-disk einsum form where some
+# `ranges` keys are NOT in `output_idx` (e.g. `A_j[j] = Σ_i A_ij[i,j]`, the
+# row-sum) — sums the body over the contracted indices for each output cell. Both
+# honor the aggregate's `join` / `filter` gate (`_geo_agg_gate`): a rejected
+# contraction tuple contributes the additive identity 0̄ (RFC §5.3 / §5.8). This is
+# the setup-time twin of the ODE arrayop einsum path.
 function _materialize_geom_array(arrayop, env, index_sets, derived_extents,
                                  var_shapes=Dict{String,Vector{String}}())
     out  = String[v for v in arrayop.output_idx]
     exts = Int[_geo_index_extent(arrayop.ranges[v], index_sets, derived_extents) for v in out]
-    # Seed the loop-var → index-set map with this arrayop's own output indices, so a
-    # nested aggregate's join can resolve a key column indexed by an output var.
-    base_setof = Dict{String,String}()
-    for v in out
+    # Contracted indices: `ranges` keys not among the output indices (§5.1). Their
+    # extents are reduced (⊕ = + for the sum_product FAQ) per output cell.
+    contract = String[k for k in keys(arrayop.ranges) if !(k in out)]
+    # Seed the loop-var → index-set map with this arrayop's output AND contracted
+    # indices, so a join can resolve a key column indexed by either (per-cell F_tgt
+    # keys on an outer output var; the row-sum keys on the contracted `i`).
+    setof = Dict{String,String}()
+    for v in Iterators.flatten((out, contract))
         r = arrayop.ranges[v]
-        r isa IndexSetRef && (base_setof[v] = r.from)
+        r isa IndexSetRef && (setof[v] = r.from)
     end
     arr  = zeros(Float64, exts...)
-    for tup in Iterators.product((1:e for e in exts)...)
-        ie = Dict{String,Any}(zip(out, tup))
-        arr[tup...] = _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents,
-                                var_shapes, base_setof)
+    if isempty(contract)
+        for tup in Iterators.product((1:e for e in exts)...)
+            ie = Dict{String,Any}(zip(out, tup))
+            # A no-contraction map still honors an output-cell join/filter gate: a
+            # rejected cell keeps the zero-initialized 0̄ (a cross-bin W_ij, a
+            # sub-atol sliver). Degenerate (no join/filter) ⇒ gate is always true.
+            _geo_agg_gate(arrayop, ie, env, setof, var_shapes, index_sets, derived_extents) || continue
+            arr[tup...] = _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents,
+                                    var_shapes, setof)
+        end
+    else
+        cexts = Int[_geo_index_extent(arrayop.ranges[c], index_sets, derived_extents)
+                    for c in contract]
+        for tup in Iterators.product((1:e for e in exts)...)
+            acc = 0.0
+            for ct in Iterators.product((1:e for e in cexts)...)
+                ie = Dict{String,Any}(zip(out, tup))
+                for (lv, cv) in zip(contract, ct)
+                    ie[lv] = cv
+                end
+                _geo_agg_gate(arrayop, ie, env, setof, var_shapes, index_sets, derived_extents) || continue
+                acc += _geo_eval(arrayop.expr_body, env, ie, index_sets, derived_extents,
+                                 var_shapes, setof)
+            end
+            arr[tup...] = acc
+        end
     end
     return arr
 end
@@ -590,7 +659,13 @@ function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names,
     setup = Set{String}()
     for (n, _) in defs
         (is_arr_obs(n) && !(n in geom_ring_vars) && !(n in tainted) && haskey(defs, n)) || continue
-        _expr_has_intersect_polygon(defs[n]) && push!(setup, n)
+        # Seed on EITHER geometry leaf. `intersect_polygon` surfaces a ragged clip
+        # ring (§8.1); the FUSED `polygon_intersection_area` returns the scalar
+        # overlap area with no exposed ring (§8.6.1) — so an `A_ij[i,j] =
+        # polygon_intersection_area(src[i], tgt[j])` aggregate is a build-once setup
+        # const exactly like a ranged clip, just dense (no derived clip_ring set).
+        (_expr_has_intersect_polygon(defs[n]) ||
+         _expr_has_polygon_intersection_area(defs[n])) && push!(setup, n)
     end
     mvars = Set{String}(keys(model.variables))
     changed = true
@@ -608,13 +683,17 @@ function _geometry_setup_vars(model, equations, geom_ring_vars, state_var_names,
     # Backward pass: also materialize state-free array observeds REFERENCED BY a
     # setup var — the bin buffers a broad-phase `join` gates on (src_bin/tgt_bin),
     # which a setup aggregate reads but which are not themselves geometry-derived.
+    # A `const`-op operand (an in-file `src_poly` / `tgt_poly` ring stack the fused
+    # leaf gathers per cell) is NOT pulled in here: it is build-time literal data
+    # seeded into the setup env directly (and registered as a const_array for the
+    # ODE), so it needs no `_materialize_geom_array` pass.
     changed = true
     while changed
         changed = false
         for n in collect(setup)
             for r in intersect(_referenced_var_names(defs[n]), mvars)
                 (is_arr_obs(r) && !(r in setup) && !(r in geom_ring_vars) &&
-                 !(r in tainted) && haskey(defs, r)) || continue
+                 !(r in tainted) && haskey(defs, r) && !_is_const_op(defs[r])) || continue
                 rrefs = intersect(_referenced_var_names(defs[r]), mvars)
                 any(f -> f in state_var_names, rrefs) && continue
                 push!(setup, r); changed = true
@@ -670,6 +749,15 @@ function _materialize_geometry_setup(setup, defs, model, const_arrays_kw,
     env = Dict{String,Any}()
     for (k, v) in const_arrays_kw
         env[String(k)] = v isa AbstractArray ? Array{Float64}(v) : v
+    end
+    # `const`-op array observeds (in-file polygon ring stacks / fields) are
+    # build-time literal data: seed env with their materialized values so a fused
+    # `polygon_intersection_area` aggregate can gather a per-cell ring via
+    # `index(src_poly, i)` at setup. A const_arrays kwarg entry (if any) wins.
+    for (n, v) in model.variables
+        (v.type == ObservedVariable && _is_array_shape(v.shape) && _is_const_op(v.expression)) || continue
+        haskey(env, n) && continue
+        env[n] = _const_op_to_array((v.expression::OpExpr).value)
     end
     for (n, v) in model.variables
         v.type == ParameterVariable && !_is_array_shape(v.shape) && v.default !== nothing &&
@@ -849,6 +937,14 @@ function _build_evaluator_impl(model::Model;
         end
         isempty(synth) || (_model_equations = vcat(model.equations, synth))
     end
+    # The FUSED `polygon_intersection_area` leaf (§8.6.1) triggers the SAME
+    # setup-geometry machinery as `intersect_polygon`: an array observed whose
+    # aggregate body is the fused leaf (`A_ij[i,j] = polygon_intersection_area(
+    # src[i], tgt[j])`) is a build-once setup const over the in-file polygon rings.
+    # `_has_setup_geometry` gates the setup-vars discovery / materialization so the
+    # ranged narrow phase compiles even when NO `intersect_polygon` node survives.
+    _has_pia = _model_has_polygon_intersection_area(model, _model_equations)
+    _has_setup_geometry = _has_geometry || _has_pia
     # `_geom_ring_vars` are the (array-shaped) observed variables whose defining
     # expression is an intersect_polygon clip; they are materialized into
     # const_arrays at setup (RFC §8.1) rather than treated as scalar observeds.
@@ -875,7 +971,7 @@ function _build_evaluator_impl(model::Model;
     # live F_src), the met→fire coupling edge. Empty (byte-identical) for files
     # whose geometry outputs are all const-fed (they stay setup vars).
     _geom_inline_vars = Set{String}()
-    if _has_geometry
+    if _has_setup_geometry
         _pre_state_names = Set{String}(n for (n, v) in model.variables
                                        if v.type == StateVariable && !(n in _vi_vars))
         _live_param_names = Set{String}(String(k) for k in keys(param_arrays))
@@ -920,8 +1016,9 @@ function _build_evaluator_impl(model::Model;
     # `_resolve_indices`. Each operand array observed is materialized into
     # `_const_arrays` and excluded from the ODE partition — it carries no state,
     # exactly like an intersect_polygon clip ring (RFC §8.1). Empty (byte-identical)
-    # for every file without a polygon_intersection_area node.
-    _has_pia = _model_has_polygon_intersection_area(model, _model_equations)
+    # for every file without a polygon_intersection_area node. (`_has_pia` is
+    # computed once, above, where it also arms the setup-geometry machinery for the
+    # RANGED narrow phase — an indexed-operand fused leaf inside an array aggregate.)
     _pia_operand_vars = Set{String}()
     _pia_operand_arrays = Dict{String,Matrix{Float64}}()
     if _has_pia
@@ -951,6 +1048,27 @@ function _build_evaluator_impl(model::Model;
         end
     end
 
+    # ---- const-op array observeds (in-file polygon rings / source fields) ----
+    # A `const`-op observed with an ARRAY shape (`src_poly[cell,vert,coord]`, a
+    # `F_src[cell]` field) is build-time literal data, not a scalar observed and not
+    # a state. When the ranged narrow phase is in play, materialize each into
+    # `_const_arrays` (so a fused-leaf aggregate gathers `index(src_poly,i)` at setup
+    # and an ODE reads `index(F_src,i)`) and exclude it from the ODE partition —
+    # exactly like an intersect_polygon clip ring (RFC §8.1) or a fused-leaf operand.
+    # Operands already owned by the scalar-leaf `_pia` path or a setup ring are left
+    # to those. Empty (byte-identical) for files without the ranged geometry.
+    _const_obs_vars = Set{String}()
+    _const_obs_arrays = Dict{String,Array{Float64}}()
+    if _has_setup_geometry
+        for (name, v) in model.variables
+            (v.type == ObservedVariable && _is_array_shape(v.shape) &&
+             _is_const_op(v.expression) && !(name in _pia_operand_vars) &&
+             !(name in _geom_ring_vars)) || continue
+            _const_obs_arrays[name] = _const_op_to_array((v.expression::OpExpr).value)
+            push!(_const_obs_vars, name)
+        end
+    end
+
     # ---- Partition variables ----
     scalar_state_names = String[]
     param_names = String[]
@@ -971,6 +1089,9 @@ function _build_evaluator_impl(model::Model;
         # materialized into const_arrays and read by the fused leaf; not a partition
         # member (they carry no state — like an intersect_polygon clip ring).
         name in _pia_operand_vars && continue
+        # const-op array observeds (in-file ring stacks / source fields) are
+        # materialized into const_arrays; build-time data, not a partition member.
+        name in _const_obs_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
@@ -1045,7 +1166,8 @@ function _build_evaluator_impl(model::Model;
     _ode_equations = Equation[eq for eq in _model_equations
         if !(eq.lhs isa VarExpr && ((eq.lhs::VarExpr).name in _geom_ring_vars ||
                                     (eq.lhs::VarExpr).name in _geom_setup_vars ||
-                                    (eq.lhs::VarExpr).name in _pia_operand_vars))]
+                                    (eq.lhs::VarExpr).name in _pia_operand_vars ||
+                                    (eq.lhs::VarExpr).name in _const_obs_vars))]
 
     # ---- Resolve value-equality joins (RFC §5.3) ----
     # Rewrite each aggregate's `join` clauses into build-time `join_gates` (a
@@ -1282,6 +1404,11 @@ function _build_evaluator_impl(model::Model;
     # `polygon_intersection_area(src, tgt)` to its scalar overlap area (§8.6.1).
     for (k, ring) in _pia_operand_arrays
         _const_arrays[k] = ring
+    end
+    # const-op array observeds (in-file ring stacks / source fields): registered so
+    # an ODE reads `index(F_src, i)` and a setup aggregate gathers `index(src_poly, i)`.
+    for (k, arr) in _const_obs_arrays
+        haskey(_const_arrays, k) || (_const_arrays[k] = arr)
     end
 
     # ---- Live forcing buffers (ess-14f.3, JL-J0 — the one engine touch) ----
