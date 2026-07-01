@@ -100,9 +100,17 @@ def load_manifest(path: Path) -> dict:
         raise ManifestError(f"failed to load manifest {path}: {e}") from e
     if not isinstance(manifest, dict):
         raise ManifestError(f"{path}: top-level must be a JSON object")
-    if manifest.get("category") != "pde_simulation":
+    # Two sibling categories share this harness: the original pre-discretized,
+    # linear, matrix-exponential-anchored ``pde_simulation`` set, and the
+    # full-pipeline, nonlinear, reference-integrator-anchored
+    # ``pde_simulation_pipeline`` set (DESIGN.md). Both use the identical manifest
+    # shape and comparison bands; the only difference is the trajectory anchor
+    # (in-manifest ``trajectory.analytic`` vs. an external ``trajectory.reference``
+    # file), handled in ``_analytic_reference``.
+    if manifest.get("category") not in ("pde_simulation", "pde_simulation_pipeline"):
         raise ManifestError(
-            f"{path}: category must be 'pde_simulation', got {manifest.get('category')!r}")
+            f"{path}: category must be 'pde_simulation' or 'pde_simulation_pipeline', "
+            f"got {manifest.get('category')!r}")
     fixtures = manifest.get("fixtures")
     if not isinstance(fixtures, list) or not fixtures:
         raise ManifestError(f"{path}: fixtures must be a non-empty array")
@@ -216,12 +224,37 @@ def compare_against(fixture: dict, produced: dict, reference: dict,
     return {"match": not problems, "problems": problems, "max_tol_frac": worst}
 
 
-def _analytic_reference(fixture: dict) -> dict:
+def _analytic_reference(fixture: dict, manifest_path: Path) -> dict:
     """Build the {rhs, trajectory} reference from the fixture's INDEPENDENT
-    analytic anchors (L u + b for RHS; matrix-exponential for trajectory)."""
+    analytic anchors.
+
+    RHS: the per-probe ``analytic_rhs`` — ``L u + b`` for the linear
+    ``pde_simulation`` category, or the independent reference integrator's
+    ``f(u, t)`` for the nonlinear ``pde_simulation_pipeline`` category (§5).
+
+    Trajectory: two sanctioned modes (DESIGN.md §6). A linear fixture carries an
+    in-manifest matrix-exponential ``trajectory.analytic``. A pipeline fixture is
+    nonlinear (no matrix exponential exists), so it instead points
+    ``trajectory.reference`` at an external JSON file produced by the independent
+    reference integrator; its ``trajectory.reference`` block is the checkpoint
+    anchor (compared under the looser ``traj_analytic`` band, which absorbs
+    integrator differences). Absent ``trajectory.analytic`` is tolerated whenever
+    ``trajectory.reference`` is present."""
     rhs = {pr["id"]: pr["analytic_rhs"] for pr in fixture["rhs_probes"]}
-    traj = {_time_key(k): v
-            for k, v in fixture["trajectory"].get("analytic", {}).items()}
+    tr = fixture.get("trajectory", {})
+    ref_ptr = tr.get("reference")
+    if isinstance(ref_ptr, str):
+        ref_path = manifest_path.parent / ref_ptr
+        try:
+            with ref_path.open() as f:
+                ref_doc = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            raise ManifestError(
+                f"trajectory.reference {ref_ptr!r} could not be loaded: {e}") from e
+        raw_traj = ref_doc.get("trajectory", {}).get("reference", {})
+        traj = {_time_key(k): v for k, v in raw_traj.items()}
+    else:
+        traj = {_time_key(k): v for k, v in tr.get("analytic", {}).items()}
     return {"rhs": rhs, "trajectory": traj}
 
 
@@ -312,7 +345,7 @@ def self_test(manifest_path: Path) -> int:
             _eprint(f"self-test FAIL [{fx['id']}]: golden missing "
                     f"({fx['golden']}); run --write-golden first")
             continue
-        analytic = _analytic_reference(fx)
+        analytic = _analytic_reference(fx, manifest_path)
         verdict = compare_against(fx, golden, analytic, tol, kind="analytic")
         if not verdict["match"]:
             rc = 1
@@ -328,7 +361,7 @@ def self_test(manifest_path: Path) -> int:
     ref_fx = fixtures[0]
     golden = load_golden(ref_fx, manifest_path)
     if golden is not None:
-        analytic = _analytic_reference(ref_fx)
+        analytic = _analytic_reference(ref_fx, manifest_path)
         # NC1: perturb one RHS element well past the tight tolerance.
         probe0 = ref_fx["rhs_probes"][0]["id"]
         bad = json.loads(json.dumps(golden))
@@ -469,7 +502,8 @@ def run_suite(manifest_path: Path, bindings: list[str], output_path: Path,
                 continue
             v_golden = compare_against(fx, produced, goldens[fx["id"]], tol,
                                        kind="golden")
-            v_analytic = compare_against(fx, produced, _analytic_reference(fx),
+            v_analytic = compare_against(fx, produced,
+                                         _analytic_reference(fx, manifest_path),
                                          tol, kind="analytic")
             match = v_golden["match"] and v_analytic["match"]
             b_report["fixtures"][fx["id"]] = {

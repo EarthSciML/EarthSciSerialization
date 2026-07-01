@@ -51,8 +51,7 @@
   "fixtures": [
     {
       "id": "advection_reaction_loaded_ic_bc",
-      "path": "fixtures/advection_reaction_loaded_ic_bc.esm",
-      "source_fixture": "../../valid/advection_reaction_loaded_ic_bc.esm",
+      "path": "../../valid/advection_reaction_loaded_ic_bc.esm",
       "model": "AdvectionReactionLoadedICBC",
       "pipeline": "full",
       "tags": [
