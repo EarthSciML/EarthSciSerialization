@@ -34,6 +34,7 @@ using JSON3
     include("relational_test.jl")
     include("simulate_run_test.jl")
     include("loaded_ic_bc_simulation_test.jl")
+    include("wildfire_simulation_test.jl")
     include("mtk_export_test.jl")
     include("tree_walk_test.jl")
     include("tree_walk_arrayop_test.jl")

@@ -1190,6 +1190,66 @@
             ]
           }
         }
+      ],
+      "tests": [
+        {
+          "id": "regrid_driven_sst_growth",
+          "description": "SST rises linearly under the conservatively-regridded atmosphere-grid flux. The inline overlap weights (bin-skolem broad phase + polygon_intersection_area narrow phase) regrid flux_field=[50,150,250,350] onto the ocean grid as surface_heat_flux=[100, 283.333, 350] W/m^2; u_ocean stays 0 so advection vanishes and SST(t)=290 + t*surface_heat_flux/4.18e6. Asserting SST(3600) validates the inline conservative regrid indirectly but precisely (a wrong weight matrix moves these values).",
+          "time_span": {
+            "start": 0,
+            "end": 3600
+          },
+          "assertions": [
+            {
+              "variable": "SST[1]",
+              "time": 0,
+              "expected": 290.0,
+              "tolerance": {
+                "abs": 1e-09
+              }
+            },
+            {
+              "variable": "SST[2]",
+              "time": 0,
+              "expected": 290.0,
+              "tolerance": {
+                "abs": 1e-09
+              }
+            },
+            {
+              "variable": "SST[3]",
+              "time": 0,
+              "expected": 290.0,
+              "tolerance": {
+                "abs": 1e-09
+              }
+            },
+            {
+              "variable": "SST[1]",
+              "time": 3600,
+              "expected": 290.0861244019,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            },
+            {
+              "variable": "SST[2]",
+              "time": 3600,
+              "expected": 290.2440191388,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            },
+            {
+              "variable": "SST[3]",
+              "time": 3600,
+              "expected": 290.3014354067,
+              "tolerance": {
+                "abs": 1e-06
+              }
+            }
+          ]
+        }
       ]
     },
     "AirSeaFluxCalculator": {
