@@ -600,14 +600,15 @@
             "atmos_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              1.0,
-              2.0,
-              3.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["a"],
+            "args": ["rg_src_poly"],
+            "reduce": "min",
+            "ranges": {
+              "a": { "from": "atmos_cells" },
+              "v": { "from": "rg_cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["rg_src_poly", "a", "v", 1] }
           },
           "description": "Source-cell representative longitude (bbox-min) \u2014 enters only the integer binning via floor, never a raw join comparison."
         },
@@ -617,14 +618,15 @@
             "atmos_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              0.0,
-              0.0,
-              0.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["a"],
+            "args": ["rg_src_poly"],
+            "reduce": "min",
+            "ranges": {
+              "a": { "from": "atmos_cells" },
+              "v": { "from": "rg_cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["rg_src_poly", "a", "v", 2] }
           },
           "description": "Source-cell representative latitude for binning."
         },
@@ -634,13 +636,15 @@
             "ocean_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              2.0,
-              3.5
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["o"],
+            "args": ["rg_tgt_poly"],
+            "reduce": "min",
+            "ranges": {
+              "o": { "from": "ocean_cells" },
+              "v": { "from": "rg_cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["rg_tgt_poly", "o", "v", 1] }
           },
           "description": "Target-cell representative longitude for binning."
         },
@@ -650,13 +654,15 @@
             "ocean_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["o"],
+            "args": ["rg_tgt_poly"],
+            "reduce": "min",
+            "ranges": {
+              "o": { "from": "ocean_cells" },
+              "v": { "from": "rg_cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["rg_tgt_poly", "o", "v", 2] }
           },
           "description": "Target-cell representative latitude for binning."
         },

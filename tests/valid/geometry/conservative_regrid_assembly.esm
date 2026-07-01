@@ -229,14 +229,15 @@
             "src_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              1.0,
-              2.0,
-              3.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["i"],
+            "args": ["src_poly"],
+            "reduce": "min",
+            "ranges": {
+              "i": { "from": "src_cells" },
+              "v": { "from": "cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["src_poly", "i", "v", 1] }
           },
           "description": "Source-cell representative longitude (bbox-min corner) \u2014 the float coord that enters ONLY the integer binning via `floor`, never a raw join comparison (\u00a75.8.5)."
         },
@@ -246,14 +247,15 @@
             "src_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              0.0,
-              0.0,
-              0.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["i"],
+            "args": ["src_poly"],
+            "reduce": "min",
+            "ranges": {
+              "i": { "from": "src_cells" },
+              "v": { "from": "cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["src_poly", "i", "v", 2] }
           },
           "description": "Source-cell representative latitude for binning."
         },
@@ -263,14 +265,15 @@
             "tgt_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              1.5,
-              2.0,
-              3.5
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["j"],
+            "args": ["tgt_poly"],
+            "reduce": "min",
+            "ranges": {
+              "j": { "from": "tgt_cells" },
+              "v": { "from": "cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["tgt_poly", "j", "v", 1] }
           },
           "description": "Target-cell representative longitude for binning."
         },
@@ -280,14 +283,15 @@
             "tgt_cells"
           ],
           "expression": {
-            "op": "const",
-            "value": [
-              0.0,
-              0.0,
-              0.0,
-              0.0
-            ],
-            "args": []
+            "op": "aggregate",
+            "output_idx": ["j"],
+            "args": ["tgt_poly"],
+            "reduce": "min",
+            "ranges": {
+              "j": { "from": "tgt_cells" },
+              "v": { "from": "cell_verts" }
+            },
+            "expr": { "op": "index", "args": ["tgt_poly", "j", "v", 2] }
           },
           "description": "Target-cell representative latitude for binning."
         },
