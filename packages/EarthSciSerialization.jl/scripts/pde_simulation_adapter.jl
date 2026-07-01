@@ -183,7 +183,13 @@ function pipeline_fixture(fx, base, reltol, abstol)
             idx === nothing && error("probe state var $name not in evaluator var_map")
             u[idx] = Float64(val)
         end
-        du = similar(u)
+        # Zero-initialize du: state slots that carry no explicit `D`-equation
+        # (e.g. ic-only fields like wind_u/phi/u_ocean) are never written by `f!`,
+        # so `similar` would leave uninitialized garbage in their RHS entries. The
+        # sanctioned integrator zero-inits du before each `f!`; mirror that here so
+        # the probe reports a deterministic 0 for those slots. (No effect on
+        # fixtures whose every state has a `D`-equation.)
+        du = zero(u)
         f!(du, u, p, Float64(pr.t))
         rhs[String(pr.id)] = Dict{String,Float64}(name => Float64(du[idx])
                                                    for (name, idx) in var_map)
