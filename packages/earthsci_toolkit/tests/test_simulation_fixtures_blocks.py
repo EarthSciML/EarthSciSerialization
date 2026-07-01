@@ -137,7 +137,6 @@ def _single_model_subset(file, model_name: str):
         file,
         models={model_name: models[model_name]},
         reaction_systems={},
-        domains={},
         coupling=[],
     )
 
@@ -148,7 +147,6 @@ def _single_rs_subset(file, rs_name: str):
         file,
         models={},
         reaction_systems={rs_name: rsys[rs_name]},
-        domains={},
         coupling=[],
     )
 

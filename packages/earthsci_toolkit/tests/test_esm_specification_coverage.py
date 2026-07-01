@@ -115,7 +115,7 @@ class TestSection02TopLevelStructure:
                 "variables": {"var1": {"file_variable": "v1", "units": "1"}}
             }},
             "coupling": [],
-            "domains": {"default": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}}
+            "domain": {"temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}}
         }
         jsonschema.validate(complete_data, schema)  # Should not raise
 
@@ -963,15 +963,6 @@ class TestSection08DataLoaders:
                         "frequency": "PT3H",
                         "records_per_file": 8
                     },
-                    "grid": {
-                        "family": "cartesian",
-                        "dimensions": ["lon", "lat"],
-                        "crs": {"projection": "longlat", "datum": "WGS84"},
-                        "extents": {
-                            "lon": {"n": 320, "spacing": "uniform"},
-                            "lat": {"n": 240, "spacing": "uniform"}
-                        }
-                    },
                     "variables": {
                         "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},
                         "v": {"file_variable": "V", "units": "m/s", "description": "Northward wind"},
@@ -1006,15 +997,6 @@ class TestSection08DataLoaders:
                         "file_period": "P1M",
                         "frequency": "P1M",
                         "records_per_file": 1
-                    },
-                    "grid": {
-                        "family": "cartesian",
-                        "dimensions": ["lon", "lat"],
-                        "crs": {"projection": "longlat", "datum": "WGS84"},
-                        "extents": {
-                            "lon": {"n": 459, "spacing": "uniform"},
-                            "lat": {"n": 299, "spacing": "uniform"}
-                        }
                     },
                     "variables": {
                         "emission_rate_NO": {
@@ -1284,120 +1266,31 @@ class TestSection10Coupling:
 
 
 class TestSection11Domain:
-    """Section 11: Domain - spatial/temporal with BCs/ICs"""
+    """Section 11: Domain - the single shared spatiotemporal domain (v0.8.0).
+
+    v0.8.0 removed the named-``domains`` map together with the ``spatial`` /
+    ``coordinate_transforms`` geometry block and the domain-level
+    ``initial_conditions`` / ``boundary_conditions`` (grid geometry is now
+    expressed via the ``aggregate`` IR). Only the single ``domain`` with its
+    temporal block survives, so that is all this section pins.
+    """
 
     def test_minimal_domain_structure(self):
-        """Test minimal domain structure."""
+        """The single top-level ``domain`` validates with a temporal block."""
         schema = _get_schema()
 
         valid_data = {
             "esm": "0.1.0",
             "metadata": {"name": "Test"},
             "models": {"test": {"variables": {}, "equations": []}},
-            "domains": {"default": {
+            "domain": {
                 "temporal": {
                     "start": "2024-05-01T00:00:00Z",
                     "end": "2024-05-03T00:00:00Z"
                 }
-            }}
+            }
         }
         jsonschema.validate(valid_data, schema)
-
-    def test_complete_domain_structure(self):
-        """Test complete domain structure from spec."""
-        schema = _get_schema()
-
-        valid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "domains": {"default": {
-                "independent_variable": "t",
-                "temporal": {
-                    "start": "2024-05-01T00:00:00Z",
-                    "end": "2024-05-03T00:00:00Z",
-                    "reference_time": "2024-05-01T00:00:00Z"
-                },
-                "spatial": {
-                    "lon": {"min": -130.0, "max": -60.0, "units": "degrees", "grid_spacing": 0.3125},
-                    "lat": {"min": 20.0, "max": 55.0, "units": "degrees", "grid_spacing": 0.25},
-                    "lev": {"min": 1, "max": 72, "units": "level", "grid_spacing": 1}
-                },
-                "coordinate_transforms": [{
-                    "id": "lonlat_to_meters",
-                    "description": "Convert lon/lat degrees to x/y meters",
-                    "dimensions": ["lon", "lat"]
-                }],
-                "spatial_ref": "WGS84",
-                "initial_conditions": {"type": "constant", "value": 0.0},
-                "boundary_conditions": [
-                    {"type": "zero_gradient", "dimensions": ["lon", "lat"]},
-                    {"type": "constant", "dimensions": ["lev"], "value": 0.0}
-                ],
-                "element_type": "Float32",
-                "array_type": "Array"
-            }}
-        }
-        jsonschema.validate(valid_data, schema)
-
-    def test_initial_condition_types(self):
-        """Test all initial condition types."""
-        schema = _get_schema()
-
-        ic_cases = [
-            {"type": "constant", "value": 1.0},
-            {"type": "per_variable", "values": {"x": 1.0, "y": 2.0}},
-            {"type": "from_file", "path": "/data/initial.nc", "format": "netcdf"}
-        ]
-
-        for ic in ic_cases:
-            valid_data = {
-                "esm": "0.1.0",
-                "metadata": {"name": "Test"},
-                "models": {"test": {"variables": {}, "equations": []}},
-                "domains": {"default": {
-                    "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
-                    "initial_conditions": ic
-                }}
-            }
-            jsonschema.validate(valid_data, schema)
-
-    def test_boundary_condition_types(self):
-        """Test all boundary condition types."""
-        schema = _get_schema()
-
-        bc_cases = [
-            {"type": "constant", "dimensions": ["x"], "value": 0.0},
-            {"type": "zero_gradient", "dimensions": ["y"]},
-            {"type": "periodic", "dimensions": ["x", "y"]}
-        ]
-
-        for bc in bc_cases:
-            valid_data = {
-                "esm": "0.1.0",
-                "metadata": {"name": "Test"},
-                "models": {"test": {"variables": {}, "equations": []}},
-                "domains": {"default": {
-                    "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
-                    "boundary_conditions": [bc]
-                }}
-            }
-            jsonschema.validate(valid_data, schema)
-
-    def test_spatial_dimension_validation(self):
-        """Test spatial dimension validation."""
-        schema = _get_schema()
-
-        # Missing required min field
-        with pytest.raises(ValidationError, match="'min' is a required property"):
-            jsonschema.validate({
-                "esm": "0.1.0",
-                "metadata": {"name": "Test"},
-                "models": {"test": {"variables": {}, "equations": []}},
-                "domains": {"default": {
-                    "spatial": {"x": {"max": 10.0}}
-                }}
-            }, schema)
 
 
 class TestSection13CompleteExamples:
@@ -1475,15 +1368,6 @@ class TestSection13CompleteExamples:
                 "GEOSFP": {
                     "kind": "grid",
                     "source": {"url_template": "file:///data/geosfp_{date:%Y%m%d}.nc"},
-                    "grid": {
-                        "family": "cartesian",
-                        "dimensions": ["lon", "lat"],
-                        "crs": {"projection": "longlat", "datum": "WGS84"},
-                        "extents": {
-                            "lon": {"n": 320, "spacing": "uniform"},
-                            "lat": {"n": 240, "spacing": "uniform"}
-                        }
-                    },
                     "variables": {
                         "u": {"file_variable": "U", "units": "m/s", "description": "Eastward wind"},
                         "v": {"file_variable": "V", "units": "m/s", "description": "Northward wind"},
@@ -1497,18 +1381,9 @@ class TestSection13CompleteExamples:
                 {"type": "variable_map", "from": "GEOSFP.u", "to": "Advection.u_wind", "transform": "param_to_var"},
                 {"type": "variable_map", "from": "GEOSFP.v", "to": "Advection.v_wind", "transform": "param_to_var"}
             ],
-            "domains": {"default": {
-                "temporal": {"start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z"},
-                "spatial": {
-                    "lon": {"min": -130.0, "max": -100.0, "grid_spacing": 0.3125, "units": "degrees"}
-                },
-                "coordinate_transforms": [
-                    {"id": "lonlat_to_meters", "dimensions": ["lon"]}
-                ],
-                "initial_conditions": {"type": "constant", "value": 1.0e-9},
-                "boundary_conditions": [{"type": "zero_gradient", "dimensions": ["lon"]}],
-                "element_type": "Float32"
-            }}
+            "domain": {
+                "temporal": {"start": "2024-05-01T00:00:00Z", "end": "2024-05-03T00:00:00Z"}
+            }
         }
 
         jsonschema.validate(minimal_complete, schema)
@@ -1573,11 +1448,9 @@ class TestSection13CompleteExamples:
             "coupling": [
                 {"type": "operator_compose", "systems": ["FullChemistry", "VerticalMixing"]}
             ],
-            "domains": {"default": {
-                "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"},
-                "spatial": {"z": {"min": 0, "max": 1000, "units": "m"}},
-                "initial_conditions": {"type": "constant", "value": 1e-9}
-            }}
+            "domain": {
+                "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-02T00:00:00Z"}
+            }
         }
 
         jsonschema.validate(complex_example, schema)
@@ -1897,11 +1770,9 @@ class TestCrossSectionValidation:
                 {"type": "operator_compose", "systems": ["Chemistry", "Transport"]},
                 {"type": "variable_map", "from": "MetData.wind_field", "to": "Transport.wind", "transform": "param_to_var"}
             ],
-            "domains": {"default": {
-                "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z"},
-                "spatial": {"x": {"min": 0, "max": 100, "units": "m"}},
-                "initial_conditions": {"type": "constant", "value": 1e-9}
-            }}
+            "domain": {
+                "temporal": {"start": "2024-01-01T00:00:00Z", "end": "2024-01-01T01:00:00Z"}
+            }
         }
 
         jsonschema.validate(comprehensive, schema)

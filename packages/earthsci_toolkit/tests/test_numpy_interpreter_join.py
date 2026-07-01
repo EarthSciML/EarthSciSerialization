@@ -362,19 +362,6 @@ def test_join_and_filter_compose() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_arrayop_alias_supports_join() -> None:
-    """The deprecated ``arrayop`` tag resolves joins identically to ``aggregate``."""
-    idx = {"county": {"kind": "categorical", "members": ["A", "B"]}}
-    ctx = _ctx({"w": np.array([[1.0, 2.0], [3.0, 4.0]])}, idx)
-    body = _index("w", "i", "j")
-    common = dict(output_idx=[], semiring="sum_product", expr=body,
-                  ranges={"i": {"from": "county"}, "j": {"from": "county"}},
-                  join=[{"on": [["i", "j"]]}])
-    assert float(eval_expr(ExprNode(op="arrayop", **common), ctx)) == pytest.approx(
-        float(eval_expr(ExprNode(op="aggregate", **common), ctx))
-    )
-
-
 def test_canonical_join_filter_fixture_evaluates_as_positional() -> None:
     """The repo's ``valid/aggregate/join_filter.esm`` fixture (the ESI MOVES
     contraction, RFC §7.2) evaluates, and its degenerate join is byte-identical
@@ -430,8 +417,8 @@ def _join_count_model(with_join: bool) -> dict:
     return {
         "esm": "0.6.0",
         "metadata": {"name": "join_e2e"},
+        "index_sets": {"county": {"kind": "categorical", "members": ["A", "B"]}},
         "models": {"M": {
-            "index_sets": {"county": {"kind": "categorical", "members": ["A", "B"]}},
             "variables": {"u": {"type": "state", "default": 0.0}},
             "equations": [{
                 "lhs": {"op": "D", "args": ["u"], "wrt": "t"},

@@ -5,7 +5,7 @@ import pytest
 
 from earthsci_toolkit.esm_types import (
     EsmFile, Metadata, DataLoader, DataLoaderKind, DataLoaderSource,
-    DataLoaderVariable, DataLoaderTemporal, Grid, GridCRS, Operator,
+    DataLoaderVariable, DataLoaderTemporal, Operator,
     VariableMapCoupling, CouplingType, ContinuousEvent, AffectEquation
 )
 from earthsci_toolkit.serialize import save
@@ -38,11 +38,6 @@ def test_roundtrip_preserves_data_loaders():
                 file_variable="P", units="Pa", description="Air pressure"
             ),
         },
-        grid=Grid(
-            family="cartesian",
-            dimensions=["lon", "lat"],
-            crs=GridCRS(projection="longlat", datum="WGS84"),
-        ),
     )
 
     # Create ESM file
@@ -55,7 +50,6 @@ def test_roundtrip_preserves_data_loaders():
         data_loaders={"test_loader": data_loader},
         operators=[],
         coupling=[],
-        domains={},
     )
 
     # Serialize to JSON
@@ -105,7 +99,6 @@ def test_roundtrip_preserves_operators():
         data_loaders={},
         operators=[operator],
         coupling=[],
-        domains={},
     )
 
     # Serialize to JSON
@@ -153,7 +146,6 @@ def test_roundtrip_preserves_couplings():
         data_loaders={},
         operators=[],
         coupling=[coupling],
-        domains={},
     )
 
     # Serialize to JSON
@@ -201,7 +193,6 @@ def test_roundtrip_preserves_events():
         data_loaders={},
         operators=[],
         coupling=[],
-        domains={},
     )
 
     # Serialize to JSON
@@ -271,7 +262,6 @@ def test_roundtrip_preserves_all_missing_fields():
         data_loaders={"loader": data_loader},
         operators=[operator],
         coupling=[coupling],
-        domains={},
     )
 
     # Serialize to JSON

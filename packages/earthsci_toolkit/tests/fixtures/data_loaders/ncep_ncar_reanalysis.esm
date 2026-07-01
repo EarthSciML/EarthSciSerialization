@@ -26,38 +26,6 @@
         "frequency": "PT6H",
         "time_variable": "time"
       },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat",
-          "level"
-        ],
-        "extents": {
-          "lon": {
-            "n": 144,
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": 72,
-            "spacing": "uniform"
-          },
-          "level": {
-            "n": "n_level",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_level": {
-            "description": "level cell count, resolved from the source dataset at load time"
-          }
-        }
-      },
       "variables": {
         "air": {
           "file_variable": "air",
@@ -103,36 +71,6 @@
       "kind": "static",
       "source": {
         "url_template": "https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/surface/{var}.sfc.nc"
-      },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat"
-        ],
-        "extents": {
-          "lon": {
-            "n": "n_lon",
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": "n_lat",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_lon": {
-            "description": "lon cell count, resolved from the source dataset at load time"
-          },
-          "n_lat": {
-            "description": "lat cell count, resolved from the source dataset at load time"
-          }
-        }
       },
       "variables": {
         "hgt_sfc": {

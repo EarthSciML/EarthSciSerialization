@@ -39,20 +39,9 @@ from earthsci_toolkit import (
     open_with_fallback,
     parse_iso_duration,
     records_for_file,
-    regrid_latlon_to_target,
     resolve_files,
     template_placeholders,
 )
-from earthsci_toolkit.esm_types import Grid, GridCRS
-
-
-def _geographic_grid() -> Grid:
-    """Minimal geographic (longlat) native grid for regridding tests."""
-    return Grid(
-        family="cartesian",
-        dimensions=["lon", "lat"],
-        crs=GridCRS(projection="longlat", datum="WGS84"),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -271,84 +260,6 @@ class TestUnitConversion:
 
 
 # ---------------------------------------------------------------------------
-# Regridding
-# ---------------------------------------------------------------------------
-
-
-class TestRegridding:
-    def setup_method(self):
-        np = pytest.importorskip("numpy")
-        self.np = np
-        self.src_lon = np.array([0.0, 1.0, 2.0, 3.0])
-        self.src_lat = np.array([0.0, 1.0, 2.0])
-        lat_mesh, lon_mesh = np.meshgrid(self.src_lat, self.src_lon, indexing="ij")
-        self.values = lat_mesh + lon_mesh  # f(lat, lon) = lat + lon
-
-    def test_identity_regrid(self):
-        out = regrid_latlon_to_target(
-            self.values, self.src_lon, self.src_lat, self.src_lon, self.src_lat
-        )
-        assert self.np.allclose(out, self.values)
-
-    def test_bilinear_midpoint(self):
-        out = regrid_latlon_to_target(
-            self.values,
-            self.src_lon,
-            self.src_lat,
-            [0.5, 1.5],
-            [0.5, 1.5],
-        )
-        expected = self.np.array([[1.0, 2.0], [2.0, 3.0]])
-        assert self.np.allclose(out, expected)
-
-    def test_clamp_extrapolation(self):
-        out = regrid_latlon_to_target(
-            self.values,
-            self.src_lon,
-            self.src_lat,
-            [-1.0, 5.0],
-            [0.5],
-            extrapolation="clamp",
-        )
-        assert not self.np.isnan(out).any()
-
-    def test_nan_extrapolation(self):
-        out = regrid_latlon_to_target(
-            self.values,
-            self.src_lon,
-            self.src_lat,
-            [-1.0, 1.5],
-            [0.5],
-            extrapolation="nan",
-        )
-        assert self.np.isnan(out[0, 0])
-        assert not self.np.isnan(out[0, 1])
-
-    def test_nan_extrapolation_fill_value(self):
-        out = regrid_latlon_to_target(
-            self.values,
-            self.src_lon,
-            self.src_lat,
-            [-1.0],
-            [0.5],
-            extrapolation="nan",
-            fill_value=0.0,
-        )
-        assert out[0, 0] == 0.0
-
-    def test_periodic_extrapolation_wraps(self):
-        out = regrid_latlon_to_target(
-            self.values,
-            self.src_lon,
-            self.src_lat,
-            [0.5, 3.5],  # 3.5 wraps to 0.5 mod 3
-            [0.5],
-            extrapolation="periodic",
-        )
-        assert out[0, 0] == pytest.approx(out[0, 1])
-
-
-# ---------------------------------------------------------------------------
 # GridLoader (fake xarray-like dataset)
 # ---------------------------------------------------------------------------
 
@@ -379,7 +290,6 @@ class FakeDataset:
 def _make_grid_loader(
     tpl: str = "mem://{date:%Y%m%d}.nc",
     variables=None,
-    grid=None,
     temporal=None,
 ) -> DataLoader:
     return DataLoader(
@@ -390,7 +300,6 @@ def _make_grid_loader(
             "u": DataLoaderVariable(file_variable="U", units="m/s"),
         },
         temporal=temporal or DataLoaderTemporal(file_period="P1D"),
-        grid=grid,
     )
 
 
@@ -466,27 +375,6 @@ class TestGridLoader:
 
         GridLoader(dl).load(time=dt.datetime(2024, 3, 5, 18, 30), opener=opener)
         assert seen == ["mem://2024-03-05.nc"]
-
-    def test_regrid_latlon_to_target(self):
-        import numpy as np  # noqa: PLC0415
-
-        dl = _make_grid_loader(grid=_geographic_grid())
-        lat = np.array([0.0, 1.0, 2.0])
-        lon = np.array([0.0, 1.0, 2.0, 3.0])
-        lat_mesh, lon_mesh = np.meshgrid(lat, lon, indexing="ij")
-        ds = FakeDataset(
-            data_vars={"U": lat_mesh + lon_mesh},
-            coords={"lat": lat, "lon": lon},
-        )
-
-        result = GridLoader(dl).load(
-            time=dt.datetime(2024, 3, 5),
-            target_grid={"lat": [0.5, 1.5], "lon": [0.5, 1.5]},
-            opener=lambda _url: ds,
-        )
-        np = pytest.importorskip("numpy")
-        expected = np.array([[1.0, 2.0], [2.0, 3.0]])
-        assert np.allclose(result.variables["u"], expected)
 
 
 # ---------------------------------------------------------------------------

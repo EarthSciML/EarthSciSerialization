@@ -418,6 +418,13 @@ def load_model(repo_root: Path, fixture_rel: str, model_name: str) -> dict:
     loaders = doc.get("data_loaders")
     if loaders and "data_loaders" not in model:
         model = {**model, "data_loaders": loaders}
+    # Attach the document's top-level `index_sets` too: in ESM v0.8.0 `index_sets`
+    # moved to the document level, so the partition's structural check (which reads
+    # `model["index_sets"]` to confirm an output buffer targets a declared index
+    # set) needs them threaded onto the model here.
+    index_sets = doc.get("index_sets")
+    if index_sets and "index_sets" not in model:
+        model = {**model, "index_sets": index_sets}
     return model
 
 

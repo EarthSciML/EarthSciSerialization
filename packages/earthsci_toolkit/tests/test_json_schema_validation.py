@@ -446,6 +446,14 @@ class TestFormatValidation:
         """Test validation of invalid date-time format strings."""
         schema = _get_schema()
         format_checker = jsonschema.FormatChecker()
+        # `date-time` format assertion needs an optional backend
+        # (e.g. rfc3339-validator); without it FormatChecker is a no-op and
+        # cannot reject bad timestamps. Skip rather than silently pass.
+        if format_checker.conforms("invalid-datetime", "date-time"):
+            pytest.skip(
+                "jsonschema 'date-time' format assertion unavailable "
+                "(install rfc3339-validator)"
+            )
 
         invalid_data = {
             "esm": "0.1.0",
@@ -474,6 +482,12 @@ class TestFormatValidation:
         """Test validation of invalid URI format strings."""
         schema = _get_schema()
         format_checker = jsonschema.FormatChecker()
+        # `uri` format assertion needs an optional backend (e.g. rfc3987);
+        # without it FormatChecker is a no-op and cannot reject bad URIs.
+        if format_checker.conforms("not-a-valid-uri", "uri"):
+            pytest.skip(
+                "jsonschema 'uri' format assertion unavailable (install rfc3987)"
+            )
 
         invalid_data = {
             "esm": "0.1.0",
@@ -793,28 +807,6 @@ class TestComplexValidationScenarios:
         with pytest.raises(ValidationError, match="should be non-empty|is too short"):
             jsonschema.validate(invalid_data, schema)
 
-    def test_domain_validation_errors(self):
-        """Test domain specific validation errors."""
-        schema = _get_schema()
-
-        # Invalid spatial dimension (missing required fields)
-        invalid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "domains": {"default": {
-                "spatial": {
-                    "x": {
-                        "max": 10.0
-                        # Missing required "min" field
-                    }
-                }
-            }}
-        }
-        with pytest.raises(ValidationError, match="'min' is a required property"):
-            jsonschema.validate(invalid_data, schema)
-
-
 class TestVersionConstraintValidation:
     """Test validation of version constraint violations."""
 
@@ -881,25 +873,6 @@ class TestEdgeCaseValidation:
             "models": {"test": {"variables": {}, "equations": []}}
         }
         with pytest.raises(ValidationError, match="None is not of type 'string'"):
-            jsonschema.validate(invalid_data, schema)
-
-    def test_boundary_condition_validation_errors(self):
-        """Test boundary condition specific validation errors."""
-        schema = _get_schema()
-
-        # Empty dimensions array (violates minItems: 1)
-        invalid_data = {
-            "esm": "0.1.0",
-            "metadata": {"name": "Test"},
-            "models": {"test": {"variables": {}, "equations": []}},
-            "domains": {"default": {
-                "boundary_conditions": [{
-                    "type": "constant",
-                    "dimensions": []  # Empty array violates minItems: 1
-                }]
-            }}
-        }
-        with pytest.raises(ValidationError, match="should be non-empty|is too short"):
             jsonschema.validate(invalid_data, schema)
 
     def test_functional_affect_validation_errors(self):

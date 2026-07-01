@@ -29,38 +29,6 @@
         "frequency": "PT1H",
         "time_variable": "valid_time"
       },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat",
-          "pressure_level"
-        ],
-        "extents": {
-          "lon": {
-            "n": 1440,
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": 720,
-            "spacing": "uniform"
-          },
-          "pressure_level": {
-            "n": "n_pressure_level",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_pressure_level": {
-            "description": "pressure_level cell count, resolved from the source dataset at load time"
-          }
-        }
-      },
       "variables": {
         "t": {
           "file_variable": "t",

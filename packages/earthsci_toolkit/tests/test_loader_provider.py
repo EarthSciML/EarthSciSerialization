@@ -259,40 +259,11 @@ def _campfire_surface_domain():
     )
 
 
-def _loader_field(var, method):
-    from earthsci_toolkit.esm_types import RegridSpec
-
+def _loader_field(var, method=None):
     return LoaderField(
         name=f"ERA5.pl.{var}", owner="ERA5", subkey="pl", var=var,
         loader=SimpleNamespace(temporal=None), cadence="discrete",
-        regrid=RegridSpec(method=method) if method else None,
     )
-
-
-def test_provider_array_regrids_native_dataset() -> None:
-    # A NativeDataset (EarthSciIO shape: .variables[var] + .coords lat/lon/lev)
-    # threads through the C4 regrid exactly like a GridLoadResult would.
-    from earthsci_toolkit.data_loaders.regrid_driver import (
-        build_target_grid,
-        regrid_loader_field,
-    )
-
-    tg = build_target_grid(_campfire_surface_domain())
-    src_lon = np.linspace(float(tg.center_lon.min()) - 0.1, float(tg.center_lon.max()) + 0.1, 6)
-    src_lat = np.linspace(float(tg.center_lat.min()) - 0.1, float(tg.center_lat.max()) + 0.1, 5)
-    LON, LAT = np.meshgrid(src_lon, src_lat)
-    F3 = np.stack([2.0 * LON + 3.0 * LAT + 100.0 * lv for lv in range(3)], axis=0)
-    native = _NativeDataset(
-        {"u": _NativeField(F3, ("lev", "lat", "lon"))},
-        coords={
-            "lon": _NativeField(src_lon, ("lon",)),
-            "lat": _NativeField(src_lat, ("lat",)),
-            "lev": _NativeField([1.0, 2.0, 3.0], ("lev",)),
-        },
-    )
-    out = _provider_array(_loader_field("u", "bspline"), native, tg)
-    exact = regrid_loader_field(F3, src_lon, src_lat, tg, "bspline", lev_coord=[1.0, 2.0, 3.0])
-    assert np.allclose(out, exact, atol=1e-12)
 
 
 def test_provider_array_identity_without_target_or_coords() -> None:
@@ -318,7 +289,7 @@ def test_provider_array_resolves_file_variable_band_name() -> None:
     )
     field = LoaderField(
         name="LANDFIRE.raw.fuel_model", owner="LANDFIRE", subkey="raw",
-        var="fuel_model", loader=loader, cadence="const", regrid=None,
+        var="fuel_model", loader=loader, cadence="const",
     )
     native = _NativeDataset({"Band1": _NativeField([[7.0, 8.0], [9.0, 10.0]], ("y", "x"))})
     # No target → raw flatten, but the fuel_model → Band1 remap must still apply.
@@ -336,7 +307,7 @@ def test_provider_array_file_variable_matching_name_and_stub() -> None:
     )
     field = LoaderField(
         name="ERA5.pl.t", owner="ERA5", subkey="pl", var="t",
-        loader=loader, cadence="discrete", regrid=None,
+        loader=loader, cadence="discrete",
     )
     native = _NativeDataset({"t": _NativeField([[1.0, 2.0]], ("y", "x"))})
     assert np.array_equal(_provider_array(field, native, None), np.array([1.0, 2.0]))

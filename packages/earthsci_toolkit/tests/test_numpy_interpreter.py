@@ -86,7 +86,7 @@ def test_arrayop_elementwise_1d() -> None:
     """``arrayop[i](u[i] * 2, ranges={i:1..3})`` returns ``[2u_1, 2u_2, 2u_3]``."""
     ctx = _ctx({"u": np.array([5.0, 6.0, 7.0])})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="*", args=[2.0, ExprNode(op="index", args=["u", "i"])]),
@@ -101,7 +101,7 @@ def test_arrayop_offset_index() -> None:
     """Stencil-style offset index: ``u[i-1] + u[i+1]`` for ``i in 2..4``."""
     ctx = _ctx({"u": np.array([1.0, 10.0, 100.0, 1000.0, 10000.0])})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="+", args=[
@@ -221,7 +221,7 @@ def test_arrayop_contraction_plus_matvec() -> None:
     x = np.array([10.0, 1.0, 0.1])                       # shape (3,)
     ctx = _ctx({"A": A, "x": x})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="*", args=[
@@ -241,7 +241,7 @@ def test_arrayop_contraction_max_row() -> None:
     A = np.array([[3.0, 1.0, 4.0], [1.0, 5.0, 9.0]])   # 2×3
     ctx = _ctx({"A": A})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="index", args=["A", "i", "j"]),
@@ -257,7 +257,7 @@ def test_arrayop_contraction_min_row() -> None:
     A = np.array([[3.0, 1.0, 4.0], [1.0, 5.0, 9.0]])   # 2×3
     ctx = _ctx({"A": A})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="index", args=["A", "i", "j"]),
@@ -274,7 +274,7 @@ def test_arrayop_contraction_plus_scalar_coeff() -> None:
     x = np.array([5.0, 6.0])
     ctx = _ctx({"A": A, "x": x})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="*", args=[
@@ -294,7 +294,7 @@ def test_arrayop_stencil_fallback_unchanged() -> None:
     """Stencil with offset subscripts still works via scalar fallback."""
     ctx = _ctx({"u": np.array([1.0, 10.0, 100.0, 1000.0, 10000.0])})
     expr = ExprNode(
-        op="arrayop",
+        op="aggregate",
         args=[],
         output_idx=["i"],
         expr=ExprNode(op="+", args=[
@@ -359,15 +359,6 @@ def test_empty_reduction_returns_semiring_identity(semiring, expected) -> None:
     body = ExprNode(op="index", args=["a", "i"])
     out = eval_expr(_scalar_aggregate(semiring, body, {"i": [1, 0]}), ctx)
     assert out == expected
-
-
-def test_aggregate_is_alias_for_arrayop() -> None:
-    """op:aggregate and op:arrayop evaluate identically (§5.6)."""
-    ctx = _ctx({"a": np.array([3.0, 1.0, 4.0])})
-    body = ExprNode(op="index", args=["a", "i"])
-    agg = _scalar_aggregate(None, body, {"i": [1, 3]}, op="aggregate")
-    arr = _scalar_aggregate(None, body, {"i": [1, 3]}, op="arrayop")
-    assert eval_expr(agg, ctx) == eval_expr(arr, ctx) == pytest.approx(8.0)
 
 
 def test_no_semiring_defaults_to_sum_product_unchanged() -> None:
