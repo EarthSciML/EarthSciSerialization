@@ -34,6 +34,7 @@ using EarthSciSerialization
 using JSON3
 import OrdinaryDiffEqTsit5
 const ODE = OrdinaryDiffEqTsit5
+const ESS = EarthSciSerialization
 
 function parse_args(args)
     manifest = nothing
@@ -81,6 +82,148 @@ function trajectory(model, ic, t0, t1, out_times, reltol, abstol)
     out
 end
 
+# ---------------------------------------------------------------------------- #
+# Full-pipeline path (pde_simulation_pipeline; DESIGN §7). A fixture tagged
+# `pipeline:"full"` is NOT pre-discretized: it must run the whole lowering
+# pipeline (reaction-gen → template `match` → `operator_compose` → pointwise-lift
+# → scoped-`ic`) with every loaded field injected through the data-Provider seam
+# from the manifest `inputs`. This reuses the exact machinery the Phase-1 gate
+# test (`test/loaded_ic_bc_simulation_test.jl`) exercises.
+# ---------------------------------------------------------------------------- #
+
+# Static CONST stub Provider (DESIGN §2), identical protocol to the gate test:
+# `provider_sample` returns the whole `<Loader>.<var> => field` table and
+# `simulate` extracts each variable's field by name; empty `refresh_times` ⇒
+# CONST ⇒ materialized once at build time into `const_arrays` under the loader
+# name, reachable by the scoped-`ic` fold (u0) and the loader→consumer gather.
+struct _StubLoaderProvider
+    fields::Dict{String,Array{Float64}}
+end
+ESS.provider_refresh_times(::_StubLoaderProvider) = Float64[]
+ESS.provider_sample(p::_StubLoaderProvider, ::Real) = p.fields
+
+# Strip a leading `Model.` namespace so an element name compares against the
+# manifest `state_order` (`Chemistry.O3[1,1]` → `O3[1,1]`).
+_bare(name::AbstractString) = occursin('.', name) ? split(name, '.'; limit = 2)[2] : name
+
+# Convert a manifest `inputs` value (nested JSON arrays, row=lon/col=lat) into a
+# dense Julia array: a `[[..],[..]]` grid → an (nlon×nlat) Matrix; a `[..]` line
+# → a Vector.
+function _to_field(v)
+    if length(v) > 0 && (v[1] isa AbstractArray)
+        nrow = length(v)
+        ncol = length(v[1])
+        M = Array{Float64}(undef, nrow, ncol)
+        for i in 1:nrow, j in 1:ncol
+            M[i, j] = Float64(v[i][j])
+        end
+        return M
+    end
+    return Float64[Float64(x) for x in v]
+end
+
+# One shared stub backs every declared loader variable; `providers` maps each
+# `<Loader>.<var>` name to it (mirrors the gate test's `_loaded_providers`).
+function _stub_providers(inputs)
+    fields = Dict{String,Array{Float64}}()
+    for (k, v) in pairs(inputs)
+        fields[String(k)] = _to_field(v)
+    end
+    stub = _StubLoaderProvider(fields)
+    return Dict{String,Any}(k => stub for k in keys(fields))
+end
+
+# Index of the saved time point closest to `t` (endpoints are `saveat`-pinned).
+function _time_index(times, t)
+    best = firstindex(times)
+    bestd = abs(times[best] - t)
+    for i in eachindex(times)
+        d = abs(times[i] - t)
+        if d < bestd
+            bestd = d
+            best = i
+        end
+    end
+    best
+end
+
+# Build the provider-folded tree-walk evaluator exactly as `simulate` does: fold
+# every CONST provider's field into `const_arrays` under its loader name, then
+# `build_evaluator` (which folds scoped-`ic` `Loader.*` into u0 and resolves the
+# lifted consumer gather from the loader name).
+function _pipeline_evaluator(path, providers, t0)
+    doc = ESS._prepare_run_doc(path)
+    merged_const = Dict{String,Any}()
+    for (rawk, prov) in providers
+        k = String(rawk)
+        merged_const[k] = ESS._provider_const_field(ESS.provider_sample(prov, t0), k)
+    end
+    return build_evaluator(doc; const_arrays = merged_const)
+end
+
+function pipeline_fixture(fx, base, reltol, abstol)
+    path = joinpath(base, String(fx.path))
+    providers = _stub_providers(fx.inputs)
+    checkpoints = Float64[Float64(c) for c in fx.trajectory.checkpoints]
+    t0 = checkpoints[1]
+    t1 = checkpoints[end]
+
+    # --- RHS at each probe via the provider-folded evaluator ------------------
+    f!, u0, p, _, var_map = _pipeline_evaluator(path, providers, t0)
+    baremap = Dict{String,Int}()
+    for (k, idx) in var_map
+        baremap[_bare(k)] = idx
+    end
+    rhs = Dict{String,Any}()
+    for pr in fx.rhs_probes
+        u = copy(u0)
+        for (rawn, val) in pairs(pr.state)
+            name = String(rawn)
+            idx = get(baremap, name, get(var_map, name, nothing))
+            idx === nothing && error("probe state var $name not in evaluator var_map")
+            u[idx] = Float64(val)
+        end
+        du = similar(u)
+        f!(du, u, p, Float64(pr.t))
+        rhs[String(pr.id)] = Dict{String,Float64}(name => Float64(du[idx])
+                                                   for (name, idx) in var_map)
+    end
+
+    # --- Trajectory via the sanctioned `simulate` provider path ---------------
+    r = ESS.simulate(path, (t0, t1); alg = ODE.Tsit5(),
+                     providers = providers, reltol = reltol, abstol = abstol,
+                     saveat = checkpoints)
+    r.success || error("simulate failed: $(r.message)")
+    traj = Dict{String,Any}()
+    for tc in checkpoints
+        ti = _time_index(r.t, tc)
+        traj[tkey(tc)] = Dict{String,Float64}(name => Float64(r.u[ti][idx])
+                                              for (name, idx) in var_map)
+    end
+    return Dict("rhs" => rhs, "trajectory" => traj)
+end
+
+# Pre-discretized path (pde_simulation): evaluate the compiled makearray RHS and
+# integrate the declared `initial_conditions` over `time_span`.
+function discretized_fixture(fx, base, reltol, abstol)
+    path = joinpath(base, String(fx.path))
+    file = load(path)
+    model = file.models[String(fx.model)]
+
+    rhs = Dict{String,Any}()
+    for pr in fx.rhs_probes
+        rhs[String(pr.id)] = rhs_at(model, pr.state, pr.t)
+    end
+
+    tr = fx.trajectory
+    ts = tr.time_span
+    traj = trajectory(model, tr.initial_conditions,
+                      ts[Symbol("start")], ts[Symbol("end")],
+                      tr.output_times, reltol, abstol)
+
+    return Dict("rhs" => rhs, "trajectory" => traj)
+end
+
 function main()
     manifest_path, output_path = parse_args(ARGS)
     manifest = JSON3.read(read(manifest_path, String))
@@ -91,22 +234,11 @@ function main()
 
     fixtures = Dict{String,Any}()
     for fx in manifest.fixtures
-        path = joinpath(base, String(fx.path))
-        file = load(path)
-        model = file.models[String(fx.model)]
-
-        rhs = Dict{String,Any}()
-        for pr in fx.rhs_probes
-            rhs[String(pr.id)] = rhs_at(model, pr.state, pr.t)
+        if haskey(fx, :pipeline) && String(fx.pipeline) == "full"
+            fixtures[String(fx.id)] = pipeline_fixture(fx, base, reltol, abstol)
+        else
+            fixtures[String(fx.id)] = discretized_fixture(fx, base, reltol, abstol)
         end
-
-        tr = fx.trajectory
-        ts = tr.time_span
-        traj = trajectory(model, tr.initial_conditions,
-                          ts[Symbol("start")], ts[Symbol("end")],
-                          tr.output_times, reltol, abstol)
-
-        fixtures[String(fx.id)] = Dict("rhs" => rhs, "trajectory" => traj)
     end
 
     payload = Dict("binding" => "julia", "fixtures" => fixtures)

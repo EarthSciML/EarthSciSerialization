@@ -29,10 +29,24 @@ import numpy as np
 
 import earthsci_toolkit as et
 from earthsci_toolkit import evaluate_rhs, simulate
+from earthsci_toolkit.simulation import _build_numpy_rhs, _provider_sample_field
 
 
 def _bare(name: str) -> str:
     return name.split(".", 1)[1] if "." in name else name
+
+
+class _StubLoaderProvider:
+    """Static CONST stub Provider (DESIGN pde_simulation_pipeline §2). Serves one
+    declared loader variable's field from the manifest ``inputs`` array; sampled
+    once at build time. Mirrors the Phase-1 gate test
+    (``tests/test_loaded_ic_bc_simulation.py``)."""
+
+    def __init__(self, field: Any) -> None:
+        self.field = np.asarray(field, dtype=float)
+
+    def sample(self, t: float) -> "np.ndarray":  # noqa: ARG002 - const provider
+        return self.field
 
 
 def _time_key(t: float) -> str:
@@ -72,6 +86,55 @@ def run_fixture(fixture: dict, base: Path, integ: dict) -> Dict[str, Any]:
     return {"rhs": rhs, "trajectory": traj}
 
 
+def run_fixture_full(fixture: dict, base: Path, integ: dict) -> Dict[str, Any]:
+    """Full-pipeline path (DESIGN pde_simulation_pipeline §7): load the fixture,
+    install a static stub provider serving the manifest ``inputs`` (keyed
+    ``<Loader>.<var>``), run the whole lowering pipeline (reaction-gen → template
+    ``match`` → ``operator_compose`` → pointwise-lift → scoped-``ic``) with the
+    loaded fields injected ONLY through the provider seam, and emit the RHS at
+    each probe state and the trajectory at each checkpoint. Reuses the exact
+    Phase-1 machinery of ``tests/test_loaded_ic_bc_simulation.py``."""
+    esm = et.load(str(base / fixture["path"]))
+    flat = et.flatten(esm)
+
+    # Every loaded field enters through the provider seam, keyed by its declared
+    # loader name; materialized ONCE at build time (t0) into loader_arrays (R2).
+    providers = {name: _StubLoaderProvider(field)
+                 for name, field in fixture["inputs"].items()}
+    checkpoints = [float(c) for c in fixture["trajectory"]["checkpoints"]]
+    t0 = checkpoints[0]
+    loaded_arrays = {
+        name: np.asarray(_provider_sample_field(prov, t0), dtype=float)
+        for name, prov in providers.items()
+    }
+
+    # --- RHS at each probe via the provider-folded NumPy interpreter ----------
+    # The probe state supplies every element as an explicit initial condition
+    # (applied AFTER the scoped-`ic` fold, so it is the evaluated state); the
+    # loaded wind/inflow forcing reaches the stencil through loader_arrays.
+    rhs: Dict[str, Dict[str, float]] = {}
+    for probe in fixture["rhs_probes"]:
+        build = _build_numpy_rhs(flat, {}, dict(probe["state"]),
+                                 loader_arrays=loaded_arrays)
+        dy = build.rhs_function(float(probe.get("t", 0.0)), build.y0)
+        rhs[probe["id"]] = {_bare(n): float(v)
+                            for n, v in zip(build.elem_names, dy)}
+
+    # --- Trajectory via the sanctioned provider-injected simulate path --------
+    tspan = (checkpoints[0], checkpoints[-1])
+    result = simulate(
+        esm, tspan,
+        providers=providers,
+        method=integ.get("method", "RK45"),
+        rtol=float(integ.get("rtol", 1e-10)),
+        atol=float(integ.get("atol", 1e-12)),
+    )
+    if not result.success:
+        raise RuntimeError(f"simulate failed: {result.message}")
+    traj = _sample_trajectory(result, checkpoints)
+    return {"rhs": rhs, "trajectory": traj}
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Python PDE-simulation conformance adapter")
     parser.add_argument("--manifest", required=True, type=Path)
@@ -84,8 +147,10 @@ def main(argv=None) -> int:
 
     fixtures: Dict[str, Any] = {}
     for fixture in manifest["fixtures"]:
+        runner = (run_fixture_full if fixture.get("pipeline") == "full"
+                  else run_fixture)
         try:
-            fixtures[fixture["id"]] = run_fixture(fixture, base, integ)
+            fixtures[fixture["id"]] = runner(fixture, base, integ)
         except Exception as exc:  # noqa: BLE001 - surface per-fixture failure to the runner
             fixtures[fixture["id"]] = {"error": f"{type(exc).__name__}: {exc}"}
 
