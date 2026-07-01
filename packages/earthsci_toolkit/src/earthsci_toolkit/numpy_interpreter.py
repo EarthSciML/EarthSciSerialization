@@ -552,6 +552,8 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
     # --- conservative-regridding geometry kernel (RFC §8.1) ---
     if op == "intersect_polygon":
         return _eval_intersect_polygon(expr, ctx)
+    if op == "polygon_intersection_area":
+        return _eval_polygon_intersection_area(expr, ctx)
 
     raise NumpyInterpreterError(f"Unsupported op in NumPy interpreter: {op!r}")
 
@@ -595,6 +597,48 @@ def _eval_intersect_polygon(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
     if node_id is not None:
         ctx.derived_rings[node_id] = closed
     return closed
+
+
+def _eval_polygon_intersection_area(expr: ExprNode, ctx: EvalContext) -> float:
+    """Evaluate the fused ``polygon_intersection_area`` leaf (esm-spec.md §8.6.1).
+
+    The SCALAR overlap area of the two operand polygon rings under the node's
+    required ``manifold`` — defined to equal
+    ``polygon_area(intersect_polygon(a, b))`` at the same manifold, but as a
+    single fused leaf with NO exposed clip ring / derived index set. It is the
+    fused form of the existing clip + shoelace: it reuses the very same
+    :func:`geometry.intersect_polygon` clip and the ``polygon_area`` ``sum_product``
+    FAQ (:func:`earthsci_toolkit.area_faq.polygon_area_via_faq`) that the
+    unfused ``intersect_polygon`` + area-FAQ fixture drives — no geometry is
+    reimplemented here.
+
+    Because it returns a scalar (a plain ``float``), it evaluates as an ordinary
+    scalar leaf: no ring is registered in ``ctx.derived_rings`` and no node ``id``
+    is materialized, so it is equally usable inside an ``aggregate`` body or as a
+    bare observed. ``planar`` is dependency-free (Sutherland–Hodgman clip +
+    shoelace); ``spherical`` / ``geodesic`` inherit the pinned S2 clip + the
+    great-circle spherical-excess FAQ. A non-overlapping pair yields ``0.0``.
+    """
+    from . import geometry
+    from .area_faq import polygon_area_via_faq
+
+    manifold = getattr(expr, "manifold", None)
+    if manifold is None:
+        raise NumpyInterpreterError(
+            "polygon_intersection_area requires a 'manifold' field (planar / "
+            "spherical / geodesic); it carries no default (CONFORMANCE_SPEC.md §5.8.4)"
+        )
+    if len(expr.args) != 2:
+        raise NumpyInterpreterError(
+            f"polygon_intersection_area is strictly binary; got {len(expr.args)} operand(s)"
+        )
+    poly_a = _as_array(eval_expr(expr.args[0], ctx))
+    poly_b = _as_array(eval_expr(expr.args[1], ctx))
+    try:
+        ring = geometry.intersect_polygon(poly_a, poly_b, manifold)
+    except geometry.GeometryError as exc:
+        raise NumpyInterpreterError(str(exc)) from exc
+    return float(polygon_area_via_faq(ring, manifold))
 
 
 def _eval_index(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
@@ -1588,6 +1632,10 @@ def expr_contains_array_op(expr: Expr) -> bool:
         if expr.op in {
             "aggregate", "makearray", "index", "broadcast",
             "reshape", "transpose", "concat", "intersect_polygon",
+            # Fused geometry leaf (esm-spec.md §8.6.1): scalar-valued but its
+            # polygon-ring operands are array-valued, so it routes to the NumPy
+            # path. Mirrors flatten._ARRAY_OPS.
+            "polygon_intersection_area",
         }:
             return True
         for a in expr.args:

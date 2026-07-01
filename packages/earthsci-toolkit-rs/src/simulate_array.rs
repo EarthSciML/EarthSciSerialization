@@ -3153,6 +3153,10 @@ fn eval_op(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
         // polygon rings on the node's `manifold`, producing the overlap ring as
         // an `[N, 2]` array. `polygon_area` over it is an ordinary `aggregate`.
         "intersect_polygon" => eval_intersect_polygon(node, ctx),
+        // Fused geometry leaf (esm-spec §4.2 / §8.6.1): the SCALAR overlap area of
+        // the two polygon operands under the node's `manifold`, defined to equal
+        // `polygon_area(intersect_polygon(a, b))` but with NO clip ring exposed.
+        "polygon_intersection_area" => eval_polygon_intersection_area(node, ctx),
         "makearray" => eval_makearray(node, ctx),
         "reshape" => eval_reshape(node, ctx),
         "transpose" => eval_transpose(node, ctx),
@@ -3544,6 +3548,58 @@ fn eval_intersect_polygon(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
             }
             Value::Array(arr)
         }
+        // A degenerate input ring or unavailable backend surfaces as NaN, the
+        // same not-a-value sentinel the evaluator uses for unevaluable nodes.
+        Err(_) => Value::Scalar(f64::NAN),
+    }
+}
+
+/// Evaluate the fused `polygon_intersection_area` leaf op (esm-spec §4.2 /
+/// §8.6.1): the **scalar** overlap area of the two polygon operands under the
+/// node's declared `manifold`. It is defined to equal
+/// `polygon_area(intersect_polygon(a, b))` at the same `manifold` — the FUSED
+/// form of the existing clip + shoelace — but exposes **no** clip ring
+/// (unlike [`eval_intersect_polygon`], which surfaces the ring as an `[N, 2]`
+/// array and self-registers a derived index set). This reuses the same kernels:
+/// [`crate::geometry::intersect_polygon`] to clip, then
+/// [`crate::geometry::polygon_area`] (planar shoelace / spherical-geodesic S2)
+/// to measure, so its value matches the composed form exactly. A disjoint /
+/// edge-touching clip yields a `< 3`-vertex ring, whose area is `0.0`.
+fn eval_polygon_intersection_area(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
+    // Strict binary clip (schema-enforced; defense-in-depth here).
+    if node.args.len() != 2 {
+        return Value::Scalar(f64::NAN);
+    }
+    // The `manifold` flag is required and part of the op's contract (§5.8.4);
+    // a missing or out-of-enum value is not evaluable.
+    let manifold = match node
+        .manifold
+        .as_deref()
+        .and_then(crate::geometry::Manifold::from_flag)
+    {
+        Some(m) => m,
+        None => return Value::Scalar(f64::NAN),
+    };
+    let poly_a = match eval(&node.args[0], ctx) {
+        Value::Array(a) => a,
+        _ => return Value::Scalar(f64::NAN),
+    };
+    let poly_b = match eval(&node.args[1], ctx) {
+        Value::Array(a) => a,
+        _ => return Value::Scalar(f64::NAN),
+    };
+    let (va, vb) = match (arrayd_to_lonlat(&poly_a), arrayd_to_lonlat(&poly_b)) {
+        (Some(a), Some(b)) => (a, b),
+        _ => return Value::Scalar(f64::NAN),
+    };
+    // Clip, then measure — the fused composition. The clip kernel returns the
+    // `n` distinct overlap vertices; `polygon_area`'s shoelace / spherical body
+    // reads the wrap edge `n→1` itself, so no explicit ring closure is needed
+    // here (and no derived ring is registered — the fused leaf exposes none).
+    match crate::geometry::intersect_polygon(&va, &vb, manifold)
+        .and_then(|ring| crate::geometry::polygon_area(&ring, manifold))
+    {
+        Ok(area) => Value::Scalar(area),
         // A degenerate input ring or unavailable backend surfaces as NaN, the
         // same not-a-value sentinel the evaluator uses for unevaluable nodes.
         Err(_) => Value::Scalar(f64::NAN),
@@ -4710,6 +4766,79 @@ mod geometry_eval_tests {
         assert!(ring.is_empty(), "disjoint cells clip to an empty ring");
         // A sum_product FAQ over the empty clip_ring reduces to the additive 0̄.
         assert_eq!(shoelace_area_faq(&ring), 0.0);
+    }
+
+    /// Evaluate the fused `polygon_intersection_area` leaf through the public
+    /// evaluator path (`eval_expression` → [`eval_op`] → `polygon_intersection_area`
+    /// arm), returning the scalar overlap area directly (no clip ring exposed).
+    fn fused_area_via_evaluator(
+        src: &[(f64, f64)],
+        tgt: &[(f64, f64)],
+        manifold: &str,
+    ) -> Value {
+        let mut inputs = HashMap::new();
+        inputs.insert("src_poly".to_string(), ring_array(src));
+        inputs.insert("tgt_poly".to_string(), ring_array(tgt));
+        let node: Expr = serde_json::from_value(json!({
+            "op": "polygon_intersection_area",
+            "manifold": manifold,
+            "args": ["src_poly", "tgt_poly"],
+        }))
+        .unwrap();
+        eval_expression(&node, &inputs, &[], &[], 0.0)
+    }
+
+    #[test]
+    fn polygon_intersection_area_planar_is_fused_clip_area() {
+        // [0,2]² ∩ [1,3]² = [1,2]², area 1. The fused leaf returns the SCALAR
+        // area directly and equals `polygon_area(intersect_polygon(a, b))`.
+        let src = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)];
+        let tgt = [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)];
+        let area = match fused_area_via_evaluator(&src, &tgt, "planar") {
+            Value::Scalar(s) => s,
+            Value::Array(_) => panic!("fused leaf must return a scalar, not a ring"),
+        };
+        assert!(
+            (area - 1.0).abs() < 1e-9,
+            "polygon_intersection_area = {area}, expected 1"
+        );
+        // Fused value matches the composed clip + shoelace-FAQ form exactly.
+        let ring = clip_via_evaluator(&src, &tgt, "planar");
+        assert!((area - shoelace_area_faq(&ring)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn polygon_intersection_area_disjoint_is_zero() {
+        // Disjoint cells clip to a < 3-vertex ring, whose area is 0.
+        let src = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+        let tgt = [(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)];
+        match fused_area_via_evaluator(&src, &tgt, "planar") {
+            Value::Scalar(s) => assert_eq!(s, 0.0, "disjoint overlap area should be 0, got {s}"),
+            Value::Array(_) => panic!("fused leaf must return a scalar"),
+        }
+    }
+
+    #[test]
+    fn polygon_intersection_area_without_manifold_is_unevaluable() {
+        // `manifold` is required on the fused leaf too; absent, it is NaN.
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "src_poly".to_string(),
+            ring_array(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]),
+        );
+        inputs.insert(
+            "tgt_poly".to_string(),
+            ring_array(&[(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)]),
+        );
+        let node: Expr = serde_json::from_value(json!({
+            "op": "polygon_intersection_area",
+            "args": ["src_poly", "tgt_poly"],
+        }))
+        .unwrap();
+        match eval_expression(&node, &inputs, &[], &[], 0.0) {
+            Value::Scalar(s) => assert!(s.is_nan(), "missing manifold should be NaN, got {s}"),
+            Value::Array(_) => panic!("missing manifold must not produce a scalar area"),
+        }
     }
 
     #[test]

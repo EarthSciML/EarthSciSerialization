@@ -252,6 +252,12 @@ _ARRAY_OPS = {
     # observed (no aggregate) must still route to the NumPy simulate path. Mirrors
     # numpy_interpreter.expr_contains_array_op, which lists it too.
     "intersect_polygon",
+    # The fused geometry leaf (esm-spec.md §8.6.1): a scalar-valued
+    # polygon_area(intersect_polygon(a, b)), but its polygon-ring operands are
+    # array-valued, so a model carrying only a polygon_intersection_area observed
+    # must likewise route to the NumPy path (the SymPy path cannot clip/area a
+    # vertex ring). Mirrors numpy_interpreter.expr_contains_array_op.
+    "polygon_intersection_area",
 }
 
 

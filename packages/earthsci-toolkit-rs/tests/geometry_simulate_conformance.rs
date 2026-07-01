@@ -229,6 +229,59 @@ fn geometry_fixtures_simulate_conformance() {
     assert!(checked > 0, "no geometry assertions were checked");
 }
 
+/// The fused `polygon_intersection_area` leaf fixture must load, drive through
+/// `simulate`, and yield the exact planar overlap area 1.0 — both as the scalar
+/// observed `overlap_area` and as the integrated `area_state` at t=1 (esm-spec
+/// §8.6.1). This pins the fused leaf's value to `polygon_area(intersect_polygon)`.
+#[test]
+fn polygon_intersection_area_planar_fixture_area_is_one() {
+    let path = geometry_dir().join("polygon_intersection_area_planar.esm");
+    let json = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+    let file = load(&json).unwrap_or_else(|e| panic!("load {path:?}: {e}"));
+    let (model_name, model) = model_iter(&file)
+        .into_iter()
+        .next()
+        .expect("fixture has a model");
+    let test = model
+        .tests
+        .as_ref()
+        .and_then(|ts| ts.first())
+        .expect("fixture has an inline test");
+    let opts = SimulateOptions {
+        solver: SolverChoice::Bdf,
+        abstol: 1e-10,
+        reltol: 1e-8,
+        max_steps: 100_000,
+        output_times: Some(vec![0.0, 1.0]),
+    };
+    let ics: HashMap<String, f64> = test
+        .initial_conditions
+        .as_ref()
+        .cloned()
+        .unwrap_or_default();
+    let sol = simulate(
+        &file,
+        (test.time_span.start, test.time_span.end),
+        &HashMap::new(),
+        &ics,
+        &opts,
+    )
+    .unwrap_or_else(|e| panic!("[{model_name}] polygon_intersection_area simulate failed: {e}"));
+
+    // The fused scalar overlap area is exposed and is exactly 1.0 at every node.
+    assert!(
+        (lookup(&sol, "overlap_area", 0.0) - 1.0).abs() < 1e-9,
+        "overlap_area@t=0 should be 1.0, got {}",
+        lookup(&sol, "overlap_area", 0.0)
+    );
+    // d(area_state)/dt = overlap_area from a zero IC ⇒ area_state(1) = 1.0.
+    assert!(
+        (lookup(&sol, "area_state", 1.0) - 1.0).abs() < 1e-9,
+        "area_state@t=1 should be 1.0, got {}",
+        lookup(&sol, "area_state", 1.0)
+    );
+}
+
 /// The canonical end-to-end fixture must be the runnable planar ODE one, and its
 /// scalar `area` observed must be exposed in the solution (the derived-clip-ring
 /// materialization is what makes this pass). Guards against the fixture being

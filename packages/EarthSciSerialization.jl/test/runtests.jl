@@ -71,6 +71,7 @@ using JSON3
     include("expression_ic_conformance_test.jl")
     include("inverse_trig_conformance_test.jl")
     include("geometry_conformance_test.jl")
+    include("geometry_polygon_intersection_area_test.jl")
     include("geometry_assembly_conformance_test.jl")
     include("geometry_overlap_join_conformance_test.jl")
     include("geometry_ranged_clip_test.jl")

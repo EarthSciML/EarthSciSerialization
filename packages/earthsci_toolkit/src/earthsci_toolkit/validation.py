@@ -348,6 +348,20 @@ def _validate_content_presence(esm_file: EsmFile, error_collector: ErrorCollecto
         error_collector.add_error(error)
 
 
+def _is_initial_condition_equation(equation) -> bool:
+    """True if an equation's LHS is an ``ic`` node (an initial-condition spec).
+
+    An ``ic`` equation (``{op:"ic", args:[state]}`` = value) pins a state's
+    starting value; it is NOT a governing equation that determines an unknown, so
+    it must be excluded from the equation-unknown balance count. A model may
+    therefore carry one governing ``D``/algebraic equation per state PLUS any
+    number of ``ic`` equations (e.g. a second-order system supplying ICs for both
+    the value and its derivative) without tripping the balance check.
+    """
+    lhs = getattr(equation, "lhs", None)
+    return getattr(lhs, "op", None) == "ic"
+
+
 def _validate_equation_balance_enhanced(esm_file: EsmFile, error_collector: ErrorCollector) -> None:
     """Enhanced equation-unknown balance validation with detailed suggestions."""
     for i, model in enumerate(esm_file.models.values()):
@@ -355,8 +369,12 @@ def _validate_equation_balance_enhanced(esm_file: EsmFile, error_collector: Erro
         state_vars = [name for name, var in model.variables.items() if var.type == 'state']
         num_unknowns = len(state_vars)
 
-        # Count equations
-        num_equations = len(model.equations)
+        # Count governing equations only — `ic` equations pin initial conditions,
+        # not unknowns, so they do not participate in the balance (see
+        # `_is_initial_condition_equation`).
+        num_equations = sum(
+            1 for eq in model.equations if not _is_initial_condition_equation(eq)
+        )
 
         if num_equations != num_unknowns:
             error = ESMErrorFactory.create_equation_imbalance_error(
@@ -378,8 +396,11 @@ def _validate_equation_balance(esm_file: EsmFile, structural_errors: List[Valida
         state_vars = [name for name, var in model.variables.items() if var.type == 'state']
         num_unknowns = len(state_vars)
 
-        # Count equations
-        num_equations = len(model.equations)
+        # Count governing equations only; `ic` equations pin initial conditions,
+        # not unknowns (see `_is_initial_condition_equation`).
+        num_equations = sum(
+            1 for eq in model.equations if not _is_initial_condition_equation(eq)
+        )
 
         if num_equations != num_unknowns:
             structural_errors.append(ValidationError(

@@ -161,6 +161,108 @@ function _materialize_geometry_rings(equations, const_arrays_kw::AbstractDict,
 end
 
 # ============================================================
+# polygon_intersection_area — FUSED clip+area scalar leaf (esm-spec §4.2 / §8.6.1)
+# ============================================================
+#
+# `polygon_intersection_area` returns the SCALAR overlap area of two polygon vertex
+# rings under a declared `manifold`. It is DEFINED to equal
+# `polygon_area(intersect_polygon(a, b))` at the same manifold — the FUSED form of
+# the existing Sutherland–Hodgman clip and the shoelace / spherical-excess area FAQ.
+# Unlike `intersect_polygon` (which surfaces a data-dependent clip ring as a
+# `kind:"derived"` index set the `polygon_area` FAQ ranges over, RFC §8.1), the
+# fused leaf exposes NO ring: it evaluates to an ordinary Float64 scalar, so it
+# drops into any expression — an ODE RHS or an `aggregate` body — with no ragged
+# intermediate. Both constituent kernels are reused verbatim: `intersect_polygon`
+# (the clip, planar or S2) and `_polygon_area_via_faq` (the shoelace / Van
+# Oosterom–Strackee area over the CLOSED ring, run through the generic aggregate
+# machinery). This is the densely-evaluable narrow phase of a conservative regrid.
+
+# True iff any node in the subtree is a polygon_intersection_area op.
+_expr_has_polygon_intersection_area(e::OpExpr) =
+    e.op == "polygon_intersection_area" ||
+    any(_expr_has_polygon_intersection_area, e.args) ||
+    (e.expr_body !== nothing && _expr_has_polygon_intersection_area(e.expr_body))
+_expr_has_polygon_intersection_area(::Expr) = false
+
+# An intersection-area leaf may live in an equation LHS/RHS or in an observed
+# variable's `expression` field (the shared fixtures use the latter).
+function _model_has_polygon_intersection_area(model::Model, equations)
+    for (_, v) in model.variables
+        v.expression isa Expr && _expr_has_polygon_intersection_area(v.expression) && return true
+    end
+    for eq in equations
+        (_expr_has_polygon_intersection_area(eq.lhs) ||
+         _expr_has_polygon_intersection_area(eq.rhs)) && return true
+    end
+    return false
+end
+
+# Collect the variable names appearing as direct operands of any
+# polygon_intersection_area node in `e` (the const polygon vertex rings).
+function _collect_pia_operands!(e::OpExpr, acc::Set{String})
+    if e.op == "polygon_intersection_area"
+        for a in e.args
+            a isa VarExpr && push!(acc, (a::VarExpr).name)
+        end
+    end
+    for a in e.args
+        _collect_pia_operands!(a, acc)
+    end
+    e.expr_body !== nothing && _collect_pia_operands!(e.expr_body, acc)
+    return acc
+end
+_collect_pia_operands!(::Expr, acc::Set{String}) = acc
+
+# A `const`-op node's stored (nested-vector) value → a dense `[nrows, ncols]`
+# Float64 vertex-ring matrix.
+function _pia_const_matrix(val)::Matrix{Float64}
+    rows = collect(val)
+    nr = length(rows)
+    nr == 0 && return Matrix{Float64}(undef, 0, 2)
+    nc = length(collect(rows[1]))
+    M = Matrix{Float64}(undef, nr, nc)
+    for i in 1:nr
+        r = collect(rows[i])
+        for j in 1:nc
+            M[i, j] = Float64(r[j])
+        end
+    end
+    return M
+end
+
+"""
+    _polygon_intersection_area(poly_a, poly_b, manifold) -> Float64
+
+The fused `polygon_intersection_area` leaf: clip the two operand rings under
+`manifold` (`intersect_polygon`), then area the CLOSED overlap ring through the
+generic `polygon_area` FAQ (`_polygon_area_via_faq`). Equals
+`polygon_area(intersect_polygon(a, b))` at the same manifold. A degenerate /
+non-overlapping clip (`< 3` distinct vertices) has zero overlap area.
+"""
+function _polygon_intersection_area(poly_a, poly_b, manifold::AbstractString)::Float64
+    ring = try
+        intersect_polygon(poly_a, poly_b, manifold)
+    catch err
+        err isa GeometryError &&
+            throw(TreeWalkError("E_TREEWALK_GEOMETRY_CLIP", err.msg))
+        rethrow()
+    end
+    size(ring, 1) < 3 && return 0.0
+    return _polygon_area_via_faq(close_ring(ring), manifold)
+end
+
+# Resolve a polygon_intersection_area operand to its const polygon-ring matrix. The
+# fused leaf is build-time-evaluable, so each operand must be a const-array variable
+# name (supplied via `const_arrays` or a materialized `const`-op observed).
+function _pia_operand_ring(arg::Expr, const_arrays::AbstractDict)
+    arg isa VarExpr && haskey(const_arrays, (arg::VarExpr).name) &&
+        return const_arrays[(arg::VarExpr).name]
+    throw(TreeWalkError("E_TREEWALK_GEOMETRY_OPERAND",
+        "polygon_intersection_area operand must be a build-time-known polygon ring " *
+        "(a const-array variable name)"))
+end
+
+# ============================================================
 # M4+ : intersect_polygon RANGED over a candidate-pair set (declarative A_ij).
 # ============================================================
 # The single-clip M4 kernel above materializes ONE intersect_polygon ring from
@@ -285,6 +387,15 @@ function _geo_eval(expr, env, idx_env, index_sets, derived_extents,
             expr.manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
                 "intersect_polygon requires a manifold"))
             return close_ring(intersect_polygon(a, b, expr.manifold))
+        elseif op == "polygon_intersection_area"
+            # FUSED scalar leaf (esm-spec §8.6.1): the overlap AREA of the two rings,
+            # with no exposed clip ring — so it evaluates as an ordinary scalar even
+            # inside a setup-time aggregate body (dense narrow phase, no ragged extent).
+            a = _geo_eval(expr.args[1], env, idx_env, index_sets, derived_extents, var_shapes, outer_setof)
+            b = _geo_eval(expr.args[2], env, idx_env, index_sets, derived_extents, var_shapes, outer_setof)
+            expr.manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
+                "polygon_intersection_area requires a manifold"))
+            return _polygon_intersection_area(a, b, expr.manifold)
         elseif op == "skolem"
             # A skolem key is a deterministic id for its arg tuple; at setup it is
             # only ever COMPARED (the bin equi-join), so a stable hash suffices.
@@ -801,6 +912,45 @@ function _build_evaluator_impl(model::Model;
         push!(_array_inline_vars, name)
     end
 
+    # ---- polygon_intersection_area fused leaf (esm-spec §8.6.1) ----
+    # `polygon_intersection_area(a, b)` is a SCALAR overlap-area leaf (the fused
+    # clip+shoelace). Its polygon operands are build-time-known const vertex rings;
+    # resolve each into a matrix (a `const_arrays` kwarg entry wins, else the
+    # operand's own `const`-op observed value) so the leaf const-folds in
+    # `_resolve_indices`. Each operand array observed is materialized into
+    # `_const_arrays` and excluded from the ODE partition — it carries no state,
+    # exactly like an intersect_polygon clip ring (RFC §8.1). Empty (byte-identical)
+    # for every file without a polygon_intersection_area node.
+    _has_pia = _model_has_polygon_intersection_area(model, _model_equations)
+    _pia_operand_vars = Set{String}()
+    _pia_operand_arrays = Dict{String,Matrix{Float64}}()
+    if _has_pia
+        _pia_names = Set{String}()
+        for eq in _model_equations
+            _collect_pia_operands!(eq.lhs, _pia_names)
+            _collect_pia_operands!(eq.rhs, _pia_names)
+        end
+        for (_, v) in model.variables
+            v.expression isa Expr && _collect_pia_operands!(v.expression, _pia_names)
+        end
+        for name in _pia_names
+            mat = if haskey(const_arrays, name)
+                Matrix{Float64}(const_arrays[name])
+            elseif haskey(model.variables, name) &&
+                   model.variables[name].expression isa OpExpr &&
+                   (model.variables[name].expression::OpExpr).op == "const"
+                _pia_const_matrix((model.variables[name].expression::OpExpr).value)
+            else
+                throw(TreeWalkError("E_TREEWALK_GEOMETRY_OPERAND",
+                    "polygon_intersection_area operand '$(name)' must be a const polygon " *
+                    "ring (supplied via `const_arrays` or a `const`-op observed)"))
+            end
+            _pia_operand_arrays[name] = mat
+            (haskey(model.variables, name) && _is_array_shape(model.variables[name].shape)) &&
+                push!(_pia_operand_vars, name)
+        end
+    end
+
     # ---- Partition variables ----
     scalar_state_names = String[]
     param_names = String[]
@@ -817,6 +967,10 @@ function _build_evaluator_impl(model::Model;
         # inlined into their readers (ess-14f.4 / shape-promotion); no partition slot.
         name in _geom_inline_vars && continue
         name in _array_inline_vars && continue
+        # polygon_intersection_area operand rings (const polygon vertex rings) are
+        # materialized into const_arrays and read by the fused leaf; not a partition
+        # member (they carry no state — like an intersect_polygon clip ring).
+        name in _pia_operand_vars && continue
         if v.type == StateVariable
             push!(state_var_names, name)
         elseif v.type == ParameterVariable
@@ -885,9 +1039,13 @@ function _build_evaluator_impl(model::Model;
     # the ODE-lowering passes so their join/filter/intersect_polygon nodes never
     # reach the join-gate / index-set-range resolvers (those expect the relational/
     # value-invention vocabulary, not the setup-geometry one).
+    # A polygon_intersection_area operand's const-ring equation is likewise dropped:
+    # its ring is materialized into const_arrays above, so its synthetic
+    # `operand = const(...)` equation must not reach the ODE-lowering passes.
     _ode_equations = Equation[eq for eq in _model_equations
         if !(eq.lhs isa VarExpr && ((eq.lhs::VarExpr).name in _geom_ring_vars ||
-                                    (eq.lhs::VarExpr).name in _geom_setup_vars))]
+                                    (eq.lhs::VarExpr).name in _geom_setup_vars ||
+                                    (eq.lhs::VarExpr).name in _pia_operand_vars))]
 
     # ---- Resolve value-equality joins (RFC §5.3) ----
     # Rewrite each aggregate's `join` clauses into build-time `join_gates` (a
@@ -917,6 +1075,37 @@ function _build_evaluator_impl(model::Model;
                              if !(_vi_typed_lhs_base(eq.lhs) in _vi_vars)]
         init_equations = Equation[eq for eq in init_equations
                                   if !(_vi_typed_lhs_base(eq.lhs) in _vi_vars)]
+    end
+
+    # ---- Fold `ic(var) = <initial value>` equations into u0 (esm-spec v0.8.0) ----
+    # An `ic`-LHS equation declares an initial condition. The tree-walk path seeds
+    # u0 from the `initial_conditions` kwarg / variable defaults, so pull each ic
+    # equation out here: const-fold its RHS to a scalar and record it (unless the
+    # caller already overrode that state), then drop the equation before the ODE
+    # partition / observed-substitution passes (its LHS is not a `D`, so it would
+    # otherwise be rejected as an unsupported equation form). No-op for files
+    # without an ic equation in `equations`.
+    _eq_ics = Dict{String,Float64}()
+    let kept = Equation[]
+        for eq in equations
+            if eq.lhs isa OpExpr && (eq.lhs::OpExpr).op == "ic"
+                lop = eq.lhs::OpExpr
+                (length(lop.args) == 1 && lop.args[1] isa VarExpr) ||
+                    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
+                        "ic(...) LHS must name a single state variable"))
+                vn = (lop.args[1]::VarExpr).name
+                _eq_ics[vn] = try
+                    Float64(evaluate_expr(eq.rhs, Dict{String,Float64}();
+                                          registered_functions=registered_functions))
+                catch err
+                    throw(TreeWalkError("E_TREEWALK_UNSUPPORTED_EQUATION",
+                        "ic($(vn)) RHS must const-fold to a scalar for the tree-walk path"))
+                end
+            else
+                push!(kept, eq)
+            end
+        end
+        equations = kept
     end
 
     # ---- Discover array cells from equations and initial conditions ----
@@ -983,6 +1172,8 @@ function _build_evaluator_impl(model::Model;
     for (i, name) in enumerate(scalar_state_names)
         if haskey(initial_conditions, name)
             u0[i] = Float64(initial_conditions[name])
+        elseif haskey(_eq_ics, name)
+            u0[i] = _eq_ics[name]   # ic(var) = <value> equation
         else
             d = model.variables[name].default
             u0[i] = d === nothing ? 0.0 : Float64(d)
@@ -1085,6 +1276,12 @@ function _build_evaluator_impl(model::Model;
     # so the ODE body reads it via `index(area, p)` / `index(A_ij, i, j)`.
     for (k, arr) in _geom_setup_arrays
         _const_arrays[k] = arr
+    end
+    # polygon_intersection_area operands: the const polygon vertex rings the fused
+    # leaf clips + areas. Registered as 2D const_arrays so `_resolve_indices` folds
+    # `polygon_intersection_area(src, tgt)` to its scalar overlap area (§8.6.1).
+    for (k, ring) in _pia_operand_arrays
+        _const_arrays[k] = ring
     end
 
     # ---- Live forcing buffers (ess-14f.3, JL-J0 — the one engine touch) ----
@@ -3875,6 +4072,20 @@ function _resolve_indices(expr::OpExpr,
                           var_map::Dict{String,Int},
                           const_arrays::AbstractDict=_EMPTY_CONST_ARRAYS,
                           pgather::AbstractDict=_EMPTY_PGATHER)
+    if expr.op == "polygon_intersection_area"
+        # FUSED clip+area scalar leaf (esm-spec §8.6.1). Both operands are
+        # build-time-known const polygon rings (registered in `const_arrays`), so the
+        # whole leaf const-folds to the scalar overlap area: clip under `manifold`,
+        # then shoelace / spherical-excess area over the CLOSED ring. Reuses the
+        # existing `intersect_polygon` + `polygon_area` FAQ kernels verbatim.
+        length(expr.args) == 2 || throw(TreeWalkError("E_TREEWALK_GEOMETRY_ARITY",
+            "polygon_intersection_area is strictly binary; got $(length(expr.args)) operand(s)"))
+        expr.manifold === nothing && throw(TreeWalkError("E_TREEWALK_GEOMETRY_NO_MANIFOLD",
+            "polygon_intersection_area requires a `manifold` (planar / spherical / geodesic)"))
+        a = _pia_operand_ring(expr.args[1], const_arrays)
+        b = _pia_operand_ring(expr.args[2], const_arrays)
+        return NumExpr(_polygon_intersection_area(a, b, expr.manifold))
+    end
     if expr.op == "index"
         isempty(expr.args) &&
             throw(TreeWalkError("E_TREEWALK_INDEX_EMPTY", "index op requires at least one arg"))

@@ -210,6 +210,78 @@ def test_planar_fixture_clip_and_area_evaluate() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# 2b′. polygon_intersection_area — the fused scalar clip+area leaf (§8.6.1)
+# --------------------------------------------------------------------------- #
+
+def _polygon_intersection_area_node(manifold: str = "planar") -> ExprNode:
+    return ExprNode(
+        op="polygon_intersection_area", manifold=manifold,
+        args=[ExprNode(op="const", value=_SQUARE_A.tolist()),
+              ExprNode(op="const", value=_SQUARE_B.tolist())],
+    )
+
+
+def test_polygon_intersection_area_via_eval_expr_is_scalar_one() -> None:
+    """The fused leaf returns the SCALAR overlap area (1.0) — a plain float."""
+    ctx = _empty_ctx()
+    val = eval_expr(_polygon_intersection_area_node("planar"), ctx)
+    assert isinstance(val, float)  # scalar leaf, not an array-valued ring
+    assert math.isclose(val, 1.0, abs_tol=1e-9)
+    # No clip ring / derived index set is exposed by the fused form.
+    assert ctx.derived_rings == {}
+
+
+def test_polygon_intersection_area_equals_clip_then_area() -> None:
+    """It equals polygon_area(intersect_polygon(a, b)) at the same manifold."""
+    ring = geom.intersect_polygon(_SQUARE_A, _SQUARE_B, "planar")
+    fused = float(eval_expr(_polygon_intersection_area_node("planar"), _empty_ctx()))
+    assert math.isclose(fused, geom.polygon_area(ring, "planar"), abs_tol=1e-12)
+    assert math.isclose(
+        fused, area_faq.polygon_area_via_faq(ring, "planar"), abs_tol=1e-12
+    )
+
+
+def test_polygon_intersection_area_disjoint_is_zero() -> None:
+    """Non-overlapping operands give a zero fused area (empty clip)."""
+    far = np.array([[5.0, 5.0], [6.0, 5.0], [6.0, 6.0], [5.0, 6.0]])
+    node = ExprNode(
+        op="polygon_intersection_area", manifold="planar",
+        args=[ExprNode(op="const", value=_SQUARE_A.tolist()),
+              ExprNode(op="const", value=far.tolist())],
+    )
+    assert float(eval_expr(node, _empty_ctx())) == 0.0
+
+
+def test_polygon_intersection_area_inside_aggregate_body() -> None:
+    """As a scalar leaf it evaluates inside an aggregate body (a 1-term sum)."""
+    agg = ExprNode(
+        op="aggregate", semiring="sum_product", output_idx=[], args=[],
+        ranges={"k": [1, 1]}, expr=_polygon_intersection_area_node("planar"),
+    )
+    assert math.isclose(float(eval_expr(agg, _empty_ctx())), 1.0, abs_tol=1e-9)
+
+
+def test_polygon_intersection_area_requires_manifold() -> None:
+    node = ExprNode(op="polygon_intersection_area", args=["a", "b"])  # no manifold
+    with pytest.raises(NumpyInterpreterError, match="manifold"):
+        eval_expr(node, _ctx_with_polys())
+
+
+def test_polygon_intersection_area_is_strictly_binary() -> None:
+    node = ExprNode(
+        op="polygon_intersection_area", manifold="planar",
+        args=[ExprNode(op="const", value=_SQUARE_A.tolist())],  # one operand
+    )
+    with pytest.raises(NumpyInterpreterError, match="binary"):
+        eval_expr(node, _empty_ctx())
+
+
+def test_expr_contains_array_op_flags_polygon_intersection_area() -> None:
+    node = ExprNode(op="polygon_intersection_area", manifold="planar", args=["a", "b"])
+    assert expr_contains_array_op(node) is True
+
+
+# --------------------------------------------------------------------------- #
 # 2c. Spherical / geodesic — area always; clip when spherely is present
 # --------------------------------------------------------------------------- #
 
@@ -403,6 +475,13 @@ def test_parser_rejects_intersect_polygon_without_manifold() -> None:
 
     with pytest.raises(ValueError, match="manifold"):
         _parse_expression({"op": "intersect_polygon", "args": ["a", "b"]})
+
+
+def test_parser_rejects_polygon_intersection_area_without_manifold() -> None:
+    from earthsci_toolkit.parse import _parse_expression
+
+    with pytest.raises(ValueError, match="manifold"):
+        _parse_expression({"op": "polygon_intersection_area", "args": ["a", "b"]})
 
 
 # --------------------------------------------------------------------------- #

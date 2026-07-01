@@ -175,14 +175,16 @@ def _parse_expression(expr_data: Union[int, float, str, Dict[str, Any]]) -> Expr
         handler_id = expr_data.get("handler_id")
         name = expr_data.get("name")
         value = expr_data.get("value")
-        # Node id (RFC §6.1) + intersect_polygon manifold (RFC §8.1). The
-        # geometry leaf is strictly binary with a required manifold (the schema
-        # enforces both); fail fast here so a hand-built node mirrors that.
+        # Node id (RFC §6.1) + geometry-kernel manifold (RFC §8.1, esm-spec.md
+        # §8.6.1). Both geometry leaves — the array-valued `intersect_polygon`
+        # clip and the fused scalar `polygon_intersection_area` — are strictly
+        # binary with a required manifold (the schema enforces both); fail fast
+        # here so a hand-built node mirrors that.
         node_id = expr_data.get("id")
         manifold = expr_data.get("manifold")
-        if op == "intersect_polygon" and manifold is None:
+        if op in ("intersect_polygon", "polygon_intersection_area") and manifold is None:
             raise ValueError(
-                "Operator 'intersect_polygon' requires a 'manifold' field "
+                f"Operator {op!r} requires a 'manifold' field "
                 "(planar / spherical / geodesic); it carries no default"
             )
 

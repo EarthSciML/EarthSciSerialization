@@ -63,13 +63,21 @@ def _collect_fixtures() -> List[Path]:
 
 
 def _needs_spherely(raw: dict) -> bool:
-    """True if any ``intersect_polygon`` in the file declares a non-planar manifold."""
+    """True if any geometry-kernel leaf in the file declares a non-planar manifold.
+
+    Covers both the ``intersect_polygon`` clip and the fused
+    ``polygon_intersection_area`` leaf — either uses the pinned S2 backend under a
+    ``spherical`` / ``geodesic`` manifold.
+    """
     found = False
 
     def walk(node: object) -> None:
         nonlocal found
         if isinstance(node, dict):
-            if node.get("op") == "intersect_polygon" and node.get("manifold") not in (
+            if node.get("op") in (
+                "intersect_polygon",
+                "polygon_intersection_area",
+            ) and node.get("manifold") not in (
                 None,
                 "planar",
             ):
@@ -172,6 +180,23 @@ def test_geometry_fixture_simulate_conformance(fixture_path: Path) -> None:
                 )
 
     assert any_assertions, f"{fixture_path.name}: no assertions were checked"
+
+
+def test_polygon_intersection_area_planar_fixture_simulates_to_one() -> None:
+    """Focused end-to-end check of the fused polygon_intersection_area leaf.
+
+    Loads the shared ``polygon_intersection_area_planar.esm`` fixture (two unit
+    squares overlapping in [1,2]×[1,2]) and integrates it through
+    :func:`simulate`. ``D(area_state)/dt = overlap_area`` from a zero IC, so
+    ``area_state(1) = overlap_area = 1.0`` — the scalar planar overlap area of the
+    fused leaf, to within 1e-9.
+    """
+    fixture = _GEOM_DIR / "polygon_intersection_area_planar.esm"
+    esm_file = load(fixture)
+    result = simulate(esm_file, tspan=(0.0, 1.0))
+    assert result.success, f"simulation failed: {result.message}"
+    area_state = _lookup(result, "area_state", 1.0)
+    assert abs(area_state - 1.0) <= 1e-9, f"area_state(1.0) = {area_state}, expected 1.0"
 
 
 # --------------------------------------------------------------------------- #
