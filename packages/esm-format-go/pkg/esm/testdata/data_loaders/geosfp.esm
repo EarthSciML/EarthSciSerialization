@@ -27,38 +27,6 @@
         "records_per_file": 8,
         "time_variable": "time"
       },
-      "grid": {
-        "family": "cartesian",
-        "crs": {
-          "projection": "longlat",
-          "datum": "WGS84"
-        },
-        "description": "Native grid migrated from the loader's former 'spatial' block (RFC pure-io-data-loaders §4.1); the loader describes this grid but performs no reprojection or regridding.",
-        "dimensions": [
-          "lon",
-          "lat",
-          "lev"
-        ],
-        "extents": {
-          "lon": {
-            "n": 72,
-            "spacing": "uniform"
-          },
-          "lat": {
-            "n": 45,
-            "spacing": "uniform"
-          },
-          "lev": {
-            "n": "n_lev",
-            "spacing": "uniform"
-          }
-        },
-        "parameters": {
-          "n_lev": {
-            "description": "lev cell count, resolved from the source dataset at load time"
-          }
-        }
-      },
       "variables": {
         "T": {
           "file_variable": "T",
