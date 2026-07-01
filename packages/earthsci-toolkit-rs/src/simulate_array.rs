@@ -713,10 +713,18 @@ impl ArrayCompiled {
             guesses: None,
             system_kind: None,
         };
-        // Flatten does not carry the document `index_sets` registry today (see
-        // note above), so resolve against an empty registry: dense `[lo, hi]`
-        // ranges — what discretized stencils emit — need no registry.
-        let mut compiled = Self::from_model(&model, &HashMap::new())?;
+        // The document `index_sets` registry is carried through flatten
+        // (`FlattenedSystem::index_sets`), so a coupled array system can resolve
+        // `aggregate`/`arrayop` `ranges` `{ "from": <set> }`, `join.on` gates, and
+        // derived-set references exactly as the single-model `from_file` path
+        // does against `file.index_sets`. Empty for a file with no index sets, so
+        // dense `[lo, hi]`-range discretized stencils are unaffected.
+        let index_sets: HashMap<String, IndexSet> = flat
+            .index_sets
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let mut compiled = Self::from_model(&model, &index_sets)?;
         // Carry the classified scoped-reference `ic` equations through so `u0` is
         // folded from the provider-served loaded initial fields at build time.
         compiled.field_ics = flat.field_ics.clone();
@@ -738,6 +746,13 @@ impl ArrayCompiled {
         // clone so the caller's model — and its serialized form — is untouched;
         // every downstream consumer then sees only dense interval ranges.
         let mut model_owned = model.clone();
+        // Drop value-invention (relational) scaffolding — skolem-id bin maps and
+        // membership sets over `kind: "derived"` index sets — plus the broad-phase
+        // `join.on` gates keyed on them, BEFORE join/range resolution. The dense
+        // runtime evaluates the geometric narrow phase densely; the elided gate is
+        // numerically inert there (see `strip_value_invention`). A no-op unless a
+        // `skolem` op or a derived-set-shaped variable is present.
+        strip_value_invention(&mut model_owned, index_sets)?;
         // Resolve `join.on` value-equality clauses (RFC §5.3) FIRST, while each
         // aggregate range still carries its `{ "from": <index set> }` linkage so
         // the join key columns' member values can be read. A join whose key
@@ -793,21 +808,48 @@ impl ArrayCompiled {
         }
 
         // (2) Infer shapes for state variables from all equation usages.
-        let shape_map = infer_shapes(&state_vars, &model.equations)?;
+        let mut shape_map = infer_shapes(&state_vars, &model.equations)?;
 
-        // (3) Partition state variables: those with D equations stay as
-        //     states, those defined only by algebraic arrayop equations
-        //     migrate to observed.
+        // (2b) Seed declared array shapes for states the index-usage inference
+        //      left scalar. A whole-array `D(state)` (bare LHS, no per-cell
+        //      `index`) or an `ic`-only array state has no indexed reference to
+        //      infer from, so its declared `shape` (index-set names resolved to
+        //      sizes via the document registry) is authoritative.
+        for name in &state_vars {
+            let empty = shape_map.get(*name).map(|s| s.is_empty()).unwrap_or(true);
+            if !empty {
+                continue;
+            }
+            if let Some(decl) = model.variables.get(*name).and_then(|v| v.shape.as_ref()) {
+                if !decl.is_empty() {
+                    if let Some(resolved) = resolve_declared_shape(decl, index_sets) {
+                        shape_map.insert((*name).clone(), resolved);
+                    }
+                }
+            }
+        }
+
+        // (3) Partition state variables. A state with a `D` equation is
+        //     integrated; one defined by an algebraic equation (but no `D`) is
+        //     eliminated to an observed; one with neither (an `ic`-only field) is
+        //     carried at its ic with zero derivative — kept as a state so its
+        //     cells are enumerated and held constant.
         let derivative_targets = collect_derivative_targets(&model.equations);
+        let algebraic_defined = collect_algebraic_defined(&model.equations);
 
         let mut final_states: Vec<String> = Vec::new();
         let mut eliminated: HashSet<String> = HashSet::new();
+        let mut held_at_ic: HashSet<String> = HashSet::new();
         for name in &state_vars {
             if derivative_targets.contains(*name) {
                 final_states.push((*name).clone());
-            } else {
-                // No D equation — this is algebraic.
+            } else if algebraic_defined.contains(*name) {
+                // No D equation, but an algebraic equation defines it.
                 eliminated.insert((*name).clone());
+            } else {
+                // No D and no algebraic definition: hold at ic (zero derivative).
+                final_states.push((*name).clone());
+                held_at_ic.insert((*name).clone());
             }
         }
 
@@ -959,6 +1001,20 @@ impl ArrayCompiled {
         let mut rhs_rules: Vec<RhsRule> = Vec::new();
         let mut covered_slots: HashSet<usize> = HashSet::new();
 
+        // Declared rank of every array-shaped variable (state / parameter /
+        // observed), used to lower a whole-array `D(state)` RHS into per-cell
+        // gathers.
+        let array_ranks: HashMap<String, usize> = model
+            .variables
+            .iter()
+            .filter_map(|(k, v)| {
+                v.shape
+                    .as_ref()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| (k.clone(), s.len()))
+            })
+            .collect();
+
         for eq in &model.equations {
             if let Some((
                 var,
@@ -1029,34 +1085,66 @@ impl ArrayCompiled {
                     });
                     continue;
                 } else {
-                    // Plain scalar D(var, t) = rhs.
-                    let shape = var_shapes.get(&var).ok_or_else(|| {
-                        CompileError::InterpreterBuildError {
+                    let shape = var_shapes
+                        .get(&var)
+                        .ok_or_else(|| CompileError::InterpreterBuildError {
                             details: format!(
                                 "Scalar derivative targets unknown state variable '{var}'"
                             ),
-                        }
-                    })?;
-                    if !shape.shape.is_empty() {
-                        return Err(CompileError::InterpreterBuildError {
-                            details: format!(
-                                "Scalar derivative for non-scalar variable '{var}' (shape {:?})",
-                                shape.shape
-                            ),
+                        })?
+                        .clone();
+                    if shape.shape.is_empty() {
+                        // Plain scalar D(var, t) = rhs.
+                        let slot = shape.flat_offset;
+                        covered_slots.insert(slot);
+                        rhs_rules.push(RhsRule::Scalar {
+                            slot,
+                            body: Box::new(eq.rhs.clone()),
                         });
+                    } else {
+                        // Whole-array `D(var) = <array-valued rhs>` over a declared
+                        // array shape: enumerate cells and emit one per-cell scalar
+                        // rule, indexing each array-shaped RHS leaf by that cell
+                        // (elementwise semantics). This is the array-runtime analog
+                        // of the Julia `_lift_wholearray_deriv_equations` lift.
+                        let total = shape.shape.iter().copied().product::<usize>().max(1);
+                        for flat in 0..total {
+                            let multi0 = flat_to_multi_col_major(flat, &shape.shape);
+                            let cell: Vec<i64> = multi0
+                                .iter()
+                                .zip(shape.origin.iter())
+                                .map(|(m, o)| *m as i64 + *o)
+                                .collect();
+                            let body = index_array_leaves(&eq.rhs, &array_ranks, &cell);
+                            let slot = shape.flat_offset + flat;
+                            covered_slots.insert(slot);
+                            rhs_rules.push(RhsRule::IndexedScalar {
+                                slot,
+                                body: Box::new(body),
+                            });
+                        }
                     }
-                    let slot = shape.flat_offset;
-                    covered_slots.insert(slot);
-                    rhs_rules.push(RhsRule::Scalar {
-                        slot,
-                        body: Box::new(eq.rhs.clone()),
-                    });
                     continue;
                 }
             }
             // Otherwise: algebraic equation (or something we don't support).
             // If the LHS is algebraic for an eliminated variable it was
             // already consumed above; ignore here.
+        }
+
+        // (7b) Held-at-ic states (no `D`, no algebraic definition) carry every
+        //      cell at its ic with zero derivative: mark their slots covered
+        //      without emitting a rule. The RHS zero-initializes `dy` each call
+        //      and never writes these slots, so they stay constant (a state that
+        //      feeds an observed — e.g. `phi` into `heat_release` — must not
+        //      drift).
+        for name in &held_at_ic {
+            if let Some(vs) = var_shapes.get(name) {
+                let total = vs.shape.iter().copied().product::<usize>().max(1);
+                for k in 0..total {
+                    covered_slots.insert(vs.flat_offset + k);
+                }
+            }
         }
 
         // (8) Every state slot must have a defining equation.
@@ -3522,8 +3610,21 @@ fn eval_index(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
     if !in_bounds {
         return Value::Scalar(0.0);
     }
-    if indices.len() != arr.ndim() {
+    if indices.len() > arr.ndim() {
         return Value::Scalar(f64::NAN);
+    }
+    // Partial indexing (fewer indices than the array rank) selects a sub-array:
+    // fix the leading `indices.len()` axes and keep the trailing axes free. This
+    // is how a per-cell polygon ring is drawn from a `[cells, verts, coord]`
+    // geometry table — `index(poly, a)` yields the `a`-th `[verts, coord]` ring
+    // that `polygon_intersection_area` / `intersect_polygon` clip. A full index
+    // set (`indices.len() == ndim`) yields the scalar element, as before.
+    if indices.len() < arr.ndim() {
+        let mut view = arr.view();
+        for &ix in &indices {
+            view = view.index_axis_move(ndarray::Axis(0), ix);
+        }
+        return Value::Array(view.to_owned());
     }
     let ix = IxDyn(&indices);
     if let Some(v) = arr.get(ix) {
@@ -4050,6 +4151,367 @@ fn eval_broadcast(node: &ExpressionNode, ctx: &mut EvalCtx) -> Value {
 // ============================================================================
 // Shape inference + LHS parsing helpers.
 // ============================================================================
+
+/// The variable a top-level equation defines, if any: `v = …`, `index(v, …) = …`,
+/// `D(v) = …` / `D(index(v, …)) = …`, `ic(v) = …`, or an `arrayop`/`aggregate`
+/// whose body is `D(index(v, …))` / `index(v, …)`. Used to prune value-invention
+/// equations and to classify algebraic definitions.
+fn equation_defined_var(lhs: &Expr) -> Option<String> {
+    match lhs {
+        Expr::Variable(v) => Some(v.clone()),
+        Expr::Operator(node) => match node.op.as_str() {
+            "index" => match node.args.first() {
+                Some(Expr::Variable(v)) => Some(v.clone()),
+                _ => None,
+            },
+            "D" | "ic" => match node.args.first() {
+                Some(Expr::Variable(v)) => Some(v.clone()),
+                Some(inner) => equation_defined_var(inner),
+                None => None,
+            },
+            op if is_aggregate_op(op) => node
+                .expr
+                .as_ref()
+                .and_then(|b| equation_defined_var(b)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The state variable an *algebraic* (non-`D`, non-`ic`) equation defines, if any.
+/// A state so-defined is eliminated to an observed rather than integrated.
+fn algebraic_defined_var(lhs: &Expr) -> Option<String> {
+    match lhs {
+        Expr::Variable(v) => Some(v.clone()),
+        Expr::Operator(node) => match node.op.as_str() {
+            "index" => match node.args.first() {
+                Some(Expr::Variable(v)) => Some(v.clone()),
+                _ => None,
+            },
+            op if is_aggregate_op(op) => {
+                // `arrayop(expr = index(v, …))` — but NOT `expr = D(index(v, …))`,
+                // which is a derivative, not an algebraic definition.
+                let body = node.expr.as_ref()?;
+                if let Expr::Operator(b) = body.as_ref() {
+                    if b.op == "D" {
+                        return None;
+                    }
+                }
+                equation_defined_var(body)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Every state variable defined by an algebraic equation (see
+/// [`algebraic_defined_var`]).
+fn collect_algebraic_defined(equations: &[crate::types::Equation]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for eq in equations {
+        if let Some(v) = algebraic_defined_var(&eq.lhs) {
+            out.insert(v);
+        }
+    }
+    out
+}
+
+/// True if `expr` (or any subexpression) uses a `skolem` op — the marker of a
+/// value-invention (relational) producer whose integer-id buffer the dense
+/// array evaluator does not materialize.
+fn expr_contains_skolem(expr: &Expr) -> bool {
+    match expr {
+        Expr::Number(_) | Expr::Integer(_) | Expr::Variable(_) => false,
+        Expr::Operator(node) => {
+            if node.op == "skolem" {
+                return true;
+            }
+            node.args.iter().any(expr_contains_skolem)
+                || node.expr.as_deref().is_some_and(expr_contains_skolem)
+                || node.filter.as_deref().is_some_and(expr_contains_skolem)
+                || node.lower.as_deref().is_some_and(expr_contains_skolem)
+                || node.upper.as_deref().is_some_and(expr_contains_skolem)
+                || node
+                    .values
+                    .as_ref()
+                    .is_some_and(|vs| vs.iter().any(expr_contains_skolem))
+                || node
+                    .axes
+                    .as_ref()
+                    .is_some_and(|ax| ax.values().any(expr_contains_skolem))
+        }
+    }
+}
+
+/// Collect the `id`s of every geometry ring producer (`intersect_polygon` /
+/// `polygon_intersection_area`) reachable from `expr`. A `kind: "derived"` index
+/// set whose `from_faq` names one of these is the materialized clip ring (kept),
+/// distinguishing it from a relational membership set (dropped).
+fn collect_geometry_producer_ids(expr: &Expr, out: &mut HashSet<String>) {
+    let Expr::Operator(node) = expr else {
+        return;
+    };
+    if matches!(
+        node.op.as_str(),
+        "intersect_polygon" | "polygon_intersection_area"
+    ) {
+        if let Some(id) = &node.id {
+            out.insert(id.clone());
+        }
+    }
+    for a in &node.args {
+        collect_geometry_producer_ids(a, out);
+    }
+    if let Some(b) = &node.expr {
+        collect_geometry_producer_ids(b, out);
+    }
+    if let Some(f) = &node.filter {
+        collect_geometry_producer_ids(f, out);
+    }
+    if let Some(vals) = &node.values {
+        for v in vals {
+            collect_geometry_producer_ids(v, out);
+        }
+    }
+    if let Some(axes) = &node.axes {
+        for v in axes.values() {
+            collect_geometry_producer_ids(v, out);
+        }
+    }
+}
+
+/// Strip every `join.on` key-pair that references a dropped value-invention
+/// variable, dropping a clause whose pairs all vanish and clearing an empty
+/// `join`. A bin-skolem broad-phase gate keyed on such a column cannot be
+/// evaluated by the dense array runtime (the integer-id buffer is not
+/// materialized); eliding it degrades the aggregate to the dense contraction
+/// over all index combinations — the pruned combinations contribute the
+/// additive identity, which for a geometric narrow phase (`polygon_intersection_area`,
+/// zero on non-overlapping pairs) they already do, so the result is unchanged.
+fn strip_vi_joins(expr: &mut Expr, vi_cols: &HashSet<String>) {
+    let Expr::Operator(node) = expr else {
+        return;
+    };
+    if let Some(joins) = &mut node.join {
+        for clause in joins.iter_mut() {
+            clause
+                .on
+                .retain(|pair| !pair.iter().any(|c| vi_cols.contains(c)));
+        }
+        joins.retain(|clause| !clause.on.is_empty());
+        if joins.is_empty() {
+            node.join = None;
+        }
+    }
+    for a in &mut node.args {
+        strip_vi_joins(a, vi_cols);
+    }
+    if let Some(b) = &mut node.expr {
+        strip_vi_joins(b, vi_cols);
+    }
+    if let Some(f) = &mut node.filter {
+        strip_vi_joins(f, vi_cols);
+    }
+    if let Some(l) = &mut node.lower {
+        strip_vi_joins(l, vi_cols);
+    }
+    if let Some(u) = &mut node.upper {
+        strip_vi_joins(u, vi_cols);
+    }
+    if let Some(vals) = &mut node.values {
+        for v in vals {
+            strip_vi_joins(v, vi_cols);
+        }
+    }
+    if let Some(axes) = &mut node.axes {
+        for v in axes.values_mut() {
+            strip_vi_joins(v, vi_cols);
+        }
+    }
+}
+
+/// Drop value-invention (relational) variables and their defining equations, and
+/// strip broad-phase `join.on` gates that reference them, BEFORE join / range
+/// resolution and shape inference.
+///
+/// The dense Rust array runtime evaluates FAQ aggregates and the fused geometry
+/// leaf, but does NOT materialize value-invention buffers — skolem-id maps
+/// (`skolem`/`rank`) or a membership set over a `kind: "derived"` (FAQ-produced)
+/// index set. A variable that is one of these, and the `join.on` gate keyed on
+/// it, are relational scaffolding around a densely-evaluable narrow phase. For a
+/// conservative regrid the narrow phase is `polygon_intersection_area`, which is
+/// zero on exactly the pairs the bin-skolem gate would prune, so the dense
+/// contraction is numerically identical (see [`strip_vi_joins`]). This keeps the
+/// coupled regrid runnable without porting the build-time relational engine,
+/// while leaving genuine (loop-symbol) joins and non-VI models byte-identical:
+/// the pass is a no-op unless a `skolem` op or a derived-set-shaped variable is
+/// present.
+fn strip_value_invention(
+    model: &mut Model,
+    index_sets: &HashMap<String, IndexSet>,
+) -> Result<(), CompileError> {
+    let mut vi_vars: HashSet<String> = HashSet::new();
+    // Ids of geometry ring producers (`intersect_polygon` / `polygon_intersection_area`).
+    // A `kind: "derived"` index set whose `from_faq` names one of these IS
+    // materialized by the dense runtime (the clipped overlap ring), so a variable
+    // shaped over it — e.g. a geometry `clip` — must be KEPT.
+    let mut geom_ids: HashSet<String> = HashSet::new();
+    for eq in &model.equations {
+        collect_geometry_producer_ids(&eq.rhs, &mut geom_ids);
+    }
+    for var in model.variables.values() {
+        if let Some(expr) = &var.expression {
+            collect_geometry_producer_ids(expr, &mut geom_ids);
+        }
+    }
+    // (a) A variable shaped over a `kind: "derived"` index set whose FAQ producer
+    //     is NOT a geometry ring producer — a relational membership / candidate
+    //     set the dense runtime does not enumerate.
+    for (name, var) in &model.variables {
+        if let Some(shape) = &var.shape {
+            if shape.iter().any(|s| {
+                index_sets
+                    .get(s)
+                    .filter(|is| is.kind == "derived")
+                    .map(|is| {
+                        !is.from_faq
+                            .as_deref()
+                            .map(|f| geom_ids.contains(f))
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
+            }) {
+                vi_vars.insert(name.clone());
+            }
+        }
+    }
+    // (b) A variable defined by an equation whose RHS produces a skolem id.
+    for eq in &model.equations {
+        if expr_contains_skolem(&eq.rhs) {
+            if let Some(v) = equation_defined_var(&eq.lhs) {
+                vi_vars.insert(v);
+            }
+        }
+    }
+    if vi_vars.is_empty() {
+        return Ok(());
+    }
+    model.variables.retain(|k, _| !vi_vars.contains(k));
+    model.equations.retain(|eq| {
+        equation_defined_var(&eq.lhs)
+            .map(|v| !vi_vars.contains(&v))
+            .unwrap_or(true)
+    });
+    // `join.on` columns are NOT namespaced by flatten (they are bare strings, not
+    // expressions), while the dropped variable keys ARE model-prefixed. Match a
+    // join column against both the qualified VI name and its unqualified suffix so
+    // a coupled `join.on [[rg_src_bin, rg_tgt_bin]]` gate is stripped even though
+    // its columns stayed unqualified.
+    let mut vi_cols: HashSet<String> = vi_vars.clone();
+    for v in &vi_vars {
+        if let Some(pos) = v.rfind('.') {
+            vi_cols.insert(v[pos + 1..].to_string());
+        }
+    }
+    for eq in &mut model.equations {
+        strip_vi_joins(&mut eq.lhs, &vi_cols);
+        strip_vi_joins(&mut eq.rhs, &vi_cols);
+    }
+    for var in model.variables.values_mut() {
+        if let Some(expr) = &mut var.expression {
+            strip_vi_joins(expr, &vi_cols);
+        }
+    }
+    Ok(())
+}
+
+/// Resolve a declared `shape` (index-set names) to concrete dense sizes against
+/// the document registry: an `interval` set contributes its `size`, a
+/// `categorical` set its member count. Returns `None` if any entry is a set the
+/// registry cannot densely size (derived / ragged / unknown).
+fn resolve_declared_shape(
+    decl: &[String],
+    index_sets: &HashMap<String, IndexSet>,
+) -> Option<Vec<usize>> {
+    let mut out = Vec::with_capacity(decl.len());
+    for s in decl {
+        let is = index_sets.get(s)?;
+        let sz = match is.kind.as_str() {
+            "interval" => is.size? as usize,
+            "categorical" => is.members.as_ref()?.len(),
+            _ => return None,
+        };
+        out.push(sz);
+    }
+    Some(out)
+}
+
+/// Rewrite each bare array-shaped `Variable` leaf of a whole-array `D(state)` RHS
+/// into an `index(var, cell…)` gather at the given 1-based cell, so the
+/// elementwise array equation compiles to one per-cell scalar rule. The array
+/// target of an existing `index` node is left untouched (it is already a gather).
+fn index_array_leaves(expr: &Expr, array_ranks: &HashMap<String, usize>, cell: &[i64]) -> Expr {
+    match expr {
+        Expr::Variable(v) => {
+            if let Some(&rank) = array_ranks.get(v) {
+                let n = rank.min(cell.len());
+                let mut args = vec![Expr::Variable(v.clone())];
+                for &c in &cell[..n] {
+                    args.push(Expr::Integer(c));
+                }
+                Expr::Operator(ExpressionNode {
+                    op: "index".to_string(),
+                    args,
+                    ..Default::default()
+                })
+            } else {
+                expr.clone()
+            }
+        }
+        Expr::Operator(node) => {
+            let mut out = node.clone();
+            if node.op == "index" {
+                // Keep the (already array-valued) target; rewrite only the index
+                // argument expressions.
+                out.args = node
+                    .args
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        if i == 0 {
+                            a.clone()
+                        } else {
+                            index_array_leaves(a, array_ranks, cell)
+                        }
+                    })
+                    .collect();
+            } else {
+                out.args = node
+                    .args
+                    .iter()
+                    .map(|a| index_array_leaves(a, array_ranks, cell))
+                    .collect();
+            }
+            out.expr = node
+                .expr
+                .as_ref()
+                .map(|e| Box::new(index_array_leaves(e, array_ranks, cell)));
+            out.filter = node
+                .filter
+                .as_ref()
+                .map(|e| Box::new(index_array_leaves(e, array_ranks, cell)));
+            out.values = node.values.as_ref().map(|vs| {
+                vs.iter()
+                    .map(|v| index_array_leaves(v, array_ranks, cell))
+                    .collect()
+            });
+            Expr::Operator(out)
+        }
+        other => other.clone(),
+    }
+}
 
 /// Collect every state variable that receives a `D(..., t) = ...` definition
 /// somewhere in the equation list.

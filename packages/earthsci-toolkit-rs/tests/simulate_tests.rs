@@ -849,6 +849,7 @@ fn flat_with_one_state_rhs(rhs: Expr) -> FlattenedSystem {
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
         domain: None,
+        index_sets: Default::default(),
         metadata: Default::default(),
     }
 }
@@ -966,6 +967,7 @@ fn dummy_flat() -> FlattenedSystem {
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
         domain: None,
+        index_sets: Default::default(),
         metadata: Default::default(),
     }
 }

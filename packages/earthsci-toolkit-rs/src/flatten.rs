@@ -15,7 +15,7 @@
 
 use crate::types::{
     ContinuousEvent, CouplingEntry, DiscreteEvent, Domain, Equation, EsmFile, Expr, ExpressionNode,
-    Model, ModelVariable, RangeSpec, ReactionSystem, VariableType,
+    IndexSet, Model, ModelVariable, RangeSpec, ReactionSystem, VariableType,
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -186,6 +186,16 @@ pub struct FlattenedSystem {
     pub discrete_events: Vec<DiscreteEvent>,
     /// The file's single shared domain, passed through (v0.8.0).
     pub domain: Option<Domain>,
+    /// The document-scoped `index_sets` registry (esm-spec v0.8.0), passed
+    /// through verbatim from the source [`EsmFile`]. Carried so a coupled
+    /// (multi-model) array system reaching the array runtime via
+    /// [`crate::simulate_array::ArrayCompiled::from_flattened`] can resolve
+    /// `aggregate`/`arrayop` `ranges` `{ "from": <set> }`, `join.on` gates, and
+    /// derived-set references against it — exactly as the single-model
+    /// `from_file` path resolves them against `file.index_sets`. Empty for a
+    /// file that declares no index sets, so the ordinary ODE path is unaffected.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub index_sets: IndexMap<String, IndexSet>,
     /// Provenance metadata.
     pub metadata: FlattenMetadata,
 }
@@ -421,6 +431,11 @@ pub fn flatten(file: &EsmFile) -> Result<FlattenedSystem, FlattenError> {
         continuous_events,
         discrete_events,
         domain: file.domain.clone(),
+        index_sets: file
+            .index_sets
+            .as_ref()
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default(),
         metadata: FlattenMetadata {
             source_systems,
             coupling_rules_applied,
@@ -1073,6 +1088,17 @@ fn apply_variable_map(
         for eq in &mut block.equations {
             eq.lhs = substitute_var(&eq.lhs, to, &replacement);
             eq.rhs = substitute_var(&eq.rhs, to, &replacement);
+        }
+        // A `variable_map` also removes the mapped parameter from the system, so
+        // it must reach OBSERVED-variable expressions too — otherwise an observed
+        // defined by its `expression` (e.g. a `wind_speed` reading a coupled
+        // ground-level wind, or a `surface_heat_flux` reading a coupled flux
+        // field) keeps a dangling reference to the now-removed parameter and
+        // evaluates to NaN. Mirrors the equation rewrite above.
+        for var in block.observed_vars.values_mut() {
+            if let Some(expr) = &var.expression {
+                var.expression = Some(substitute_var(expr, to, &replacement));
+            }
         }
     }
 }
