@@ -96,9 +96,9 @@ const COUPLED_FORCED_JSON: &str = r#"{
    "variables": {"c": {"type": "state", "shape": ["i"], "default": 0.0}},
    "equations": [
     {
-     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "D", "args": [{"op": "index", "args": ["c", "i"]}], "wrt": "t"}},
-     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "*", "args": [
                 {"op": "index", "args": ["scale", "i"]},
                 {"op": "index", "args": ["src", "i"]}
@@ -110,9 +110,9 @@ const COUPLED_FORCED_JSON: &str = r#"{
    "variables": {"d": {"type": "state", "shape": ["i"], "default": 0.0}},
    "equations": [
     {
-     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "D", "args": [{"op": "index", "args": ["d", "i"]}], "wrt": "t"}},
-     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "index", "args": ["Box.c", "i"]}}
     }
    ]

@@ -84,6 +84,8 @@ fn model_only_subset(file: &EsmFile, model_key: &str) -> EsmFile {
         models.insert(model_key.to_string(), m.clone());
     }
     EsmFile {
+        domain: None,
+        index_sets: None,
         esm: file.esm.clone(),
         metadata: empty_metadata(),
         models: Some(models),
@@ -93,11 +95,6 @@ fn model_only_subset(file: &EsmFile, model_key: &str) -> EsmFile {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     }
 }
@@ -110,6 +107,8 @@ fn reaction_system_only_subset(file: &EsmFile, rs_key: &str) -> EsmFile {
         rs.insert(rs_key.to_string(), r.clone());
     }
     EsmFile {
+        domain: None,
+        index_sets: None,
         esm: file.esm.clone(),
         metadata: empty_metadata(),
         models: None,
@@ -119,11 +118,6 @@ fn reaction_system_only_subset(file: &EsmFile, rs_key: &str) -> EsmFile {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     }
 }

@@ -1471,6 +1471,8 @@ mod tests {
 
     fn empty_file() -> EsmFile {
         EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: make_metadata(),
             models: None,
@@ -1480,8 +1482,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         }
     }
@@ -1529,7 +1529,6 @@ mod tests {
             "sys".to_string(),
             Model {
                 name: Some("System".to_string()),
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,

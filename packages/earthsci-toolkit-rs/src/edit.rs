@@ -603,6 +603,8 @@ mod tests {
 
     fn create_empty_esm_file() -> EsmFile {
         EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -624,8 +626,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         }
     }
@@ -633,7 +633,6 @@ mod tests {
     fn create_simple_model() -> Model {
         Model {
             reference: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: Some("Test Model".to_string()),
@@ -1015,6 +1014,7 @@ mod tests {
     fn test_add_coupling() {
         let esm_file = create_empty_esm_file();
         let coupling = CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["system1".to_string(), "system2".to_string()],
             translate: None,
             description: Some("Test coupling".to_string()),
@@ -1045,6 +1045,7 @@ mod tests {
         let esm_file = create_empty_esm_file();
 
         let coupling1 = CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["system1".to_string(), "system2".to_string()],
             translate: None,
             description: None,
@@ -1077,6 +1078,7 @@ mod tests {
         let mut esm_file = create_empty_esm_file();
         esm_file.coupling = Some(vec![
             CouplingEntry::OperatorCompose {
+                lifting: None,
                 systems: vec!["system1".to_string(), "system2".to_string()],
                 translate: None,
                 description: Some("First coupling".to_string()),
@@ -1128,6 +1130,7 @@ mod tests {
     fn test_remove_last_coupling() {
         let mut esm_file = create_empty_esm_file();
         esm_file.coupling = Some(vec![CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["system1".to_string(), "system2".to_string()],
             translate: None,
             description: Some("Only coupling".to_string()),
@@ -1145,6 +1148,7 @@ mod tests {
     fn test_replace_coupling() {
         let mut esm_file = create_empty_esm_file();
         esm_file.coupling = Some(vec![CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["old_system1".to_string(), "old_system2".to_string()],
             translate: None,
             description: Some("Old coupling".to_string()),
@@ -1186,6 +1190,7 @@ mod tests {
 
         // Test out of bounds error
         let dummy_coupling = CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["dummy".to_string()],
             translate: None,
             description: None,
@@ -1200,6 +1205,7 @@ mod tests {
         // Test error when no coupling entries exist
         let empty_file = create_empty_esm_file();
         let dummy_coupling2 = CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["dummy".to_string()],
             translate: None,
             description: None,

@@ -262,6 +262,7 @@ mod coupling_field_tests {
     fn test_coupling_serialization_round_trip() {
         // Test serialization round-trip
         let coupling = CouplingEntry::OperatorCompose {
+            lifting: None,
             systems: vec!["sys1".to_string(), "sys2".to_string()],
             translate: None,
             description: None,

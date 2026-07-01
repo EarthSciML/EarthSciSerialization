@@ -43,9 +43,9 @@ const COUPLED_ARRAY_JSON: &str = r#"{
    "variables": {"u": {"type": "state", "shape": ["i"]}},
    "equations": [
     {
-     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"}},
-     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "*", "args": [-1, {"op": "index", "args": ["u", "i"]}]}}
     }
    ]
@@ -54,9 +54,9 @@ const COUPLED_ARRAY_JSON: &str = r#"{
    "variables": {"w": {"type": "state", "shape": ["i"]}},
    "equations": [
     {
-     "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "D", "args": [{"op": "index", "args": ["w", "i"]}], "wrt": "t"}},
-     "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+     "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
              "expr": {"op": "index", "args": ["Src.u", "i"]}}
     }
    ]
@@ -141,7 +141,7 @@ fn flatten_preserves_arrayop_structure_and_namespaces_body() {
     };
     // The arrayop sidecar fields must survive namespacing — the regression the
     // seam fixes is `..Default::default()` wiping exactly these.
-    assert_eq!(rhs.op, "arrayop");
+    assert_eq!(rhs.op, "aggregate");
     assert_eq!(
         rhs.output_idx.as_deref(),
         Some(&["i".to_string()][..]),
@@ -276,9 +276,9 @@ fn single_model_array_path_unchanged() {
        "variables": {"u": {"type": "state", "shape": ["i"]}},
        "equations": [
         {
-         "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+         "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
                  "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"}},
-         "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
+         "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"], "ranges": {"i": [1, 3]},
                  "expr": {"op": "*", "args": [-1, {"op": "index", "args": ["u", "i"]}]}}
         }
        ]

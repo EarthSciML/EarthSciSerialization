@@ -245,19 +245,6 @@ fn test_loader_only_document_loads() {
                 "source": {
                     "url_template": "https://example.org/data/{date:%Y%m%d}.nc"
                 },
-                "grid": {
-                    "family": "cartesian",
-                    "crs": { "projection": "longlat", "datum": "WGS84" },
-                    "dimensions": ["lon", "lat"],
-                    "extents": {
-                        "lon": { "n": "n_lon", "spacing": "uniform" },
-                        "lat": { "n": "n_lat", "spacing": "uniform" }
-                    },
-                    "parameters": {
-                        "n_lon": { "description": "lon cell count" },
-                        "n_lat": { "description": "lat cell count" }
-                    }
-                },
                 "variables": {
                     "T": {
                         "file_variable": "temperature",

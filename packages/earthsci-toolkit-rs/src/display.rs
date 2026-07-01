@@ -2225,7 +2225,6 @@ mod tests {
         );
 
         let reaction_system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species,
@@ -2242,6 +2241,8 @@ mod tests {
 
         // Create ESM file
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata,
             models: None,
@@ -2251,8 +2252,6 @@ mod tests {
 
             data_loaders: None,
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 

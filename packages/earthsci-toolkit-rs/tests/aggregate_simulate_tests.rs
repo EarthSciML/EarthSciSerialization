@@ -118,7 +118,7 @@ const I_2: &str = r#"{ "i": [1, 2] }"#;
 #[test]
 fn sum_product_semiring_matches_reduce_plus() {
     let by_reduce = build(
-        "arrayop",
+        "aggregate",
         "y",
         r#""reduce": "+","#,
         PROD_BODY,
@@ -127,7 +127,7 @@ fn sum_product_semiring_matches_reduce_plus() {
         "",
     );
     let by_semiring = build(
-        "arrayop",
+        "aggregate",
         "y",
         r#""semiring": "sum_product","#,
         PROD_BODY,
@@ -154,7 +154,7 @@ fn sum_product_semiring_matches_reduce_plus() {
 #[test]
 fn max_sum_semiring_matches_reduce_max() {
     let by_reduce = build(
-        "arrayop",
+        "aggregate",
         "y",
         r#""reduce": "max","#,
         SUM_BODY,
@@ -163,7 +163,7 @@ fn max_sum_semiring_matches_reduce_max() {
         "",
     );
     let by_semiring = build(
-        "arrayop",
+        "aggregate",
         "y",
         r#""semiring": "max_sum","#,
         SUM_BODY,
@@ -193,7 +193,7 @@ fn max_sum_semiring_matches_reduce_max() {
 #[test]
 fn min_sum_semiring_reduces_with_min() {
     let m = build(
-        "arrayop",
+        "aggregate",
         "y",
         r#""semiring": "min_sum","#,
         SUM_BODY,
@@ -399,10 +399,10 @@ fn ragged_index_set_drives_dynamic_reduction_bound() {
                      "expr": "k",
                      "ranges": { "i": { "from": "cells" },
                                  "k": { "from": "edges_of_cell", "of": ["i"] } } } },
-          { "lhs": { "op": "arrayop", "args": [], "output_idx": ["i"],
+          { "lhs": { "op": "aggregate", "args": [], "output_idx": ["i"],
                      "expr": { "op": "D", "args": [{ "op": "index", "args": ["nedges", "i"] }], "wrt": "t" },
                      "ranges": { "i": [1, 2] } },
-            "rhs": { "op": "arrayop", "args": [], "output_idx": ["i"],
+            "rhs": { "op": "aggregate", "args": [], "output_idx": ["i"],
                      "expr": 0, "ranges": { "i": [1, 2] } } }
         ]
       } }

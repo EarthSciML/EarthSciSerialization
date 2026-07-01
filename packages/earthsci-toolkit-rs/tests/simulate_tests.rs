@@ -45,6 +45,8 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
     let mut models = std::collections::HashMap::new();
     models.insert(model_name.to_string(), model);
     EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: empty_metadata(),
         models: Some(models),
@@ -54,11 +56,6 @@ fn esm_with_model(model_name: &str, model: Model) -> EsmFile {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     }
 }
@@ -146,9 +143,7 @@ fn make_model(
         variables.insert(n, v);
     }
     Model {
-        regrid: None,
         name: Some(name.to_string()),
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -840,6 +835,7 @@ fn flat_with_one_state_rhs(rhs: Expr) -> FlattenedSystem {
         parameters: IndexMap::new(),
         observed_variables: IndexMap::new(),
         brownian_variables: IndexMap::new(),
+        field_ics: Vec::new(),
         equations: vec![Equation {
             lhs: Expr::Operator(ExpressionNode {
                 op: "D".to_string(),
@@ -852,7 +848,7 @@ fn flat_with_one_state_rhs(rhs: Expr) -> FlattenedSystem {
         }],
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
-        domains: None,
+        domain: None,
         metadata: Default::default(),
     }
 }
@@ -943,7 +939,7 @@ fn test_error_grad_in_array_simulator_rejected() {
             ..Default::default()
         }],
     );
-    let err = match ArrayCompiled::from_model(&model) {
+    let err = match ArrayCompiled::from_model(&model, &std::collections::HashMap::new()) {
         Ok(_) => panic!("expected error, got Ok"),
         Err(e) => e,
     };
@@ -965,10 +961,11 @@ fn dummy_flat() -> FlattenedSystem {
         parameters: IndexMap::new(),
         observed_variables: IndexMap::new(),
         brownian_variables: IndexMap::new(),
+        field_ics: Vec::new(),
         equations: Vec::new(),
         continuous_events: Vec::new(),
         discrete_events: Vec::new(),
-        domains: None,
+        domain: None,
         metadata: Default::default(),
     }
 }

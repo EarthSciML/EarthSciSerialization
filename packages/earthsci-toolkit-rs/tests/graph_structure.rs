@@ -40,8 +40,6 @@ fn test_component_graph_generation() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -77,7 +75,6 @@ fn test_component_graph_generation() {
 
     let rs = ReactionSystem {
         subsystems: None,
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -92,6 +89,8 @@ fn test_component_graph_generation() {
     reaction_systems.insert("rs1".to_string(), rs);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata,
         models: Some(models),
@@ -101,11 +100,6 @@ fn test_component_graph_generation() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -153,8 +147,6 @@ fn test_component_graph_exports() {
     };
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -175,6 +167,8 @@ fn test_component_graph_exports() {
     models.insert("simple".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata,
         models: Some(models),
@@ -184,11 +178,6 @@ fn test_component_graph_exports() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -257,8 +246,6 @@ fn test_model_expression_graph() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -373,7 +360,6 @@ fn test_reaction_system_expression_graph() {
 
     let rs = ReactionSystem {
         subsystems: None,
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -420,8 +406,6 @@ fn test_component_existence() {
     };
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -442,6 +426,8 @@ fn test_component_existence() {
     models.insert("test_model".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata,
         models: Some(models),
@@ -451,11 +437,6 @@ fn test_component_existence() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -554,8 +535,6 @@ fn test_expected_graph_outputs() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,

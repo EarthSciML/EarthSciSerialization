@@ -932,6 +932,8 @@ mod tests {
     #[test]
     fn test_component_graph_empty() {
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -953,8 +955,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -970,7 +970,6 @@ mod tests {
             "model1".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Test Model 1".to_string()),
@@ -990,7 +989,6 @@ mod tests {
             "model2".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Test Model 2".to_string()),
@@ -1008,6 +1006,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1029,8 +1029,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -1053,7 +1051,6 @@ mod tests {
             "test_model".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Test Model".to_string()),
@@ -1071,6 +1068,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1092,8 +1091,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -1108,7 +1105,6 @@ mod tests {
             "test_model".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Test Model".to_string()),
@@ -1129,7 +1125,6 @@ mod tests {
         reaction_systems.insert(
             "test_rs".to_string(),
             ReactionSystem {
-                domain: None,
                 coupletype: None,
                 reference: None,
                 species: HashMap::new(),
@@ -1143,6 +1138,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1164,8 +1161,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -1262,7 +1257,6 @@ mod tests {
             "source".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Source System".to_string()),
@@ -1282,7 +1276,6 @@ mod tests {
             "target".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Target System".to_string()),
@@ -1308,6 +1301,8 @@ mod tests {
         }];
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1329,8 +1324,6 @@ mod tests {
             enums: None,
 
             coupling: Some(coupling_entries),
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 

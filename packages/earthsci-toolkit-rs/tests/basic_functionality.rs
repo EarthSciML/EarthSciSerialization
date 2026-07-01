@@ -80,8 +80,6 @@ fn test_structural_validation() {
     // Create a model with equations but no variables (should fail structural validation)
     let variables = HashMap::new();
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -106,6 +104,8 @@ fn test_structural_validation() {
     models.insert("test".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: Metadata {
             name: Some("Test".to_string()),
@@ -127,11 +127,6 @@ fn test_structural_validation() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -217,7 +212,6 @@ fn test_stoichiometric_matrix() {
 
     let rs = ReactionSystem {
         subsystems: None,
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -253,8 +247,6 @@ fn test_component_graph() {
     };
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -275,6 +267,8 @@ fn test_component_graph() {
     models.insert("test_model".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata,
         models: Some(models),
@@ -284,11 +278,6 @@ fn test_component_graph() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -327,8 +316,6 @@ fn test_pretty_printing() {
 #[test]
 fn test_editing() {
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,

@@ -81,6 +81,8 @@ mod tests {
     #[test]
     fn test_save_minimal_file() {
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test_model".to_string()),
@@ -102,8 +104,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -138,7 +138,6 @@ mod tests {
             "test".to_string(),
             Model {
                 reference: None,
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 name: Some("Test Model".to_string()),
@@ -160,6 +159,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test_model".to_string()),
@@ -181,8 +182,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -199,6 +198,8 @@ mod tests {
     #[test]
     fn test_save_compact() {
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test_model".to_string()),
@@ -220,8 +221,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 

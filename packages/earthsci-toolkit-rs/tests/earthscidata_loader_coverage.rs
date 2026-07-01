@@ -184,10 +184,7 @@ fn every_earthscidata_loader_has_expected_variables() {
             // Kind must be one of the enum variants — exercise the enum so
             // a future deserialization regression is caught here.
             match dl.kind {
-                DataLoaderKind::Grid
-                | DataLoaderKind::Points
-                | DataLoaderKind::Static
-                | DataLoaderKind::Mesh => {}
+                DataLoaderKind::Grid | DataLoaderKind::Points | DataLoaderKind::Static => {}
             }
             for (vname, var) in &dl.variables {
                 assert!(

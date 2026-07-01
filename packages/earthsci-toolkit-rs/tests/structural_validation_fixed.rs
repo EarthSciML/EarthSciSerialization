@@ -28,8 +28,6 @@ fn test_undefined_variable_in_model() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -54,6 +52,8 @@ fn test_undefined_variable_in_model() {
     models.insert("test".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: Metadata {
             name: Some("Test".to_string()),
@@ -75,11 +75,6 @@ fn test_undefined_variable_in_model() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -134,8 +129,6 @@ fn test_equation_count_mismatch() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -167,6 +160,8 @@ fn test_equation_count_mismatch() {
     models.insert("test".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: Metadata {
             name: Some("Test".to_string()),
@@ -188,11 +183,6 @@ fn test_equation_count_mismatch() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -247,7 +237,6 @@ fn test_undefined_species_in_reaction() {
 
     let rs = ReactionSystem {
         subsystems: None,
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -262,6 +251,8 @@ fn test_undefined_species_in_reaction() {
     reaction_systems.insert("test".to_string(), rs);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: Metadata {
             name: Some("Test".to_string()),
@@ -283,11 +274,6 @@ fn test_undefined_species_in_reaction() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -360,8 +346,6 @@ fn test_valid_file_passes() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -382,6 +366,8 @@ fn test_valid_file_passes() {
     models.insert("valid".to_string(), model);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: Metadata {
             name: Some("Valid File".to_string()),
@@ -403,11 +389,6 @@ fn test_valid_file_passes() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 

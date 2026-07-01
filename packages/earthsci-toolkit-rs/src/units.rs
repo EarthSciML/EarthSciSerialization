@@ -1173,7 +1173,7 @@ mod tests {
         let env = env_of(&[("x", "m/s")]);
         let body = op("*", vec![Expr::Variable("x".into()), Expr::Number(2.0)]);
         let node = Expr::Operator(ExpressionNode {
-            op: "arrayop".to_string(),
+            op: "aggregate".to_string(),
             args: vec![],
             expr: Some(Box::new(body)),
             ..ExpressionNode::default()

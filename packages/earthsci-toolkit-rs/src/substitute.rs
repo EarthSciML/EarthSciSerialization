@@ -802,7 +802,6 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,
@@ -820,6 +819,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -841,8 +842,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -883,7 +882,6 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,
@@ -901,6 +899,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -922,8 +922,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -967,7 +965,6 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,
@@ -985,6 +982,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1006,8 +1005,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -1065,7 +1062,6 @@ mod tests {
             "Atmosphere".to_string(),
             Model {
                 name: Some("Atmosphere".to_string()),
-                domain: None,
                 coupletype: None,
                 subsystems: None,
                 reference: None,
@@ -1083,6 +1079,8 @@ mod tests {
         );
 
         let esm_file = EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.1.0".to_string(),
             metadata: Metadata {
                 name: Some("test".to_string()),
@@ -1104,8 +1102,6 @@ mod tests {
             enums: None,
 
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         };
 
@@ -1248,7 +1244,6 @@ mod tests {
         // Create a model with discrete and continuous events
         let model = Model {
             name: Some("TestModel".to_string()),
-            domain: None,
             coupletype: None,
             subsystems: None,
             reference: None,

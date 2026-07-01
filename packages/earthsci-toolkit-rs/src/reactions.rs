@@ -442,7 +442,6 @@ mod tests {
     #[test]
     fn test_derive_odes_simple() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A"), create_test_species("B")]
@@ -500,7 +499,6 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [
@@ -559,7 +557,6 @@ mod tests {
     #[test]
     fn test_stoichiometric_matrix_empty() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: std::collections::HashMap::new(),
@@ -578,7 +575,6 @@ mod tests {
     #[test]
     fn test_derive_odes_empty_system() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: std::collections::HashMap::new(),
@@ -598,7 +594,6 @@ mod tests {
     #[test]
     fn test_derive_odes_unknown_species_error() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A")]
@@ -629,7 +624,6 @@ mod tests {
     #[test]
     fn test_derive_odes_mass_action_kinetics() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [
@@ -685,7 +679,6 @@ mod tests {
     #[test]
     fn test_derive_odes_source_reaction() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A")]
@@ -717,7 +710,6 @@ mod tests {
     #[test]
     fn test_derive_odes_sink_reaction() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A")]
@@ -764,7 +756,6 @@ mod tests {
     #[test]
     fn test_derive_odes_higher_order_reaction() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A"), create_test_species("B")]
@@ -815,7 +806,6 @@ mod tests {
     #[test]
     fn test_derive_odes_reactions_with_no_substrates_and_products() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [create_test_species("A")]
@@ -846,7 +836,6 @@ mod tests {
     #[test]
     fn test_derive_odes_complex_reaction_network() {
         let system = ReactionSystem {
-            domain: None,
             coupletype: None,
             reference: None,
             species: [

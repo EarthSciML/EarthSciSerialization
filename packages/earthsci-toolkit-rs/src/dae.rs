@@ -377,6 +377,8 @@ mod tests {
         let mut models = HashMap::new();
         models.insert(model_name.into(), model);
         EsmFile {
+            domain: None,
+            index_sets: None,
             esm: "0.2.0".into(),
             metadata: Metadata {
                 name: Some("test".into()),
@@ -397,8 +399,6 @@ mod tests {
             operators: None,
             enums: None,
             coupling: None,
-            domains: None,
-            interfaces: None,
             function_tables: None,
         }
     }
@@ -448,7 +448,6 @@ mod tests {
     fn empty_model() -> Model {
         Model {
             name: None,
-            domain: None,
             coupletype: None,
             reference: None,
             variables: HashMap::new(),
@@ -703,7 +702,6 @@ mod tests {
         // Domain with independent_variable = "s". D(x, wrt=s) is
         // differential; D(x, wrt=t) is algebraic under this indep.
         let mut m = empty_model();
-        m.domain = Some("space".into());
         m.variables.insert("x".into(), state_var());
         m.equations.push(Equation {
             lhs: op_wrt("D", vec![var("x")], "t"),
@@ -711,18 +709,12 @@ mod tests {
             ..Default::default()
         });
         let mut esm = minimal_esm("M", m);
-        let mut domains = HashMap::new();
-        domains.insert(
-            "space".into(),
-            Domain {
-                independent_variable: Some("s".into()),
-                temporal: None,
-                initial_conditions: None,
-                element_type: None,
-                array_type: None,
-            },
-        );
-        esm.domains = Some(domains);
+        esm.domain = Some(Domain {
+            independent_variable: Some("s".into()),
+            temporal: None,
+            element_type: None,
+            array_type: None,
+        });
 
         // With non-bare LHS (D(...)) the equation cannot be factored;
         // since wrt=t doesn't match indep=s it is algebraic.

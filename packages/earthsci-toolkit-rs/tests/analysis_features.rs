@@ -50,8 +50,6 @@ fn test_analysis_features_integration() {
     );
 
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,
@@ -140,7 +138,6 @@ fn test_analysis_features_integration() {
 
     let rs = ReactionSystem {
         subsystems: None,
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -155,6 +152,8 @@ fn test_analysis_features_integration() {
     reaction_systems.insert("simple_rs".to_string(), rs);
 
     let esm_file = EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata,
         models: Some(models),
@@ -164,11 +163,6 @@ fn test_analysis_features_integration() {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     };
 
@@ -228,8 +222,6 @@ fn test_editing_operations() {
 
     // Create a simple model
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         reference: None,

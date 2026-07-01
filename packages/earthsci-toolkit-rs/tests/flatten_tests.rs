@@ -32,6 +32,8 @@ fn empty_metadata() -> Metadata {
 
 fn empty_file() -> EsmFile {
     EsmFile {
+        domain: None,
+        index_sets: None,
         esm: "0.1.0".to_string(),
         metadata: empty_metadata(),
         models: None,
@@ -41,11 +43,6 @@ fn empty_file() -> EsmFile {
         enums: None,
 
         coupling: None,
-        domains: None,
-        interfaces: None,
-        grids: None,
-        staggering_rules: None,
-        discretizations: None,
         function_tables: None,
     }
 }
@@ -118,7 +115,6 @@ fn reaction_system(
         );
     }
     ReactionSystem {
-        domain: None,
         coupletype: None,
         reference: None,
         species,
@@ -206,8 +202,6 @@ fn flatten_mixed_model_and_reaction_system() {
     models.insert(
         "dyn".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -395,8 +389,6 @@ fn flatten_conflicting_derivative_raises_error() {
     models.insert(
         "sys".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -508,8 +500,6 @@ fn flatten_operator_compose_sums_matched_rhses() {
     models.insert(
         "A".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -533,8 +523,6 @@ fn flatten_operator_compose_sums_matched_rhses() {
     models.insert(
         "B".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -563,6 +551,7 @@ fn flatten_operator_compose_sums_matched_rhses() {
     );
 
     let coupling = vec![CouplingEntry::OperatorCompose {
+        lifting: None,
         systems: vec!["A".to_string(), "B".to_string()],
         translate: None,
         description: None,
@@ -658,8 +647,6 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
     models.insert(
         "M".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -683,8 +670,6 @@ fn flatten_variable_map_param_to_var_substitutes_and_removes_parameter() {
     models.insert(
         "S".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -758,8 +743,6 @@ fn flatten_couple_includes_connector_equations() {
     models.insert(
         "A".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -836,8 +819,6 @@ fn flatten_model_wraps_and_namespaces_under_declared_name() {
         },
     );
     let model = Model {
-        regrid: None,
-        domain: None,
         coupletype: None,
         subsystems: None,
         name: Some("Nested".to_string()),
@@ -886,8 +867,6 @@ fn flatten_rejects_spatial_operators() {
     models.insert(
         "transport".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,
@@ -953,8 +932,6 @@ fn flatten_rejects_non_time_derivative_and_exposes_slice_variant() {
     models.insert(
         "pde".to_string(),
         Model {
-            regrid: None,
-            domain: None,
             coupletype: None,
             subsystems: None,
             name: None,

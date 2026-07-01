@@ -823,10 +823,10 @@ mod tests {
          "models": {"Forced": {
            "variables": {"u": {"type": "state", "shape": ["i"], "default": 0.0}},
            "equations": [{
-             "lhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "lhs": {"op": "aggregate", "args": [], "output_idx": ["i"],
                      "expr": {"op": "D", "args": [{"op": "index", "args": ["u", "i"]}], "wrt": "t"},
                      "ranges": {"i": [1, 3]}},
-             "rhs": {"op": "arrayop", "args": [], "output_idx": ["i"],
+             "rhs": {"op": "aggregate", "args": [], "output_idx": ["i"],
                      "ranges": {"i": [1, 3]},
                      "expr": {"op": "index", "args": ["wind", "i"]}}
            }]
