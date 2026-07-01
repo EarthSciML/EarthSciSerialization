@@ -27,23 +27,17 @@ const _EXPRIC_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
     @test file isa ESS.EsmFile
     @test file.esm == "0.6.0"
 
-    # The domain declares a 1-D spatial grid (x in [0, 1] at grid_spacing 0.25,
-    # 5 nodes) and an `expression` initial condition whose value is an Expression
-    # AST in the spatial coordinate `x`.
+    # esm-spec v0.8.0 removed the domain-level `initial_conditions` block; the
+    # expression IC is now carried by an `ic(u)` equation whose RHS is the
+    # Expression AST psi(x) = 0.5 * (1 + tanh((x - 0.3)/0.15)) in the spatial
+    # coordinate `x`. The state field is method-of-lines discretized over the
+    # 1-D grid via `shape: [i]`.
     raw = JSON3.read(read(path, String), Dict)
-    dom = raw["domains"]["line"]
-    @test haskey(dom["spatial"], "x")
-    @test dom["spatial"]["x"]["min"] == 0.0
-    @test dom["spatial"]["x"]["max"] == 1.0
-    @test dom["spatial"]["x"]["grid_spacing"] == 0.25
-
-    ic = dom["initial_conditions"]
-    @test ic["type"] == "expression"
-    @test haskey(ic["values"], "u")
-    @test ic["values"]["u"]["op"] == "*"  # psi(x) = 0.5 * (1 + tanh(...))
-
-    # The state variable is method-of-lines discretized over the grid.
     model = raw["models"]["IgnitionFront1D"]
-    @test model["domain"] == "line"
     @test model["variables"]["u"]["shape"] == ["i"]
+
+    ic_eq = first(e for e in model["equations"]
+                  if e["lhs"] isa AbstractDict && get(e["lhs"], "op", nothing) == "ic")
+    @test ic_eq["lhs"]["args"] == ["u"]
+    @test ic_eq["rhs"]["op"] == "*"  # psi(x) = 0.5 * (1 + tanh(...))
 end

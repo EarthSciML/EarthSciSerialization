@@ -51,8 +51,8 @@ import Symbolics
     end
 
     @testset "ModelingToolkit.System(::Model) errors on PDE model with pointer to PDESystem" begin
-        domains = Dict{String,Domain}(
-            "col" => Domain(spatial=Dict{String,Any}("z" => Dict())))
+        # The spatial dimension `z` is derived from the grad operators'
+        # `dim="z"` (esm-spec v0.8.0 removed the Domain.spatial table).
         vars = Dict{String,ModelVariable}(
             "u" => ModelVariable(StateVariable; default=1.0),
             "D" => ModelVariable(ParameterVariable; default=0.1),
@@ -66,9 +66,9 @@ import Symbolics
                 ], dim="z"),
             ]),
         )
-        model = Model(vars, [eq], domain="col")
+        model = Model(vars, [eq])
         file = EsmFile("0.1.0", Metadata("Diffuse");
-            models=Dict("Diffuse" => model), domains=domains)
+            models=Dict("Diffuse" => model))
         flat = flatten(file)
         @test :z in flat.independent_variables
         @test_throws ArgumentError ModelingToolkit.System(flat; name=:Diffuse)
@@ -153,7 +153,7 @@ import Symbolics
 
         flat = FlattenedSystem(ivs, svars, ps, obs, [diff_eq, slice_eq],
             ContinuousEvent[], DiscreteEvent[],
-            Domain(spatial=Dict{String,Any}("z" => [0.0, 1000.0])),
+            nothing,
             FlattenMetadata())
 
         pde = ModelingToolkit.PDESystem(flat; name=:VertDep)

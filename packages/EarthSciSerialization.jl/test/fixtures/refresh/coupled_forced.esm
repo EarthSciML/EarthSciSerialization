@@ -13,11 +13,11 @@
       "equations": [
         {
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
+            "op": "aggregate", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["c", "i"] }], "wrt": "t" }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
+            "op": "aggregate", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
             "expr": {
               "op": "*",
               "args": [
@@ -29,11 +29,11 @@
         },
         {
           "lhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
+            "op": "aggregate", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
             "expr": { "op": "D", "args": [{ "op": "index", "args": ["d", "i"] }], "wrt": "t" }
           },
           "rhs": {
-            "op": "arrayop", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
+            "op": "aggregate", "args": [], "output_idx": ["i"], "ranges": { "i": [1, 3] },
             "expr": { "op": "index", "args": ["c", "i"] }
           }
         }

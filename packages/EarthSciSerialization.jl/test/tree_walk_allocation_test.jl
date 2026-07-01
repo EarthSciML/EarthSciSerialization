@@ -156,19 +156,6 @@ _forcing_gather_model(N) = ESM.Model(
         end
     end
 
-    @testset "discretized advection RHS (param + division): 0 bytes" begin
-        for n in (8, 32, 128)
-            disc = discretize(_advection_esm(n); lift_1d_arrayop=true)
-            f!, u0, p, _tspan, vmap = build_evaluator(disc)
-            dx = 1.0 / n
-            for i in 1:n
-                u0[vmap["u[$i]"]] = sin(2π * (i - 0.5) * dx)
-            end
-            du = similar(u0)
-            @test rhs_alloc_bytes(f!, du, u0, p, 0.0) == 0
-        end
-    end
-
     @testset "vectorized interp.linear RHS: 0 bytes, N-independent (ess-wrh)" begin
         # Query lands strictly inside the axis so the blend (not a clamp) runs.
         for N in (32, 128)

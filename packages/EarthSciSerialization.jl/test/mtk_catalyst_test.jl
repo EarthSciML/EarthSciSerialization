@@ -82,8 +82,8 @@ using BenchmarkTools
     end
 
     @testset "MockMTKSystem(::Model) errors on PDE model with pointer to MockPDESystem" begin
-        domains = Dict{String,Domain}(
-            "col" => Domain(spatial=Dict{String,Any}("x" => Dict())))
+        # The spatial dimension `x` is derived from the grad operators'
+        # `dim="x"` (esm-spec v0.8.0 removed the Domain.spatial table).
         vars = Dict{String,ModelVariable}(
             "u" => ModelVariable(StateVariable; default=1.0),
             "D" => ModelVariable(ParameterVariable; default=0.1),
@@ -98,9 +98,9 @@ using BenchmarkTools
                 ], dim="x"),
             ])
         )
-        model = Model(vars, [eq], domain="col")
+        model = Model(vars, [eq])
         file = EsmFile("0.1.0", Metadata("Diffuse");
-            models=Dict("Diffuse" => model), domains=domains)
+            models=Dict("Diffuse" => model))
         flat = flatten(file)
         @test :x in flat.independent_variables
 
