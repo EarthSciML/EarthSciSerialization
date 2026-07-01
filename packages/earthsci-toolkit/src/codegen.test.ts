@@ -197,9 +197,11 @@ describe('toJuliaCode', () => {
     expect(code).toContain('model1_system.y ~ model2_system.y,')
 
     // Check domain implementation
+    // v0.8.0 clean break removed the Domain.spatial geometry block, so only the
+    // independent (time) variable is emitted — no per-spatial-coordinate @variables.
     expect(code).toContain('# Domain')
+    expect(code).toContain('# Time domain setup')
     expect(code).toContain('@variables t')
-    expect(code).toContain('@variables x y')
 
     // Check data loader implementation
     expect(code).toContain('# Data loader: weather')
@@ -521,9 +523,11 @@ describe('toPythonCode', () => {
     expect(code).toContain('variables=["x","y"]')
 
     // Check domain implementation
+    // v0.8.0 clean break removed the Domain.spatial geometry block, so only the
+    // independent (time) variable is emitted — no per-spatial-coordinate Symbols.
     expect(code).toContain('# Domain')
-    expect(code).toContain('x = sp.Symbol(\'x\')')
-    expect(code).toContain('y = sp.Symbol(\'y\')')
+    expect(code).toContain('# Domain configuration')
+    expect(code).toContain('t = sp.Symbol(\'t\')')
     expect(code).toContain('domain = esm.Domain(')
 
     // Check data loader implementation
