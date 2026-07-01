@@ -149,9 +149,10 @@ const _SR_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
                        expr_body=_idx("u", _v("i")),
                        ranges=Dict("i" => ESM.IndexSetRef("cells")))),
         ]
-        model = ESM.Model(vars, eqs; index_sets=index_sets)
+        model = ESM.Model(vars, eqs)
         ics = Dict("u[$i]" => Float64(i) for i in 1:N)
-        f!, u0, p, _, vmap = build_evaluator(model; initial_conditions=ics)
+        f!, u0, p, _, vmap = build_evaluator(model; index_sets=index_sets,
+                                             initial_conditions=ics)
         du = similar(u0); f!(du, u0, p, 0.0)
         for i in 1:N
             @test du[vmap["u[$i]"]] == -Float64(i)
@@ -172,8 +173,8 @@ const _SR_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
             OpExpr("aggregate", ESM.Expr[]; output_idx=Any[], semiring="sum_product",
                    expr_body=_idx("pop", _v("c")),
                    ranges=Dict("c" => ESM.IndexSetRef("county"))))
-        model = ESM.Model(vars, [eq]; index_sets=index_sets)
-        f!, u0, p, _, vmap = build_evaluator(model;
+        model = ESM.Model(vars, [eq])
+        f!, u0, p, _, vmap = build_evaluator(model; index_sets=index_sets,
             const_arrays=Dict("pop" => [10.0, 20.0, 30.0]))
         du = similar(u0); f!(du, u0, p, 0.0)
         @test du[vmap["total"]] == 60.0
@@ -204,7 +205,7 @@ const _SR_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
         rhs_reg = OpExpr("aggregate", ESM.Expr[]; output_idx=Any["c"], reduce="+",
             ranges=Dict("c" => Any[1, N_c], "k" => ESM.IndexSetRef("edges_of_cell"; of=["c"])),
             expr_body=body)
-        model_reg = ESM.Model(vars, [ESM.Equation(lhs, rhs_reg)]; index_sets=index_sets)
+        model_reg = ESM.Model(vars, [ESM.Equation(lhs, rhs_reg)])
         # Explicit form: k ∈ [1, index(n_edges_on_cell, c)].
         rhs_exp = OpExpr("aggregate", ESM.Expr[]; output_idx=Any["c"], reduce="+",
             ranges=Dict("c" => Any[1, N_c],
@@ -213,7 +214,8 @@ const _SR_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
         model_exp = ESM.Model(vars, [ESM.Equation(lhs, rhs_exp)])
 
         ics = Dict("u[$c]" => 0.0 for c in 1:N_c)
-        fr!, ur, pr, _, vr = build_evaluator(model_reg; initial_conditions=ics, const_arrays=carrs)
+        fr!, ur, pr, _, vr = build_evaluator(model_reg; index_sets=index_sets,
+                                             initial_conditions=ics, const_arrays=carrs)
         fe!, ue, pe, _, ve = build_evaluator(model_exp; initial_conditions=ics, const_arrays=carrs)
         u = copy(ur); u[vr["u[2]"]] = 1.0
         dur = similar(ur); fr!(dur, u, pr, 0.0)
@@ -240,10 +242,11 @@ const _SR_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
         model0 = ESM.Model(vars, [eq])
         @test_throws ESM.TreeWalkError build_evaluator(model0)
         # Registry present but missing the referenced name.
-        model1 = ESM.Model(vars, [eq];
-            index_sets=Dict("cells" => ESM.IndexSet("interval"; size=3)))
+        model1 = ESM.Model(vars, [eq])
         err = try
-            build_evaluator(model1); nothing
+            build_evaluator(model1;
+                index_sets=Dict("cells" => ESM.IndexSet("interval"; size=3)))
+            nothing
         catch e; e; end
         @test err isa ESM.TreeWalkError
         @test occursin("not_declared", sprint(showerror, err))

@@ -488,39 +488,14 @@ function _collect_spatial_dims!(dims::Set{Symbol}, expr::EarthSciSerialization.E
 end
 
 # ========================================
-# Index-set namespacing (RFC semiring-faq-unified-ir §5.2)
+# Variable-shape namespacing (RFC semiring-faq-unified-ir §5.2)
 # ========================================
 
-# Collect every value-invention producer `id` reachable in an expression tree.
-# A derived index set names its producer via `from_faq`, matched against these.
-function _collect_node_ids!(acc::Set{String}, expr::EarthSciSerialization.Expr)
-    expr isa OpExpr || return acc
-    expr.id === nothing || push!(acc, expr.id)
-    for a in expr.args
-        _collect_node_ids!(acc, a)
-    end
-    for f in (expr.expr_body, expr.filter, expr.lower, expr.upper)
-        f === nothing || _collect_node_ids!(acc, f)
-    end
-    if expr.values !== nothing
-        for v in expr.values
-            _collect_node_ids!(acc, v)
-        end
-    end
-    if expr.table_axes !== nothing
-        for v in values(expr.table_axes)
-            _collect_node_ids!(acc, v)
-        end
-    end
-    return acc
-end
-
-# Namespace one IndexSet entry: prefix its `from_faq` producer id and any `of`
-# parent that is itself a component-local index identifier; namespace the
-# `values`/`offsets` factor-array references that name component-local variables.
-# `kind`/`size`/`members` carry data, not names, and pass through unchanged.
-# Namespace a variable's `shape` index-set references (gated on idx_names). Returns
-# the same variable unchanged when its shape touches no local index identifier.
+# Namespace a variable's `shape` index-set references (gated on `idx_names`).
+# As of esm-spec v0.8.0 index sets are document-scoped with plain, shared names,
+# so the flattener passes an empty `idx_names` and this is a no-op — a shape's
+# entries (index-set names / domain dims) are global and never prefixed. The
+# gate is retained so a future component-local shape identifier could opt in.
 function _namespace_var_shape(var::ModelVariable, prefix::String, idx_names::Set{String})::ModelVariable
     var.shape === nothing && return var
     any(s -> s in idx_names, var.shape) || return var
@@ -531,22 +506,6 @@ function _namespace_var_shape(var::ModelVariable, prefix::String, idx_names::Set
         noise_kind=var.noise_kind, correlation_group=var.correlation_group)
 end
 
-function _namespace_index_set(is::IndexSet, prefix::String,
-                              local_names::Set{String}, idx_names::Set{String})::IndexSet
-    pfx(n) = "$(prefix).$(n)"
-    new_from_faq = (is.from_faq !== nothing && is.from_faq in idx_names) ?
-        pfx(is.from_faq) : is.from_faq
-    new_of = is.of === nothing ? nothing :
-        String[o in idx_names ? pfx(o) : o for o in is.of]
-    new_values = (is.values !== nothing && is.values in local_names) ?
-        pfx(is.values) : is.values
-    new_offsets = (is.offsets !== nothing && is.offsets in local_names) ?
-        pfx(is.offsets) : is.offsets
-    return IndexSet(is.kind; size=is.size, members=is.members, of=new_of,
-                    offsets=new_offsets, values=new_values, from_faq=new_from_faq,
-                    members_raw=is.members_raw)
-end
-
 # ========================================
 # Per-system collection
 # ========================================
@@ -554,10 +513,10 @@ end
 """
 Collect a Model's variables and equations into the flattener accumulators,
 recursing through subsystems. All names are rewritten to `prefix.local_name`.
-A model's document-scoped index sets (RFC §5.2) are namespaced per-component and
-merged into `index_sets_acc`, with their references inside equations (`ranges`
-`from`, producer `id`) rewritten in lockstep, so sibling components' identically-
-named geometry sets don't collide.
+Index sets (RFC §5.2) are document-scoped as of esm-spec v0.8.0 — a single shared
+registry seeded once by `flatten` into `index_sets_acc` — so their references
+inside equations (`shape`, `ranges` `from`, producer `id` / `from_faq`) keep
+their plain document-level names and are NOT namespaced here.
 """
 function _collect_model!(states::OrderedDict{String, ModelVariable},
                          params::OrderedDict{String, ModelVariable},
@@ -575,37 +534,20 @@ function _collect_model!(states::OrderedDict{String, ModelVariable},
         push!(local_names, sub_name)
     end
 
-    # The set of component-local index identifiers to namespace: declared
-    # index-set names, the producer ids their `from_faq` point at, and every
-    # `id` on a node in the model's equations. Empty (so a no-op) for models
-    # that declare no index sets — keeping non-geometry components byte-identical.
+    # esm-spec v0.8.0: index sets are a single document-scoped registry (seeded
+    # into `index_sets_acc` once, in `flatten`) with plain names shared by every
+    # component — no longer per-`Model` and no longer namespaced. So index-set
+    # references (`shape` entries, `ranges[*]` `{from}`, producer `id`s and their
+    # `from_faq` edges) stay as plain document-level names and must NOT be
+    # rewritten to a `<prefix>.` form. Passing an empty `idx_names` leaves them
+    # untouched while ordinary variable references are still namespaced.
     idx_names = Set{String}()
-    if !isempty(model.index_sets)
-        union!(idx_names, keys(model.index_sets))
-        for is in values(model.index_sets)
-            is.from_faq === nothing || push!(idx_names, is.from_faq)
-        end
-        for eq in model.equations
-            _collect_node_ids!(idx_names, eq.lhs)
-            _collect_node_ids!(idx_names, eq.rhs)
-        end
-        for (name, var) in model.variables
-            var.type == ObservedVariable && var.expression !== nothing &&
-                _collect_node_ids!(idx_names, var.expression)
-        end
-        # Merge the namespaced registry. Keys become `<prefix>.<setname>`.
-        for (sname, is) in model.index_sets
-            index_sets_acc["$(prefix).$(sname)"] =
-                _namespace_index_set(is, prefix, local_names, idx_names)
-        end
-    end
 
     for (name, var) in model.variables
         namespaced = "$(prefix).$(name)"
-        # An array variable's `shape` names index sets; namespace any entry that
-        # is a component-local index identifier so the shape stays consistent with
-        # the per-component namespaced `index_sets` registry (domain dims like
-        # x/y are global and pass through). No-op for scalar / domain-only shapes.
+        # An array variable's `shape` names index sets, which are document-scoped
+        # (v0.8.0): their plain names are shared across components, so the shape
+        # passes through unchanged (empty `idx_names` → no-op).
         v = _namespace_var_shape(var, prefix, idx_names)
         if v.type == StateVariable
             states[namespaced] = v
@@ -1169,7 +1111,10 @@ function flatten(file::EsmFile)::FlattenedSystem
     equations = Equation[]
     continuous_events = ContinuousEvent[]
     discrete_events = DiscreteEvent[]
-    index_sets = OrderedDict{String, IndexSet}()
+    # esm-spec v0.8.0: index sets are a single document-scoped registry, seeded
+    # directly from the top-level `index_sets` object (plain names, un-namespaced)
+    # and shared by every collected component.
+    index_sets = OrderedDict{String, IndexSet}(file.index_sets)
     source_systems = String[]
 
     file_domain = file.domain
@@ -1288,8 +1233,9 @@ The single model collects:
 - every flattened equation (state ODEs + the synthesized observed definitions),
   so the evaluator's own observed-equation synthesis is a no-op (it skips any
   observed already defined by an equation — no double definition);
-- the namespaced `index_sets` registry (so the five regridders' `ranges.from` /
-  `from_faq` / producer `id` references resolve without collision);
+- the document-scoped `index_sets` registry (esm-spec v0.8.0), emitted at the
+  top level so the regridders' `ranges.from` / `from_faq` / producer `id`
+  references resolve;
 - the file-scoped `function_tables` (the fuel `table_lookup` data).
 
 This is the monolithic path the staged camp-fire run previously could not take,
@@ -1314,16 +1260,19 @@ function flattened_to_esm(flat::FlattenedSystem;
         "variables" => variables,
         "equations" => Any[serialize_equation(eq) for eq in flat.equations],
     )
-    if !isempty(flat.index_sets)
-        model["index_sets"] = Dict{String,Any}(
-            k => serialize_index_set(v) for (k, v) in flat.index_sets)
-    end
 
     doc = Dict{String,Any}(
         "esm" => String(esm_version),
         "metadata" => Dict{String,Any}("name" => sname),
         "models" => Dict{String,Any}(sname => model),
     )
+    # esm-spec v0.8.0: the index-set registry is document-scoped — emit it as a
+    # sibling of `models` so the reconstituted document validates and both the
+    # typed (`coerce_esm_file`) and value-invention front-doors resolve it.
+    if !isempty(flat.index_sets)
+        doc["index_sets"] = Dict{String,Any}(
+            k => serialize_index_set(v) for (k, v) in flat.index_sets)
+    end
     if !isempty(flat.function_tables)
         doc["function_tables"] = Dict{String,Any}(
             k => serialize_function_table(v) for (k, v) in flat.function_tables)

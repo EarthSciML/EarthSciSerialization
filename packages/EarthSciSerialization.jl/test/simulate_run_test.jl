@@ -35,8 +35,8 @@ const ESM_S = EarthSciSerialization
     @testset "array state with seed_ic! + element IC override" begin
         esm = Dict{String,Any}(
             "esm" => "0.5.0", "metadata" => Dict{String,Any}("name" => "A"),
+            "index_sets" => Dict{String,Any}("n" => Dict{String,Any}("kind" => "interval", "size" => 3)),
             "models" => Dict{String,Any}("M" => Dict{String,Any}(
-                "index_sets" => Dict{String,Any}("n" => Dict{String,Any}("kind" => "interval", "size" => 3)),
                 "variables" => Dict{String,Any}("u" => Dict{String,Any}("type" => "state", "shape" => Any["n"])),
                 "equations" => Any[Dict{String,Any}(
                     "lhs" => Dict{String,Any}("op" => "arrayop", "output_idx" => Any["i"],
@@ -54,8 +54,8 @@ const ESM_S = EarthSciSerialization
         # u[i] state on a 4-cell axis; seed u(x) = x^2 at coords [10,20,30,40].
         esm = Dict{String,Any}(
             "esm" => "0.5.0", "metadata" => Dict{String,Any}("name" => "G"),
+            "index_sets" => Dict{String,Any}("n" => Dict{String,Any}("kind" => "interval", "size" => 4)),
             "models" => Dict{String,Any}("M" => Dict{String,Any}(
-                "index_sets" => Dict{String,Any}("n" => Dict{String,Any}("kind" => "interval", "size" => 4)),
                 "variables" => Dict{String,Any}("u" => Dict{String,Any}("type" => "state", "shape" => Any["n"])),
                 "equations" => Any[Dict{String,Any}(
                     "lhs" => Dict{String,Any}("op" => "arrayop", "output_idx" => Any["i"],

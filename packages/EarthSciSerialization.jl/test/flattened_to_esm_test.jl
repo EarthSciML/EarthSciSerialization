@@ -47,9 +47,10 @@ V(n) = E.VarExpr(n); N(x) = E.NumExpr(x)
             "function_tables" => Dict{String,Any}("fuel" => Dict{String,Any}(
                 "axes" => Any[Dict{String,Any}("name"=>"code","values"=>Any[1.0,2.0])],
                 "data" => Any[10.0, 20.0])),
+            # esm-spec v0.8.0: index_sets is a single document-scoped registry.
+            "index_sets" => Dict{String,Any}("cells"=>Dict{String,Any}("kind"=>"interval","size"=>2)),
             "models" => Dict{String,Any}(
                 "A" => Dict{String,Any}(
-                    "index_sets" => Dict{String,Any}("cells"=>Dict{String,Any}("kind"=>"interval","size"=>2)),
                     "variables" => Dict{String,Any}(
                         "code" => Dict{String,Any}("type"=>"parameter","default"=>2.0),
                         # `h` is plain arithmetic so the tree-walk eval needs no
@@ -68,18 +69,19 @@ V(n) = E.VarExpr(n); N(x) = E.NumExpr(x)
     # validation of a hand-built fixture.
     parse_tiny() = E.flatten(ESS.coerce_esm_file(ESS.JSON3.read(ESS.JSON3.write(tiny_doc()))))
 
-    @testset "flatten carries namespaced index_sets + function_tables" begin
+    @testset "flatten carries document-scoped index_sets + function_tables" begin
         flat = parse_tiny()
-        @test haskey(flat.index_sets, "A.cells")          # namespaced
-        @test !haskey(flat.index_sets, "cells")
+        # esm-spec v0.8.0: document-scoped registry — plain (un-namespaced) names.
+        @test haskey(flat.index_sets, "cells")
+        @test !haskey(flat.index_sets, "A.cells")
         @test haskey(flat.function_tables, "fuel")        # carried through
     end
 
     @testset "flattened_to_esm reconstitutes a runnable document" begin
         flat = parse_tiny()
         doc = E.flattened_to_esm(flat)
-        m = doc["models"][first(keys(doc["models"]))]
-        @test haskey(m, "index_sets") && haskey(m["index_sets"], "A.cells")
+        # index_sets is emitted at the document level (sibling of `models`).
+        @test haskey(doc, "index_sets") && haskey(doc["index_sets"], "cells")
         @test haskey(doc, "function_tables") && haskey(doc["function_tables"], "fuel")
         # build + evaluate: table_lookup(code=2) -> 20, so D(y) = 20.
         f!, u0, p, _t, vmap = E.build_evaluator(doc; initial_conditions=Dict("A.y"=>0.0))

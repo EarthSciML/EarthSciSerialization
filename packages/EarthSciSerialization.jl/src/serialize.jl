@@ -391,12 +391,6 @@ function serialize_model(model::Model)::Dict{String,Any}
         result["subsystems"] = Dict(k => _serialize_subsystem(v) for (k, v) in model.subsystems)
     end
 
-    if !isempty(model.index_sets)
-        result["index_sets"] = Dict{String,Any}(
-            k => serialize_index_set(v) for (k, v) in model.index_sets
-        )
-    end
-
     if model.tolerance !== nothing
         result["tolerance"] = serialize_tolerance(model.tolerance)
     end
@@ -1043,6 +1037,12 @@ function serialize_esm_file(file::EsmFile)::Dict{String,Any}
     end
     if file.domain !== nothing
         result["domain"] = serialize_domain(file.domain)
+    end
+    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2;
+    # esm-spec v0.8.0) — serialized at the top level, a sibling of `models`.
+    if !isempty(file.index_sets)
+        result["index_sets"] = Dict{String,Any}(
+            k => serialize_index_set(v) for (k, v) in file.index_sets)
     end
 
     return result

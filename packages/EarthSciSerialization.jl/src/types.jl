@@ -546,7 +546,7 @@ end
 """
     IndexSet(kind; size, members, of, offsets, values, from_faq)
 
-A declared index set in a model's document-scoped `index_sets` registry
+A declared index set in the document-scoped `index_sets` registry
 (RFC semiring-faq-unified-ir §5.2). Unifies ESM grid dims and ESI categorical
 dims under one shape. `kind` is one of:
 
@@ -629,10 +629,6 @@ struct Model
     initialization_equations::Vector{Equation}
     guesses::Dict{String,Union{Float64,Expr}}
     system_kind::Union{String,Nothing}
-    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
-    # Maps a name to its IndexSet declaration; `ranges[*]` `{from: <name>}`
-    # references resolve against it. Empty when the model declares none.
-    index_sets::Dict{String,IndexSet}
 
     # Primary constructor with separate event arrays
     Model(variables::AbstractDict{String,ModelVariable}, equations::Vector{Equation},
@@ -641,13 +637,11 @@ struct Model
           tolerance=nothing, tests=Test[],
           initialization_equations=Equation[],
           guesses=Dict{String,Union{Float64,Expr}}(),
-          system_kind=nothing,
-          index_sets=Dict{String,IndexSet}()) =
+          system_kind=nothing) =
         new(Dict{String,ModelVariable}(variables), equations,
             discrete_events, continuous_events, Dict{String,Any}(subsystems),
             tolerance, tests,
-            initialization_equations, guesses, system_kind,
-            Dict{String,IndexSet}(index_sets))
+            initialization_equations, guesses, system_kind)
 
     # Convenience constructor with optional events and subsystems.
     # Accepts legacy `events=` kwarg as a mixed Vector{EventType} and splits
@@ -662,8 +656,7 @@ struct Model
                    tests=Test[],
                    initialization_equations=Equation[],
                    guesses=Dict{String,Union{Float64,Expr}}(),
-                   system_kind=nothing,
-                   index_sets=Dict{String,IndexSet}())
+                   system_kind=nothing)
         if events !== nothing
             discrete_events = DiscreteEvent[]
             continuous_events = ContinuousEvent[]
@@ -680,8 +673,7 @@ struct Model
         return new(Dict{String,ModelVariable}(variables), equations,
                    discrete_events, continuous_events, Dict{String,Any}(subsystems),
                    tolerance, tests,
-                   initialization_equations, guesses, system_kind,
-                   Dict{String,IndexSet}(index_sets))
+                   initialization_equations, guesses, system_kind)
     end
 end
 
@@ -1229,6 +1221,12 @@ struct EsmFile
     # Keys are table ids; values are FunctionTable entries referenced by
     # table_lookup AST nodes.
     function_tables::Union{Dict{String,FunctionTable},Nothing}
+    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2;
+    # esm-spec v0.8.0). A single registry, sibling of `models`/`domain`, shared
+    # by every component: `ranges[*]` `{from: <name>}` references, array-variable
+    # `shape`s, and derived-set `from_faq` edges resolve against it. Empty when
+    # the document declares none.
+    index_sets::Dict{String,IndexSet}
 
     # Constructor with optional parameters
     EsmFile(esm::String, metadata::Metadata;
@@ -1240,10 +1238,12 @@ struct EsmFile
             coupling=CouplingEntry[],
             domain=nothing,
             enums=nothing,
-            function_tables=nothing) =
+            function_tables=nothing,
+            index_sets=Dict{String,IndexSet}()) =
         new(esm, metadata, models, reaction_systems, data_loaders,
             operators, registered_functions,
-            coupling, domain, enums, function_tables)
+            coupling, domain, enums, function_tables,
+            Dict{String,IndexSet}(index_sets))
 end
 
 # ========================================

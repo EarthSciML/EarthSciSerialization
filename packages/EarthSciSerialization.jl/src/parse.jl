@@ -490,6 +490,19 @@ function coerce_esm_file(data::Any)::EsmFile
         nothing
     end
 
+    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2;
+    # esm-spec v0.8.0). A single top-level `index_sets` object — sibling of
+    # `models`/`domain`, shared by every component — that unifies ESM grid dims
+    # and ESI categorical dims. `ranges[*]` `{from: <name>}` references, array
+    # `shape`s, and derived-set `from_faq` edges resolve against it. Empty when
+    # the document declares none.
+    index_sets = Dict{String,IndexSet}()
+    if haskey(data, :index_sets) && data.index_sets !== nothing
+        for (k, v) in pairs(data.index_sets)
+            index_sets[string(k)] = coerce_index_set(v)
+        end
+    end
+
     file = EsmFile(esm, metadata,
                   models=models,
                   reaction_systems=reaction_systems,
@@ -499,7 +512,8 @@ function coerce_esm_file(data::Any)::EsmFile
                   coupling=coupling,
                   domain=domain,
                   enums=enums,
-                  function_tables=function_tables)
+                  function_tables=function_tables,
+                  index_sets=index_sets)
     # Lower every `enum` op to a `const` integer using the file-local map.
     # This runs once at load time so downstream consumers (evaluators,
     # canonicalize, codegen) never see enum strings in expression trees.
@@ -705,16 +719,6 @@ function coerce_model(data::Any)::Model
     system_kind = haskey(data, :system_kind) && data.system_kind !== nothing ?
         string(data.system_kind) : nothing
 
-    # Document-scoped index-set registry (RFC semiring-faq-unified-ir §5.2).
-    # Accepted as a Model-level key (the canonical site that unifies ESM
-    # domain.spatial dims and ESI index_sets). Empty when absent.
-    index_sets = Dict{String,IndexSet}()
-    if haskey(data, :index_sets) && data.index_sets !== nothing
-        for (k, v) in pairs(data.index_sets)
-            index_sets[string(k)] = coerce_index_set(v)
-        end
-    end
-
     # Backwards compatibility: handle old 'events' field
     if haskey(data, :events)
         mixed_events = [coerce_event(ev) for ev in data.events]
@@ -725,7 +729,6 @@ function coerce_model(data::Any)::Model
                      base.subsystems;
                      tolerance=base.tolerance,
                      tests=base.tests,
-                     index_sets=index_sets,
                      initialization_equations=initialization_equations,
                      guesses=guesses,
                      system_kind=system_kind)
@@ -767,8 +770,7 @@ function coerce_model(data::Any)::Model
                  tests=tests,
                  initialization_equations=initialization_equations,
                  guesses=guesses,
-                 system_kind=system_kind,
-                 index_sets=index_sets)
+                 system_kind=system_kind)
 end
 
 """

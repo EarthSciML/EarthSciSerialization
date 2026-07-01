@@ -40,9 +40,9 @@ const ESMJ = EarthSciSerialization
         rhs = _op("aggregate"; output_idx=Any[], semiring=semiring, reduce=reduce,
                   expr_body=body, ranges=ranges, join=join, filter=filter)
         model = ESMJ.Model(Dict("u" => ModelVariable(StateVariable)),
-                           [ESMJ.Equation(_op("D", _v("u"); wrt="t"), rhs)];
-                           index_sets=index_sets)
-        f!, u0, p, _, vmap = build_evaluator(model; const_arrays=const_arrays)
+                           [ESMJ.Equation(_op("D", _v("u"); wrt="t"), rhs)])
+        f!, u0, p, _, vmap = build_evaluator(model; index_sets=index_sets,
+                                             const_arrays=const_arrays)
         du = similar(u0); f!(du, u0, p, 0.0)
         return du[vmap["u"]]
     end
@@ -151,8 +151,9 @@ const ESMJ = EarthSciSerialization
                   ranges=Dict("i" => _R("out"), "k" => _R("k")),
                   join=Any[[("i", "k")]])
         model = ESMJ.Model(Dict("o" => ModelVariable(StateVariable)),
-                           [ESMJ.Equation(lhs, rhs)]; index_sets=isets)
-        f!, u0, p, _, vmap = build_evaluator(model; const_arrays=Dict("v" => [5.0 7.0; 8.0 9.0]))
+                           [ESMJ.Equation(lhs, rhs)])
+        f!, u0, p, _, vmap = build_evaluator(model; index_sets=isets,
+                                             const_arrays=Dict("v" => [5.0 7.0; 8.0 9.0]))
         du = similar(u0); f!(du, u0, p, 0.0)
         @test du[vmap["o[1]"]] == 5.0
         @test du[vmap["o[2]"]] == 0.0
@@ -279,9 +280,8 @@ const ESMJ = EarthSciSerialization
         common = (; output_idx=Any[], semiring="sum_product", expr_body=_idx("w", "i", "j"),
                   ranges=Dict("i" => _R("county"), "j" => _R("county")), join=Any[[("i", "j")]])
         mk(tag) = ESMJ.Model(Dict("u" => ModelVariable(StateVariable)),
-                             [ESMJ.Equation(_op("D", _v("u"); wrt="t"), _op(tag; common...))];
-                             index_sets=isets)
-        run1(m) = (r = build_evaluator(m; const_arrays=ca); du = similar(r[2]); r[1](du, r[2], r[3], 0.0); du[r[5]["u"]])
+                             [ESMJ.Equation(_op("D", _v("u"); wrt="t"), _op(tag; common...))])
+        run1(m) = (r = build_evaluator(m; index_sets=isets, const_arrays=ca); du = similar(r[2]); r[1](du, r[2], r[3], 0.0); du[r[5]["u"]])
         @test run1(mk("arrayop")) == run1(mk("aggregate")) == 1.0 + 4.0
     end
 

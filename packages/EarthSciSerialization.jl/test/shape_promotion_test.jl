@@ -14,8 +14,9 @@ function syn()
         "ranges"=>Dict{String,Any}("k"=>Dict{String,Any}("from"=>"c")),
         "args"=>Any[], "expr"=>ix("b","k"))
     Dict{String,Any}("esm"=>"0.5.0","metadata"=>Dict("name"=>"P"),
+      # esm-spec v0.8.0: index_sets is a single document-scoped registry.
+      "index_sets"=>Dict{String,Any}("c"=>Dict{String,Any}("kind"=>"interval","size"=>3)),
       "models"=>Dict{String,Any}("M"=>Dict{String,Any}(
-        "index_sets"=>Dict{String,Any}("c"=>Dict{String,Any}("kind"=>"interval","size"=>3)),
         "variables"=>Dict{String,Any}(
             "f"=>Dict{String,Any}("type"=>"parameter","shape"=>Any["c"]),
             "a"=>Dict{String,Any}("type"=>"observed","expression"=>op("*","f",2)),
@@ -32,8 +33,8 @@ end
     @testset "shape inference: scalar chain promoted, reduction stays scalar" begin
         sh(n) = (v = get(prom.observed_variables, n, get(prom.state_variables, n, nothing));
                  v === nothing ? :absent : (v.shape === nothing ? String[] : v.shape))
-        @test sh("M.a") == ["M.c"]            # promoted (downstream of array f)
-        @test sh("M.b") == ["M.c"]            # promoted
+        @test sh("M.a") == ["c"]              # promoted (downstream of array f); c is document-scoped
+        @test sh("M.b") == ["c"]              # promoted
         @test sh("M.s") == String[]           # reduction boundary — stays scalar
     end
 
@@ -91,8 +92,9 @@ end
     # level-set fold. a = f+1, b = a*2 (both [c]); D(s) = f - b. After inlining, a and b
     # vanish and D(s)'s RHS references only f.
     d = Dict{String,Any}("esm"=>"0.5.0","metadata"=>Dict("name"=>"P"),
+      # esm-spec v0.8.0: index_sets is a single document-scoped registry.
+      "index_sets"=>Dict{String,Any}("c"=>Dict{String,Any}("kind"=>"interval","size"=>3)),
       "models"=>Dict{String,Any}("M"=>Dict{String,Any}(
-        "index_sets"=>Dict{String,Any}("c"=>Dict{String,Any}("kind"=>"interval","size"=>3)),
         "variables"=>Dict{String,Any}(
           "f"=>Dict{String,Any}("type"=>"parameter","shape"=>Any["c"]),
           "a"=>Dict{String,Any}("type"=>"observed","shape"=>Any["c"],"expression"=>op("+","f",1)),

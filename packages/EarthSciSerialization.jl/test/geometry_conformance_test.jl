@@ -103,11 +103,12 @@ _vertset(ring) = Set((round(ring[i, 1]; digits=9), round(ring[i, 2]; digits=9))
         bad = Dict(
             "esm" => "0.6.0",
             "metadata" => Dict("name" => "derived_unmaterialized"),
+            # esm-spec v0.8.0: document-scoped index-set registry.
+            "index_sets" => Dict(
+                "coord" => Dict("kind" => "interval", "size" => 2),
+                "ghost_ring" => Dict("kind" => "derived", "from_faq" => "missing_clip"),
+            ),
             "models" => Dict("M" => Dict(
-                "index_sets" => Dict(
-                    "coord" => Dict("kind" => "interval", "size" => 2),
-                    "ghost_ring" => Dict("kind" => "derived", "from_faq" => "missing_clip"),
-                ),
                 "variables" => Dict(
                     "y" => Dict("type" => "state", "shape" => []),
                 ),

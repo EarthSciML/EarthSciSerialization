@@ -688,6 +688,12 @@ function _build_evaluator_impl(model::Model;
                          # default. Mirrors the grid periodicity honored by the
                          # state-variable gather.
                          const_array_boundaries::AbstractDict=Dict{String,Any}(),
+                         # Document-scoped index-set registry (RFC §5.2; esm-spec
+                         # v0.8.0). Supplied by the `EsmFile` / `AbstractDict`
+                         # front-doors from the top-level `index_sets` object;
+                         # `ranges[*]` `{from}`, join gates, and derived-set ranges
+                         # resolve against it. Empty on a bare `Model` call.
+                         index_sets::AbstractDict=Dict{String,IndexSet}(),
                          # Internal: value-invention materialisation results, set by
                          # the AbstractDict front-door (RFC §6.1). `_vi_extents` maps a
                          # `from_faq` producer id to its materialised derived-index-set
@@ -859,7 +865,7 @@ function _build_evaluator_impl(model::Model;
     _geom_setup_arrays = Dict{String,AbstractArray{Float64}}()
     if !isempty(_geom_setup_vars)
         _geom_setup_arrays = _materialize_geometry_setup(_geom_setup_vars, _geom_defs,
-            model, const_arrays, model.index_sets, _derived_extents;
+            model, const_arrays, index_sets, _derived_extents;
             vi_maps=_vi_maps.maps, param_overrides=parameter_overrides)
     end
     # Value-invention derived index sets (skolem/distinct/rank) materialized via
@@ -882,18 +888,18 @@ function _build_evaluator_impl(model::Model;
     # canonical bucket code per key-column position) BEFORE index-set ranges are
     # resolved away — categorical members are read from the still-present
     # `{from}` references here. No-op (byte-identical) for files without a join.
-    equations = _resolve_join_gates(_ode_equations, model.index_sets, _vi_maps)
+    equations = _resolve_join_gates(_ode_equations, index_sets, _vi_maps)
     init_equations = _resolve_join_gates(model.initialization_equations,
-                                         model.index_sets, _vi_maps)
+                                         index_sets, _vi_maps)
 
     # ---- Resolve index-set references in ranges (RFC §5.2) ----
-    # Rewrite any `ranges[*]` `{from: <name>}` reference against the model's
+    # Rewrite any `ranges[*]` `{from: <name>}` reference against the document's
     # `index_sets` registry into the dense / dynamic-bound form the range
     # machinery already consumes, BEFORE any range expansion runs. No-op (and
     # therefore byte-identical) for files that use no `{from}` references.
-    equations = _resolve_index_set_ranges(equations, model.index_sets, _derived_extents)
+    equations = _resolve_index_set_ranges(equations, index_sets, _derived_extents)
     init_equations = _resolve_index_set_ranges(init_equations,
-                                               model.index_sets, _derived_extents)
+                                               index_sets, _derived_extents)
 
     # ---- Drop value-invention equations from the ODE (RFC §6.1) ----
     # The skolem/distinct/rank LHS vars are materialized at setup, not integrated;
@@ -1416,7 +1422,9 @@ function build_evaluator(file::EsmFile;
                          model_name::Union{Nothing,AbstractString}=nothing,
                          kwargs...)
     model = _select_model(file, model_name)
-    return build_evaluator(model; kwargs...)
+    # Thread the document-scoped index-set registry (esm-spec v0.8.0) into the
+    # typed evaluator, which no longer reads it off the `Model`.
+    return build_evaluator(model; index_sets=file.index_sets, kwargs...)
 end
 
 # Direct EsmFile/Model entry points carry no raw JSON, so value-invention
@@ -1482,11 +1490,25 @@ function _select_model_json(esm::AbstractDict, model_name)
     doc = Cadence.to_native(esm)
     models = get(doc, "models", nothing)
     isa(models, AbstractDict) && !isempty(models) || return nothing
-    if model_name !== nothing
-        return get(models, String(model_name), nothing)
+    model = if model_name !== nothing
+        get(models, String(model_name), nothing)
+    elseif length(models) == 1
+        first(values(models))
+    else
+        nothing
     end
-    length(models) == 1 && return first(values(models))
-    return nothing
+    (model === nothing || !isa(model, AbstractDict)) && return model
+    # esm-spec v0.8.0: the index-set registry is a single document-scoped object,
+    # but the value-invention / relational front-door reads it off the model dict.
+    # Inject the document registry here so a `{from}` / `from_faq` reference still
+    # resolves. A no-op when the document declares none, or when the model already
+    # carries its own registry (legacy internal reconstitution).
+    doc_is = get(doc, "index_sets", nothing)
+    if doc_is !== nothing && !haskey(model, "index_sets")
+        model = Dict{String,Any}(model)
+        model["index_sets"] = doc_is
+    end
+    return model
 end
 
 """

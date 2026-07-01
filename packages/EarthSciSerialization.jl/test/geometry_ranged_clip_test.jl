@@ -51,12 +51,6 @@ function _ranged_clip_regrid_esm()
     F_tgt = _arrop(["j"], ["j" => "tgt_cells"], Dict{String,Any}("op" => "/", "args" => Any[num, _ix("A_j", "j")]))
 
     model = Dict{String,Any}(
-        "index_sets" => Dict{String,Any}(
-            "coord" => Dict{String,Any}("kind" => "interval", "size" => 2),
-            "verts" => Dict{String,Any}("kind" => "interval", "size" => 4),
-            "src_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
-            "tgt_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
-            "clip_ring" => Dict{String,Any}("kind" => "derived", "from_faq" => "overlap_clip")),
         "variables" => Dict{String,Any}(
             "src_poly" => Dict{String,Any}("type" => "parameter", "shape" => Any["src_cells", "verts", "coord"]),
             "tgt_poly" => Dict{String,Any}("type" => "parameter", "shape" => Any["tgt_cells", "verts", "coord"]),
@@ -77,6 +71,13 @@ function _ranged_clip_regrid_esm()
             _D("FT1", _ix("F_tgt", 1)),   _D("FT2", _ix("F_tgt", 2))])
     return Dict{String,Any}(
         "esm" => "0.6.0", "metadata" => Dict{String,Any}("name" => "ranged_clip_regrid_2x2"),
+        # esm-spec v0.8.0: document-scoped index-set registry.
+        "index_sets" => Dict{String,Any}(
+            "coord" => Dict{String,Any}("kind" => "interval", "size" => 2),
+            "verts" => Dict{String,Any}("kind" => "interval", "size" => 4),
+            "src_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
+            "tgt_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
+            "clip_ring" => Dict{String,Any}("kind" => "derived", "from_faq" => "overlap_clip")),
         "models" => Dict{String,Any}("RangedClipRegrid2x2" => model))
 end
 
@@ -147,12 +148,6 @@ function _broadphase_regrid_esm()
     P(shape...) = Dict{String,Any}("type" => "parameter", "shape" => collect(Any, shape))
     O(expr, shape...) = Dict{String,Any}("type" => "observed", "shape" => collect(Any, shape), "expression" => expr)
     model = Dict{String,Any}(
-        "index_sets" => Dict{String,Any}(
-            "coord" => Dict{String,Any}("kind" => "interval", "size" => 2),
-            "verts" => Dict{String,Any}("kind" => "interval", "size" => 4),
-            "src_cells" => Dict{String,Any}("kind" => "interval", "size" => 3),
-            "tgt_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
-            "clip_ring" => Dict{String,Any}("kind" => "derived", "from_faq" => "overlap_clip")),
         "variables" => Dict{String,Any}(
             "src_poly" => P("src_cells", "verts", "coord"), "tgt_poly" => P("tgt_cells", "verts", "coord"),
             "src_cx" => P("src_cells"), "tgt_cx" => P("tgt_cells"), "F_src" => P("src_cells"),
@@ -167,7 +162,13 @@ function _broadphase_regrid_esm()
         "equations" => Any[_D("AJ1", _ix("A_j", 1)), _D("AJ2", _ix("A_j", 2)),
                            _D("FT1", _ix("F_tgt", 1)), _D("FT2", _ix("F_tgt", 2))])
     return Dict{String,Any}("esm" => "0.6.0", "metadata" => Dict{String,Any}("name" => "broadphase_regrid"),
-                            "models" => Dict{String,Any}("BroadphaseRegrid" => model))
+        "index_sets" => Dict{String,Any}(
+            "coord" => Dict{String,Any}("kind" => "interval", "size" => 2),
+            "verts" => Dict{String,Any}("kind" => "interval", "size" => 4),
+            "src_cells" => Dict{String,Any}("kind" => "interval", "size" => 3),
+            "tgt_cells" => Dict{String,Any}("kind" => "interval", "size" => 2),
+            "clip_ring" => Dict{String,Any}("kind" => "derived", "from_faq" => "overlap_clip")),
+        "models" => Dict{String,Any}("BroadphaseRegrid" => model))
 end
 
 @testset "Broad-phase join + sliver filter on a declarative conservative regrid (M4+)" begin
@@ -227,10 +228,6 @@ function _constructed_live_regrid_esm()
     Pd(d) = Dict{String,Any}("type" => "parameter", "default" => d)
     O(e, shape...) = Dict{String,Any}("type" => "observed", "shape" => collect(Any, shape), "expression" => e)
     model = Dict{String,Any}(
-        "index_sets" => Dict{String,Any}(
-            "coord" => Dict{String,Any}("kind"=>"interval","size"=>2), "verts" => Dict{String,Any}("kind"=>"interval","size"=>4),
-            "src_cells" => Dict{String,Any}("kind"=>"interval","size"=>4), "tgt_cells" => Dict{String,Any}("kind"=>"interval","size"=>2),
-            "clip_ring" => Dict{String,Any}("kind"=>"derived","from_faq"=>"overlap_clip")),
         "variables" => Dict{String,Any}(
             "x0" => Pd(0.0), "dx_src" => Pd(0.5), "dx_tgt" => Pd(1.0),
             "F_src" => Dict{String,Any}("type" => "parameter", "shape" => Any["src_cells"]),
@@ -241,7 +238,11 @@ function _constructed_live_regrid_esm()
             "F_tgt" => Dict{String,Any}("type" => "state", "shape" => Any["tgt_cells"])),
         "equations" => Any[Dict{String,Any}("lhs" => lhs, "rhs" => rhs)])
     return Dict{String,Any}("esm" => "0.6.0", "metadata" => Dict{String,Any}("name" => "constructed_live_regrid"),
-                            "models" => Dict{String,Any}("ConstructedLiveRegrid" => model))
+        "index_sets" => Dict{String,Any}(
+            "coord" => Dict{String,Any}("kind"=>"interval","size"=>2), "verts" => Dict{String,Any}("kind"=>"interval","size"=>4),
+            "src_cells" => Dict{String,Any}("kind"=>"interval","size"=>4), "tgt_cells" => Dict{String,Any}("kind"=>"interval","size"=>2),
+            "clip_ring" => Dict{String,Any}("kind"=>"derived","from_faq"=>"overlap_clip")),
+        "models" => Dict{String,Any}("ConstructedLiveRegrid" => model))
 end
 
 @testset "Constructed geometry + live F_src field through the regrid (M4+)" begin
@@ -294,10 +295,6 @@ function _coupled_bridge_esm()
     Pd(d) = Dict{String,Any}("type" => "parameter", "default" => d)
     O(e, shape...) = Dict{String,Any}("type" => "observed", "shape" => collect(Any, shape), "expression" => e)
     model = Dict{String,Any}(
-        "index_sets" => Dict{String,Any}(
-            "coord" => Dict{String,Any}("kind"=>"interval","size"=>2), "verts" => Dict{String,Any}("kind"=>"interval","size"=>4),
-            "src_cells" => Dict{String,Any}("kind"=>"interval","size"=>4), "tgt_cells" => Dict{String,Any}("kind"=>"interval","size"=>2),
-            "clip_ring" => Dict{String,Any}("kind"=>"derived","from_faq"=>"overlap_clip")),
         "variables" => Dict{String,Any}(
             "x0" => Pd(0.0), "dx_src" => Pd(0.5), "dx_tgt" => Pd(1.0), "k" => Pd(2.0),
             "F_src" => Dict{String,Any}("type" => "parameter", "shape" => Any["src_cells"]),
@@ -309,7 +306,11 @@ function _coupled_bridge_esm()
             "u" => Dict{String,Any}("type" => "state", "shape" => Any["tgt_cells"])),
         "equations" => Any[Dict{String,Any}("lhs" => cons_lhs, "rhs" => cons_rhs)])
     return Dict{String,Any}("esm" => "0.6.0", "metadata" => Dict{String,Any}("name" => "coupled_bridge"),
-                            "models" => Dict{String,Any}("CoupledBridge" => model))
+        "index_sets" => Dict{String,Any}(
+            "coord" => Dict{String,Any}("kind"=>"interval","size"=>2), "verts" => Dict{String,Any}("kind"=>"interval","size"=>4),
+            "src_cells" => Dict{String,Any}("kind"=>"interval","size"=>4), "tgt_cells" => Dict{String,Any}("kind"=>"interval","size"=>2),
+            "clip_ring" => Dict{String,Any}("kind"=>"derived","from_faq"=>"overlap_clip")),
+        "models" => Dict{String,Any}("CoupledBridge" => model))
 end
 
 @testset "Coupled-array bridge: consumer ODE reads a live regrid F_tgt observed (met→fire)" begin
