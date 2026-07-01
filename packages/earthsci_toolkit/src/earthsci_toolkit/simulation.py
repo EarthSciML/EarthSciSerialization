@@ -18,7 +18,7 @@ import datetime as _dt
 import numpy as np
 import sympy as sp
 from typing import Dict, List, Set, Tuple, Optional, Union, Any, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Optional scipy import - only needed for actual simulation
 try:
@@ -1170,11 +1170,30 @@ def _apply_equation_to_dy(
     lhs = eq.lhs
     rhs = eq.rhs
 
-    # Case A: scalar state LHS — D(var, t) with var a bare string.
+    # Case A: bare-name state LHS — D(var, t) with var a bare string.
     if isinstance(lhs, ExprNode) and lhs.op == "D" and lhs.args:
         inner = lhs.args[0]
         if isinstance(inner, str):
             if inner not in state_layout:
+                return
+            shape = shapes.get(inner, ())
+            if shape:
+                # Whole-array derivative ``D(SST) = <array rhs>`` (esm-spec §11):
+                # the declared-shape array state is integrated per cell. Evaluate
+                # the array-valued RHS and scatter it element-wise across the
+                # state's flat slots (a scalar RHS broadcasts to every cell).
+                n = int(np.prod(shape))
+                start = state_layout[inner].start
+                arr = np.asarray(eval_expr(rhs, ctx), dtype=float).reshape(-1)
+                if arr.size == 1:
+                    dy[start:start + n] = float(arr[0])
+                elif arr.size == n:
+                    dy[start:start + n] = arr
+                else:
+                    raise SimulationError(
+                        f"D({inner}): RHS produced {arr.size} elements for a "
+                        f"state of shape {shape} ({n} cells)"
+                    )
                 return
             val = float(eval_expr(rhs, ctx))
             dy[state_layout[inner].start] = val
@@ -1434,6 +1453,8 @@ class _NumpyRhsBuild:
     param_values: Dict[str, float]
     ordered_observed: List[Tuple[str, Expr]]
     elem_names: List[str]
+    join_key_buffers: Dict[str, "np.ndarray"] = field(default_factory=dict)
+    join_key_index_sets: Dict[str, str] = field(default_factory=dict)
 
 
 def _resolve_field_ic(
@@ -1505,6 +1526,135 @@ def _fold_field_ics(
             )
 
 
+def _resolve_index_set_shape(
+    decl_shape: List[str],
+    index_sets: Dict[str, Any],
+    derived_extents: Optional[Dict[str, int]] = None,
+) -> Optional[Tuple[int, ...]]:
+    """Resolve a declared ``shape`` (index-set names) to an integer tuple.
+
+    Each axis names an index set: an ``interval`` contributes its ``size``, a
+    ``derived`` set its materialized ``from_faq`` extent (when known). Returns
+    ``None`` if any axis cannot be resolved (an unmaterialized derived set, an
+    unknown name) so the caller can fall back to usage-inferred shapes.
+    """
+    derived_extents = derived_extents or {}
+    dims: List[int] = []
+    for axis in decl_shape:
+        entry = index_sets.get(axis) if isinstance(index_sets, dict) else None
+        if not isinstance(entry, dict):
+            return None
+        kind = entry.get("kind")
+        if kind == "interval":
+            size = entry.get("size")
+            if not isinstance(size, int):
+                return None
+            dims.append(int(size))
+        elif kind == "derived":
+            ext = derived_extents.get(entry.get("from_faq"))
+            if ext is None:
+                return None
+            dims.append(int(ext))
+        else:
+            return None
+    return tuple(dims)
+
+
+def _vi_lhs_base(lhs: Expr) -> Optional[str]:
+    """Base variable name written by an equation LHS: ``name``,
+    ``index(name, …)`` or ``D(name, …)``. ``None`` if unrecognised."""
+    if isinstance(lhs, str):
+        return lhs
+    if isinstance(lhs, ExprNode) and lhs.op in ("index", "D") and lhs.args:
+        return _vi_lhs_base(lhs.args[0])
+    return None
+
+
+def _detect_value_invention_states(
+    flat: FlattenedSystem,
+) -> Tuple[Set[str], List[Tuple[str, ExprNode, Optional[str]]]]:
+    """Detect value-invention state vars written by a skolem / distinct aggregate.
+
+    Returns ``(vi_var_names, bin_specs)`` where ``bin_specs`` is a list of
+    ``(var_name, aggregate_node, index_set_name)`` for the per-cell skolem MAP
+    buffers (the broad-phase bins ``rg_src_bin`` / ``rg_tgt_bin``) a downstream
+    ``join.on`` gates on. A ``distinct`` producer (the candidate-set membership)
+    is a VI var too — dropped from the ODE — but needs no build-time buffer here
+    (nothing ranges over its derived set for surface_heat_flux). Mirrors
+    ``value_invention._vi_node_kind``, working directly on the flattened
+    ExprNodes, which preserve ``distinct`` / ``key`` / ``join`` (unlike a
+    serialized round-trip). Non-fixture-specific: any state assigned by a skolem
+    or distinct aggregate is a build-time relational output, not an ODE state.
+    """
+    vi_var_names: Set[str] = set()
+    bin_specs: List[Tuple[str, ExprNode, Optional[str]]] = []
+    states = flat.state_variables
+    for eq in flat.equations:
+        base = _vi_lhs_base(eq.lhs)
+        if base is None or base not in states:
+            continue
+        rhs = eq.rhs
+        if not (isinstance(rhs, ExprNode) and rhs.op == "aggregate"):
+            continue
+        skolem_body = isinstance(rhs.expr, ExprNode) and rhs.expr.op == "skolem"
+        skolem_key = isinstance(rhs.key, ExprNode) and rhs.key.op == "skolem"
+        if rhs.distinct is True:
+            vi_var_names.add(base)  # candidate-set producer — drop from ODE
+        elif skolem_body or skolem_key:
+            vi_var_names.add(base)
+            decl = getattr(states[base], "shape", None)
+            bin_specs.append((base, rhs, decl[0] if decl else None))
+    return vi_var_names, bin_specs
+
+
+def _materialize_join_key_buffers(
+    ordered_observed: List[Tuple[str, Expr]],
+    bin_specs: List[Tuple[str, ExprNode, Optional[str]]],
+    index_sets: Dict[str, Any],
+    param_values: Dict[str, float],
+    shapes: Dict[str, Tuple[int, ...]],
+    state_layout: Dict[str, slice],
+    total_size: int,
+) -> Tuple[Dict[str, "np.ndarray"], Dict[str, str]]:
+    """Materialize the broad-phase bin buffers ONCE at setup (RFC §5.3).
+
+    The bins depend only on constant geometry (the source / target polygons and
+    the ``rg_dx`` / ``rg_dy`` params), so they are computed here, off the
+    per-step hot path. Every join-FREE constant observed the bins read (the
+    binning coordinates ``rg_src_lon`` … via the polygon aggregates) is
+    materialized into a setup context first; then each bin aggregate is evaluated
+    to its per-cell integer-code buffer. Returns ``(buffers, index_sets)`` keyed
+    by bin var name — the ``EvalContext.join_key_buffers`` / ``…_index_sets`` a
+    downstream ``join.on [[rg_src_bin, rg_tgt_bin]]`` gates on.
+    """
+    buffers: Dict[str, "np.ndarray"] = {}
+    idx_sets: Dict[str, str] = {}
+    if not bin_specs:
+        return buffers, idx_sets
+    ctx = EvalContext(
+        state_layout=state_layout,
+        state_shapes=shapes,
+        param_values=param_values,
+        observed_values={},
+        y=np.zeros(total_size, dtype=float),
+        t=0.0,
+        index_sets=index_sets,
+    )
+    # Join-carrying observeds (rg_A / rg_At / rg_W / surface_heat_flux) gate on
+    # the bins themselves, so they are NOT materialized here — only the bins'
+    # own (join-free) inputs are.
+    join_free = [
+        (name, rhs) for name, rhs in ordered_observed
+        if not (isinstance(rhs, ExprNode) and getattr(rhs, "join", None))
+    ]
+    _materialize_observeds(join_free, ctx)
+    for name, node, idx_set in bin_specs:
+        buffers[name] = np.asarray(eval_expr(node, ctx), dtype=float).reshape(-1)
+        if idx_set is not None:
+            idx_sets[name] = idx_set
+    return buffers, idx_sets
+
+
 def _build_numpy_rhs(
     flat: FlattenedSystem,
     parameters: Dict[str, float],
@@ -1523,7 +1673,21 @@ def _build_numpy_rhs(
     # extent past the true grid; the lift's recorded extent is authoritative.
     if flat.lifted_shapes:
         shapes.update(flat.lifted_shapes)
-    state_names = list(flat.state_variables.keys())
+    # Declared-shape resolution (esm-spec §11): a state's declared ``shape``
+    # (index-set names) is authoritative over usage inference — a whole-array
+    # ``D(SST)`` never index-uses SST, so inference alone collapses it to a
+    # scalar. Resolve each declared shape against the index-set registry so the
+    # array state gets its true per-cell extent (ocean_cells → 3).
+    for _name, _var in flat.state_variables.items():
+        _decl = getattr(_var, "shape", None)
+        if _decl:
+            _res = _resolve_index_set_shape(_decl, flat.index_sets)
+            if _res is not None:
+                shapes[_name] = _res
+    # Value-invention states (broad-phase bins / candidate-set membership) are
+    # materialized at setup and DROPPED from the ODE (RFC §5.3 / §6.1).
+    vi_var_names, bin_specs = _detect_value_invention_states(flat)
+    state_names = [n for n in flat.state_variables.keys() if n not in vi_var_names]
     observed_names: Set[str] = set(flat.observed_variables.keys())
     loader_arrays = loader_arrays or {}
 
@@ -1559,6 +1723,11 @@ def _build_numpy_rhs(
     # no-op handling) so scalar-ic fixtures behave exactly as before.
     field_ic_eqs: List[Tuple[str, Expr]] = []
     for eq in flat.equations:
+        # Value-invention state assignments (bin skolem maps, distinct
+        # candidate-set membership) are materialized at setup, not integrated.
+        _base = _vi_lhs_base(eq.lhs)
+        if _base is not None and _base in vi_var_names:
+            continue
         if (isinstance(eq.lhs, ExprNode) and eq.lhs.op == "ic"
                 and eq.lhs.args and isinstance(eq.lhs.args[0], str)
                 and shapes.get(eq.lhs.args[0])):
@@ -1596,6 +1765,14 @@ def _build_numpy_rhs(
             val = float(default) if isinstance(default, (int, float)) else 0.0
         param_values[pname] = val
         param_values[bare] = val  # also expose via bare name
+
+    # Value-invention bin buffers (RFC §5.3): materialize the broad-phase bins
+    # (``rg_src_bin`` / ``rg_tgt_bin``) once, from constant geometry + params, so
+    # a downstream ``join.on [[rg_src_bin, rg_tgt_bin]]`` can gate the regrid.
+    join_key_buffers, join_key_index_sets = _materialize_join_key_buffers(
+        ordered_observed, bin_specs, flat.index_sets, param_values, shapes,
+        state_layout, total_size,
+    )
 
     # Initial conditions.
     y0 = np.zeros(total_size, dtype=float)
@@ -1646,6 +1823,8 @@ def _build_numpy_rhs(
             # segment its contents are fixed, so the RHS is pure; the segmenting
             # driver mutates it in place between segments to advance the cadence.
             input_arrays=loader_arrays if loader_arrays is not None else {},
+            join_key_buffers=join_key_buffers,
+            join_key_index_sets=join_key_index_sets,
         )
         # Materialize array-valued observeds + derived rings and scalar
         # observeds into the context (dependency-ordered) so the state
@@ -1677,6 +1856,8 @@ def _build_numpy_rhs(
         param_values=param_values,
         ordered_observed=ordered_observed,
         elem_names=elem_names,
+        join_key_buffers=join_key_buffers,
+        join_key_index_sets=join_key_index_sets,
     )
 
 
@@ -1769,6 +1950,8 @@ def _simulate_with_numpy(
                         y=y_out[:, 0],
                         t=float(t_out[0]),
                         index_sets=flat.index_sets,
+                        join_key_buffers=build.join_key_buffers,
+                        join_key_index_sets=build.join_key_index_sets,
                     )
                     _materialize_observeds(ordered_observed, ctx)
                     scalar_obs = [
@@ -1798,6 +1981,8 @@ def _simulate_with_numpy(
                             y=y_out[:, j],
                             t=float(t_out[j]),
                             index_sets=flat.index_sets,
+                            join_key_buffers=build.join_key_buffers,
+                            join_key_index_sets=build.join_key_index_sets,
                         )
                         _materialize_observeds(ordered_observed, ctx)
                         for name, _ in ordered_observed:

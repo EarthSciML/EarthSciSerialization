@@ -84,6 +84,16 @@ class EvalContext:
     # only at cadence boundaries, so the RHS is pure within a segment. Empty ⇒ no
     # data-loader fields are bound. See `simulation._simulate_with_loaders`.
     input_arrays: Dict[str, np.ndarray] = field(default_factory=dict)
+    # Build-time value-invention MAP buffers (RFC §5.3): a per-cell key buffer
+    # (e.g. the broad-phase bins ``rg_src_bin`` / ``rg_tgt_bin``) that an
+    # aggregate ``join.on [[rg_src_bin, rg_tgt_bin]]`` gates on. Each value is a
+    # 0-based ndarray of integer bin codes; ``join_key_index_sets`` records the
+    # buffer's 1-D declared-shape index set so the join resolver can map the key
+    # column to the range symbol whose ``{"from": <set>}`` matches. Materialized
+    # ONCE at setup (:func:`simulation._materialize_join_key_buffers`) — the
+    # skolem/floor bins run off the per-step hot path. Empty ⇒ no buffer joins.
+    join_key_buffers: Dict[str, np.ndarray] = field(default_factory=dict)
+    join_key_index_sets: Dict[str, str] = field(default_factory=dict)
 
 
 class NumpyInterpreterError(Exception):
@@ -554,8 +564,82 @@ def eval_expr(expr: Expr, ctx: EvalContext) -> Union[float, np.ndarray]:
         return _eval_intersect_polygon(expr, ctx)
     if op == "polygon_intersection_area":
         return _eval_polygon_intersection_area(expr, ctx)
+    # --- value-invention skolem key (RFC §5.3 / §5.7) ---
+    if op == "skolem":
+        return _eval_skolem(expr, ctx)
+    if op == "true":
+        return 1.0
+    if op == "false":
+        return 0.0
 
     raise NumpyInterpreterError(f"Unsupported op in NumPy interpreter: {op!r}")
+
+
+def _skolem_atom(value: float) -> Tuple[str, Any]:
+    """Canonicalise one numeric skolem component (integers kept exact)."""
+    fv = float(value)
+    return ("i", int(fv)) if fv == int(fv) else ("f", repr(fv))
+
+
+def _skolem_code(parts: Sequence[Tuple[str, Any]]) -> float:
+    """Hash a canonical skolem-argument tuple to a 48-bit integer code (float).
+
+    BLAKE2b to 48 bits — exactly representable in float64 and stable across
+    processes — mirroring the Julia setup-geometry evaluator's
+    ``hash(Tuple(vals))`` skolem (tree_walk.jl §433).
+    """
+    import hashlib
+
+    digest = hashlib.blake2b(repr(tuple(parts)).encode("utf-8"), digest_size=6).digest()
+    return float(int.from_bytes(digest, "big"))
+
+
+def _eval_skolem(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
+    """Evaluate a ``skolem`` key node to a deterministic integer code (as float).
+
+    A skolem term is a deterministic identity for its argument tuple; it is only
+    ever COMPARED (the broad-phase equi-join, RFC §5.3), so any injective
+    encoding of the tuple suffices. String args (the tag, e.g. ``"bin"``) are
+    literal; numeric args are evaluated and canonicalised (integers kept exact).
+
+    Array-aware: when the vectorized map path binds an index symbol to a whole
+    range (so a subscript evaluates to an ndarray), the codes are computed
+    ELEMENT-WISE and returned as an ndarray — otherwise the per-cell bins would
+    collapse to a single code. Scalar args yield a single float code.
+    """
+    evaled: List[Tuple[str, Any]] = []
+    n: Optional[int] = None
+    for a in expr.args:
+        if isinstance(a, str):
+            evaled.append(("s", a))
+            continue
+        arr = np.asarray(eval_expr(a, ctx), dtype=float)
+        if arr.ndim == 0:
+            evaled.append(("scalar", float(arr)))
+        else:
+            flat = arr.reshape(-1)
+            if n is None:
+                n = flat.size
+            elif n != flat.size:
+                raise NumpyInterpreterError(
+                    f"skolem array args have mismatched lengths ({n} vs {flat.size})"
+                )
+            evaled.append(("array", flat))
+    if n is None:
+        parts = [(k, v) if k == "s" else _skolem_atom(v) for k, v in evaled]
+        return _skolem_code(parts)
+    codes = np.empty(n, dtype=float)
+    for i in range(n):
+        parts = []
+        for kind, val in evaled:
+            if kind == "s":
+                parts.append(("s", val))
+            elif kind == "scalar":
+                parts.append(_skolem_atom(val))
+            else:
+                parts.append(_skolem_atom(val[i]))
+        codes[i] = _skolem_code(parts)
+    return codes
 
 
 def _eval_intersect_polygon(expr: ExprNode, ctx: EvalContext) -> np.ndarray:
@@ -666,13 +750,18 @@ def _eval_index(expr: ExprNode, ctx: EvalContext) -> Union[float, np.ndarray]:
         return arr_val[tuple(gathered)]
     # 1-based -> 0-based.
     zero_idx = tuple(int(round(float(i))) - 1 for i in idxs)
-    if len(zero_idx) != arr_val.ndim:
-        # Allow row-level access on a 2D array with a single index (returns a row).
-        # Otherwise treat as error.
+    if len(zero_idx) > arr_val.ndim:
         raise NumpyInterpreterError(
             f"index got {len(zero_idx)} indices for array of shape {arr_val.shape}"
         )
-    return float(arr_val[zero_idx])
+    # Partial index (fewer subscripts than dims) → the trailing-dims sub-array,
+    # e.g. ``index(rg_src_poly[a,v,c], a)`` → the a-th (v,c) vertex ring. A full
+    # index yields the scalar element. Mirrors the Julia setup-geometry
+    # evaluator's partial-index slice (tree_walk.jl _geo_eval).
+    sub = arr_val[zero_idx]
+    if np.ndim(sub) == 0:
+        return float(sub)
+    return np.asarray(sub, dtype=float)
 
 
 def _decompose_body_as_scaled_product(
@@ -1312,16 +1401,12 @@ def _resolve_join(expr: ExprNode, raw_ranges: Dict[str, Any],
                     f"join 'on' entry {pair!r} must be a [left, right] key-column "
                     f"pair (RFC §5.3)"
                 )
-            sym_l = _join_sym_for_key(pair[0], raw_ranges, sym_to_set)
-            sym_r = _join_sym_for_key(pair[1], raw_ranges, sym_to_set)
-            for s in (sym_l, sym_r):
-                if s not in sym_positions:
-                    raise NumpyInterpreterError(
-                        f"join key symbol {s!r} is not an output or contracted "
-                        f"range of this aggregate (RFC §5.3)"
-                    )
-            vals_l = _key_member_values(sym_l, raw_ranges, sym_positions[sym_l], ctx)
-            vals_r = _key_member_values(sym_r, raw_ranges, sym_positions[sym_r], ctx)
+            sym_l, vals_l = _resolve_join_key_column(
+                pair[0], raw_ranges, sym_to_set, sym_positions, ctx
+            )
+            sym_r, vals_r = _resolve_join_key_column(
+                pair[1], raw_ranges, sym_to_set, sym_positions, ctx
+            )
             codes_l, codes_r = _encode_join_keys(vals_l, vals_r)
             gates.append((
                 sym_l, sym_r,
@@ -1329,6 +1414,65 @@ def _resolve_join(expr: ExprNode, raw_ranges: Dict[str, Any],
                 dict(zip(sym_positions[sym_r], codes_r)),
             ))
     return gates
+
+
+def _resolve_join_key_column(
+    key: str,
+    raw_ranges: Dict[str, Any],
+    sym_to_set: Dict[str, str],
+    sym_positions: Dict[str, List[int]],
+    ctx: EvalContext,
+) -> Tuple[str, List[Any]]:
+    """Resolve one join key column to ``(range_symbol, key_values)`` (RFC §5.3).
+
+    Two key kinds are supported:
+
+    * A **materialized value-invention MAP buffer** (``rg_src_bin``): the key
+      names a per-cell bin buffer in ``ctx.join_key_buffers``. The range symbol
+      is the one whose ``{"from": <set>}`` matches the buffer's 1-D declared
+      shape index set (``ctx.join_key_index_sets[key]``), and the key value at
+      each 1-based position is the buffer's integer bin code — the broad-phase
+      bin-skolem equi-join.
+    * A **range symbol / index set** — the existing categorical / interval key
+      column, resolved via :func:`_join_sym_for_key` / :func:`_key_member_values`.
+    """
+    # A join key may name a value-invention MAP buffer. Match it against the
+    # materialized buffers by exact name OR namespaced suffix: flatten prefixes
+    # the bin STATE with its model (``OceanDynamics.rg_src_bin``) but leaves the
+    # ``join.on`` key column bare (``rg_src_bin``), so the two must be reconciled
+    # here (the intra-model-reference namespacing gap, RFC §5.3).
+    buf_key = None
+    if key in ctx.join_key_buffers:
+        buf_key = key
+    else:
+        _suffix = [b for b in ctx.join_key_buffers if b == key or b.endswith("." + key)]
+        if len(_suffix) == 1:
+            buf_key = _suffix[0]
+    if buf_key is not None:
+        key = buf_key
+        set_name = ctx.join_key_index_sets.get(key)
+        candidates = [
+            s for s in sym_positions
+            if isinstance(raw_ranges.get(s), dict)
+            and raw_ranges[s].get("from") == set_name
+        ]
+        if len(candidates) != 1:
+            raise NumpyInterpreterError(
+                f"join key buffer {key!r} (over index set {set_name!r}) does not "
+                f"map to exactly one range symbol of this aggregate (found "
+                f"{sorted(candidates)}); RFC §5.3"
+            )
+        sym = candidates[0]
+        buf = np.asarray(ctx.join_key_buffers[key], dtype=float).reshape(-1)
+        vals = [int(round(float(buf[p - 1]))) for p in sym_positions[sym]]
+        return sym, vals
+    sym = _join_sym_for_key(key, raw_ranges, sym_to_set)
+    if sym not in sym_positions:
+        raise NumpyInterpreterError(
+            f"join key symbol {sym!r} is not an output or contracted range of "
+            f"this aggregate (RFC §5.3)"
+        )
+    return sym, _key_member_values(sym, raw_ranges, sym_positions[sym], ctx)
 
 
 def _join_admits(gates: List[Tuple[str, str, Dict[int, int], Dict[int, int]]],

@@ -383,12 +383,35 @@ def _namespace_expr(expr: Expr, prefix: str, leave_alone: Optional[Set[str]] = N
              for v in expr.values]
             if expr.values is not None else None
         )
+        # Aggregate filter / key sub-nodes reference the SAME model-local
+        # variables the body does (a sliver ``filter rg_A[a,o] > rg_atol``, a
+        # ``key`` skolem), so they must be namespaced identically — otherwise the
+        # area matrix / bin key a downstream aggregate reads stays bare and
+        # cannot be resolved after flatten (RFC §5.3). Range symbols stay local
+        # via ``local_leave``.
+        #
+        # ``join.on`` key columns are LEFT UNCHANGED here: a key may name a
+        # DOCUMENT-scoped index set (e.g. a categorical equi-join on
+        # ``sourceType``) that must NOT be model-prefixed, and this namespacing
+        # pass has no index-set registry to tell the two apart. A key that names
+        # a model-local value-invention buffer (``rg_src_bin``) is instead
+        # reconciled bare-vs-namespaced at join-resolution time
+        # (numpy_interpreter._resolve_join_key_column), which has the buffer set.
+        new_filter = (
+            _namespace_expr(expr.filter, prefix, local_leave, subsystem_keys)
+            if expr.filter is not None else None
+        )
+        new_key = (
+            _namespace_expr(expr.key, prefix, local_leave, subsystem_keys)
+            if expr.key is not None else None
+        )
         # Use ``replace`` so closed-function metadata (``name``, ``value``,
         # ``handler_id``, ``table``, ``table_axes``, ``output``) is preserved
         # automatically. Hand-listing fields silently drops any new
         # ExprNode attribute and cost the SymPy bridge ``fn``-op support
         # before this fix (esm-6ka).
-        return replace(expr, args=new_args, expr=new_body, values=new_values)
+        return replace(expr, args=new_args, expr=new_body, values=new_values,
+                       filter=new_filter, key=new_key)
     return expr
 
 
